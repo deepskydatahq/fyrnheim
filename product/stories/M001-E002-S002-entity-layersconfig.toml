@@ -1,0 +1,59 @@
+id = "M001-E002-S002"
+parent = "M001-E002"
+title = "Extract Entity and LayersConfig with Source union type"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The Entity and LayersConfig Pydantic models are extracted. Entity accepts name,
+description, layers (with at-least-one validation), source, required_fields,
+quality config, and computed columns/measures. Source is a Union of all
+source config types.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity importable from typedata.core with name, description, layers, source fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "LayersConfig validates that at least one layer is configured"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity validates name pattern: lowercase + underscores only (^[a-z_][a-z0-9_]*$)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity rejects creation without required_fields or source (raises ValidationError)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity.all_computed_columns returns core_computed + dimension layer computed columns"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Source union type accepts BigQuerySource, DerivedSource, UnionSource instances"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/entity.py",
+]
+input_fixtures = []
+depends_on = ["M001-E002-S001", "M001-E001-S003"]
+
+[handoff]
+implementation_hints = """
+- entity.py imports from activity, analytics, layer, source — all must be extracted first
+- Uses TYPE_CHECKING for ComputedColumn, Measure, QualityConfig (resolved via model_rebuild later)
+- Update TYPE_CHECKING imports: metadata.components → typedata.components, metadata.quality → typedata.quality
+- Keep the Source union type — evaluate which source types to include
+- Entity has properties: all_fields, all_computed_columns, all_measures, get_layer, has_layer
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/entity.py",
+]

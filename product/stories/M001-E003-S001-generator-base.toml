@@ -1,0 +1,57 @@
+id = "M001-E003-S001"
+parent = "M001-E003"
+title = "Extract base generator class and Ibis code generator structure"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The IbisCodeGenerator class is extracted with its constructor (accepts Entity),
+import generation, and source function generation for DuckDB and BigQuery backends.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisCodeGenerator importable from typedata.generators"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisCodeGenerator(entity) accepts an Entity instance"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_generate_imports() returns valid Python with ibis import"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_generate_source_functions() returns DuckDB parquet reader and BigQuery table reader"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "UnionSource entities generate multiple source readers correctly"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/base.py",
+]
+input_fixtures = []
+depends_on = ["M001-E002-S004"]
+
+[handoff]
+implementation_hints = """
+- ibis_code_generator.py is 527 lines — extract the class structure and source generation first
+- It uses Hamilton @config.when decorators for backend switching — evaluate if we keep Hamilton
+  or simplify to plain Ibis (Hamilton adds a dependency)
+- The generator imports Entity, ActivityConfig, ActivityType, UnionSource from metadata.core
+- Update all imports to typedata.*
+- base.py (~30 lines) provides abstract base — may not be needed if we only have one generator
+- Strip dbt/dagster references
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/base.py",
+]

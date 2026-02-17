@@ -1,0 +1,58 @@
+# Story Template
+# Copy this file to product/stories/MXXX-EXXX-SXXX-story-name.toml
+# Use parent epic prefix (e.g., M001-E001-S001, M001-E001-S002)
+
+id = "MXXX-EXXX-SXXX"
+parent = "MXXX-EXXX"  # Parent epic ID
+title = "Story title - specific implementable unit"
+status = "draft"  # draft | ready | in-progress | complete | abandoned
+created = 2025-01-01  # Update to current date
+
+# Outcome: What does this story deliver?
+[outcome]
+description = """
+One clear sentence describing what this story implements.
+Should be small enough to complete in one implementation session.
+"""
+
+# Acceptance Criteria: How do we verify this story is complete?
+[acceptance_criteria]
+# Can these criteria be verified with automated tests?
+executable = true  # true | false
+
+# List of criteria - each should be verifiable
+[[acceptance_criteria.criteria]]
+test = "unit"  # unit | integration | e2e | manual
+description = "Specific testable behavior 1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Specific testable behavior 2"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Specific testable behavior 3"
+
+# Context: Implementation scope
+[context]
+# Files likely to be created or modified
+relevant_paths = [
+    "src/feature/file.ts"
+]
+
+# Test fixtures or example data to use
+input_fixtures = []
+
+# Dependencies on other stories (use story IDs)
+depends_on = []
+
+# Handoff: Information for the implementation phase
+[handoff]
+# Suggested approach for brainstorming phase
+implementation_hints = """
+Optional hints about implementation approach.
+Leave empty if the story is self-explanatory.
+"""
+
+# Files that provide useful context for implementation
+reference_files = []

@@ -1,0 +1,55 @@
+id = "M001-E002-S001"
+parent = "M001-E002"
+title = "Extract layer configuration classes"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+PrepLayer, DimensionLayer, SnapshotLayer, and ActivityLayer are extracted with
+correct dependency on MaterializationType from core/types.py and forward
+reference to ComputedColumn.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PrepLayer importable with model_name, computed_columns, materialization, target_schema fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DimensionLayer importable with model_name, computed_columns, materialization fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotLayer importable with enabled flag and configuration"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityLayer importable with model_name and configuration"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PrepLayer auto-adds 'prep' tag in model_post_init"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/layer.py",
+]
+input_fixtures = []
+depends_on = ["M001-E001-S002"]
+
+[handoff]
+implementation_hints = """
+- layer.py imports MaterializationType from core/types — must have S002 complete
+- Uses ComputedColumn = Any as placeholder (forward ref resolved later via model_rebuild)
+- Keep the same forward-reference pattern
+- has to_sql() methods that generate dbt SQL — evaluate if these should stay or be stripped
+  (they're dbt-specific, typedata uses Ibis instead)
+- Update import: from .types import MaterializationType
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/layer.py",
+]

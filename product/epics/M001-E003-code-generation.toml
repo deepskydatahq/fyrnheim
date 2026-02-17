@@ -1,0 +1,63 @@
+id = "M001-E003"
+parent = "M001"
+title = "Ibis code generation from entity definitions"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+Given an Entity definition, typedata generates valid Ibis transformation code
+that implements the entity's layer pipeline (prep → dimension → snapshot).
+The generated code is importable Python that produces Ibis table expressions.
+"""
+
+job_story = """
+When I have defined an entity with layers and computed columns,
+I want to generate Ibis transformation code automatically,
+so that I don't write SQL or Ibis expressions by hand for standard patterns.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IbisCodeGenerator extracted and adapted: accepts Entity, produces Python source code",
+    "Generated code contains valid Ibis table expressions (not raw SQL strings)",
+    "PrepLayer generation: type casts, renames, computed columns produce correct Ibis ops",
+    "DimensionLayer generation: computed columns, materialization config present",
+    "SnapshotLayer generation: SCD Type 2 logic with surrogate keys generated",
+    "Generated code is syntactically valid Python (ast.parse succeeds)",
+    "Generated code references correct typedata imports (not metadata.*)",
+    "Test suite: generate code from sample entity, verify it parses and contains expected Ibis patterns",
+]
+
+validator_context = [
+    "src/typedata/generators/",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/base.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/",
+]
+
+dependencies = ["M001-E002"]
+
+[notes]
+considerations = """
+The generator system in timo-data-stack has many generators (dbt, duckdb, sql, ibis).
+For typedata, we only need the Ibis code generator — the others are integration-specific.
+
+Key extraction:
+- generators/base.py — base class
+- generators/ibis_code_generator.py — the core (527 lines)
+- Skip: dbt_generator.py, duckdb_generator.py, sql_generator.py, dbt_project_generator.py
+
+The ibis_code_generator imports from metadata.core (Entity, source types, activity types).
+These imports need updating to typedata.*.
+
+Consider whether to also extract the identity graph generator here or defer to E004.
+"""
+
+estimated_stories = 4  # S001-S004

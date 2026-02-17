@@ -1,0 +1,86 @@
+id = "M001"
+title = "Extract core entity framework into standalone typedata package"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A data engineer can `pip install typedata`, define a Pydantic entity with source,
+layers, and quality checks, then run transformations on DuckDB — all without
+timo-data-stack. The framework works as a self-contained library with clean
+public API, tests, and documentation.
+"""
+
+user_progress = "From 'framework buried inside a monorepo, can't reuse it' to 'pip install typedata and define entities in any project'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "typedata is pip-installable (pyproject.toml, package structure, uv/pip install -e . works)",
+    "Entity, LayersConfig, PrepLayer, DimensionLayer, SnapshotLayer can be imported from typedata",
+    "Primitives (hash_email, categorize, days_since) importable from typedata.primitives",
+    "Components (ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics) importable from typedata.components",
+    "Quality checks (NotNull, Unique, QualityConfig) importable from typedata.quality",
+    "A sample entity defined with Pydantic validates correctly (fields, layers, source config)",
+    "Code generator produces valid Ibis expressions from entity definition",
+    "Generated transformations execute on DuckDB with sample parquet data and produce correct output",
+    "Test suite passes: entity definition, code generation, transformation execution, quality checks",
+    "No dependency on timo-data-stack — framework is fully self-contained",
+]
+
+validator_context = [
+    "src/typedata/",
+    "tests/",
+    "pyproject.toml",
+    "examples/",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/primitives/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/components/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/quality/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/identity_graph/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/generate_pydantic_entities.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",
+]
+
+[notes]
+considerations = """
+Extraction scope (from timo-data-stack/metadata/):
+
+MUST extract:
+- core/ — Entity, LayersConfig, all source types, layers, types
+- primitives/ — 65+ SQL building block functions
+- components/ — ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics
+- quality/ — QualityConfig, checks, runner
+- generators/ — Base generator + Ibis code generator (skip dbt/dagster generators)
+- identity_graph/ — Full identity resolution system
+
+MUST build new:
+- Clean public API (__init__.py exports)
+- pyproject.toml with minimal dependencies
+- Package structure: src/typedata/
+- Example entity + sample data for end-to-end validation
+- Test suite covering core → generate → execute flow
+
+Key decisions:
+- Use src/ layout for proper packaging
+- Ibis backends as optional extras: typedata[duckdb], typedata[bigquery]
+- BigQuery dependency optional, DuckDB as default local backend
+- Keep generators internal — users define entities, not generator code
+- Skip tenant extensions for now (multi-tenant is a later concern)
+- Skip dbt/dagster generators (those are integration-specific)
+
+Dependencies:
+- pydantic>=2.11.0
+- ibis-framework>=11.0.0
+- pyyaml>=6.0.0
+- duckdb>=1.4.0 (optional, in [duckdb] extra)
+- google-cloud-bigquery>=3.35.0 (optional, in [bigquery] extra)
+"""

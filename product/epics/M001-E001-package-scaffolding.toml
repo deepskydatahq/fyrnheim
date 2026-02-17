@@ -1,0 +1,98 @@
+id = "M001-E001"
+parent = "M001"
+title = "Package scaffolding and foundation types"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A pip-installable typedata package exists with src/ layout, pyproject.toml,
+and the zero-dependency leaf modules extracted: types, sources, primitives,
+components, and quality checks. `pip install -e .` works and imports resolve.
+"""
+
+job_story = """
+When I start building the typedata library,
+I want the package structure, build config, and foundation types in place,
+so that all subsequent epics can build on a working, installable package.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pyproject.toml exists with correct metadata, dependencies (pydantic>=2.11), and optional extras [duckdb], [bigquery]",
+    "src/typedata/ package structure with __init__.py",
+    "`uv pip install -e .` succeeds without errors",
+    "core/types.py extracted: MaterializationType, IncrementalStrategy, SourcePriority importable",
+    "core/source.py extracted: BigQuerySource, DerivedSource, Field, UnionSource etc. importable",
+    "core/activity.py extracted: ActivityConfig, ActivityType importable",
+    "core/analytics.py extracted: AnalyticsLayer, AnalyticsMetric etc. importable",
+    "primitives/ fully extracted: hash_email, categorize, days_since, sum_, count_ etc. importable from typedata.primitives",
+    "components/ fully extracted: ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics importable from typedata.components",
+    "quality/ fully extracted: QualityConfig, NotNull, Unique, QualityRunner importable from typedata.quality",
+    "Basic test suite passes: import tests for all leaf modules",
+]
+
+validator_context = [
+    "pyproject.toml",
+    "src/typedata/",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/types.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/activity.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/analytics.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/primitives/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/components/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/quality/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/pyproject.toml",
+]
+
+dependencies = []
+
+[notes]
+considerations = """
+These are all Layer 0 modules — zero coupling to each other or to core/entity.
+They depend only on pydantic and stdlib.
+
+Extract with minimal modification — keep the same class names and API surface.
+Only changes needed:
+- Update import paths from metadata.* to typedata.*
+- Remove any timo-data-stack-specific source types if they exist (SignalSourceConfig, ProductSourceConfig etc. — evaluate if generic enough)
+- Clean up __init__.py exports for public API
+
+Package layout:
+  src/typedata/
+    __init__.py
+    core/
+      __init__.py
+      types.py
+      source.py
+      activity.py
+      analytics.py
+    primitives/
+      __init__.py
+      aggregations.py
+      dates.py
+      hashing.py
+      categorization.py
+      strings.py
+      json_ops.py
+      time.py
+    components/
+      __init__.py
+      computed_column.py
+      measure.py
+      lifecycle_flags.py
+      time_metrics.py
+      quality_checks.py
+    quality/
+      __init__.py
+      checks.py
+      runner.py
+"""
+
+estimated_stories = 5

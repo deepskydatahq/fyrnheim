@@ -1,0 +1,55 @@
+id = "M001-E004-S002"
+parent = "M001-E004"
+title = "Build DuckDB execution engine"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+An execution engine loads generated Ibis transformation code, connects to DuckDB,
+registers parquet files as source tables, runs transformations, and persists results.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDBExecutor connects to DuckDB (in-memory or file-based)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "register_parquet(name, path) registers a parquet file as a named table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "execute(entity_name) loads generated transform module and runs it"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Transform result is an Ibis table that can be .to_pandas() or persisted to DuckDB"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Results persist to DuckDB as tables accessible via conn.table(name)"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",
+]
+input_fixtures = []
+depends_on = ["M001-E003-S004"]
+
+[handoff]
+implementation_hints = """
+- run_transformations.py in timo-data-stack is 695 lines with lots of timo-specific logic
+- Extract only the DuckDB path — skip BigQuery, incremental processing, Hamilton DAG
+- Core loop: connect DuckDB → register sources → load generated module → call transform function → persist
+- Use ibis.duckdb.connect() for the backend
+- Parquet registration: conn.read_parquet(path, table_name=name)
+- Result persistence: conn.create_table(name, result) or conn.insert(name, result)
+- Place in typedata/engine/executor.py
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",
+]

@@ -1,0 +1,65 @@
+id = "M001-E001-S004"
+parent = "M001-E001"
+title = "Extract primitives and components packages"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+All 30+ primitive functions (hashing, dates, categorization, aggregations, strings, json, time)
+and all component classes (ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics,
+DataQualityChecks) are extracted and importable.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "hash_email, concat_hash, hash_md5, hash_sha256 importable from typedata.primitives"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "categorize, lifecycle_flag, boolean_to_int importable from typedata.primitives"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "date_diff_days, days_since, extract_year, date_trunc_month importable from typedata.primitives"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "sum_, count_, count_distinct, avg_, row_number_by importable from typedata.primitives"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics, DataQualityChecks importable from typedata.components"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ComputedColumn validates with name and expression fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Primitives return valid SQL expression strings when called"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/primitives/",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/components/",
+]
+input_fixtures = []
+depends_on = ["M001-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- Both packages have ZERO internal deps — they don't import from metadata.core or each other
+- Copy all 7 primitives modules + __init__.py verbatim
+- Copy all 5 components modules + __init__.py verbatim
+- Only change needed: any import path updates (there shouldn't be any)
+- Test primitives by calling functions and checking they return SQL strings
+- Can be done in parallel with S002 and S003
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/primitives/__init__.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/components/__init__.py",
+]

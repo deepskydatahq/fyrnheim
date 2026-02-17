@@ -1,0 +1,57 @@
+# Epic Template
+# Copy this file to product/epics/MXXX-EXXX-epic-name.toml
+# Use parent mission prefix (e.g., M001-E001, M001-E002)
+
+id = "MXXX-EXXX"
+parent = "MXXX"  # Parent mission ID
+title = "Epic title - feature group description"
+status = "draft"  # draft | active | complete | abandoned
+created = 2025-01-01  # Update to current date
+
+# Outcome: What does completing this epic achieve?
+[outcome]
+description = """
+Describe what this epic delivers in 1-2 sentences.
+This should be a meaningful milestone within the mission.
+"""
+
+# Job Story format: context -> motivation -> outcome
+job_story = """
+When [situation/context],
+I want [motivation/action],
+so that [expected outcome/benefit].
+"""
+
+# Testing: How do we know this epic succeeded?
+[testing]
+approach = "agent-judgment"  # Epics typically use agent judgment
+criteria = [
+    "Testable outcome 1",
+    "Testable outcome 2",
+    "Testable outcome 3"
+]
+
+# What should the judgment agent examine?
+validator_context = [
+    "src/relevant/feature/",
+    "tests/relevant/"
+]
+
+# Context: Scope and dependencies
+[context]
+relevant_paths = [
+    "src/feature/area/"
+]
+
+# Other epics that must complete first (use epic IDs)
+dependencies = []
+
+# Optional: Notes for the story breakdown agent
+[notes]
+considerations = """
+Important context for breaking this epic into stories.
+Technical constraints, UX requirements, etc.
+"""
+
+# Estimated scope (optional, for tracking)
+estimated_stories = 0  # Fill in after breakdown

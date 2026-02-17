@@ -1,0 +1,43 @@
+id = "M001-E002-S003"
+parent = "M001-E002"
+title = "Extract SourceMapping class"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+SourceMapping is extracted — it bridges Entity definitions to specific data sources
+with field mappings. Uses TYPE_CHECKING forward references to Entity and Source.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SourceMapping importable from typedata.core"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SourceMapping accepts entity reference and field_mappings dict"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SourceMapping validates field mapping configuration"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source_mapping.py",
+]
+input_fixtures = []
+depends_on = ["M001-E002-S002"]
+
+[handoff]
+implementation_hints = """
+- source_mapping.py uses TYPE_CHECKING for Entity and Source — no runtime circular dep
+- Small file (~50 lines) — straightforward extraction
+- Update import paths in TYPE_CHECKING block
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source_mapping.py",
+]

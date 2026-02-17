@@ -1,0 +1,57 @@
+id = "M001-E004-S003"
+parent = "M001-E004"
+title = "Create public run() function orchestrating the full pipeline"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A public typedata.run() function orchestrates the full pipeline: discover entities,
+resolve dependencies, generate code, execute on DuckDB, run quality checks, and
+report results.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run(entities_dir, data_dir, backend='duckdb') executes all entities in dependency order"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run() generates transformation code if not already generated"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run() reports success/failure per entity with row counts"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "run() with quality checks reports check results per entity"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Errors during one entity don't prevent other entities from running (graceful failure)"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",
+]
+input_fixtures = []
+depends_on = ["M001-E004-S001", "M001-E004-S002"]
+
+[handoff]
+implementation_hints = """
+- This is the top-level public API for execution
+- Orchestration flow:
+  1. EntityRegistry.discover(entities_dir) → list of entities
+  2. Resolve dependency order
+  3. For each entity: generate code → execute on backend → run quality checks
+  4. Return summary: entity name, status, row count, quality results
+- Expose as typedata.run() in the public API
+- Consider also a run_entity(entity, data_dir) for single-entity execution
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",
+]

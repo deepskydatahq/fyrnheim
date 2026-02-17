@@ -1,0 +1,55 @@
+id = "M001-E001-S001"
+parent = "M001-E001"
+title = "Create package structure with pyproject.toml and src layout"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A minimal pip-installable Python package exists at src/typedata/ with pyproject.toml,
+empty __init__.py files, and `uv pip install -e .` succeeds.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "pyproject.toml exists with name='typedata', python>=3.11, build-system=hatchling"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Core dependencies declared: pydantic>=2.11.0, pyyaml>=6.0.0"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Optional extras defined: [duckdb] (ibis-framework[duckdb], duckdb>=1.4.0), [bigquery] (ibis-framework[bigquery], google-cloud-bigquery)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`uv pip install -e .` completes without errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`import typedata` succeeds and typedata.__version__ exists"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+- Use src/ layout: src/typedata/__init__.py
+- Build system: hatchling (same as timo-data-stack)
+- Create sub-package directories: core/, primitives/, components/, quality/, generators/, engine/
+- Each sub-package gets an empty __init__.py for now
+- Dev dependencies: pytest, ruff, mypy
+- Only include generic dependencies — strip dlt, dbt, convex, youtube etc.
+- Add ibis-framework (without backend extras) as core dep, backends as extras
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/pyproject.toml",
+]

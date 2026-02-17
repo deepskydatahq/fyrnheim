@@ -1,0 +1,51 @@
+id = "M001-E001-S003"
+parent = "M001-E001"
+title = "Extract activity and analytics layer config classes"
+status = "ready"
+created = 2026-02-16
+
+[outcome]
+description = """
+ActivityConfig, ActivityType and AnalyticsLayer, AnalyticsMetric, AnalyticsModel,
+AnalyticsSource, ComputedMetric are extracted — completing all leaf-level core
+config classes.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityConfig, ActivityType importable from typedata.core.activity"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsLayer, AnalyticsMetric, AnalyticsModel, AnalyticsSource, ComputedMetric importable from typedata.core.analytics"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityConfig validates with correct activity type enum values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsLayer validates with metrics list and source configuration"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/activity.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/analytics.py",
+]
+input_fixtures = []
+depends_on = ["M001-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- Both files are pure Pydantic models with zero internal deps — copy directly
+- Update import paths only
+- These are small files (<100 lines combined)
+- Can be done in parallel with S002
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/activity.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/analytics.py",
+]

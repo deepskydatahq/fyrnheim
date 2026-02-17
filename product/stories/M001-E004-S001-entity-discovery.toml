@@ -1,0 +1,54 @@
+id = "M001-E004-S001"
+parent = "M001-E004"
+title = "Extract entity discovery and dependency resolution"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+EntityRegistry discovers Entity definitions from a directory, resolves their
+dependency order (DerivedSource depends on other entities), and returns them
+in execution order.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityRegistry importable from typedata.engine"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityRegistry.discover(entities_dir) finds all .py files exporting Entity instances"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dependency resolution: entity with DerivedSource sorts after its source entity"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Circular dependency raises clear error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityInfo provides name, entity, layers list, and path information"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/entity_registry.py",
+]
+input_fixtures = []
+depends_on = ["M001-E002-S004"]
+
+[handoff]
+implementation_hints = """
+- EntityRegistry in timo-data-stack (~224 lines) scans for Entity instances in Python files
+- Uses importlib to dynamically load entity modules
+- Dependency resolution based on DerivedSource/DerivedEntitySource references
+- Place in typedata/engine/ sub-package
+- Strip timo-specific logic, keep generic discovery + dep resolution
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/entity_registry.py",
+]

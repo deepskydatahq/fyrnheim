@@ -1,0 +1,49 @@
+id = "M001-E003-S002"
+parent = "M001-E003"
+title = "Generate Ibis code for PrepLayer and DimensionLayer"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The generator produces valid Ibis expressions for PrepLayer (type casts, renames,
+computed columns) and DimensionLayer (computed columns, select, materialization).
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PrepLayer generation produces Ibis rename, type cast, and computed column operations"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DimensionLayer generation produces Ibis select with computed columns appended"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code for entity with PrepLayer + DimensionLayer is syntactically valid (ast.parse)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code contains correct function signatures referencing entity name"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = ["M001-E003-S001"]
+
+[handoff]
+implementation_hints = """
+- Focus on the _generate_prep_layer() and _generate_dimension_layer() methods
+- Prep: iterate TypeCast, Rename, Divide, Multiply + computed columns → Ibis .cast(), .name(), .mutate()
+- Dimension: computed columns → Ibis .mutate() with expression evaluation
+- The timo-data-stack generator creates SQL strings — consider generating actual Ibis Python code instead
+- Test with a sample entity that has both layers with computed columns
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+]

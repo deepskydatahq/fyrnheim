@@ -1,0 +1,45 @@
+id = "M001-E003-S003"
+parent = "M001-E003"
+title = "Generate Ibis code for SnapshotLayer (SCD Type 2)"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The generator produces valid Ibis code for SnapshotLayer implementing SCD Type 2
+logic — daily snapshots with surrogate keys and valid_from/valid_to tracking.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotLayer generation produces Ibis code with surrogate key computation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated snapshot code includes valid_from and valid_to date columns"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code is syntactically valid Python (ast.parse)"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = ["M001-E003-S001"]
+
+[handoff]
+implementation_hints = """
+- Snapshot layer is more complex — SCD Type 2 with change detection
+- Look for snapshot-related methods in the generator
+- Key operations: hash current row, compare with previous snapshot, detect changes,
+  set valid_from/valid_to, append new records
+- Can be done in parallel with S002
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py",
+]

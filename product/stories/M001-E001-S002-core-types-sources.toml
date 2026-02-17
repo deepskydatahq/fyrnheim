@@ -1,0 +1,60 @@
+id = "M001-E001-S002"
+parent = "M001-E001"
+title = "Extract core types, enums, and source configuration classes"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The foundation type system is extracted: MaterializationType, IncrementalStrategy,
+SourcePriority enums, plus all source config classes (Field, BigQuerySource,
+DerivedSource, UnionSource, etc.) and transformation helpers (TypeCast, Rename,
+Divide, Multiply).
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MaterializationType, IncrementalStrategy, SourcePriority importable from typedata.core.types"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Field, TypeCast, Rename, Divide, Multiply importable from typedata.core.source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "BigQuerySource, DerivedSource, DerivedEntitySource, AggregationSource, UnionSource importable from typedata.core.source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "BigQuerySource validates correctly with project, dataset, table fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Field validates correctly with name, type, nullable, description"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/types.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source.py",
+]
+input_fixtures = []
+depends_on = ["M001-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- Copy types.py nearly verbatim — it's pure enums, no internal deps
+- Copy source.py — also no internal deps, just pydantic
+- Evaluate which source types are generic vs timo-specific:
+  - KEEP: BigQuerySource, DerivedSource, DerivedEntitySource, AggregationSource, UnionSource, Field, TypeCast, Rename, Divide, Multiply
+  - EVALUATE: SignalSourceConfig, ProductSourceConfig, ProductUnionSource, AnonSourceConfig, EventAggregationSource — these may be too specific
+  - SourceOverrides — keep if generic enough
+- Update import paths: metadata.* → typedata.*
+- Create core/__init__.py with re-exports
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/types.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source.py",
+]

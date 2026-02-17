@@ -1,0 +1,57 @@
+id = "M001-E003-S004"
+parent = "M001-E003"
+title = "Create generate() function that writes transformation files"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A public generate() function accepts an Entity (or path to entity definition)
+and writes the generated Ibis transformation code to a specified output directory.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate(entity, output_dir) writes a {entity_name}_transforms.py file"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated file contains a transform_{entity_name}() function"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated file has correct imports (ibis, os)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Generated file can be imported as a Python module without errors"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Full round trip: define entity → generate() → import generated module → module has expected functions"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/generate_pydantic_entities.py",
+]
+input_fixtures = []
+depends_on = ["M001-E003-S002", "M001-E003-S003"]
+
+[handoff]
+implementation_hints = """
+- This is the public API entry point for code generation
+- In timo-data-stack this lives in scripts/generate_pydantic_entities.py (PydanticIbisGenerator)
+- For typedata, expose as typedata.generate(entity, output_dir='generated/')
+- The function should:
+  1. Accept Entity instance
+  2. Create IbisCodeGenerator(entity)
+  3. Call all generation methods
+  4. Write output to {output_dir}/{entity_name}_transforms.py
+- Consider also supporting a batch mode: generate_all(entities_dir, output_dir)
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/generate_pydantic_entities.py",
+]

@@ -1,0 +1,55 @@
+id = "M001-E001-S005"
+parent = "M001-E001"
+title = "Extract quality check framework"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The quality check framework is extracted: QualityConfig, all check types
+(NotNull, NotEmpty, InRange, InSet, MatchesPattern, ForeignKey, Unique,
+MaxAge, CustomSQL), and QualityRunner with CheckResult/EntityResult.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "QualityConfig, NotNull, Unique, InRange importable from typedata.quality"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "NotNull('email').get_where_clause() returns valid SQL fragment"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "InRange('amount', min=0, max=10000).get_where_clause() returns correct SQL"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "QualityConfig validates with checks list and primary_key"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "QualityRunner, CheckResult, EntityResult importable from typedata.quality"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/quality/",
+]
+input_fixtures = []
+depends_on = ["M001-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- quality/ package has zero deps on metadata.core — copy directly
+- checks.py: abstract QualityCheck base + 9 concrete check types
+- runner.py: QualityRunner that executes checks against data
+- Check if runner.py has any BigQuery-specific logic that needs abstracting
+- Can be done in parallel with S002, S003, S004
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/quality/checks.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/quality/runner.py",
+]

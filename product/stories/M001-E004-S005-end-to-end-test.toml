@@ -1,0 +1,64 @@
+id = "M001-E004-S005"
+parent = "M001-E004"
+title = "End-to-end integration test: define → generate → execute → verify"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A comprehensive integration test proves the full typedata pipeline works:
+define a sample entity, generate Ibis code, execute on DuckDB, verify the
+output table has correct schema and data.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Test defines Entity with PrepLayer + DimensionLayer + quality checks"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Test calls generate() and verifies generated file exists and is valid Python"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Test calls run() with sample parquet data on DuckDB"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Output DuckDB table has expected columns including computed columns"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Output rows match expected count (no data loss)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Quality checks pass on the output (NotNull, Unique verified)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "pytest runs all tests (unit + integration + e2e) and they pass"
+
+[context]
+relevant_paths = []
+input_fixtures = []
+depends_on = ["M001-E004-S004"]
+
+[handoff]
+implementation_hints = """
+- This is the mission validation story — if this passes, M001 is complete
+- Use pytest with tmp_path for isolation
+- Create entity inline in test (don't depend on examples/)
+- Create sample parquet with pandas in test fixture
+- Verify:
+  1. Generated Python file exists and imports cleanly
+  2. DuckDB table created with correct schema
+  3. Row count matches input
+  4. Computed columns have expected values (spot check)
+  5. Quality checks report pass/fail correctly
+- Run the full test suite: pytest tests/ -v
+"""
+reference_files = []

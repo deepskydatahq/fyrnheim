@@ -1,0 +1,98 @@
+[project]
+name = "typedata"
+version = "0.1.0"
+description = "Define typed Python entities, generate transformations, run anywhere. A dbt alternative built on Pydantic + Ibis."
+requires-python = ">=3.11"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Timo Dechau", email = "timo@deepskydata.com" }
+]
+keywords = ["data", "transformations", "pydantic", "ibis", "dbt-alternative", "elt"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "pydantic>=2.11.0",
+    "pyyaml>=6.0.0",
+    "ibis-framework>=11.0.0",
+]
+
+[project.optional-dependencies]
+duckdb = [
+    "ibis-framework[duckdb]>=11.0.0",
+    "duckdb>=1.4.0",
+]
+bigquery = [
+    "ibis-framework[bigquery]>=11.0.0",
+    "google-cloud-bigquery>=3.35.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.12.0",
+    "mypy>=1.17.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/timo-ai/typedata"
+Repository = "https://github.com/timo-ai/typedata"
+Issues = "https://github.com/timo-ai/typedata/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/typedata"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]

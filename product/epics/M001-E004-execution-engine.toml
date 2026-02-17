@@ -1,0 +1,69 @@
+id = "M001-E004"
+parent = "M001"
+title = "DuckDB execution engine with end-to-end validation"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+A user can define an entity, generate transformations, and execute them on DuckDB
+with real parquet data — completing the full typedata loop. Includes sample entity,
+sample data, and an end-to-end test that validates the entire pipeline.
+"""
+
+job_story = """
+When I have generated Ibis transformation code from my entity,
+I want to execute it on DuckDB with my local data files,
+so that I can see the transformed output without touching a cloud warehouse.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Execution engine loads generated Ibis code and runs it against DuckDB backend",
+    "Engine discovers entities, resolves dependencies, executes in correct order",
+    "Parquet files can be registered as source tables in DuckDB",
+    "Sample entity + sample parquet data included in examples/ directory",
+    "End-to-end test: define entity → generate code → execute on DuckDB → verify output table has correct rows and columns",
+    "Quality checks run after transformation and report results",
+    "Errors during execution produce clear, actionable messages (not raw Ibis/DuckDB tracebacks)",
+    "README or examples/README.md shows the complete workflow",
+]
+
+validator_context = [
+    "src/typedata/engine/",
+    "examples/",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/entity_registry.py",
+]
+
+dependencies = ["M001-E003"]
+
+[notes]
+considerations = """
+run_transformations.py in timo-data-stack is 695 lines with both DuckDB and BigQuery
+support, incremental processing, and many timo-specific source types.
+
+For typedata E004, extract only:
+- Entity discovery and dependency resolution
+- DuckDB backend execution (BigQuery is optional extra, deferred)
+- Parquet file registration as source tables
+- Basic execution loop: load sources → run generated code → persist result
+
+Skip for now:
+- Incremental processing (high water marks) — that's an optimization
+- BigQuery backend — optional extra for later
+- Hamilton DAG orchestration — keep it simple
+
+The sample entity should be something universal (e.g. a simple "customers" entity
+transforming a parquet of raw customer records into a dimension table).
+
+This epic validates the ENTIRE mission — if this works, M001 succeeds.
+"""
+
+estimated_stories = 5  # S001-S005

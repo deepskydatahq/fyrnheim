@@ -1,0 +1,51 @@
+id = "M001-E004-S004"
+parent = "M001-E004"
+title = "Create sample entity with test data for end-to-end validation"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+An examples/ directory contains a sample 'customers' entity with parquet test data,
+demonstrating the full typedata workflow: define → generate → run → query results.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/entities/customers.py defines Entity with PrepLayer + DimensionLayer"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/data/customers.parquet contains sample customer records (10+ rows)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "PrepLayer includes: email hash, type casts for dates"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "DimensionLayer includes: computed columns (email_domain, lifecycle segment)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Quality checks: NotNull on email, Unique on email_hash"
+
+[context]
+relevant_paths = []
+input_fixtures = []
+depends_on = ["M001-E004-S003"]
+
+[handoff]
+implementation_hints = """
+- Create a realistic but simple example that showcases typedata's value
+- Sample customer data with: id, email, name, created_at, plan, amount_cents
+- PrepLayer: hash email, cast created_at to date, divide amount_cents by 100
+- DimensionLayer: email_domain (extract_email_domain primitive), is_paying flag, signup_month
+- Quality: NotNull('email', 'id'), Unique('email_hash'), InRange('amount_cents', min=0)
+- Generate sample parquet using pandas — include in examples/data/
+- This proves the entire pipeline works end-to-end
+"""
+reference_files = []

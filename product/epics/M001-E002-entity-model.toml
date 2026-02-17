@@ -1,0 +1,67 @@
+id = "M001-E002"
+parent = "M001"
+title = "Core entity model and layer system"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The Entity and LayersConfig system is extracted — a user can define a typed
+Pydantic entity with PrepLayer, DimensionLayer, SnapshotLayer, ActivityLayer,
+and AnalyticsLayer. Pydantic validation catches schema errors at definition time.
+"""
+
+job_story = """
+When I want to define a business entity (e.g. customers, transactions),
+I want to declare it as a Pydantic model with source, layers, and quality rules,
+so that my entity definition is validated before any transformation runs.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "core/layer.py extracted: PrepLayer, DimensionLayer, SnapshotLayer, ActivityLayer importable with correct fields",
+    "core/entity.py extracted: Entity, LayersConfig, Source union type working",
+    "core/source_mapping.py extracted: SourceMapping importable",
+    "Entity.model_rebuild() resolves forward references to ComputedColumn, Measure, QualityConfig",
+    "A sample entity with PrepLayer + DimensionLayer + computed columns validates without errors",
+    "A sample entity with invalid config (e.g. missing required field) raises Pydantic ValidationError",
+    "Entity can reference quality checks from typedata.quality",
+    "Top-level typedata/__init__.py re-exports Entity, LayersConfig, and all source/layer types",
+    "Test suite covers: valid entity creation, validation errors, layer configuration, source types",
+]
+
+validator_context = [
+    "src/typedata/core/entity.py",
+    "src/typedata/core/layer.py",
+    "src/typedata/core/source_mapping.py",
+    "src/typedata/__init__.py",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/entity.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/layer.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source_mapping.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/tenant_extension.py",
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/__init__.py",
+]
+
+dependencies = ["M001-E001"]
+
+[notes]
+considerations = """
+This is the hub module — entity.py imports from types, source, activity, analytics, layer.
+It uses TYPE_CHECKING imports for ComputedColumn, Measure, QualityConfig (resolved via model_rebuild).
+
+Key decisions:
+- Skip TenantExtension for now (multi-tenant is deferred) — or include as opt-in
+- The Source union type aggregates all source configs — evaluate which are generic vs timo-specific
+- model_rebuild() call must happen in typedata/__init__.py after all modules load
+- Keep the same forward-reference pattern (TYPE_CHECKING + model_rebuild)
+
+Layer 1+2 from dependency analysis. Depends on E001 being complete.
+"""
+
+estimated_stories = 4  # S001-S004

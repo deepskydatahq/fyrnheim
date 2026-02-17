@@ -1,0 +1,58 @@
+id = "M001-E002-S004"
+parent = "M001-E002"
+title = "Wire up model_rebuild and public API exports"
+status = "complete"
+created = 2026-02-16
+
+[outcome]
+description = """
+The top-level typedata/__init__.py calls model_rebuild() to resolve forward
+references and re-exports all public types. A user can `from typedata import Entity,
+LayersConfig, PrepLayer, ComputedColumn, NotNull` etc. in a single import.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity.model_rebuild() resolves ComputedColumn, Measure, QualityConfig forward refs"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer works"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "from typedata import ComputedColumn, Measure, NotNull, Unique works"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "from typedata import BigQuerySource, DerivedSource, Field works"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Creating Entity with ComputedColumn in dimension layer validates correctly (forward ref resolved)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Creating Entity with quality=QualityConfig(checks=[NotNull('id')]) validates correctly"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/__init__.py",
+]
+input_fixtures = []
+depends_on = ["M001-E002-S002", "M001-E002-S003", "M001-E001-S004", "M001-E001-S005"]
+
+[handoff]
+implementation_hints = """
+- The timo-data-stack metadata/__init__.py does model_rebuild() then imports concrete entities
+- For typedata, we only need the model_rebuild() + re-exports (no concrete entities)
+- Call order matters: import all modules, THEN model_rebuild(), THEN re-export
+- This is the integration story that proves the whole core works together
+- Test by creating a realistic entity with all features: source, layers, computed columns, quality
+"""
+reference_files = [
+    "/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/__init__.py",
+]

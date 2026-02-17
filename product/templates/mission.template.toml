@@ -1,0 +1,50 @@
+# Mission Template
+# Copy this file to product/missions/MXXX-mission-name.toml
+# Replace MXXX with next available mission ID (M001, M002, etc.)
+
+id = "MXXX"
+title = "Mission title - clear, descriptive"
+status = "draft"  # draft | active | complete | abandoned
+created = 2025-01-01  # Update to current date
+
+# Outcome: What user progress does this mission enable?
+[outcome]
+description = """
+Describe the user experience improvement in 2-3 sentences.
+Focus on what changes for the user, not what we build.
+"""
+
+# Jobs-to-be-Done framing: from state A to state B
+user_progress = "From '[current painful state]' to '[desired improved state]'"
+
+# Testing: How do we know this mission succeeded?
+[testing]
+approach = "agent-judgment"  # Missions always use agent judgment
+criteria = [
+    "Observable outcome 1 that indicates success",
+    "Observable outcome 2 that indicates success",
+    "Observable outcome 3 that indicates success"
+]
+
+# What should the judgment agent examine?
+validator_context = [
+    "paths/to/relevant/code/",
+    "docs/relevant-documentation.md"
+]
+
+# Context: What existing work relates to this mission?
+[context]
+related_docs = [
+    "VISION.md",
+    "ROADMAP.md"
+]
+relevant_paths = [
+    "src/relevant/area/"
+]
+
+# Optional: Notes for the breakdown agent
+[notes]
+considerations = """
+Any important context, constraints, or things to keep in mind
+when breaking this mission into epics.
+"""

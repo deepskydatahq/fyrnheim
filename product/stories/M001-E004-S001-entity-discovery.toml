@@ -16,7 +16,7 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "EntityRegistry importable from typedata.engine"
+description = "EntityRegistry importable from fyrnheim.engine"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
@@ -46,7 +46,7 @@ implementation_hints = """
 - EntityRegistry in timo-data-stack (~224 lines) scans for Entity instances in Python files
 - Uses importlib to dynamically load entity modules
 - Dependency resolution based on DerivedSource/DerivedEntitySource references
-- Place in typedata/engine/ sub-package
+- Place in fyrnheim/engine/ sub-package
 - Strip timo-specific logic, keep generic discovery + dep resolution
 """
 reference_files = [

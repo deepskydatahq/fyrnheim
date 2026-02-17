@@ -1,34 +1,34 @@
-"""Tests for typedata.components package."""
+"""Tests for fyrnheim.components package."""
 
 import pytest
 from pydantic import ValidationError
 
 
 class TestImports:
-    """Test that all 5 classes are importable from typedata.components."""
+    """Test that all 5 classes are importable from fyrnheim.components."""
 
     def test_computed_column_importable(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         assert ComputedColumn is not None
 
     def test_measure_importable(self):
-        from typedata.components import Measure
+        from fyrnheim.components import Measure
 
         assert Measure is not None
 
     def test_lifecycle_flags_importable(self):
-        from typedata.components import LifecycleFlags
+        from fyrnheim.components import LifecycleFlags
 
         assert LifecycleFlags is not None
 
     def test_time_based_metrics_importable(self):
-        from typedata.components import TimeBasedMetrics
+        from fyrnheim.components import TimeBasedMetrics
 
         assert TimeBasedMetrics is not None
 
     def test_data_quality_checks_importable(self):
-        from typedata.components import DataQualityChecks
+        from fyrnheim.components import DataQualityChecks
 
         assert DataQualityChecks is not None
 
@@ -37,7 +37,7 @@ class TestComputedColumn:
     """Tests for ComputedColumn validation and behavior."""
 
     def test_valid_creation(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         col = ComputedColumn(
             name="total",
@@ -49,33 +49,33 @@ class TestComputedColumn:
         assert col.description == "Total amount"
 
     def test_empty_name_fails(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         with pytest.raises(ValidationError):
             ComputedColumn(name="", expression="SUM(amount)")
 
     def test_empty_expression_fails(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         with pytest.raises(ValidationError):
             ComputedColumn(name="total", expression="")
 
     def test_to_sql_works(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         col = ComputedColumn(name="total", expression="SUM(amount)")
         sql = col.to_sql()
         assert "SUM(amount) AS total" in sql
 
     def test_to_sql_custom_indent(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         col = ComputedColumn(name="total", expression="SUM(amount)")
         sql = col.to_sql(indent=8)
         assert sql.startswith("        ")
 
     def test_expression_is_stripped(self):
-        from typedata.components import ComputedColumn
+        from fyrnheim.components import ComputedColumn
 
         col = ComputedColumn(name="total", expression="  SUM(amount)  ")
         assert col.expression == "SUM(amount)"
@@ -85,7 +85,7 @@ class TestMeasure:
     """Tests for Measure validation."""
 
     def test_valid_creation(self):
-        from typedata.components import Measure
+        from fyrnheim.components import Measure
 
         m = Measure(
             name="total_revenue",
@@ -96,19 +96,19 @@ class TestMeasure:
         assert m.expression == "SUM(amount_cents)"
 
     def test_empty_name_fails(self):
-        from typedata.components import Measure
+        from fyrnheim.components import Measure
 
         with pytest.raises(ValidationError):
             Measure(name="", expression="SUM(amount)")
 
     def test_empty_expression_fails(self):
-        from typedata.components import Measure
+        from fyrnheim.components import Measure
 
         with pytest.raises(ValidationError):
             Measure(name="total", expression="")
 
     def test_expression_is_stripped(self):
-        from typedata.components import Measure
+        from fyrnheim.components import Measure
 
         m = Measure(name="total", expression="  COUNT(*)  ")
         assert m.expression == "COUNT(*)"
@@ -118,7 +118,7 @@ class TestLifecycleFlags:
     """Tests for LifecycleFlags component."""
 
     def test_generates_is_active_and_is_churned(self):
-        from typedata.components import LifecycleFlags
+        from fyrnheim.components import LifecycleFlags
 
         flags = LifecycleFlags(
             status_column="status",
@@ -132,7 +132,7 @@ class TestLifecycleFlags:
         assert len(columns) == 2
 
     def test_generates_is_at_risk_when_provided(self):
-        from typedata.components import LifecycleFlags
+        from fyrnheim.components import LifecycleFlags
 
         flags = LifecycleFlags(
             status_column="status",
@@ -146,7 +146,7 @@ class TestLifecycleFlags:
         assert len(columns) == 3
 
     def test_computed_columns_have_expressions(self):
-        from typedata.components import LifecycleFlags
+        from fyrnheim.components import LifecycleFlags
 
         flags = LifecycleFlags(
             status_column="status",
@@ -163,7 +163,7 @@ class TestTimeBasedMetrics:
     """Tests for TimeBasedMetrics component."""
 
     def test_generates_basic_time_columns(self):
-        from typedata.components import TimeBasedMetrics
+        from fyrnheim.components import TimeBasedMetrics
 
         metrics = TimeBasedMetrics(created_at_col="created_at")
         columns = metrics.to_computed_columns()
@@ -174,7 +174,7 @@ class TestTimeBasedMetrics:
         assert len(columns) == 3
 
     def test_generates_updated_columns_when_provided(self):
-        from typedata.components import TimeBasedMetrics
+        from fyrnheim.components import TimeBasedMetrics
 
         metrics = TimeBasedMetrics(
             created_at_col="created_at",
@@ -187,7 +187,7 @@ class TestTimeBasedMetrics:
         assert len(columns) == 5
 
     def test_computed_columns_have_expressions(self):
-        from typedata.components import TimeBasedMetrics
+        from fyrnheim.components import TimeBasedMetrics
 
         metrics = TimeBasedMetrics(created_at_col="created_at")
         columns = metrics.to_computed_columns()
@@ -200,7 +200,7 @@ class TestDataQualityChecks:
     """Tests for DataQualityChecks component."""
 
     def test_generates_flag_columns(self):
-        from typedata.components import DataQualityChecks
+        from fyrnheim.components import DataQualityChecks
 
         checks = DataQualityChecks(
             checks={
@@ -215,7 +215,7 @@ class TestDataQualityChecks:
         assert len(columns) == 2
 
     def test_custom_prefix(self):
-        from typedata.components import DataQualityChecks
+        from fyrnheim.components import DataQualityChecks
 
         checks = DataQualityChecks(
             checks={"null_name": "name IS NULL"},
@@ -225,14 +225,14 @@ class TestDataQualityChecks:
         assert columns[0].name == "flag_null_name"
 
     def test_empty_checks_returns_empty_list(self):
-        from typedata.components import DataQualityChecks
+        from fyrnheim.components import DataQualityChecks
 
         checks = DataQualityChecks()
         columns = checks.to_computed_columns()
         assert columns == []
 
     def test_columns_are_computed_columns(self):
-        from typedata.components import ComputedColumn, DataQualityChecks
+        from fyrnheim.components import ComputedColumn, DataQualityChecks
 
         checks = DataQualityChecks(
             checks={"missing_email": "email IS NULL"},

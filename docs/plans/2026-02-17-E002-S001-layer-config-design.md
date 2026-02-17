@@ -3,7 +3,7 @@
 **Date:** 2026-02-17
 **Story:** M001-E002-S001-layer-config
 **Source:** `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/layer.py`
-**Target:** `src/typedata/core/layer.py`
+**Target:** `src/fyrnheim/core/layer.py`
 
 ---
 
@@ -31,10 +31,10 @@ All four classes inherit from `pydantic.BaseModel`. The module imports `Material
 Rationale:
 
 - The `to_sql()` methods on `PrepLayer`, `DimensionLayer`, and `ActivityLayer` generate **dbt Jinja SQL** (e.g., `{{ config(...) }}`, `{{ ref('...') }}`, `{{ dbt_utils.incremental_where(...) }}`). This is not portable SQL -- it is dbt-specific templating that has no meaning outside dbt.
-- Typedata's architecture is `Entity -> Layers -> Ibis expressions -> Any backend`. Code generation lives in Epic E003 (`generators/ibis_code_generator.py`), not in the layer config classes. The layer classes are **configuration**, not **execution**.
+- Fyrnheim's architecture is `Entity -> Layers -> Ibis expressions -> Any backend`. Code generation lives in Epic E003 (`generators/ibis_code_generator.py`), not in the layer config classes. The layer classes are **configuration**, not **execution**.
 - Keeping `to_sql()` even as a utility would create a confusing duality: the "real" path is Ibis generation (E003), but there would also be a dead dbt SQL path sitting in the config classes. This violates the vision statement: "Not a dbt wrapper -- we replace dbt's approach entirely."
 - The SQL generation logic is tightly coupled to dbt conventions (Jinja config blocks, `ref()` macros, `dbt_utils` package). Generalizing it would mean rewriting it entirely, at which point it is no longer "keeping" the old code.
-- If a dbt export target is ever needed in the future, it belongs in a separate `typedata.exporters.dbt` module, not on the config classes themselves.
+- If a dbt export target is ever needed in the future, it belongs in a separate `fyrnheim.exporters.dbt` module, not on the config classes themselves.
 
 **Action:** Delete `to_sql()` from all three classes.
 
@@ -45,7 +45,7 @@ Rationale:
 Rationale:
 
 - These methods return **raw SQL strings** with BigQuery-specific syntax (`EXTRACT(HOUR FROM ts)`, `CAST(... AS FLOAT64)`, `JSON_EXTRACT_SCALAR`). They are not backend-portable.
-- In typedata, the equivalent logic will be expressed as Ibis expressions during code generation (E003). The layer config should declare *what* to compute, not *how* to compute it in a specific SQL dialect.
+- In fyrnheim, the equivalent logic will be expressed as Ibis expressions during code generation (E003). The layer config should declare *what* to compute, not *how* to compute it in a specific SQL dialect.
 - The `include_standard_computed: bool` field on `ActivityLayer` can stay -- it is a declarative flag that the Ibis code generator can read. The generator (E003) will be responsible for producing the actual Ibis window functions.
 
 **Action:** Delete `standard_computed_columns()` and `standard_additional_columns()`. Keep `include_standard_computed` as a declarative config flag.
@@ -57,14 +57,14 @@ Rationale:
 Rationale:
 
 - The source uses `ComputedColumn = Any` as a module-level placeholder, then resolves it later via `model_rebuild()`. This is an established Pydantic v2 pattern for circular/forward references.
-- The story S004 (model-rebuild-public-api) explicitly handles the `model_rebuild()` call in `typedata/__init__.py` after all modules load.
+- The story S004 (model-rebuild-public-api) explicitly handles the `model_rebuild()` call in `fyrnheim/__init__.py` after all modules load.
 - The epic notes confirm: "Uses TYPE_CHECKING imports for ComputedColumn, Measure, QualityConfig (resolved via model_rebuild)."
 
 **Action:** Keep `ComputedColumn = Any` as-is. Add a comment explaining the resolution mechanism:
 
 ```python
-# Forward reference: resolved to typedata.components.ComputedColumn
-# via model_rebuild() in typedata/__init__.py
+# Forward reference: resolved to fyrnheim.components.ComputedColumn
+# via model_rebuild() in fyrnheim/__init__.py
 ComputedColumn = Any
 ```
 
@@ -77,7 +77,7 @@ Four fields need evaluation:
 | `target_schema: str` | PrepLayer, DimensionLayer | Partially. dbt uses "schema" for output dataset routing. | **Keep.** Schema/dataset targeting is a universal warehouse concept, not dbt-specific. Useful for Ibis `create_table` calls. |
 | `materialization: MaterializationType` | PrepLayer, DimensionLayer, SnapshotLayer | The *name* "materialization" comes from dbt, but the *concept* (table vs view vs incremental) is universal. | **Keep.** `MaterializationType` is already extracted in S002 as a clean enum. Ibis backends need to know whether to `CREATE TABLE` or `CREATE VIEW`. |
 | `tags: list[str]` | PrepLayer, DimensionLayer | dbt uses tags for model selection (`dbt run --select tag:prep`). | **Keep.** Tags are useful metadata for any system (filtering, discovery, documentation). Not dbt-specific. |
-| `tests: list[Any]` | PrepLayer, DimensionLayer | dbt test configs. | **Rename to `quality_checks`** to align with typedata's quality framework (E001-S005). Keep the type as `list[Any]` for now -- E002-S004 will resolve forward references to `QualityConfig`. |
+| `tests: list[Any]` | PrepLayer, DimensionLayer | dbt test configs. | **Rename to `quality_checks`** to align with fyrnheim's quality framework (E001-S005). Keep the type as `list[Any]` for now -- E002-S004 will resolve forward references to `QualityConfig`. |
 
 **Additional field review:**
 
@@ -109,11 +109,11 @@ Four fields need evaluation:
 
 **Renamed:**
 
-- `tests: list[Any]` -> `quality_checks: list[Any]` on PrepLayer and DimensionLayer (aligns with typedata naming)
+- `tests: list[Any]` -> `quality_checks: list[Any]` on PrepLayer and DimensionLayer (aligns with fyrnheim naming)
 
 **Import update:**
 
-- `from .types import MaterializationType` -- stays the same (relative import within `typedata.core`)
+- `from .types import MaterializationType` -- stays the same (relative import within `fyrnheim.core`)
 
 ---
 
@@ -129,8 +129,8 @@ from pydantic import Field as PydanticField
 
 from .types import MaterializationType
 
-# Forward reference: resolved to typedata.components.ComputedColumn
-# via model_rebuild() in typedata/__init__.py
+# Forward reference: resolved to fyrnheim.components.ComputedColumn
+# via model_rebuild() in fyrnheim/__init__.py
 ComputedColumn = Any
 
 

@@ -4,7 +4,7 @@ import typing
 
 import pytest
 
-from typedata.quality import (
+from fyrnheim.quality import (
     CustomSQL,
     ForeignKey,
     InRange,
@@ -20,7 +20,7 @@ from typedata.quality import (
 
 
 class TestImports:
-    """All check types should be importable from typedata.quality."""
+    """All check types should be importable from fyrnheim.quality."""
 
     def test_quality_check_importable(self) -> None:
         assert QualityCheck is not None

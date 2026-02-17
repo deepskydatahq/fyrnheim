@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from typedata import (
+from fyrnheim import (
     ComputedColumn,
     DimensionLayer,
     Entity,
@@ -15,7 +15,7 @@ from typedata import (
     SnapshotLayer,
     TableSource,
 )
-from typedata._generate import generate
+from fyrnheim._generate import generate
 
 
 @pytest.fixture()
@@ -218,20 +218,20 @@ class TestGenerateResultDataclass:
 
 
 class TestLazyImports:
-    """Test lazy imports from top-level typedata package."""
+    """Test lazy imports from top-level fyrnheim package."""
 
     def test_generate_importable(self):
-        import typedata
+        import fyrnheim
 
-        gen_func = typedata.generate
+        gen_func = fyrnheim.generate
         assert callable(gen_func)
 
     def test_generate_result_importable(self):
-        import typedata
+        import fyrnheim
 
-        assert typedata.GenerateResult is not None
+        assert fyrnheim.GenerateResult is not None
 
     def test_ibis_code_generator_importable(self):
-        from typedata import IbisCodeGenerator
+        from fyrnheim import IbisCodeGenerator
 
         assert IbisCodeGenerator is not None

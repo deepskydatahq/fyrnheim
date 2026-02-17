@@ -19,8 +19,8 @@ from .source import (
 )
 
 if TYPE_CHECKING:
-    from typedata.components import ComputedColumn, Measure
-    from typedata.quality import QualityConfig
+    from fyrnheim.components import ComputedColumn, Measure
+    from fyrnheim.quality import QualityConfig
 
 Source = (
     TableSource

@@ -2,7 +2,7 @@
 
 import ast
 
-from typedata import (
+from fyrnheim import (
     DimensionLayer,
     Entity,
     LayersConfig,
@@ -10,8 +10,8 @@ from typedata import (
     SnapshotLayer,
     TableSource,
 )
-from typedata.engine.snapshot import _parse_dedup_order
-from typedata.generators import IbisCodeGenerator
+from fyrnheim.engine.snapshot import _parse_dedup_order
+from fyrnheim.generators import IbisCodeGenerator
 
 
 def _make_snapshot_entity(
@@ -77,7 +77,7 @@ class TestSnapshotCodeGeneration:
         entity = _make_snapshot_entity()
         gen = IbisCodeGenerator(entity)
         code = gen.generate_module()
-        assert "from typedata.engine.snapshot import apply_snapshot" in code
+        assert "from fyrnheim.engine.snapshot import apply_snapshot" in code
         assert "apply_snapshot(" in code
 
     def test_passes_natural_key_string(self):

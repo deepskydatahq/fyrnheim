@@ -6,13 +6,13 @@ created = 2026-02-16
 
 [outcome]
 description = """
-A pip-installable typedata package exists with src/ layout, pyproject.toml,
+A pip-installable fyrnheim package exists with src/ layout, pyproject.toml,
 and the zero-dependency leaf modules extracted: types, sources, primitives,
 components, and quality checks. `pip install -e .` works and imports resolve.
 """
 
 job_story = """
-When I start building the typedata library,
+When I start building the fyrnheim library,
 I want the package structure, build config, and foundation types in place,
 so that all subsequent epics can build on a working, installable package.
 """
@@ -21,21 +21,21 @@ so that all subsequent epics can build on a working, installable package.
 approach = "agent-judgment"
 criteria = [
     "pyproject.toml exists with correct metadata, dependencies (pydantic>=2.11), and optional extras [duckdb], [bigquery]",
-    "src/typedata/ package structure with __init__.py",
+    "src/fyrnheim/ package structure with __init__.py",
     "`uv pip install -e .` succeeds without errors",
     "core/types.py extracted: MaterializationType, IncrementalStrategy, SourcePriority importable",
     "core/source.py extracted: BigQuerySource, DerivedSource, Field, UnionSource etc. importable",
     "core/activity.py extracted: ActivityConfig, ActivityType importable",
     "core/analytics.py extracted: AnalyticsLayer, AnalyticsMetric etc. importable",
-    "primitives/ fully extracted: hash_email, categorize, days_since, sum_, count_ etc. importable from typedata.primitives",
-    "components/ fully extracted: ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics importable from typedata.components",
-    "quality/ fully extracted: QualityConfig, NotNull, Unique, QualityRunner importable from typedata.quality",
+    "primitives/ fully extracted: hash_email, categorize, days_since, sum_, count_ etc. importable from fyrnheim.primitives",
+    "components/ fully extracted: ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics importable from fyrnheim.components",
+    "quality/ fully extracted: QualityConfig, NotNull, Unique, QualityRunner importable from fyrnheim.quality",
     "Basic test suite passes: import tests for all leaf modules",
 ]
 
 validator_context = [
     "pyproject.toml",
-    "src/typedata/",
+    "src/fyrnheim/",
     "tests/",
 ]
 
@@ -60,12 +60,12 @@ They depend only on pydantic and stdlib.
 
 Extract with minimal modification — keep the same class names and API surface.
 Only changes needed:
-- Update import paths from metadata.* to typedata.*
+- Update import paths from metadata.* to fyrnheim.*
 - Remove any timo-data-stack-specific source types if they exist (SignalSourceConfig, ProductSourceConfig etc. — evaluate if generic enough)
 - Clean up __init__.py exports for public API
 
 Package layout:
-  src/typedata/
+  src/fyrnheim/
     __init__.py
     core/
       __init__.py

@@ -37,7 +37,7 @@ This only stamps the dimension table with a snapshot date. There is no:
 
 The SCD Type 2 logic is spread across **three separate places** in timo-data-stack:
 
-1. **dbt_generator.py** (`generate_snapshot_model`, lines 78-110) -- Generates dbt snapshot SQL using dbt's built-in SCD2 mechanism (`{% snapshot %}` with `strategy='timestamp'` or `strategy='check'`). This delegates all SCD2 logic to dbt. Not useful for typedata since we replace dbt.
+1. **dbt_generator.py** (`generate_snapshot_model`, lines 78-110) -- Generates dbt snapshot SQL using dbt's built-in SCD2 mechanism (`{% snapshot %}` with `strategy='timestamp'` or `strategy='check'`). This delegates all SCD2 logic to dbt. Not useful for fyrnheim since we replace dbt.
 
 2. **dbt_generator.py** (`generate_snapshot_dimension`, lines 411-501) -- Generates the "daily snapshot dimension" approach that replaced dbt SCD2. This is the newer pattern: incremental model with `ds` column, deduplication via ROW_NUMBER, BigQuery partitioning. This is what the current Ibis generator mimics in simplified form.
 
@@ -57,7 +57,7 @@ The old dbt SCD2 approach (`SCD2SnapshotLayerConfig`) was deprecated on 2025-11-
 
 ## 3. Design Decisions
 
-### Decision 1: What "SCD Type 2" means for typedata
+### Decision 1: What "SCD Type 2" means for fyrnheim
 
 **Clarification: The story title says "SCD Type 2" but the actual codebase has moved AWAY from traditional SCD2 (valid_from/valid_to) toward daily snapshots (ds column).**
 
@@ -111,7 +111,7 @@ Rationale:
 Proposed structure:
 
 ```
-src/typedata/generators/
+src/fyrnheim/generators/
     __init__.py
     ibis_code_generator.py   # Main generator class
     _snapshot.py              # SnapshotBuilder helper (private module)
@@ -121,7 +121,7 @@ The `_snapshot.py` module is private (underscore prefix) because it is an implem
 
 ### Decision 4: Generated code vs runtime library function
 
-**Decision: Generate code that calls a runtime library function from `typedata.engine.snapshot`.**
+**Decision: Generate code that calls a runtime library function from `fyrnheim.engine.snapshot`.**
 
 This is the key insight from analyzing the source code. The snapshot pattern is **always the same**:
 
@@ -141,7 +141,7 @@ This means we should NOT generate 30+ lines of Ibis code for each entity. Instea
 ```python
 def snapshot_subscriptions(dim_subscriptions: ibis.Table) -> ibis.Table:
     """Snapshot layer: daily snapshot with ds column."""
-    from typedata.engine.snapshot import apply_snapshot
+    from fyrnheim.engine.snapshot import apply_snapshot
 
     return apply_snapshot(
         dim_subscriptions,
@@ -151,7 +151,7 @@ def snapshot_subscriptions(dim_subscriptions: ibis.Table) -> ibis.Table:
     )
 ```
 
-**Runtime library function (`typedata.engine.snapshot`):**
+**Runtime library function (`fyrnheim.engine.snapshot`):**
 
 ```python
 def apply_snapshot(
@@ -240,9 +240,9 @@ The `natural_key` comes from the Entity definition (the entity's primary key / g
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `src/typedata/generators/ibis_code_generator.py` | Modify | Update `_generate_snapshot_function()` to generate code that calls `apply_snapshot()` |
-| `src/typedata/engine/__init__.py` | Create (if not exists) | Engine sub-package init |
-| `src/typedata/engine/snapshot.py` | Create | Runtime `apply_snapshot()` function |
+| `src/fyrnheim/generators/ibis_code_generator.py` | Modify | Update `_generate_snapshot_function()` to generate code that calls `apply_snapshot()` |
+| `src/fyrnheim/engine/__init__.py` | Create (if not exists) | Engine sub-package init |
+| `src/fyrnheim/engine/snapshot.py` | Create | Runtime `apply_snapshot()` function |
 | `tests/test_snapshot_generation.py` | Create | Unit tests per acceptance criteria |
 
 ---
@@ -327,7 +327,7 @@ def test_apply_snapshot_computes_surrogate_key():
 
 1. **Story title vs reality** -- The story title says "SCD Type 2" but the codebase has deprecated SCD2 in favor of daily snapshots. The design follows the codebase. If the product intent is actually traditional SCD2 with valid_from/valid_to, the `include_validity_range` parameter handles that. Recommend clarifying with product.
 
-2. **Entity natural key** -- The generator needs access to the entity's natural key (e.g., `id`, `subscription_id`) to compute surrogate keys. This must come from the Entity definition or a new `natural_key` field on SnapshotLayer. Currently, Entity does not appear to have an explicit `primary_key` field in the extracted typedata model. The E002 entity design should be checked -- if Entity has a `grain` or `primary_key` field, use that. Otherwise, add `natural_key: str | list[str]` to SnapshotLayer.
+2. **Entity natural key** -- The generator needs access to the entity's natural key (e.g., `id`, `subscription_id`) to compute surrogate keys. This must come from the Entity definition or a new `natural_key` field on SnapshotLayer. Currently, Entity does not appear to have an explicit `primary_key` field in the extracted fyrnheim model. The E002 entity design should be checked -- if Entity has a `grain` or `primary_key` field, use that. Otherwise, add `natural_key: str | list[str]` to SnapshotLayer.
 
 3. **`deduplication_order_by` parsing** -- The string `"updated_at DESC"` needs to be parsed into column name + direction for Ibis. This is fragile. Consider changing to a structured config in a future iteration:
    ```python
@@ -336,7 +336,7 @@ def test_apply_snapshot_computes_surrogate_key():
        descending: bool = True
    ```
 
-4. **Engine sub-package timing** -- `src/typedata/engine/` may not exist yet (it depends on E004). The `snapshot.py` file can live there provisionally, or it can live in `src/typedata/generators/_snapshot.py` as a private helper and be moved to engine later. Recommend the engine location since it is runtime code, not generation code.
+4. **Engine sub-package timing** -- `src/fyrnheim/engine/` may not exist yet (it depends on E004). The `snapshot.py` file can live there provisionally, or it can live in `src/fyrnheim/generators/_snapshot.py` as a private helper and be moved to engine later. Recommend the engine location since it is runtime code, not generation code.
 
 5. **ibis.row_number() indexing** -- Ibis `row_number()` is 0-indexed (unlike SQL which is 1-indexed). The `apply_snapshot()` implementation must filter on `_rn == 0`, not `_rn == 1`. This is a common Ibis gotcha.
 
@@ -351,7 +351,7 @@ def test_apply_snapshot_computes_surrogate_key():
 The snapshot generation follows a **thin wrapper + runtime library** pattern:
 
 - **Generator** (`_generate_snapshot_function()` in `IbisCodeGenerator`) produces a 7-line function that delegates to `apply_snapshot()`.
-- **Runtime library** (`typedata.engine.snapshot.apply_snapshot()`) contains the actual Ibis logic: ds stamping, surrogate key computation, deduplication, and optional validity range columns.
+- **Runtime library** (`fyrnheim.engine.snapshot.apply_snapshot()`) contains the actual Ibis logic: ds stamping, surrogate key computation, deduplication, and optional validity range columns.
 
 This is the correct split because the snapshot pattern is identical across all entities -- only the configuration parameters vary (natural key, date column, dedup ordering). Generating 30+ lines of Ibis code per entity would be pointless duplication.
 
@@ -363,13 +363,13 @@ Before writing code, the design's open questions from Section 8 are resolved as 
    Resolved. Generate the daily `ds` snapshot pattern, not traditional SCD2 with valid_from/valid_to. The `include_validity_range` flag on `apply_snapshot()` satisfies the acceptance criterion about valid_from/valid_to as an opt-in feature. This matches the codebase reality where `SCD2SnapshotLayerConfig` was deprecated 2025-11-10.
 
 2. **Entity natural key:**
-   Resolved. The E002-S002 Entity design does NOT have an explicit `primary_key` or `grain` field. Add `natural_key: str | list[str] = "id"` to `SnapshotLayer` (in `src/typedata/core/layer.py`). This is the right location because the natural key for snapshot dedup is a snapshot-layer concern (the entity may have different identity semantics in other layers). Default to `"id"` since that is the most common entity primary key.
+   Resolved. The E002-S002 Entity design does NOT have an explicit `primary_key` or `grain` field. Add `natural_key: str | list[str] = "id"` to `SnapshotLayer` (in `src/fyrnheim/core/layer.py`). This is the right location because the natural key for snapshot dedup is a snapshot-layer concern (the entity may have different identity semantics in other layers). Default to `"id"` since that is the most common entity primary key.
 
 3. **`deduplication_order_by` parsing:**
    Resolved. Parse the string by splitting on whitespace: `"updated_at DESC"` becomes `column="updated_at"`, `descending=True`. If no direction suffix, default to `DESC` (most recent wins). This is a simple, sufficient approach. A structured `DeduplicationConfig` model is deferred to a future cleanup story.
 
 4. **Engine sub-package timing:**
-   Resolved. Create `src/typedata/engine/__init__.py` and `src/typedata/engine/snapshot.py` now, even though E004 has not started. The engine package is the correct home for runtime code. Creating it early is harmless -- it is just a Python package with one module. If E004 later restructures the engine package, snapshot.py moves with it.
+   Resolved. Create `src/fyrnheim/engine/__init__.py` and `src/fyrnheim/engine/snapshot.py` now, even though E004 has not started. The engine package is the correct home for runtime code. Creating it early is harmless -- it is just a Python package with one module. If E004 later restructures the engine package, snapshot.py moves with it.
 
 5. **ibis.row_number() indexing:**
    Resolved. Use `_rn == 0` in the filter. Add an inline comment in the code explaining the 0-indexed behavior.
@@ -380,7 +380,7 @@ Execute in this exact order. Each step is a single coherent change that can be t
 
 #### Step 1: Add `natural_key` to SnapshotLayer config
 
-**File:** `src/typedata/core/layer.py` (created by E002-S001; if not yet implemented, this step is deferred to when S001 is done -- but the field definition is ready)
+**File:** `src/fyrnheim/core/layer.py` (created by E002-S001; if not yet implemented, this step is deferred to when S001 is done -- but the field definition is ready)
 
 **Change:** Add one field to `SnapshotLayer`:
 
@@ -402,10 +402,10 @@ class SnapshotLayer(BaseModel):
 
 **Test:** Instantiate `SnapshotLayer()` and verify `natural_key` defaults to `"id"`. Instantiate with `natural_key=["org_id", "user_id"]` and verify it accepts a list.
 
-#### Step 2: Create `src/typedata/engine/snapshot.py` -- the runtime library
+#### Step 2: Create `src/fyrnheim/engine/snapshot.py` -- the runtime library
 
-**File:** `src/typedata/engine/__init__.py` (create, empty or minimal)
-**File:** `src/typedata/engine/snapshot.py` (create)
+**File:** `src/fyrnheim/engine/__init__.py` (create, empty or minimal)
+**File:** `src/fyrnheim/engine/snapshot.py` (create)
 
 **Contents of `snapshot.py`:**
 
@@ -523,7 +523,7 @@ def _parse_dedup_order(order_by_str: str) -> tuple[str, bool]:
 
 #### Step 3: Update `_generate_snapshot_function()` in the generator
 
-**File:** `src/typedata/generators/ibis_code_generator.py` (from E003-S001)
+**File:** `src/fyrnheim/generators/ibis_code_generator.py` (from E003-S001)
 
 **Replace** the existing `_generate_snapshot_function()` method with:
 
@@ -553,7 +553,7 @@ def _generate_snapshot_function(self) -> str:
     func = f'''
 def snapshot_{self.entity_name}(dim_{self.entity_name}: ibis.Table) -> ibis.Table:
     """Snapshot layer: daily snapshot with {date_col} column."""
-    from typedata.engine.snapshot import apply_snapshot
+    from fyrnheim.engine.snapshot import apply_snapshot
 
     return apply_snapshot(
         dim_{self.entity_name},
@@ -568,7 +568,7 @@ def snapshot_{self.entity_name}(dim_{self.entity_name}: ibis.Table) -> ibis.Tabl
     return func
 ```
 
-**Also update `_generate_imports()`:** No change needed. The `apply_snapshot` import is inside the generated function body (lazy import), so the module-level imports do not need to change. This is intentional -- the generated module only depends on `ibis` and `os` at the module level. The `typedata.engine.snapshot` dependency is deferred to call time.
+**Also update `_generate_imports()`:** No change needed. The `apply_snapshot` import is inside the generated function body (lazy import), so the module-level imports do not need to change. This is intentional -- the generated module only depends on `ibis` and `os` at the module level. The `fyrnheim.engine.snapshot` dependency is deferred to call time.
 
 **Test:** See Step 4.
 
@@ -588,7 +588,7 @@ def test_snapshot_generates_apply_snapshot_call():
     entity = make_test_entity(snapshot=SnapshotLayer(enabled=True))
     generator = IbisCodeGenerator(entity)
     code = generator.generate_module()
-    assert "from typedata.engine.snapshot import apply_snapshot" in code
+    assert "from fyrnheim.engine.snapshot import apply_snapshot" in code
     assert "apply_snapshot(" in code
 
 def test_snapshot_passes_natural_key():
@@ -742,7 +742,7 @@ def test_parse_dedup_order_no_direction():
 
 #### Step 5: Add `include_validity_range` to SnapshotLayer (optional field)
 
-**File:** `src/typedata/core/layer.py`
+**File:** `src/fyrnheim/core/layer.py`
 
 **Change:** Add one more field to satisfy the acceptance criterion about valid_from/valid_to:
 
@@ -783,10 +783,10 @@ This defaults to `False`, preserving the standard daily snapshot behavior. When 
 
 | File | Action | Lines (est.) |
 |------|--------|-------------|
-| `src/typedata/core/layer.py` | Modify | +2 lines (add `natural_key`, `include_validity_range` fields) |
-| `src/typedata/engine/__init__.py` | Create | 1 line (empty or docstring) |
-| `src/typedata/engine/snapshot.py` | Create | ~80 lines |
-| `src/typedata/generators/ibis_code_generator.py` | Modify | Replace `_generate_snapshot_function()` (~25 lines) |
+| `src/fyrnheim/core/layer.py` | Modify | +2 lines (add `natural_key`, `include_validity_range` fields) |
+| `src/fyrnheim/engine/__init__.py` | Create | 1 line (empty or docstring) |
+| `src/fyrnheim/engine/snapshot.py` | Create | ~80 lines |
+| `src/fyrnheim/generators/ibis_code_generator.py` | Modify | Replace `_generate_snapshot_function()` (~25 lines) |
 | `tests/test_snapshot_generation.py` | Create | ~150 lines |
 
 ### 9.7 Implementation Order for Coding Session

@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from typedata.core.activity import ActivityConfig, ActivityType
-from typedata.core.analytics import (
+from fyrnheim.core.activity import ActivityConfig, ActivityType
+from fyrnheim.core.analytics import (
     AnalyticsLayer,
     AnalyticsMetric,
     AnalyticsModel,

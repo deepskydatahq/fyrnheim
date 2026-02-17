@@ -1,13 +1,13 @@
-"""Tests for the typedata public API and model_rebuild resolution."""
+"""Tests for the fyrnheim public API and model_rebuild resolution."""
 
-import typedata
+import fyrnheim
 
 
 class TestFlatImports:
     """Verify flat imports from top-level package work."""
 
     def test_core_entity_types(self):
-        from typedata import Entity, Field, LayersConfig, Source
+        from fyrnheim import Entity, Field, LayersConfig, Source
 
         assert Entity is not None
         assert LayersConfig is not None
@@ -15,14 +15,14 @@ class TestFlatImports:
         assert Field is not None
 
     def test_layer_types(self):
-        from typedata import DimensionLayer, PrepLayer, SnapshotLayer
+        from fyrnheim import DimensionLayer, PrepLayer, SnapshotLayer
 
         assert PrepLayer is not None
         assert DimensionLayer is not None
         assert SnapshotLayer is not None
 
     def test_source_types(self):
-        from typedata import (
+        from fyrnheim import (
             AggregationSource,
             DerivedSource,
             EventAggregationSource,
@@ -37,27 +37,27 @@ class TestFlatImports:
         assert UnionSource is not None
 
     def test_component_types(self):
-        from typedata import ComputedColumn, Measure
+        from fyrnheim import ComputedColumn, Measure
 
         assert ComputedColumn is not None
         assert Measure is not None
 
     def test_quality_types(self):
-        from typedata import NotNull, QualityConfig, Unique
+        from fyrnheim import NotNull, QualityConfig, Unique
 
         assert QualityConfig is not None
         assert NotNull is not None
         assert Unique is not None
 
     def test_primitive_functions(self):
-        from typedata import categorize, hash_email, sum_
+        from fyrnheim import categorize, hash_email, sum_
 
         assert callable(hash_email)
         assert callable(categorize)
         assert callable(sum_)
 
     def test_source_mapping(self):
-        from typedata import SourceMapping
+        from fyrnheim import SourceMapping
 
         assert SourceMapping is not None
 
@@ -66,26 +66,26 @@ class TestNestedImports:
     """Verify nested imports work and return same objects as flat imports."""
 
     def test_entity_same_object(self):
-        from typedata import Entity as E1
-        from typedata.core import Entity as E2
+        from fyrnheim import Entity as E1
+        from fyrnheim.core import Entity as E2
 
         assert E1 is E2
 
     def test_computed_column_same_object(self):
-        from typedata import ComputedColumn as C1
-        from typedata.components import ComputedColumn as C2
+        from fyrnheim import ComputedColumn as C1
+        from fyrnheim.components import ComputedColumn as C2
 
         assert C1 is C2
 
     def test_not_null_same_object(self):
-        from typedata import NotNull as N1
-        from typedata.quality import NotNull as N2
+        from fyrnheim import NotNull as N1
+        from fyrnheim.quality import NotNull as N2
 
         assert N1 is N2
 
     def test_hash_email_same_object(self):
-        from typedata import hash_email as H1
-        from typedata.primitives import hash_email as H2
+        from fyrnheim import hash_email as H1
+        from fyrnheim.primitives import hash_email as H2
 
         assert H1 is H2
 
@@ -95,7 +95,7 @@ class TestModelRebuild:
 
     def test_entity_forward_refs_resolved(self):
         """Entity.model_rebuild() resolves ComputedColumn, Measure, QualityConfig."""
-        from typedata import Entity
+        from fyrnheim import Entity
 
         field_info = Entity.model_fields
         # If model_rebuild hadn't been called, these would still be string refs
@@ -105,7 +105,7 @@ class TestModelRebuild:
 
     def test_entity_with_computed_columns_validates(self):
         """Creating Entity with ComputedColumn in dimension layer validates correctly."""
-        from typedata import (
+        from fyrnheim import (
             ComputedColumn,
             DimensionLayer,
             Entity,
@@ -144,7 +144,7 @@ class TestModelRebuild:
 
     def test_entity_with_quality_config_validates(self):
         """Creating Entity with quality=QualityConfig validates."""
-        from typedata import (
+        from fyrnheim import (
             Entity,
             Field,
             LayersConfig,
@@ -167,7 +167,7 @@ class TestModelRebuild:
 
     def test_source_mapping_model_rebuild(self):
         """SourceMapping with Entity and Source validates correctly."""
-        from typedata import (
+        from fyrnheim import (
             Entity,
             Field,
             LayersConfig,
@@ -197,8 +197,8 @@ class TestAllExports:
     """Verify __all__ is accurate."""
 
     def test_all_exports_are_accessible(self):
-        for name in typedata.__all__:
-            assert hasattr(typedata, name), f"{name} in __all__ but not accessible"
+        for name in fyrnheim.__all__:
+            assert hasattr(fyrnheim, name), f"{name} in __all__ but not accessible"
 
     def test_version(self):
-        assert typedata.__version__ == "0.1.0"
+        assert fyrnheim.__version__ == "0.1.0"

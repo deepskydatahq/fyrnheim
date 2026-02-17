@@ -1,4 +1,4 @@
-"""DuckDB execution engine for typedata pipelines."""
+"""DuckDB execution engine for fyrnheim pipelines."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from typing import Any
 
 import ibis
 
-from typedata.engine._loader import load_transform_module
-from typedata.engine.errors import ExecutionError, SourceNotFoundError
+from fyrnheim.engine._loader import load_transform_module
+from fyrnheim.engine.errors import ExecutionError, SourceNotFoundError
 
-log = logging.getLogger("typedata.engine")
+log = logging.getLogger("fyrnheim.engine")
 
 
 @dataclass(frozen=True)

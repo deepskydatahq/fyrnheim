@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from typedata import (
+from fyrnheim import (
     AggregationSource,
     DerivedSource,
     Entity,
@@ -12,13 +12,13 @@ from typedata import (
     PrepLayer,
     TableSource,
 )
-from typedata.engine import (
+from fyrnheim.engine import (
     CircularDependencyError,
     EntityInfo,
     EntityRegistry,
     resolve_execution_order,
 )
-from typedata.engine.resolution import _extract_dependencies
+from fyrnheim.engine.resolution import _extract_dependencies
 
 
 def _write_entity_file(directory: Path, filename: str, entity_code: str) -> Path:

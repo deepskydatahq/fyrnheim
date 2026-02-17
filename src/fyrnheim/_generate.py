@@ -1,12 +1,12 @@
-"""Public generate() function for typedata code generation."""
+"""Public generate() function for fyrnheim code generation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from typedata.core import Entity
-from typedata.generators import IbisCodeGenerator
+from fyrnheim.core import Entity
+from fyrnheim.generators import IbisCodeGenerator
 
 
 @dataclass(frozen=True)

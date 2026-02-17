@@ -1,4 +1,4 @@
-# typedata
+# fyrnheim
 
 Define typed Python entities, generate transformations, run anywhere.
 

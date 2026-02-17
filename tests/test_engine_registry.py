@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from typedata.engine import EntityInfo, EntityRegistry
+from fyrnheim.engine import EntityInfo, EntityRegistry
 
 
 def _write_entity_file(directory: Path, filename: str, entity_code: str) -> Path:
@@ -15,7 +15,7 @@ def _write_entity_file(directory: Path, filename: str, entity_code: str) -> Path
 
 
 ENTITY_TEMPLATE = """\
-from typedata import Entity, LayersConfig, PrepLayer, TableSource
+from fyrnheim import Entity, LayersConfig, PrepLayer, TableSource
 
 entity = Entity(
     name="{name}",
@@ -113,7 +113,7 @@ class TestEntityRegistryDiscover:
         entities_dir = tmp_path / "entities"
         entities_dir.mkdir()
         code = """\
-from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer, TableSource
+from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer, TableSource
 
 entity = Entity(
     name="users",

@@ -3,9 +3,9 @@
 import pytest
 from pydantic import ValidationError
 
-from typedata.core.entity import Entity, LayersConfig
-from typedata.core.layer import DimensionLayer, PrepLayer, SnapshotLayer
-from typedata.core.source import (
+from fyrnheim.core.entity import Entity, LayersConfig
+from fyrnheim.core.layer import DimensionLayer, PrepLayer, SnapshotLayer
+from fyrnheim.core.source import (
     AggregationSource,
     DerivedSource,
     EventAggregationSource,

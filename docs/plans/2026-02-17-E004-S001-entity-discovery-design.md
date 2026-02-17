@@ -36,12 +36,12 @@ Two source types create cross-entity edges:
 
 ### Changes from timo-data-stack
 
-| Aspect | timo-data-stack | typedata |
+| Aspect | timo-data-stack | fyrnheim |
 |---|---|---|
 | Entity name source | `entity_file.stem` (filename) | `entity.name` (from the Entity definition) |
 | Layer enumeration | Hardcoded check of `entity.layers.prep`, `.dimension`, `.snapshot`, `.activity` | Use `Entity.has_layer()` method; iterate over all layer names dynamically |
 | Generated code tracking | Checks for `{entity_name}_transforms.py` in generated dir | **Remove.** Generated code is a separate concern (E004-S003 run function). Discovery should only find and validate entity definitions. |
-| sys.path manipulation | Inserts parent directory into `sys.path` | Keep. Required for dynamic import to resolve entity module dependencies (e.g., entity files that import from `typedata`). |
+| sys.path manipulation | Inserts parent directory into `sys.path` | Keep. Required for dynamic import to resolve entity module dependencies (e.g., entity files that import from `fyrnheim`). |
 | `EntityInfo.module` | References the generated transforms module | **Remove.** Not the registry's responsibility. |
 | `EntityInfo.generated_path` | Path to generated transforms file | **Remove.** |
 | `EntityInfo.has_generated_code` | Boolean flag | **Remove.** |
@@ -172,11 +172,11 @@ def resolve_execution_order(registry: EntityRegistry) -> list[EntityInfo]:
     return [registry.get(name) for name in order if registry.get(name) is not None]
 ```
 
-**Key difference from timo-data-stack:** The timo-data-stack `DependencyResolver` operates at the model/layer level (`prep_orders`, `snapshot_customers`, `dim_person`). Typedata operates at the entity level. Intra-entity layer ordering (source -> snapshot -> prep -> dimension -> activity -> analytics) is a separate concern handled by the executor, not the registry.
+**Key difference from timo-data-stack:** The timo-data-stack `DependencyResolver` operates at the model/layer level (`prep_orders`, `snapshot_customers`, `dim_person`). Fyrnheim operates at the entity level. Intra-entity layer ordering (source -> snapshot -> prep -> dimension -> activity -> analytics) is a separate concern handled by the executor, not the registry.
 
 ### Why entity-level, not layer-level?
 
-In timo-data-stack, the dependency resolver builds a graph of individual layer models (`prep_orders` depends on `snapshot_orders` depends on `source_orders`). This is over-engineered for typedata:
+In timo-data-stack, the dependency resolver builds a graph of individual layer models (`prep_orders` depends on `snapshot_orders` depends on `source_orders`). This is over-engineered for fyrnheim:
 
 1. **Intra-entity layer ordering is fixed.** An entity's layers always execute in the same order: source -> snapshot -> prep -> dimension -> activity -> analytics. There is no need to topologically sort these -- it is a linear pipeline defined by the framework.
 2. **Cross-entity dependencies are entity-to-entity.** When `account` depends on `person`, it means "all of person's layers must complete before any of account's layers start." This is the only edge the registry needs.
@@ -204,12 +204,12 @@ execution_order = resolve_execution_order(registry)
 
 **Rationale:** Resolution is a pure computation over the registry's data. It has no state of its own. Making it a function keeps the API surface minimal and makes it easy to test (pass any registry). It also avoids the timo-data-stack pattern where `DependencyResolver` wraps `EntityRegistry` -- that extra class adds indirection without value.
 
-**Do NOT create a separate `DependencyResolver` class.** The timo-data-stack's `DependencyResolver` exists because it does smart layer-level resolution (entity name -> best layer, `source:` prefix handling, intra-entity layer chaining). Since typedata resolves at the entity level, all of that complexity vanishes. A single function suffices.
+**Do NOT create a separate `DependencyResolver` class.** The timo-data-stack's `DependencyResolver` exists because it does smart layer-level resolution (entity name -> best layer, `source:` prefix handling, intra-entity layer chaining). Since fyrnheim resolves at the entity level, all of that complexity vanishes. A single function suffices.
 
-## Decision 4: Where does it live in the typedata package?
+## Decision 4: Where does it live in the fyrnheim package?
 
 ```
-typedata/
+fyrnheim/
   engine/
     __init__.py          # Re-exports: EntityRegistry, EntityInfo, resolve_execution_order
     registry.py          # EntityRegistry, EntityInfo
@@ -219,14 +219,14 @@ typedata/
 ### Import paths
 
 ```python
-from typedata.engine import EntityRegistry, EntityInfo, resolve_execution_order
+from fyrnheim.engine import EntityRegistry, EntityInfo, resolve_execution_order
 ```
 
-**Rationale:** The story acceptance criteria say "EntityRegistry importable from typedata.engine". The `engine` sub-package will also hold the executor (E004-S002) and run function (E004-S003), so discovery and resolution belong here as the first building blocks.
+**Rationale:** The story acceptance criteria say "EntityRegistry importable from fyrnheim.engine". The `engine` sub-package will also hold the executor (E004-S002) and run function (E004-S003), so discovery and resolution belong here as the first building blocks.
 
-### Why not `typedata.engine.registry`?
+### Why not `fyrnheim.engine.registry`?
 
-The public import path is `typedata.engine`. The internal module split (`registry.py`, `resolution.py`) is an implementation detail. Users should not need to know which submodule contains which class. The `engine/__init__.py` re-exports everything.
+The public import path is `fyrnheim.engine`. The internal module split (`registry.py`, `resolution.py`) is an implementation detail. Users should not need to know which submodule contains which class. The `engine/__init__.py` re-exports everything.
 
 ## Decision 5: How to handle circular dependencies?
 
@@ -268,9 +268,9 @@ An entity whose `AggregationSource.source_entity` points to itself would create 
 
 | File | Contents |
 |---|---|
-| `typedata/engine/__init__.py` | Re-exports `EntityRegistry`, `EntityInfo`, `resolve_execution_order`, `CircularDependencyError` |
-| `typedata/engine/registry.py` | `EntityInfo` (Pydantic model), `EntityRegistry` class with `discover()`, `get()`, `items()`, `__iter__`, `__len__`, `__contains__` |
-| `typedata/engine/resolution.py` | `resolve_execution_order()` function, `CircularDependencyError` exception, `_extract_dependencies()` helper |
+| `fyrnheim/engine/__init__.py` | Re-exports `EntityRegistry`, `EntityInfo`, `resolve_execution_order`, `CircularDependencyError` |
+| `fyrnheim/engine/registry.py` | `EntityInfo` (Pydantic model), `EntityRegistry` class with `discover()`, `get()`, `items()`, `__iter__`, `__len__`, `__contains__` |
+| `fyrnheim/engine/resolution.py` | `resolve_execution_order()` function, `CircularDependencyError` exception, `_extract_dependencies()` helper |
 
 ### Modifications to existing types (future, noted here)
 
@@ -296,7 +296,7 @@ Total: ~290 lines (vs ~740 lines across the three timo-data-stack source files).
 
 3. **Entity name collisions** -- If `discover()` is called on multiple directories and two files define entities with the same `entity.name`, we need a clear error. Design: raise `ValueError(f"Duplicate entity name '{name}': defined in {existing_path} and {new_path}")`.
 
-4. **Import errors during discovery** -- If an entity file has import errors (e.g., missing dependency), the current timo-data-stack code prints a warning and skips it. Typedata should collect these errors and either (a) raise them all at the end, or (b) return them alongside successful discoveries. Decision: **Raise immediately.** Silent skipping hides real problems. If a file exists in the entities directory, it should load. If it cannot, that is a bug the user needs to fix, not a warning to ignore.
+4. **Import errors during discovery** -- If an entity file has import errors (e.g., missing dependency), the current timo-data-stack code prints a warning and skips it. Fyrnheim should collect these errors and either (a) raise them all at the end, or (b) return them alongside successful discoveries. Decision: **Raise immediately.** Silent skipping hides real problems. If a file exists in the entities directory, it should load. If it cannot, that is a bug the user needs to fix, not a warning to ignore.
 
 5. **`resolve_execution_order` for partial graphs** -- The function resolves ALL discovered entities. A future story may want to resolve a subset (e.g., "just run `account` and its transitive dependencies"). This can be added later as `resolve_execution_order(registry, targets=["account"])` without changing the current design.
 
@@ -306,11 +306,11 @@ Total: ~290 lines (vs ~740 lines across the three timo-data-stack source files).
 
 ### Prerequisites
 
-This story depends on M001-E002-S004 (public API exports), which means `Entity`, `DerivedSource`, `AggregationSource`, `LayersConfig`, and all core types are importable from `typedata`. The `src/typedata/engine/` directory exists as an empty sub-package from M001-E001-S001.
+This story depends on M001-E002-S004 (public API exports), which means `Entity`, `DerivedSource`, `AggregationSource`, `LayersConfig`, and all core types are importable from `fyrnheim`. The `src/fyrnheim/engine/` directory exists as an empty sub-package from M001-E001-S001.
 
 ### Step 1: Add `depends_on` field to `DerivedSource`
 
-**File:** `src/typedata/core/source.py`
+**File:** `src/fyrnheim/core/source.py`
 
 Add a `depends_on: list[str]` field to `DerivedSource`. This is required before resolution can work, because `DerivedSource` dependencies are not extractable from the `identity_graph` string alone.
 
@@ -348,9 +348,9 @@ class AggregationSource(BaseModel):
 
 **Verification:** Write a quick test that `DerivedSource(identity_graph="x", depends_on=["a", "b"])` constructs without error, and that the default `depends_on` is `[]`.
 
-### Step 2: Create `src/typedata/engine/registry.py`
+### Step 2: Create `src/fyrnheim/engine/registry.py`
 
-**File:** `src/typedata/engine/registry.py` (~80 lines)
+**File:** `src/fyrnheim/engine/registry.py` (~80 lines)
 
 This file contains two classes: `EntityInfo` and `EntityRegistry`.
 
@@ -359,7 +359,7 @@ This file contains two classes: `EntityInfo` and `EntityRegistry`.
 ```python
 from pathlib import Path
 from pydantic import BaseModel
-from typedata.core.entity import Entity  # or wherever Entity lives after E002-S004
+from fyrnheim.core.entity import Entity  # or wherever Entity lives after E002-S004
 
 class EntityInfo(BaseModel):
     """Information about a discovered entity."""
@@ -417,7 +417,7 @@ class EntityRegistry:
 
         for entity_file in entity_files:
             # Dynamic import
-            module_name = f"_typedata_entity_{entity_file.stem}"
+            module_name = f"_fyrnheim_entity_{entity_file.stem}"
             spec = importlib.util.spec_from_file_location(module_name, entity_file)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Could not create import spec for {entity_file}")
@@ -481,9 +481,9 @@ Key design decisions baked in:
 - Layer enumeration uses `Entity.has_layer()` method, iterating over the known layer names dynamically
 - Sorted glob results for deterministic discovery order
 
-### Step 3: Create `src/typedata/engine/resolution.py`
+### Step 3: Create `src/fyrnheim/engine/resolution.py`
 
-**File:** `src/typedata/engine/resolution.py` (~50 lines)
+**File:** `src/fyrnheim/engine/resolution.py` (~50 lines)
 
 ```python
 """Dependency resolution for entity execution ordering."""
@@ -493,11 +493,11 @@ from __future__ import annotations
 from graphlib import CycleError, TopologicalSorter
 from typing import TYPE_CHECKING
 
-from typedata.core.source import AggregationSource, DerivedSource
+from fyrnheim.core.source import AggregationSource, DerivedSource
 
 if TYPE_CHECKING:
-    from typedata.engine.registry import EntityInfo, EntityRegistry
-    from typedata.core.entity import Entity
+    from fyrnheim.engine.registry import EntityInfo, EntityRegistry
+    from fyrnheim.core.entity import Entity
 
 
 class CircularDependencyError(Exception):
@@ -566,17 +566,17 @@ Key points:
 - `CircularDependencyError` wraps `graphlib.CycleError` so callers do not need to know about `graphlib`.
 - The function filters the topological order to only return entities present in the registry. `TopologicalSorter` will include dependency names as nodes even if they are not keys in the graph dict, but those have no `EntityInfo`.
 
-### Step 4: Update `src/typedata/engine/__init__.py`
+### Step 4: Update `src/fyrnheim/engine/__init__.py`
 
-**File:** `src/typedata/engine/__init__.py`
+**File:** `src/fyrnheim/engine/__init__.py`
 
 Replace the empty `__init__.py` with re-exports:
 
 ```python
-"""typedata.engine -- Entity discovery, dependency resolution, and execution."""
+"""fyrnheim.engine -- Entity discovery, dependency resolution, and execution."""
 
-from typedata.engine.registry import EntityInfo, EntityRegistry
-from typedata.engine.resolution import CircularDependencyError, resolve_execution_order
+from fyrnheim.engine.registry import EntityInfo, EntityRegistry
+from fyrnheim.engine.resolution import CircularDependencyError, resolve_execution_order
 
 __all__ = [
     "CircularDependencyError",
@@ -586,7 +586,7 @@ __all__ = [
 ]
 ```
 
-This enables the acceptance-criteria import: `from typedata.engine import EntityRegistry`.
+This enables the acceptance-criteria import: `from fyrnheim.engine import EntityRegistry`.
 
 ### Step 5: Write tests
 
@@ -648,26 +648,26 @@ def write_entity_file(directory: Path, filename: str, entity_code: str) -> Path:
     return path
 ```
 
-Entity code will import from `typedata` to create real `Entity` instances. This requires `typedata` to be installed (editable mode). The entity definitions will be minimal -- just `name`, `description`, `layers` with one layer, and optionally `source`.
+Entity code will import from `fyrnheim` to create real `Entity` instances. This requires `fyrnheim` to be installed (editable mode). The entity definitions will be minimal -- just `name`, `description`, `layers` with one layer, and optionally `source`.
 
 ### Implementation Checklist
 
-1. [ ] Add `depends_on: list[str] = PydanticField(default_factory=list)` to `DerivedSource` in `src/typedata/core/source.py`
-2. [ ] Add `depends_on: list[str] = PydanticField(default_factory=list)` to `AggregationSource` in `src/typedata/core/source.py`
-3. [ ] Create `src/typedata/engine/registry.py` with `EntityInfo` and `EntityRegistry`
-4. [ ] Create `src/typedata/engine/resolution.py` with `CircularDependencyError`, `_extract_dependencies`, `resolve_execution_order`
-5. [ ] Update `src/typedata/engine/__init__.py` with re-exports
+1. [ ] Add `depends_on: list[str] = PydanticField(default_factory=list)` to `DerivedSource` in `src/fyrnheim/core/source.py`
+2. [ ] Add `depends_on: list[str] = PydanticField(default_factory=list)` to `AggregationSource` in `src/fyrnheim/core/source.py`
+3. [ ] Create `src/fyrnheim/engine/registry.py` with `EntityInfo` and `EntityRegistry`
+4. [ ] Create `src/fyrnheim/engine/resolution.py` with `CircularDependencyError`, `_extract_dependencies`, `resolve_execution_order`
+5. [ ] Update `src/fyrnheim/engine/__init__.py` with re-exports
 6. [ ] Create `tests/test_engine_registry.py` with discovery tests
 7. [ ] Create `tests/test_engine_resolution.py` with dependency resolution tests
 8. [ ] Run `pytest tests/test_engine_registry.py tests/test_engine_resolution.py` -- all pass
-9. [ ] Run `ruff check src/typedata/engine/` -- no lint errors
-10. [ ] Run `mypy src/typedata/engine/` -- no type errors
+9. [ ] Run `ruff check src/fyrnheim/engine/` -- no lint errors
+10. [ ] Run `mypy src/fyrnheim/engine/` -- no type errors
 
 ### Acceptance Criteria Mapping
 
 | Criterion | Satisfied by |
 |---|---|
-| EntityRegistry importable from typedata.engine | Step 4: `__init__.py` re-exports |
+| EntityRegistry importable from fyrnheim.engine | Step 4: `__init__.py` re-exports |
 | EntityRegistry.discover(entities_dir) finds all .py files exporting Entity instances | Step 2: `discover()` method with glob + dynamic import |
 | Dependency resolution: entity with DerivedSource sorts after its source entity | Step 3: `_extract_dependencies` reads `DerivedSource.depends_on`, `resolve_execution_order` uses TopologicalSorter |
 | Circular dependency raises clear error | Step 3: `CircularDependencyError` wrapping `CycleError` |

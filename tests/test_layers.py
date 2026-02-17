@@ -1,8 +1,8 @@
 """Tests for layer configuration classes."""
 
 
-from typedata.core.layer import DimensionLayer, PrepLayer, SnapshotLayer
-from typedata.core.types import MaterializationType
+from fyrnheim.core.layer import DimensionLayer, PrepLayer, SnapshotLayer
+from fyrnheim.core.types import MaterializationType
 
 
 class TestPrepLayer:

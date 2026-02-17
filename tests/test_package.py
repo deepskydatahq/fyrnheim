@@ -1,11 +1,11 @@
-"""Smoke tests for typedata package structure."""
+"""Smoke tests for fyrnheim package structure."""
 
 
-def test_import_typedata():
-    """typedata is importable."""
-    import typedata
+def test_import_fyrnheim():
+    """fyrnheim is importable."""
+    import fyrnheim
 
-    assert typedata.__version__ == "0.1.0"
+    assert fyrnheim.__version__ == "0.1.0"
 
 
 def test_import_subpackages():
@@ -14,8 +14,8 @@ def test_import_subpackages():
 
 def test_version_is_string():
     """Version is a proper string."""
-    import typedata
+    import fyrnheim
 
-    assert isinstance(typedata.__version__, str)
-    parts = typedata.__version__.split(".")
+    assert isinstance(fyrnheim.__version__, str)
+    parts = fyrnheim.__version__.split(".")
     assert len(parts) == 3, "Version should be semver (major.minor.patch)"

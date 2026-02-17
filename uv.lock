@@ -402,6 +402,48 @@ wheels = [
 ]
 
 [[package]]
+name = "fyrnheim"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "ibis-framework" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+bigquery = [
+    { name = "google-cloud-bigquery" },
+    { name = "ibis-framework", extra = ["bigquery"] },
+]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+duckdb = [
+    { name = "duckdb" },
+    { name = "ibis-framework", extra = ["duckdb"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.4.0" },
+    { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.35.0" },
+    { name = "ibis-framework", specifier = ">=11.0.0" },
+    { name = "ibis-framework", extras = ["bigquery"], marker = "extra == 'bigquery'", specifier = ">=11.0.0" },
+    { name = "ibis-framework", extras = ["duckdb"], marker = "extra == 'duckdb'", specifier = ">=11.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17.0" },
+    { name = "pydantic", specifier = ">=2.11.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
+]
+provides-extras = ["duckdb", "bigquery", "dev"]
+
+[[package]]
 name = "google-api-core"
 version = "2.29.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1570,48 +1612,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/11/d6/114b492226588d6ff
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl", hash = "sha256:15ccc861ac51c53696de0a5d6d4607f99c210739caf987b5d2054f3efed429d8", size = 58093, upload-time = "2025-10-17T04:03:20.435Z" },
 ]
-
-[[package]]
-name = "typedata"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "ibis-framework" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-bigquery = [
-    { name = "google-cloud-bigquery" },
-    { name = "ibis-framework", extra = ["bigquery"] },
-]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-duckdb = [
-    { name = "duckdb" },
-    { name = "ibis-framework", extra = ["duckdb"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.4.0" },
-    { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.35.0" },
-    { name = "ibis-framework", specifier = ">=11.0.0" },
-    { name = "ibis-framework", extras = ["bigquery"], marker = "extra == 'bigquery'", specifier = ">=11.0.0" },
-    { name = "ibis-framework", extras = ["duckdb"], marker = "extra == 'duckdb'", specifier = ">=11.0.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17.0" },
-    { name = "pydantic", specifier = ">=2.11.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
-    { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-]
-provides-extras = ["duckdb", "bigquery", "dev"]
 
 [[package]]
 name = "typing-extensions"

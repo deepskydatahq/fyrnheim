@@ -1,21 +1,21 @@
-"""typedata.engine -- Entity discovery, dependency resolution, and execution."""
+"""fyrnheim.engine -- Entity discovery, dependency resolution, and execution."""
 
-from typedata.engine.errors import (
+from fyrnheim.engine.errors import (
     ExecutionError as ExecutionError,
+    FyrnheimEngineError as FyrnheimEngineError,
     SourceNotFoundError as SourceNotFoundError,
     TransformModuleError as TransformModuleError,
-    TypedataEngineError as TypedataEngineError,
 )
-from typedata.engine.executor import (
+from fyrnheim.engine.executor import (
     DuckDBExecutor as DuckDBExecutor,
     ExecutionResult as ExecutionResult,
 )
-from typedata.engine.registry import EntityInfo as EntityInfo, EntityRegistry as EntityRegistry
-from typedata.engine.resolution import (
+from fyrnheim.engine.registry import EntityInfo as EntityInfo, EntityRegistry as EntityRegistry
+from fyrnheim.engine.resolution import (
     CircularDependencyError as CircularDependencyError,
     resolve_execution_order as resolve_execution_order,
 )
-from typedata.engine.runner import (
+from fyrnheim.engine.runner import (
     EntityRunResult as EntityRunResult,
     RunResult as RunResult,
     run as run,
@@ -33,7 +33,7 @@ __all__ = [
     "RunResult",
     "SourceNotFoundError",
     "TransformModuleError",
-    "TypedataEngineError",
+    "FyrnheimEngineError",
     "resolve_execution_order",
     "run",
     "run_entity",

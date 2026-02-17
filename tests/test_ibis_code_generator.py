@@ -4,7 +4,7 @@ import ast
 
 import pytest
 
-from typedata import (
+from fyrnheim import (
     Entity,
     Field,
     LayersConfig,
@@ -12,7 +12,7 @@ from typedata import (
     TableSource,
     UnionSource,
 )
-from typedata.generators import IbisCodeGenerator
+from fyrnheim.generators import IbisCodeGenerator
 
 
 @pytest.fixture()
@@ -62,7 +62,7 @@ class TestImports:
     """Test IbisCodeGenerator is importable."""
 
     def test_importable(self):
-        from typedata.generators import IbisCodeGenerator
+        from fyrnheim.generators import IbisCodeGenerator
 
         assert IbisCodeGenerator is not None
 

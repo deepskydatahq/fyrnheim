@@ -5,15 +5,15 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from typedata.engine import (
+from fyrnheim.engine import (
     DuckDBExecutor,
     ExecutionError,
     ExecutionResult,
+    FyrnheimEngineError,
     SourceNotFoundError,
     TransformModuleError,
-    TypedataEngineError,
 )
-from typedata.engine._loader import load_transform_module
+from fyrnheim.engine._loader import load_transform_module
 
 # ---------------------------------------------------------------------------
 # Helper: create sample parquet and generated transform modules
@@ -67,16 +67,16 @@ def dim_customers(prep_customers):
 
 
 class TestErrorHierarchy:
-    """Test that all engine errors inherit from TypedataEngineError."""
+    """Test that all engine errors inherit from FyrnheimEngineError."""
 
     def test_source_not_found(self):
-        assert issubclass(SourceNotFoundError, TypedataEngineError)
+        assert issubclass(SourceNotFoundError, FyrnheimEngineError)
 
     def test_transform_module_error(self):
-        assert issubclass(TransformModuleError, TypedataEngineError)
+        assert issubclass(TransformModuleError, FyrnheimEngineError)
 
     def test_execution_error(self):
-        assert issubclass(ExecutionError, TypedataEngineError)
+        assert issubclass(ExecutionError, FyrnheimEngineError)
 
 
 # ---------------------------------------------------------------------------

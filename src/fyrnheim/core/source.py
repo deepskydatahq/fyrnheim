@@ -1,4 +1,4 @@
-"""Source configuration classes for typedata entities."""
+"""Source configuration classes for fyrnheim entities."""
 
 import os
 from typing import Any, Literal

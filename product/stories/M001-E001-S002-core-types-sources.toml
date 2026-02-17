@@ -17,15 +17,15 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "MaterializationType, IncrementalStrategy, SourcePriority importable from typedata.core.types"
+description = "MaterializationType, IncrementalStrategy, SourcePriority importable from fyrnheim.core.types"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "Field, TypeCast, Rename, Divide, Multiply importable from typedata.core.source"
+description = "Field, TypeCast, Rename, Divide, Multiply importable from fyrnheim.core.source"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "BigQuerySource, DerivedSource, DerivedEntitySource, AggregationSource, UnionSource importable from typedata.core.source"
+description = "BigQuerySource, DerivedSource, DerivedEntitySource, AggregationSource, UnionSource importable from fyrnheim.core.source"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
@@ -51,7 +51,7 @@ implementation_hints = """
   - KEEP: BigQuerySource, DerivedSource, DerivedEntitySource, AggregationSource, UnionSource, Field, TypeCast, Rename, Divide, Multiply
   - EVALUATE: SignalSourceConfig, ProductSourceConfig, ProductUnionSource, AnonSourceConfig, EventAggregationSource — these may be too specific
   - SourceOverrides — keep if generic enough
-- Update import paths: metadata.* → typedata.*
+- Update import paths: metadata.* → fyrnheim.*
 - Create core/__init__.py with re-exports
 """
 reference_files = [

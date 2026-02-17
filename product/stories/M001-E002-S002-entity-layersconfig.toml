@@ -17,7 +17,7 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "Entity importable from typedata.core with name, description, layers, source fields"
+description = "Entity importable from fyrnheim.core with name, description, layers, source fields"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
@@ -50,7 +50,7 @@ depends_on = ["M001-E002-S001", "M001-E001-S003"]
 implementation_hints = """
 - entity.py imports from activity, analytics, layer, source — all must be extracted first
 - Uses TYPE_CHECKING for ComputedColumn, Measure, QualityConfig (resolved via model_rebuild later)
-- Update TYPE_CHECKING imports: metadata.components → typedata.components, metadata.quality → typedata.quality
+- Update TYPE_CHECKING imports: metadata.components → fyrnheim.components, metadata.quality → fyrnheim.quality
 - Keep the Source union type — evaluate which source types to include
 - Entity has properties: all_fields, all_computed_columns, all_measures, get_layer, has_layer
 """

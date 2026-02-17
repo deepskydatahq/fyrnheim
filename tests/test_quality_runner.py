@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from typedata.quality import QualityRunner
+from fyrnheim.quality import QualityRunner
 
 
 class TestQualityRunnerConstructor:

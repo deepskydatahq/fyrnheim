@@ -1,4 +1,4 @@
-# Typedata Vision
+# Fyrnheim Vision
 
 ## The Transformation
 
@@ -34,7 +34,7 @@ Data teams define typed Python entities and get:
 
 ## Core Mechanism
 
-**Entity-as-code**: A Pydantic model defines what a business entity is (fields, types, sources, layers, quality checks). Typedata generates Ibis transformation code from that definition and executes it on any supported backend.
+**Entity-as-code**: A Pydantic model defines what a business entity is (fields, types, sources, layers, quality checks). Fyrnheim generates Ibis transformation code from that definition and executes it on any supported backend.
 
 ```
 Entity (Pydantic) → Layers (prep, dim, snapshot, activity, analytics) → Ibis expressions → Any backend

@@ -7,7 +7,7 @@ created = 2026-02-16
 [outcome]
 description = """
 A user can define an entity, generate transformations, and execute them on DuckDB
-with real parquet data — completing the full typedata loop. Includes sample entity,
+with real parquet data — completing the full fyrnheim loop. Includes sample entity,
 sample data, and an end-to-end test that validates the entire pipeline.
 """
 
@@ -31,7 +31,7 @@ criteria = [
 ]
 
 validator_context = [
-    "src/typedata/engine/",
+    "src/fyrnheim/engine/",
     "examples/",
     "tests/",
 ]
@@ -49,7 +49,7 @@ considerations = """
 run_transformations.py in timo-data-stack is 695 lines with both DuckDB and BigQuery
 support, incremental processing, and many timo-specific source types.
 
-For typedata E004, extract only:
+For fyrnheim E004, extract only:
 - Entity discovery and dependency resolution
 - DuckDB backend execution (BigQuery is optional extra, deferred)
 - Parquet file registration as source tables

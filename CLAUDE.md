@@ -1,12 +1,12 @@
-# CLAUDE.md - Typedata
+# CLAUDE.md - Fyrnheim
 
-Best practices and conventions for working on Typedata.
+Best practices and conventions for working on Fyrnheim.
 
 ---
 
 ## Overview
 
-Typedata — vision and tech stack to be defined via `/product-vision`.
+Fyrnheim — vision and tech stack to be defined via `/product-vision`.
 
 ---
 

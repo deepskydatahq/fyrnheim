@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from typedata.core.source import (
+from fyrnheim.core.source import (
     AggregationSource,
     BaseTableSource,
     DerivedEntitySource,
@@ -327,41 +327,41 @@ class TestOldNamesNotImportable:
 
     def test_bigquery_source_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import BigQuerySource  # noqa: F401
+            from fyrnheim.core.source import BigQuerySource  # noqa: F401
 
     def test_base_source_config_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import BaseSourceConfig  # noqa: F401
+            from fyrnheim.core.source import BaseSourceConfig  # noqa: F401
 
     def test_source_overrides_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import SourceOverrides  # noqa: F401
+            from fyrnheim.core.source import SourceOverrides  # noqa: F401
 
     def test_signal_source_config_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import SignalSourceConfig  # noqa: F401
+            from fyrnheim.core.source import SignalSourceConfig  # noqa: F401
 
     def test_product_source_config_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import ProductSourceConfig  # noqa: F401
+            from fyrnheim.core.source import ProductSourceConfig  # noqa: F401
 
     def test_product_union_source_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import ProductUnionSource  # noqa: F401
+            from fyrnheim.core.source import ProductUnionSource  # noqa: F401
 
     def test_anon_source_config_not_importable(self):
         with pytest.raises(ImportError):
-            from typedata.core.source import AnonSourceConfig  # noqa: F401
+            from fyrnheim.core.source import AnonSourceConfig  # noqa: F401
 
 
 class TestReExportsFromCore:
-    """Verify all source classes are re-exported from typedata.core."""
+    """Verify all source classes are re-exported from fyrnheim.core."""
 
     def test_all_source_classes_importable(self):
-        from typedata.core import (
+        from fyrnheim.core import (
             Field,
         )
 
         # Verify they are the same objects (not copies)
-        from typedata.core.source import Field as DirectField
+        from fyrnheim.core.source import Field as DirectField
         assert Field is DirectField

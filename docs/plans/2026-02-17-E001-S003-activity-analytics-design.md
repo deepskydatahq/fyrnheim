@@ -7,7 +7,7 @@
 - `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/activity.py` (43 lines)
 - `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/analytics.py` (90 lines)
 
-**Target location:** `src/typedata/core/activity.py` and `src/typedata/core/analytics.py`
+**Target location:** `src/fyrnheim/core/activity.py` and `src/fyrnheim/core/analytics.py`
 
 ---
 
@@ -60,7 +60,7 @@
 
 **Rationale:** Both files are pure Pydantic models with zero internal dependencies. They import only from `pydantic` and `typing`. There is nothing to strip, refactor, or abstract. The code is clean, well-typed, and already generic.
 
-**Action:** Copy with import path changes only (`metadata.core.*` references in any docstrings become `typedata.core.*`). No actual import statements reference internal modules, so no code changes are needed beyond the module-level docstring if desired.
+**Action:** Copy with import path changes only (`metadata.core.*` references in any docstrings become `fyrnheim.core.*`). No actual import statements reference internal modules, so no code changes are needed beyond the module-level docstring if desired.
 
 ### Decision 2: No dbt stripping needed
 
@@ -86,7 +86,7 @@ AnalyticsModel   (top-level: combines sources into wide table)
 
 This hierarchy is entirely domain-agnostic. The only domain-specific content is the Ibis expression strings written by users, which is the intended usage pattern. The class structure itself has no timo-data-stack-specific assumptions.
 
-`AnalyticsModel` with its `sources` + `computed_metrics` pattern is the equivalent of a dbt mart model, but expressed purely in Python config. This is a core typedata concept.
+`AnalyticsModel` with its `sources` + `computed_metrics` pattern is the equivalent of a dbt mart model, but expressed purely in Python config. This is a core fyrnheim concept.
 
 ### Decision 4: Keep all 7 classes, modify nothing
 
@@ -115,7 +115,7 @@ These are observations for future stories, NOT for this extraction:
 
 ## 3. Implementation plan
 
-### File: `src/typedata/core/activity.py`
+### File: `src/fyrnheim/core/activity.py`
 
 ```python
 """Activity layer configuration for entities."""
@@ -164,7 +164,7 @@ class ActivityConfig(BaseModel):
 
 Identical to source. Zero changes.
 
-### File: `src/typedata/core/analytics.py`
+### File: `src/fyrnheim/core/analytics.py`
 
 ```python
 """Analytics layer components for date-grain metric aggregation."""
@@ -197,7 +197,7 @@ class AnalyticsModel(BaseModel):
 
 Identical to source. Zero changes.
 
-### Exports in `src/typedata/core/__init__.py`
+### Exports in `src/fyrnheim/core/__init__.py`
 
 Add to the existing `__init__.py` (which will be created by S001 and may already have S002 exports):
 
@@ -218,8 +218,8 @@ from .analytics import (
 
 Four tests matching acceptance criteria:
 
-1. **Import test -- activity:** `ActivityConfig, ActivityType` importable from `typedata.core.activity`
-2. **Import test -- analytics:** `AnalyticsLayer, AnalyticsMetric, AnalyticsModel, AnalyticsSource, ComputedMetric` importable from `typedata.core.analytics`
+1. **Import test -- activity:** `ActivityConfig, ActivityType` importable from `fyrnheim.core.activity`
+2. **Import test -- analytics:** `AnalyticsLayer, AnalyticsMetric, AnalyticsModel, AnalyticsSource, ComputedMetric` importable from `fyrnheim.core.analytics`
 3. **Validation test -- activity:** `ActivityConfig` requires at least one `ActivityType`, requires `person_id_field` or `anon_id_field`, and `identity_field` property returns the correct value
 4. **Validation test -- analytics:** `AnalyticsLayer` requires at least one metric, `AnalyticsMetric` validates `min_length=1` on `name` and `expression`
 
@@ -229,7 +229,7 @@ Four tests matching acceptance criteria:
 
 **Risks:** None. Both files are zero-dependency leaf modules with no coupling. This is a straightforward copy.
 
-**Open question:** The `ActivityConfig` in `entity.py` coexists with a legacy `ActivityLayer` (dbt-based) in `layer.py`. In typedata, only `ActivityConfig` should exist. The legacy `ActivityLayer` should NOT be extracted. This is already the plan per the layer config story (M001-E002-S001), but worth noting explicitly: typedata has `ActivityConfig` for activity streams, not `ActivityLayer`.
+**Open question:** The `ActivityConfig` in `entity.py` coexists with a legacy `ActivityLayer` (dbt-based) in `layer.py`. In fyrnheim, only `ActivityConfig` should exist. The legacy `ActivityLayer` should NOT be extracted. This is already the plan per the layer config story (M001-E002-S001), but worth noting explicitly: fyrnheim has `ActivityConfig` for activity streams, not `ActivityLayer`.
 
 ---
 
@@ -245,33 +245,33 @@ Four tests matching acceptance criteria:
 
 ### Summary
 
-Extract 7 Pydantic config classes from two source files in timo-data-stack into the typedata library. Both source files (`activity.py` with 2 classes, `analytics.py` with 5 classes) are pure Pydantic models with zero internal dependencies -- they import only from `pydantic` and `typing`. Neither file contains any dbt references; all expressions are Ibis-style strings. **These are verbatim copies with zero code changes.**
+Extract 7 Pydantic config classes from two source files in timo-data-stack into the fyrnheim library. Both source files (`activity.py` with 2 classes, `analytics.py` with 5 classes) are pure Pydantic models with zero internal dependencies -- they import only from `pydantic` and `typing`. Neither file contains any dbt references; all expressions are Ibis-style strings. **These are verbatim copies with zero code changes.**
 
 ### Acceptance criteria
 
-1. `ActivityConfig` and `ActivityType` are importable from `typedata.core.activity`
-2. `AnalyticsLayer`, `AnalyticsMetric`, `AnalyticsModel`, `AnalyticsSource`, and `ComputedMetric` are importable from `typedata.core.analytics`
+1. `ActivityConfig` and `ActivityType` are importable from `fyrnheim.core.activity`
+2. `AnalyticsLayer`, `AnalyticsMetric`, `AnalyticsModel`, `AnalyticsSource`, and `ComputedMetric` are importable from `fyrnheim.core.analytics`
 3. `ActivityConfig` validates with correct activity type enum values (trigger Literal, at least one type, requires person or anon ID)
 4. `AnalyticsLayer` validates with metrics list (at least one required) and `AnalyticsMetric` enforces `min_length=1` on `name` and `expression`
 
 ### Implementation tasks
 
-**Task 1: Create `src/typedata/core/activity.py`**
-- Target: `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/core/activity.py`
+**Task 1: Create `src/fyrnheim/core/activity.py`**
+- Target: `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/core/activity.py`
 - Source: `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/activity.py` (43 lines)
 - Action: Verbatim copy. Zero modifications. Contains `ActivityType` and `ActivityConfig`.
 - Classes: 2 (`ActivityType`, `ActivityConfig`)
 - Dependencies: `pydantic.BaseModel`, `pydantic.field_validator`, `typing.Literal`
 
-**Task 2: Create `src/typedata/core/analytics.py`**
-- Target: `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/core/analytics.py`
+**Task 2: Create `src/fyrnheim/core/analytics.py`**
+- Target: `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/core/analytics.py`
 - Source: `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/analytics.py` (90 lines)
 - Action: Verbatim copy. Zero modifications. Contains all 5 analytics classes.
 - Classes: 5 (`AnalyticsMetric`, `AnalyticsLayer`, `AnalyticsSource`, `ComputedMetric`, `AnalyticsModel`)
 - Dependencies: `pydantic.BaseModel`, `pydantic.field_validator`, `pydantic.Field`, `typing.Literal`
 
-**Task 3: Update `src/typedata/core/__init__.py`**
-- Target: `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/core/__init__.py`
+**Task 3: Update `src/fyrnheim/core/__init__.py`**
+- Target: `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/core/__init__.py`
 - Action: Add re-exports for all 7 classes from the two new modules.
 - Append:
   ```python
@@ -287,14 +287,14 @@ Extract 7 Pydantic config classes from two source files in timo-data-stack into 
 
 ### Test plan
 
-Test file: `/home/tmo/roadtothebeach/tmo/typedata/tests/core/test_activity_analytics.py`
+Test file: `/home/tmo/roadtothebeach/tmo/fyrnheim/tests/core/test_activity_analytics.py`
 
 **Test 1: `test_activity_types_importable`**
-- Import `ActivityConfig` and `ActivityType` from `typedata.core.activity`
+- Import `ActivityConfig` and `ActivityType` from `fyrnheim.core.activity`
 - Verify both are subclasses of `pydantic.BaseModel`
 
 **Test 2: `test_analytics_classes_importable`**
-- Import all 5 analytics classes from `typedata.core.analytics`
+- Import all 5 analytics classes from `fyrnheim.core.analytics`
 - Verify each is a subclass of `pydantic.BaseModel`
 
 **Test 3: `test_activity_config_validation`**

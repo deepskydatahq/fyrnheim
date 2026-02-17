@@ -6,7 +6,7 @@ created = 2026-02-16
 
 [outcome]
 description = """
-Given an Entity definition, typedata generates valid Ibis transformation code
+Given an Entity definition, fyrnheim generates valid Ibis transformation code
 that implements the entity's layer pipeline (prep → dimension → snapshot).
 The generated code is importable Python that produces Ibis table expressions.
 """
@@ -26,12 +26,12 @@ criteria = [
     "DimensionLayer generation: computed columns, materialization config present",
     "SnapshotLayer generation: SCD Type 2 logic with surrogate keys generated",
     "Generated code is syntactically valid Python (ast.parse succeeds)",
-    "Generated code references correct typedata imports (not metadata.*)",
+    "Generated code references correct fyrnheim imports (not metadata.*)",
     "Test suite: generate code from sample entity, verify it parses and contains expected Ibis patterns",
 ]
 
 validator_context = [
-    "src/typedata/generators/",
+    "src/fyrnheim/generators/",
     "tests/",
 ]
 
@@ -47,7 +47,7 @@ dependencies = ["M001-E002"]
 [notes]
 considerations = """
 The generator system in timo-data-stack has many generators (dbt, duckdb, sql, ibis).
-For typedata, we only need the Ibis code generator — the others are integration-specific.
+For fyrnheim, we only need the Ibis code generator — the others are integration-specific.
 
 Key extraction:
 - generators/base.py — base class
@@ -55,7 +55,7 @@ Key extraction:
 - Skip: dbt_generator.py, duckdb_generator.py, sql_generator.py, dbt_project_generator.py
 
 The ibis_code_generator imports from metadata.core (Entity, source types, activity types).
-These imports need updating to typedata.*.
+These imports need updating to fyrnheim.*.
 
 Consider whether to also extract the identity graph generator here or defer to E004.
 """

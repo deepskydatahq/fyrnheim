@@ -1,26 +1,26 @@
 id = "M001"
-title = "Extract core entity framework into standalone typedata package"
+title = "Extract core entity framework into standalone fyrnheim package"
 status = "complete"
 created = 2026-02-16
 
 [outcome]
 description = """
-A data engineer can `pip install typedata`, define a Pydantic entity with source,
+A data engineer can `pip install fyrnheim`, define a Pydantic entity with source,
 layers, and quality checks, then run transformations on DuckDB — all without
 timo-data-stack. The framework works as a self-contained library with clean
 public API, tests, and documentation.
 """
 
-user_progress = "From 'framework buried inside a monorepo, can't reuse it' to 'pip install typedata and define entities in any project'"
+user_progress = "From 'framework buried inside a monorepo, can't reuse it' to 'pip install fyrnheim and define entities in any project'"
 
 [testing]
 approach = "agent-judgment"
 criteria = [
-    "typedata is pip-installable (pyproject.toml, package structure, uv/pip install -e . works)",
-    "Entity, LayersConfig, PrepLayer, DimensionLayer, SnapshotLayer can be imported from typedata",
-    "Primitives (hash_email, categorize, days_since) importable from typedata.primitives",
-    "Components (ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics) importable from typedata.components",
-    "Quality checks (NotNull, Unique, QualityConfig) importable from typedata.quality",
+    "fyrnheim is pip-installable (pyproject.toml, package structure, uv/pip install -e . works)",
+    "Entity, LayersConfig, PrepLayer, DimensionLayer, SnapshotLayer can be imported from fyrnheim",
+    "Primitives (hash_email, categorize, days_since) importable from fyrnheim.primitives",
+    "Components (ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics) importable from fyrnheim.components",
+    "Quality checks (NotNull, Unique, QualityConfig) importable from fyrnheim.quality",
     "A sample entity defined with Pydantic validates correctly (fields, layers, source config)",
     "Code generator produces valid Ibis expressions from entity definition",
     "Generated transformations execute on DuckDB with sample parquet data and produce correct output",
@@ -29,7 +29,7 @@ criteria = [
 ]
 
 validator_context = [
-    "src/typedata/",
+    "src/fyrnheim/",
     "tests/",
     "pyproject.toml",
     "examples/",
@@ -65,13 +65,13 @@ MUST extract:
 MUST build new:
 - Clean public API (__init__.py exports)
 - pyproject.toml with minimal dependencies
-- Package structure: src/typedata/
+- Package structure: src/fyrnheim/
 - Example entity + sample data for end-to-end validation
 - Test suite covering core → generate → execute flow
 
 Key decisions:
 - Use src/ layout for proper packaging
-- Ibis backends as optional extras: typedata[duckdb], typedata[bigquery]
+- Ibis backends as optional extras: fyrnheim[duckdb], fyrnheim[bigquery]
 - BigQuery dependency optional, DuckDB as default local backend
 - Keep generators internal — users define entities, not generator code
 - Skip tenant extensions for now (multi-tenant is a later concern)

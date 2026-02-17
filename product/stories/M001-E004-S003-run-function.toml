@@ -6,7 +6,7 @@ created = 2026-02-16
 
 [outcome]
 description = """
-A public typedata.run() function orchestrates the full pipeline: discover entities,
+A public fyrnheim.run() function orchestrates the full pipeline: discover entities,
 resolve dependencies, generate code, execute on DuckDB, run quality checks, and
 report results.
 """
@@ -49,7 +49,7 @@ implementation_hints = """
   2. Resolve dependency order
   3. For each entity: generate code → execute on backend → run quality checks
   4. Return summary: entity name, status, row count, quality results
-- Expose as typedata.run() in the public API
+- Expose as fyrnheim.run() in the public API
 - Consider also a run_entity(entity, data_dir) for single-entity execution
 """
 reference_files = [

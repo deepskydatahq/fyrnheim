@@ -48,7 +48,7 @@ implementation_hints = """
 - Use ibis.duckdb.connect() for the backend
 - Parquet registration: conn.read_parquet(path, table_name=name)
 - Result persistence: conn.create_table(name, result) or conn.insert(name, result)
-- Place in typedata/engine/executor.py
+- Place in fyrnheim/engine/executor.py
 """
 reference_files = [
     "/home/tmo/roadtothebeach/tmo/timo-data-stack/scripts/run_transformations.py",

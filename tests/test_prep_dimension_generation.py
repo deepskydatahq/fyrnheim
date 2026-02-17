@@ -2,7 +2,7 @@
 
 import ast
 
-from typedata import (
+from fyrnheim import (
     ComputedColumn,
     DimensionLayer,
     Divide,
@@ -15,7 +15,7 @@ from typedata import (
     TableSource,
     TypeCast,
 )
-from typedata.generators import IbisCodeGenerator
+from fyrnheim.generators import IbisCodeGenerator
 
 
 def _make_entity(

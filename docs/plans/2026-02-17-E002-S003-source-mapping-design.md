@@ -42,7 +42,7 @@ source_mapping = SourceMapping(
 )
 ```
 
-This is a pattern that any typedata user defining entities against varying data sources will need.
+This is a pattern that any fyrnheim user defining entities against varying data sources will need.
 
 ### What stays the same
 
@@ -53,7 +53,7 @@ This is a pattern that any typedata user defining entities against varying data 
 
 ### What changes
 
-- TYPE_CHECKING imports update from `from .entity import Entity` / `from .source import Source` to `from typedata.core.entity import Entity` / `from typedata.core.source import Source` (or keep relative `.entity`, `.source` since it stays in `typedata/core/`).
+- TYPE_CHECKING imports update from `from .entity import Entity` / `from .source import Source` to `from fyrnheim.core.entity import Entity` / `from fyrnheim.core.source import Source` (or keep relative `.entity`, `.source` since it stays in `fyrnheim/core/`).
 
 **Recommendation:** Keep relative imports (`.entity`, `.source`) since SourceMapping lives in the same `core` subpackage. This matches the existing pattern and avoids coupling to the full package path.
 
@@ -120,7 +120,7 @@ class FieldMapping(BaseModel):
 Considered but rejected for now. The plain dict is simpler, matches how dbt source mappings work, and covers all current use cases. If transforms-at-mapping-time become needed, a `FieldMapping` model can be introduced later as a backward-compatible addition (accept `dict[str, str | FieldMapping]`).
 
 **Option C: Rename to `column_mappings` for clarity.**
-Rejected. `field_mappings` is consistent with the Entity model's `required_fields` / `optional_fields` naming. Fields are the typedata abstraction; columns are the source-level term. The mapping bridges entity fields to source columns, so `field_mappings` is accurate.
+Rejected. `field_mappings` is consistent with the Entity model's `required_fields` / `optional_fields` naming. Fields are the fyrnheim abstraction; columns are the source-level term. The mapping bridges entity fields to source columns, so `field_mappings` is accurate.
 
 ### What to improve
 
@@ -167,13 +167,13 @@ This is distinct from the legacy pattern where `Entity.source` was set directly.
 SourceMapping uses TYPE_CHECKING imports for Entity and Source to avoid circular dependencies at module load time. This means:
 
 - `SourceMapping` can be defined before Entity and Source are fully loaded.
-- `SourceMapping.model_rebuild()` must be called in `typedata/__init__.py` after all modules are imported, alongside `Entity.model_rebuild()`.
+- `SourceMapping.model_rebuild()` must be called in `fyrnheim/__init__.py` after all modules are imported, alongside `Entity.model_rebuild()`.
 - This is already planned in S004 (model_rebuild and public API).
 
 ### Where SourceMapping lives in the module tree
 
 ```
-typedata/
+fyrnheim/
   core/
     entity.py        # Entity, LayersConfig, Source union
     source.py         # BigQuerySource, DerivedSource, Field, etc.
@@ -196,9 +196,9 @@ This is a generator concern, not a SourceMapping concern. SourceMapping's job is
 After extraction, SourceMapping should be importable as:
 
 ```python
-from typedata import SourceMapping
-from typedata.core import SourceMapping       # also works
-from typedata.core.source_mapping import SourceMapping  # direct
+from fyrnheim import SourceMapping
+from fyrnheim.core import SourceMapping       # also works
+from fyrnheim.core.source_mapping import SourceMapping  # direct
 ```
 
 ---
@@ -207,12 +207,12 @@ from typedata.core.source_mapping import SourceMapping  # direct
 
 **Status:** Complete
 
-### Step 1: Create `src/typedata/core/source_mapping.py`
+### Step 1: Create `src/fyrnheim/core/source_mapping.py`
 
 Extract as-is from timo-data-stack with minimal import path changes. No TenantExtension.
 
 **Source:** `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source_mapping.py`
-**Target:** `src/typedata/core/source_mapping.py`
+**Target:** `src/fyrnheim/core/source_mapping.py`
 
 #### What stays the same
 
@@ -279,9 +279,9 @@ class SourceMapping(BaseModel):
         return self
 ```
 
-This is byte-for-byte identical to the source file. The TYPE_CHECKING imports already use relative `.entity` and `.source`, which is correct since SourceMapping lives in the same `core/` subpackage in both timo-data-stack and typedata.
+This is byte-for-byte identical to the source file. The TYPE_CHECKING imports already use relative `.entity` and `.source`, which is correct since SourceMapping lives in the same `core/` subpackage in both timo-data-stack and fyrnheim.
 
-### Step 2: Export from `src/typedata/core/__init__.py`
+### Step 2: Export from `src/fyrnheim/core/__init__.py`
 
 Add to the core package exports:
 
@@ -291,10 +291,10 @@ from .source_mapping import SourceMapping
 
 ### Step 3: Wire `model_rebuild()` and top-level re-export (deferred to S004)
 
-In S004 (model_rebuild + public API), add to `src/typedata/__init__.py`:
+In S004 (model_rebuild + public API), add to `src/fyrnheim/__init__.py`:
 
 ```python
-from typedata.core.source_mapping import SourceMapping
+from fyrnheim.core.source_mapping import SourceMapping
 # ... after all imports ...
 SourceMapping.model_rebuild()
 ```
@@ -309,14 +309,14 @@ Test cases derived from acceptance criteria:
 
 | # | Test | What it validates |
 |---|------|-------------------|
-| 1 | `test_source_mapping_importable` | `from typedata.core import SourceMapping` works |
+| 1 | `test_source_mapping_importable` | `from fyrnheim.core import SourceMapping` works |
 | 2 | `test_source_mapping_accepts_entity_and_field_mappings` | Constructor accepts `entity`, `source`, `field_mappings` dict |
 | 3 | `test_source_mapping_validates_required_field_coverage` | Raises `ValidationError` when required fields lack mappings |
 | 4 | `test_source_mapping_allows_unmapped_optional_fields` | Optional fields can be omitted from `field_mappings` |
 | 5 | `test_source_mapping_empty_mappings_with_no_required_fields` | Old-style entity (required_fields=None) skips validation |
 | 6 | `test_source_mapping_default_empty_field_mappings` | `field_mappings` defaults to `{}` when not provided |
 
-**Note on test setup:** Tests need Entity and Source instances. Since S003 depends on S002 (Entity extraction), tests can use the real Entity/Source classes from `typedata.core`. If S002 is not yet merged, tests should use `unittest.mock.MagicMock` objects with `.required_fields` and `.optional_fields` attributes, relying on `arbitrary_types_allowed` to accept them. The validator only accesses `self.entity.required_fields` (a list of objects with `.name` attributes), so mocks are straightforward.
+**Note on test setup:** Tests need Entity and Source instances. Since S003 depends on S002 (Entity extraction), tests can use the real Entity/Source classes from `fyrnheim.core`. If S002 is not yet merged, tests should use `unittest.mock.MagicMock` objects with `.required_fields` and `.optional_fields` attributes, relying on `arbitrary_types_allowed` to accept them. The validator only accesses `self.entity.required_fields` (a list of objects with `.name` attributes), so mocks are straightforward.
 
 ### Not included (explicitly skipped)
 

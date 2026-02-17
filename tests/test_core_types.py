@@ -1,7 +1,7 @@
 """Tests for core type definitions and enums."""
 
 
-from typedata.core.types import IncrementalStrategy, MaterializationType, SourcePriority
+from fyrnheim.core.types import IncrementalStrategy, MaterializationType, SourcePriority
 
 
 class TestMaterializationType:
@@ -88,16 +88,16 @@ class TestSourcePriority:
 
 
 class TestReExports:
-    """Verify re-exports from typedata.core work."""
+    """Verify re-exports from fyrnheim.core work."""
 
     def test_materialization_type_from_core(self):
-        from typedata.core import MaterializationType as MT
+        from fyrnheim.core import MaterializationType as MT
         assert MT.TABLE == "table"
 
     def test_incremental_strategy_from_core(self):
-        from typedata.core import IncrementalStrategy as IS
+        from fyrnheim.core import IncrementalStrategy as IS
         assert IS.MERGE == "merge"
 
     def test_source_priority_from_core(self):
-        from typedata.core import SourcePriority as SP
+        from fyrnheim.core import SourcePriority as SP
         assert SP.PRIMARY == 1

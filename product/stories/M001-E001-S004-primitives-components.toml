@@ -16,23 +16,23 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "hash_email, concat_hash, hash_md5, hash_sha256 importable from typedata.primitives"
+description = "hash_email, concat_hash, hash_md5, hash_sha256 importable from fyrnheim.primitives"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "categorize, lifecycle_flag, boolean_to_int importable from typedata.primitives"
+description = "categorize, lifecycle_flag, boolean_to_int importable from fyrnheim.primitives"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "date_diff_days, days_since, extract_year, date_trunc_month importable from typedata.primitives"
+description = "date_diff_days, days_since, extract_year, date_trunc_month importable from fyrnheim.primitives"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "sum_, count_, count_distinct, avg_, row_number_by importable from typedata.primitives"
+description = "sum_, count_, count_distinct, avg_, row_number_by importable from fyrnheim.primitives"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics, DataQualityChecks importable from typedata.components"
+description = "ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics, DataQualityChecks importable from fyrnheim.components"
 
 [[acceptance_criteria.criteria]]
 test = "unit"

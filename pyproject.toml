@@ -1,5 +1,5 @@
 [project]
-name = "typedata"
+name = "fyrnheim"
 version = "0.1.0"
 description = "Define typed Python entities, generate transformations, run anywhere. A dbt alternative built on Pydantic + Ibis."
 requires-python = ">=3.11"
@@ -45,17 +45,20 @@ dev = [
     "mypy>=1.17.0",
 ]
 
+[project.scripts]
+fyr = "fyrnheim.cli:main"
+
 [project.urls]
-Homepage = "https://github.com/timo-ai/typedata"
-Repository = "https://github.com/timo-ai/typedata"
-Issues = "https://github.com/timo-ai/typedata/issues"
+Homepage = "https://github.com/timo-ai/fyrnheim"
+Repository = "https://github.com/timo-ai/fyrnheim"
+Issues = "https://github.com/timo-ai/fyrnheim/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/typedata"]
+packages = ["src/fyrnheim"]
 
 [tool.ruff]
 line-length = 100

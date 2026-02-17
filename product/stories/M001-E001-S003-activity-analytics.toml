@@ -16,11 +16,11 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "ActivityConfig, ActivityType importable from typedata.core.activity"
+description = "ActivityConfig, ActivityType importable from fyrnheim.core.activity"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "AnalyticsLayer, AnalyticsMetric, AnalyticsModel, AnalyticsSource, ComputedMetric importable from typedata.core.analytics"
+description = "AnalyticsLayer, AnalyticsMetric, AnalyticsModel, AnalyticsSource, ComputedMetric importable from fyrnheim.core.analytics"
 
 [[acceptance_criteria.criteria]]
 test = "unit"

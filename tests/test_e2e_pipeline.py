@@ -1,4 +1,4 @@
-"""End-to-end tests for the full typedata pipeline.
+"""End-to-end tests for the full fyrnheim pipeline.
 
 Proves: define entity -> generate Ibis code -> execute on DuckDB -> verify results.
 This is the mission validation test for M001.
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import pandas as pd
 import pytest
 
-from typedata import (
+from fyrnheim import (
     ComputedColumn,
     DimensionLayer,
     Entity,
@@ -25,9 +25,9 @@ from typedata import (
     TableSource,
     Unique,
 )
-from typedata._generate import GenerateResult, generate
-from typedata.engine import DuckDBExecutor
-from typedata.primitives import date_trunc_month, hash_email
+from fyrnheim._generate import GenerateResult, generate
+from fyrnheim.engine import DuckDBExecutor
+from fyrnheim.primitives import date_trunc_month, hash_email
 
 # ---------------------------------------------------------------------------
 # Pipeline result container

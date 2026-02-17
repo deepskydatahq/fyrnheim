@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-17
 **Story:** M001-E002-S004
-**Beads task:** typedata-88g
+**Beads task:** fyrnheim-88g
 **Status:** Ready
 
 ---
@@ -14,11 +14,11 @@ predecessor stories (S001-S005 from E001 for package scaffolding, S001-S003 from
 E002 for entity/layers/source-mapping) will have created the individual modules.
 This story wires them together: resolve Pydantic forward references via
 `model_rebuild()`, then re-export the public API from the top-level
-`typedata/__init__.py`.
+`fyrnheim/__init__.py`.
 
 The reference implementation is `timo-data-stack/metadata/__init__.py`, which
 imports everything, calls `model_rebuild()`, then imports concrete entity
-instances. Typedata is a generic framework -- we drop the concrete entities and
+instances. Fyrnheim is a generic framework -- we drop the concrete entities and
 the entity registry, keeping only the type system and re-exports.
 
 ---
@@ -38,102 +38,102 @@ These are the symbols a user touches in every entity definition file:
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `Entity` | `typedata.core` | The central model |
-| `LayersConfig` | `typedata.core` | Container for layer configuration |
-| `Source` | `typedata.core` | Union type alias for all source configs |
-| `Field` | `typedata.core` | Field definition in source/entity contract |
+| `Entity` | `fyrnheim.core` | The central model |
+| `LayersConfig` | `fyrnheim.core` | Container for layer configuration |
+| `Source` | `fyrnheim.core` | Union type alias for all source configs |
+| `Field` | `fyrnheim.core` | Field definition in source/entity contract |
 
 ### Tier 2 -- Layer Configuration
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `PrepLayer` | `typedata.core` | Prep/staging layer |
-| `DimensionLayer` | `typedata.core` | Dimension layer (Type 1/2 SCD) |
-| `SnapshotLayer` | `typedata.core` | Daily snapshot layer |
-| `ActivityLayer` | `typedata.core` | Legacy dbt-based activity layer |
-| `ActivityConfig` | `typedata.core` | Ibis-based activity config |
-| `ActivityType` | `typedata.core` | Activity type definition |
-| `AnalyticsLayer` | `typedata.core` | Analytics aggregation layer |
-| `AnalyticsMetric` | `typedata.core` | Metric within analytics layer |
-| `AnalyticsModel` | `typedata.core` | Combines analytics layers |
-| `AnalyticsSource` | `typedata.core` | Reference to entity analytics |
-| `ComputedMetric` | `typedata.core` | Computed from combined analytics |
+| `PrepLayer` | `fyrnheim.core` | Prep/staging layer |
+| `DimensionLayer` | `fyrnheim.core` | Dimension layer (Type 1/2 SCD) |
+| `SnapshotLayer` | `fyrnheim.core` | Daily snapshot layer |
+| `ActivityLayer` | `fyrnheim.core` | Legacy dbt-based activity layer |
+| `ActivityConfig` | `fyrnheim.core` | Ibis-based activity config |
+| `ActivityType` | `fyrnheim.core` | Activity type definition |
+| `AnalyticsLayer` | `fyrnheim.core` | Analytics aggregation layer |
+| `AnalyticsMetric` | `fyrnheim.core` | Metric within analytics layer |
+| `AnalyticsModel` | `fyrnheim.core` | Combines analytics layers |
+| `AnalyticsSource` | `fyrnheim.core` | Reference to entity analytics |
+| `ComputedMetric` | `fyrnheim.core` | Computed from combined analytics |
 
 ### Tier 3 -- Source Configuration
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `BigQuerySource` | `typedata.core` | Standard BQ table source |
-| `DerivedSource` | `typedata.core` | Identity-graph derived source |
-| `DerivedEntitySource` | `typedata.core` | Derived entity source |
-| `AggregationSource` | `typedata.core` | Entity-to-entity aggregation |
-| `EventAggregationSource` | `typedata.core` | Event stream aggregation |
-| `UnionSource` | `typedata.core` | Multi-source union |
-| `BaseSourceConfig` | `typedata.core` | Base for BQ/DuckDB sources |
-| `SourceOverrides` | `typedata.core` | Type casts, renames, etc. |
-| `TypeCast` | `typedata.core` | Type cast helper |
-| `Rename` | `typedata.core` | Column rename helper |
-| `Divide` | `typedata.core` | Divide-by-constant helper |
-| `Multiply` | `typedata.core` | Multiply-by-constant helper |
-| `SignalSourceConfig` | `typedata.core` | Signal source within union |
-| `ProductSourceConfig` | `typedata.core` | Product source within union |
-| `ProductUnionSource` | `typedata.core` | Multi-product union |
-| `AnonSourceConfig` | `typedata.core` | Anonymous visitor source |
+| `BigQuerySource` | `fyrnheim.core` | Standard BQ table source |
+| `DerivedSource` | `fyrnheim.core` | Identity-graph derived source |
+| `DerivedEntitySource` | `fyrnheim.core` | Derived entity source |
+| `AggregationSource` | `fyrnheim.core` | Entity-to-entity aggregation |
+| `EventAggregationSource` | `fyrnheim.core` | Event stream aggregation |
+| `UnionSource` | `fyrnheim.core` | Multi-source union |
+| `BaseSourceConfig` | `fyrnheim.core` | Base for BQ/DuckDB sources |
+| `SourceOverrides` | `fyrnheim.core` | Type casts, renames, etc. |
+| `TypeCast` | `fyrnheim.core` | Type cast helper |
+| `Rename` | `fyrnheim.core` | Column rename helper |
+| `Divide` | `fyrnheim.core` | Divide-by-constant helper |
+| `Multiply` | `fyrnheim.core` | Multiply-by-constant helper |
+| `SignalSourceConfig` | `fyrnheim.core` | Signal source within union |
+| `ProductSourceConfig` | `fyrnheim.core` | Product source within union |
+| `ProductUnionSource` | `fyrnheim.core` | Multi-product union |
+| `AnonSourceConfig` | `fyrnheim.core` | Anonymous visitor source |
 
 **Decision on timo-specific source types:** Keep `SignalSourceConfig`,
 `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig`, and
 `EventAggregationSource` in the initial extraction. These are concrete patterns
 that demonstrate what the framework supports. If they become a maintenance burden
-we can move them to a `typedata.contrib` module later. The alternative (stripping
+we can move them to a `fyrnheim.contrib` module later. The alternative (stripping
 them now) risks breaking the extraction goal of "same behavior, new package."
 
 ### Tier 4 -- Enums and Types
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `MaterializationType` | `typedata.core` | TABLE, VIEW, INCREMENTAL, etc. |
-| `IncrementalStrategy` | `typedata.core` | Merge, append, etc. |
-| `SourcePriority` | `typedata.core` | Source ordering |
+| `MaterializationType` | `fyrnheim.core` | TABLE, VIEW, INCREMENTAL, etc. |
+| `IncrementalStrategy` | `fyrnheim.core` | Merge, append, etc. |
+| `SourcePriority` | `fyrnheim.core` | Source ordering |
 
 ### Tier 5 -- Source Mapping and Tenant Extension
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `SourceMapping` | `typedata.core` | Entity-to-source bridge |
-| `TenantExtension` | `typedata.core` | Tenant-specific overrides |
+| `SourceMapping` | `fyrnheim.core` | Entity-to-source bridge |
+| `TenantExtension` | `fyrnheim.core` | Tenant-specific overrides |
 
 ### Tier 6 -- Components (multi-column patterns)
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `ComputedColumn` | `typedata.components` | Single computed column |
-| `Measure` | `typedata.components` | Aggregation measure |
-| `LifecycleFlags` | `typedata.components` | Lifecycle boolean flags |
-| `TimeBasedMetrics` | `typedata.components` | Time-based metric columns |
-| `DataQualityChecks` | `typedata.components` | Quality check component |
+| `ComputedColumn` | `fyrnheim.components` | Single computed column |
+| `Measure` | `fyrnheim.components` | Aggregation measure |
+| `LifecycleFlags` | `fyrnheim.components` | Lifecycle boolean flags |
+| `TimeBasedMetrics` | `fyrnheim.components` | Time-based metric columns |
+| `DataQualityChecks` | `fyrnheim.components` | Quality check component |
 
 ### Tier 7 -- Quality Framework
 
 | Symbol | Module | Purpose |
 |--------|--------|---------|
-| `QualityConfig` | `typedata.quality` | Quality check container |
-| `QualityCheck` | `typedata.quality` | Base check class |
-| `NotNull` | `typedata.quality` | Not-null check |
-| `NotEmpty` | `typedata.quality` | Not-empty check |
-| `InRange` | `typedata.quality` | Range check |
-| `InSet` | `typedata.quality` | Set membership check |
-| `MatchesPattern` | `typedata.quality` | Regex pattern check |
-| `ForeignKey` | `typedata.quality` | Foreign key check |
-| `Unique` | `typedata.quality` | Uniqueness check |
-| `MaxAge` | `typedata.quality` | Freshness check |
-| `CustomSQL` | `typedata.quality` | Custom SQL check |
-| `QualityRunner` | `typedata.quality` | Check executor |
-| `CheckResult` | `typedata.quality` | Single check result |
-| `EntityResult` | `typedata.quality` | Entity-level result |
+| `QualityConfig` | `fyrnheim.quality` | Quality check container |
+| `QualityCheck` | `fyrnheim.quality` | Base check class |
+| `NotNull` | `fyrnheim.quality` | Not-null check |
+| `NotEmpty` | `fyrnheim.quality` | Not-empty check |
+| `InRange` | `fyrnheim.quality` | Range check |
+| `InSet` | `fyrnheim.quality` | Set membership check |
+| `MatchesPattern` | `fyrnheim.quality` | Regex pattern check |
+| `ForeignKey` | `fyrnheim.quality` | Foreign key check |
+| `Unique` | `fyrnheim.quality` | Uniqueness check |
+| `MaxAge` | `fyrnheim.quality` | Freshness check |
+| `CustomSQL` | `fyrnheim.quality` | Custom SQL check |
+| `QualityRunner` | `fyrnheim.quality` | Check executor |
+| `CheckResult` | `fyrnheim.quality` | Single check result |
+| `EntityResult` | `fyrnheim.quality` | Entity-level result |
 
 ### Tier 8 -- Primitives (SQL building blocks)
 
-All primitives from `typedata.primitives` are re-exported at the top level.
+All primitives from `fyrnheim.primitives` are re-exported at the top level.
 Full list (30+ functions):
 
 **Hashing:** `concat_hash`, `hash_email`, `hash_id`, `hash_md5`, `hash_sha256`
@@ -157,7 +157,7 @@ Full list (30+ functions):
 | `EntityRegistry` | timo-specific orchestration concern, not a framework type |
 | `product_entity`, `leads_entity`, etc. | Concrete entity instances, user-land |
 | `get_all_entities` | Registry/discovery, belongs in engine layer (M001-E004) |
-| `standard_dimension_entity` | Template, future `typedata.templates` module |
+| `standard_dimension_entity` | Template, future `fyrnheim.templates` module |
 
 ---
 
@@ -171,9 +171,9 @@ not imported at definition time to avoid circular imports:
 
 | Model | Forward References | Declared In |
 |-------|-------------------|-------------|
-| `Entity` | `ComputedColumn`, `Measure`, `QualityConfig` | `typedata.core.entity` via `TYPE_CHECKING` from `typedata.components`, `typedata.quality` |
-| `SourceMapping` | `Entity`, `Source` | `typedata.core.source_mapping` via `TYPE_CHECKING` from `.entity` |
-| `TenantExtension` | `ComputedColumn`, `Measure`, `Entity`, `SourceMapping` | `typedata.core.tenant_extension` via `TYPE_CHECKING` from `typedata.components`, `.entity`, `.source_mapping` |
+| `Entity` | `ComputedColumn`, `Measure`, `QualityConfig` | `fyrnheim.core.entity` via `TYPE_CHECKING` from `fyrnheim.components`, `fyrnheim.quality` |
+| `SourceMapping` | `Entity`, `Source` | `fyrnheim.core.source_mapping` via `TYPE_CHECKING` from `.entity` |
+| `TenantExtension` | `ComputedColumn`, `Measure`, `Entity`, `SourceMapping` | `fyrnheim.core.tenant_extension` via `TYPE_CHECKING` from `fyrnheim.components`, `.entity`, `.source_mapping` |
 
 ### Required Call Order
 
@@ -183,10 +183,10 @@ classes for the string annotations to resolve against.
 
 ```python
 # Phase 1: Import all modules (triggers submodule loading)
-from typedata.components import ComputedColumn, Measure, ...
-from typedata.core import Entity, SourceMapping, TenantExtension, ...
-from typedata.quality import QualityConfig, ...
-from typedata.primitives import ...
+from fyrnheim.components import ComputedColumn, Measure, ...
+from fyrnheim.core import Entity, SourceMapping, TenantExtension, ...
+from fyrnheim.quality import QualityConfig, ...
+from fyrnheim.primitives import ...
 
 # Phase 2: Rebuild models (order matters for dependencies)
 Entity.model_rebuild()            # Resolves: ComputedColumn, Measure, QualityConfig
@@ -232,7 +232,7 @@ need `model_rebuild()` calls. This is tech debt to track but not block on.
 Reasons:
 
 1. **IDE support.** Tools like PyCharm, VS Code/Pylance, and mypy use `__all__`
-   to determine what `from typedata import *` exposes and to flag invalid
+   to determine what `from fyrnheim import *` exposes and to flag invalid
    imports. Without `__all__`, star-imports pull in every name in the namespace
    including internal helpers and re-exported stdlib types.
 
@@ -247,9 +247,9 @@ Reasons:
 4. **Precedent.** The timo-data-stack `metadata/__init__.py` already uses
    `__all__`. Maintaining the pattern reduces cognitive overhead.
 
-**Convention:** Every subpackage (`typedata.core`, `typedata.components`,
-`typedata.quality`, `typedata.primitives`) should also define its own `__all__`
-in its `__init__.py`. The top-level `typedata/__all__` is the union of what we
+**Convention:** Every subpackage (`fyrnheim.core`, `fyrnheim.components`,
+`fyrnheim.quality`, `fyrnheim.primitives`) should also define its own `__all__`
+in its `__init__.py`. The top-level `fyrnheim/__all__` is the union of what we
 choose to re-export.
 
 ---
@@ -262,28 +262,28 @@ choose to re-export.
 
 ```python
 # The recommended way -- everything from one place
-from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer
-from typedata import BigQuerySource, Field, ComputedColumn
-from typedata import NotNull, Unique, QualityConfig
-from typedata import hash_email, categorize, sum_
+from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer
+from fyrnheim import BigQuerySource, Field, ComputedColumn
+from fyrnheim import NotNull, Unique, QualityConfig
+from fyrnheim import hash_email, categorize, sum_
 ```
 
 ### Power-user / explicit API (nested)
 
 ```python
 # Also works -- for when you want to be explicit about provenance
-from typedata.core import Entity, LayersConfig
-from typedata.components import ComputedColumn, Measure
-from typedata.quality import NotNull, QualityConfig
-from typedata.primitives import hash_email
+from fyrnheim.core import Entity, LayersConfig
+from fyrnheim.components import ComputedColumn, Measure
+from fyrnheim.quality import NotNull, QualityConfig
+from fyrnheim.primitives import hash_email
 ```
 
 ### Why both?
 
 - **Flat is ergonomic.** The acceptance criteria in the story explicitly require
-  `from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer` to
+  `from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer` to
   work. This is the primary developer experience.
-- **Nested is precise.** When reading unfamiliar code, `from typedata.quality
+- **Nested is precise.** When reading unfamiliar code, `from fyrnheim.quality
   import NotNull` instantly tells you the domain. It also avoids name collisions
   if a user has their own `Field` class.
 - **No performance cost.** The top-level `__init__.py` eagerly imports all
@@ -292,16 +292,16 @@ from typedata.primitives import hash_email
 
 ### Implementation
 
-`typedata/__init__.py` imports from subpackages and re-exports:
+`fyrnheim/__init__.py` imports from subpackages and re-exports:
 
 ```python
-from typedata.core import Entity, LayersConfig, Source, ...
-from typedata.components import ComputedColumn, Measure, ...
-from typedata.quality import QualityConfig, NotNull, ...
-from typedata.primitives import hash_email, categorize, ...
+from fyrnheim.core import Entity, LayersConfig, Source, ...
+from fyrnheim.components import ComputedColumn, Measure, ...
+from fyrnheim.quality import QualityConfig, NotNull, ...
+from fyrnheim.primitives import hash_email, categorize, ...
 ```
 
-Subpackage `__init__.py` files (e.g., `typedata/core/__init__.py`) handle
+Subpackage `__init__.py` files (e.g., `fyrnheim/core/__init__.py`) handle
 internal re-exports from their own submodules.
 
 ---
@@ -312,7 +312,7 @@ internal re-exports from their own submodules.
 
 ### Analysis
 
-The typedata package has two categories of dependencies:
+The fyrnheim package has two categories of dependencies:
 
 1. **Core (always required):** `pydantic` -- used by every model class.
 2. **Backend-specific (optional):** `ibis-framework[duckdb]`,
@@ -330,23 +330,23 @@ be eagerly imported with zero optional-dependency risk.
 
 ### When Lazy Loading Will Matter
 
-In M001-E004 (execution engine), the `typedata.engine` module will import `ibis`
+In M001-E004 (execution engine), the `fyrnheim.engine` module will import `ibis`
 and backend connectors. At that point:
 
-- `typedata.engine` should NOT be imported in `typedata/__init__.py`
-- Users will explicitly `from typedata.engine import run` or
-  `from typedata.engine.duckdb import DuckDBExecutor`
-- The top-level `typedata` import remains lightweight
+- `fyrnheim.engine` should NOT be imported in `fyrnheim/__init__.py`
+- Users will explicitly `from fyrnheim.engine import run` or
+  `from fyrnheim.engine.duckdb import DuckDBExecutor`
+- The top-level `fyrnheim` import remains lightweight
 
-If we later want `from typedata import run` to work, we can add a lazy import
+If we later want `from fyrnheim import run` to work, we can add a lazy import
 using `__getattr__` at the module level:
 
 ```python
 def __getattr__(name):
     if name == "run":
-        from typedata.engine import run
+        from fyrnheim.engine import run
         return run
-    raise AttributeError(f"module 'typedata' has no attribute {name}")
+    raise AttributeError(f"module 'fyrnheim' has no attribute {name}")
 ```
 
 But this is a future concern, not needed for S004.
@@ -356,9 +356,9 @@ But this is a future concern, not needed for S004.
 ## 7. Implementation Skeleton
 
 ```python
-# src/typedata/__init__.py
+# src/fyrnheim/__init__.py
 """
-typedata - Typed entity framework for data transformations
+fyrnheim - Typed entity framework for data transformations
 
 Define entities once in Python, run them anywhere.
 """
@@ -366,7 +366,7 @@ Define entities once in Python, run them anywhere.
 # --- Phase 1: Import all modules ---
 
 # Components (must be imported before model_rebuild)
-from typedata.components import (
+from fyrnheim.components import (
     ComputedColumn,
     DataQualityChecks,
     LifecycleFlags,
@@ -375,7 +375,7 @@ from typedata.components import (
 )
 
 # Core entity and configuration classes
-from typedata.core import (
+from fyrnheim.core import (
     ActivityConfig,
     ActivityLayer,
     ActivityType,
@@ -415,7 +415,7 @@ from typedata.core import (
 )
 
 # Quality checks
-from typedata.quality import (
+from fyrnheim.quality import (
     CheckResult,
     CustomSQL,
     EntityResult,
@@ -433,7 +433,7 @@ from typedata.quality import (
 )
 
 # Primitives - SQL building blocks
-from typedata.primitives import (
+from fyrnheim.primitives import (
     account_id_from_domain,
     any_value,
     avg_,
@@ -607,7 +607,7 @@ Tests should verify the acceptance criteria from the story TOML:
 ```python
 def test_entity_model_rebuild_resolves_forward_refs():
     """Entity.model_rebuild() resolves ComputedColumn, Measure, QualityConfig forward refs."""
-    from typedata import Entity, ComputedColumn, Measure, QualityConfig
+    from fyrnheim import Entity, ComputedColumn, Measure, QualityConfig
 
     # Verify the model fields accept actual types (not strings)
     field_info = Entity.model_fields
@@ -620,19 +620,19 @@ def test_entity_model_rebuild_resolves_forward_refs():
 
 ```python
 def test_tier1_imports():
-    from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer
+    from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer
 
 def test_tier2_imports():
-    from typedata import ComputedColumn, Measure, NotNull, Unique
+    from fyrnheim import ComputedColumn, Measure, NotNull, Unique
 
 def test_tier3_imports():
-    from typedata import BigQuerySource, DerivedSource, Field
+    from fyrnheim import BigQuerySource, DerivedSource, Field
 
 def test_nested_imports_also_work():
-    from typedata.core import Entity
-    from typedata.components import ComputedColumn
-    from typedata.quality import NotNull
-    from typedata.primitives import hash_email
+    from fyrnheim.core import Entity
+    from fyrnheim.components import ComputedColumn
+    from fyrnheim.quality import NotNull
+    from fyrnheim.primitives import hash_email
 ```
 
 ### Integration Test: Realistic entity with forward refs resolved
@@ -640,7 +640,7 @@ def test_nested_imports_also_work():
 ```python
 def test_entity_with_computed_columns_and_quality():
     """Creating Entity with ComputedColumn and QualityConfig validates correctly."""
-    from typedata import (
+    from fyrnheim import (
         Entity, LayersConfig, PrepLayer, DimensionLayer,
         BigQuerySource, Field, ComputedColumn, QualityConfig, NotNull,
     )
@@ -700,7 +700,7 @@ def test_entity_with_computed_columns_and_quality():
 
 This story creates/modifies two files:
 
-1. **`src/typedata/__init__.py`** -- The main deliverable. Replace the current
+1. **`src/fyrnheim/__init__.py`** -- The main deliverable. Replace the current
    minimal stub (which only exports `__version__`) with the full public API:
    imports from all four subpackages, `model_rebuild()` calls in the correct
    order, and an `__all__` list.
@@ -724,7 +724,7 @@ names as they exist in the implemented predecessor stories.
 
 Renames decided in predecessor designs:
 
-| Original (timo-data-stack) | Typedata name | Decided in |
+| Original (timo-data-stack) | Fyrnheim name | Decided in |
 |---|---|---|
 | `BigQuerySource` | `TableSource` | E001-S002, E002-S002 |
 | `BaseSourceConfig` | `BaseTableSource` | E001-S002 |
@@ -733,7 +733,7 @@ Renames decided in predecessor designs:
 | `ActivityLayer` (dbt-based) | Dropped entirely | E002-S001, E002-S002 |
 | `activities: ActivityConfig` | `activity: ActivityConfig` | E002-S002 |
 
-Symbols removed from typedata (present in timo-data-stack but not extracted):
+Symbols removed from fyrnheim (present in timo-data-stack but not extracted):
 
 | Symbol | Reason |
 |---|---|
@@ -758,28 +758,28 @@ Before writing any code, verify all four subpackages export their symbols
 correctly. Run these checks:
 
 ```bash
-python -c "from typedata.components import ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics, DataQualityChecks"
-python -c "from typedata.core import Entity, SourceMapping, LayersConfig"
-python -c "from typedata.quality import QualityConfig, QualityCheck, NotNull, Unique"
-python -c "from typedata.primitives import hash_email, categorize, sum_"
+python -c "from fyrnheim.components import ComputedColumn, Measure, LifecycleFlags, TimeBasedMetrics, DataQualityChecks"
+python -c "from fyrnheim.core import Entity, SourceMapping, LayersConfig"
+python -c "from fyrnheim.quality import QualityConfig, QualityCheck, NotNull, Unique"
+python -c "from fyrnheim.primitives import hash_email, categorize, sum_"
 ```
 
 If any fail, the predecessor story is not complete. Do not proceed.
 
 ### 10.4 Implementation tasks
 
-**Task 1: Write `src/typedata/__init__.py`**
+**Task 1: Write `src/fyrnheim/__init__.py`**
 
-Target: `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/__init__.py`
+Target: `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/__init__.py`
 
 This replaces the existing stub. Structure follows three phases:
 
 ```
 Phase 1: Import all symbols from subpackages
-  - typedata.components (5 symbols)
-  - typedata.core (all entity, layer, source, mapping, type symbols)
-  - typedata.quality (13 symbols)
-  - typedata.primitives (30+ functions)
+  - fyrnheim.components (5 symbols)
+  - fyrnheim.core (all entity, layer, source, mapping, type symbols)
+  - fyrnheim.quality (13 symbols)
+  - fyrnheim.primitives (30+ functions)
 
 Phase 2: model_rebuild() calls IN ORDER
   1. Entity.model_rebuild()           -- resolves ComputedColumn, Measure, QualityConfig
@@ -805,7 +805,7 @@ is what allows the forward reference strings to resolve.
 
 **Task 2: Write `tests/test_public_api.py`**
 
-Target: `/home/tmo/roadtothebeach/tmo/typedata/tests/test_public_api.py`
+Target: `/home/tmo/roadtothebeach/tmo/fyrnheim/tests/test_public_api.py`
 
 Test cases (mapped to acceptance criteria from the story TOML):
 
@@ -816,21 +816,21 @@ test_entity_model_rebuild_resolves_forward_refs
           are resolved to actual classes (not strings).
 
 test_flat_import_tier1_core
-  AC: "from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer works"
+  AC: "from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer works"
   Method: Single import statement, assert all four are callable classes.
 
 test_flat_import_tier2_components_quality
-  AC: "from typedata import ComputedColumn, Measure, NotNull, Unique works"
+  AC: "from fyrnheim import ComputedColumn, Measure, NotNull, Unique works"
   Method: Single import statement, assert all four are importable.
 
 test_flat_import_tier3_sources
-  AC: "from typedata import BigQuerySource/TableSource, DerivedSource, Field works"
+  AC: "from fyrnheim import BigQuerySource/TableSource, DerivedSource, Field works"
   Method: Single import statement, assert all three are importable.
 
 test_nested_imports_work
   AC: implicit (both flat and nested must work)
-  Method: Import same symbols via typedata.core, typedata.components,
-          typedata.quality, typedata.primitives. Assert identity (same object).
+  Method: Import same symbols via fyrnheim.core, fyrnheim.components,
+          fyrnheim.quality, fyrnheim.primitives. Assert identity (same object).
 
 test_entity_with_computed_columns_validates
   AC: "Creating Entity with ComputedColumn in dimension layer validates correctly"
@@ -846,7 +846,7 @@ test_entity_with_quality_config_validates
 
 test_all_exports_match_dir
   AC: implicit (__all__ must be accurate)
-  Method: Import typedata, verify every name in __all__ is actually accessible
+  Method: Import fyrnheim, verify every name in __all__ is actually accessible
           as an attribute. Verify no extra non-underscore public names exist
           that are not in __all__ (excluding dunder names and imported modules).
 
@@ -868,10 +868,10 @@ pytest tests/test_public_api.py -v
 pytest tests/ -v
 
 # Lint check
-ruff check src/typedata/__init__.py
+ruff check src/fyrnheim/__init__.py
 
 # Type check
-mypy src/typedata/__init__.py
+mypy src/fyrnheim/__init__.py
 ```
 
 ### 10.5 Exact `__all__` list
@@ -901,7 +901,7 @@ Every symbol in `__all__` MUST:
 
 3. **If a primitive or quality check is added in a future story**, it must be
    added to both the subpackage `__init__.py` and the top-level `__init__.py`
-   imports + `__all__`. Consider adding a test that verifies `typedata.__all__`
+   imports + `__all__`. Consider adding a test that verifies `fyrnheim.__all__`
    is a superset of each subpackage's `__all__`.
 
 4. **Circular import risk:** None. The top-level `__init__.py` only imports
@@ -911,16 +911,16 @@ Every symbol in `__all__` MUST:
 
 ### 10.7 Definition of done
 
-- [ ] `src/typedata/__init__.py` contains all Phase 1 imports, Phase 2
+- [ ] `src/fyrnheim/__init__.py` contains all Phase 1 imports, Phase 2
       model_rebuild() calls, and Phase 3 `__all__` + `__version__`
-- [ ] `from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer`
+- [ ] `from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer`
       works
-- [ ] `from typedata import ComputedColumn, Measure, NotNull, Unique` works
-- [ ] `from typedata.core import Entity` returns the same object as
-      `from typedata import Entity`
+- [ ] `from fyrnheim import ComputedColumn, Measure, NotNull, Unique` works
+- [ ] `from fyrnheim.core import Entity` returns the same object as
+      `from fyrnheim import Entity`
 - [ ] Entity with ComputedColumn in dimension layer validates without error
 - [ ] Entity with QualityConfig validates without error
 - [ ] SourceMapping with Entity and Source validates without error
 - [ ] All tests in `tests/test_public_api.py` pass
-- [ ] `ruff check src/typedata/__init__.py` passes
+- [ ] `ruff check src/fyrnheim/__init__.py` passes
 - [ ] `pytest tests/ -v` passes (all existing + new tests)

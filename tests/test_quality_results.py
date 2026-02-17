@@ -1,6 +1,6 @@
 """Unit tests for quality check result models."""
 
-from typedata.quality import CheckResult, EntityResult
+from fyrnheim.quality import CheckResult, EntityResult
 
 
 class TestCheckResult:

@@ -5,11 +5,11 @@ from __future__ import annotations
 from graphlib import CycleError, TopologicalSorter
 from typing import TYPE_CHECKING
 
-from typedata.core.source import AggregationSource, DerivedSource
+from fyrnheim.core.source import AggregationSource, DerivedSource
 
 if TYPE_CHECKING:
-    from typedata.core.entity import Entity
-    from typedata.engine.registry import EntityInfo, EntityRegistry
+    from fyrnheim.core.entity import Entity
+    from fyrnheim.engine.registry import EntityInfo, EntityRegistry
 
 
 class CircularDependencyError(Exception):

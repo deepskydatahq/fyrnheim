@@ -15,7 +15,7 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "IbisCodeGenerator importable from typedata.generators"
+description = "IbisCodeGenerator importable from fyrnheim.generators"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
@@ -47,7 +47,7 @@ implementation_hints = """
 - It uses Hamilton @config.when decorators for backend switching — evaluate if we keep Hamilton
   or simplify to plain Ibis (Hamilton adds a dependency)
 - The generator imports Entity, ActivityConfig, ActivityType, UnionSource from metadata.core
-- Update all imports to typedata.*
+- Update all imports to fyrnheim.*
 - base.py (~30 lines) provides abstract base — may not be needed if we only have one generator
 - Strip dbt/dagster references
 """

@@ -8,15 +8,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from typedata.engine.executor import DuckDBExecutor
-from typedata.engine.registry import EntityRegistry
-from typedata.engine.resolution import _extract_dependencies, resolve_execution_order
+from fyrnheim.engine.executor import DuckDBExecutor
+from fyrnheim.engine.registry import EntityRegistry
+from fyrnheim.engine.resolution import _extract_dependencies, resolve_execution_order
 
 if TYPE_CHECKING:
-    from typedata.core.entity import Entity
-    from typedata.quality.results import CheckResult
+    from fyrnheim.core.entity import Entity
+    from fyrnheim.quality.results import CheckResult
 
-log = logging.getLogger("typedata.engine")
+log = logging.getLogger("fyrnheim.engine")
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ def run_entity(
     # 1. Auto-generate
     if auto_generate:
         try:
-            from typedata._generate import generate
+            from fyrnheim._generate import generate
 
             log.debug("Generating: %s_transforms.py", entity.name)
             generate(entity, output_dir=gen_dir)
@@ -192,7 +192,7 @@ def run_entity(
     quality_results = None
     if quality_checks and entity.quality and entity.quality.checks:
         try:
-            from typedata.quality import QualityRunner
+            from fyrnheim.quality import QualityRunner
 
             qr = QualityRunner(executor.connection)
             entity_result = qr.run_entity_checks(
@@ -232,7 +232,7 @@ def run(
     quality_checks: bool = True,
     on_error: Literal["skip", "stop"] = "skip",
 ) -> RunResult:
-    """Run the full typedata pipeline: discover, generate, execute, verify.
+    """Run the full fyrnheim pipeline: discover, generate, execute, verify.
 
     Args:
         entities_dir: Directory containing entity .py files.

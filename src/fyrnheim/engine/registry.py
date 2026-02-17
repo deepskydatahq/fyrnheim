@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from typedata.core.entity import Entity
+from fyrnheim.core.entity import Entity
 
 
 class EntityInfo(BaseModel):
@@ -55,7 +55,7 @@ class EntityRegistry:
         )
 
         for entity_file in entity_files:
-            module_name = f"_typedata_entity_{entity_file.stem}"
+            module_name = f"_fyrnheim_entity_{entity_file.stem}"
             spec = importlib.util.spec_from_file_location(module_name, entity_file)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Could not create import spec for {entity_file}")

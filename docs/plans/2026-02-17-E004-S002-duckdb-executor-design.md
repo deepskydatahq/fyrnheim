@@ -7,7 +7,7 @@
 
 ## Context
 
-The timo-data-stack `run_transformations.py` (695 lines) handles both DuckDB and BigQuery backends, incremental processing with high water marks, identity graph resolution, union sources, and timo-specific entity discovery. Typedata needs the DuckDB path only, stripped of all timo-specific logic, as a clean reusable execution engine.
+The timo-data-stack `run_transformations.py` (695 lines) handles both DuckDB and BigQuery backends, incremental processing with high water marks, identity graph resolution, union sources, and timo-specific entity discovery. Fyrnheim needs the DuckDB path only, stripped of all timo-specific logic, as a clean reusable execution engine.
 
 The executor is the critical bridge between code generation (E003) and the public `run()` API (S003). It must be simple enough to use standalone but composable enough to plug into the orchestration layer.
 
@@ -31,7 +31,7 @@ The executor is the critical bridge between code generation (E003) and the publi
 
 ```python
 from pathlib import Path
-from typedata.engine.executor import DuckDBExecutor
+from fyrnheim.engine.executor import DuckDBExecutor
 
 # Context manager usage (preferred)
 with DuckDBExecutor(db_path=":memory:") as executor:
@@ -66,7 +66,7 @@ The protocol is not implemented in S002. It is documented here to show the class
 
 **Rationale:**
 
-- The timo-data-stack uses convention-based paths (`~/timo-data/{source_name}/**/*.parquet`) which is tightly coupled to the timo directory layout. Typedata should not assume any directory structure.
+- The timo-data-stack uses convention-based paths (`~/timo-data/{source_name}/**/*.parquet`) which is tightly coupled to the timo directory layout. Fyrnheim should not assume any directory structure.
 - Explicit registration makes the data contract visible: the caller says "this parquet file is the `raw_customers` table." No magic, no surprises.
 - Convention-based discovery can be layered on top by the `run()` function (S003) without baking it into the executor. The executor stays a low-level building block.
 - Glob support via `Path` means a caller can pass `Path("data/customers/*.parquet")` and DuckDB's `read_parquet` handles the glob natively.
@@ -103,7 +103,7 @@ result = executor.execute("customers")
 ```
 execute("customers", generated_dir=Path("generated/"))
   -> resolve path: generated/customers_transforms.py
-  -> importlib.util.spec_from_file_location("typedata.generated.customers_transforms", path)
+  -> importlib.util.spec_from_file_location("fyrnheim.generated.customers_transforms", path)
   -> module_from_spec + exec_module
   -> getattr(module, "transform_customers")
   -> call transform_fn(source_table) -> ibis.Table result
@@ -126,7 +126,7 @@ S002 implements only the single-source path. Multi-source support is documented 
 
 - In-memory is the right default for tests, CI, and quick local runs. It is fast and leaves no artifacts.
 - File-based is needed when results must persist across executor invocations (e.g., running entity A, then entity B that depends on A's output, in separate sessions). It is also required for inspecting results after execution with external tools (DBeaver, DuckDB CLI).
-- The timo-data-stack hardcodes `~/timo-data/timo.duckdb`. Typedata should not impose a path convention but should make file-based easy when needed.
+- The timo-data-stack hardcodes `~/timo-data/timo.duckdb`. Fyrnheim should not impose a path convention but should make file-based easy when needed.
 - Using the string `":memory:"` follows DuckDB's own convention (`duckdb.connect(":memory:")`), so it is unsurprising.
 
 **Interface:**
@@ -151,7 +151,7 @@ executor = DuckDBExecutor(db_path="warehouse.duckdb")  # str also accepted
 
 - The epic notes explicitly say: "Skip for now: Incremental processing (high water marks) -- that's an optimization."
 - `CREATE TABLE ... AS` with `overwrite=True` is the simplest correct approach. It replaces the entire table each run, which matches the expected local development workflow (define, run, inspect, iterate).
-- The timo-data-stack uses both `create_table` (full refresh) and `insert` (incremental). Typedata S002 needs only full refresh.
+- The timo-data-stack uses both `create_table` (full refresh) and `insert` (incremental). Fyrnheim S002 needs only full refresh.
 - Incremental mode can be added later as an `ExecutionMode` enum or a parameter on `execute()` without breaking the S002 interface.
 
 **Target table naming:**
@@ -189,7 +189,7 @@ class ExecutionResult:
 
 **Rationale:**
 
-- The timo-data-stack does `raise SystemExit(1)` on any error, which is appropriate for a CLI script but wrong for a library. Typedata is a library first.
+- The timo-data-stack does `raise SystemExit(1)` on any error, which is appropriate for a CLI script but wrong for a library. Fyrnheim is a library first.
 - The S003 `run()` function (the orchestrator) is responsible for deciding whether to continue after one entity fails. The acceptance criteria for S003 say: "Errors during one entity don't prevent other entities from running." The executor should not make this decision.
 - Errors fall into three categories, each needing different handling:
 
@@ -205,34 +205,34 @@ class ExecutionResult:
 **All custom exceptions inherit from a common base:**
 
 ```python
-class TypedataEngineError(Exception):
+class FyrnheimEngineError(Exception):
     """Base exception for engine errors."""
     pass
 
-class SourceNotFoundError(TypedataEngineError):
+class SourceNotFoundError(FyrnheimEngineError):
     """Raised when a source table or parquet file cannot be found."""
     pass
 
-class TransformModuleError(TypedataEngineError):
+class TransformModuleError(FyrnheimEngineError):
     """Raised when a generated transform module cannot be loaded."""
     pass
 
-class ExecutionError(TypedataEngineError):
+class ExecutionError(FyrnheimEngineError):
     """Raised when transform execution or result persistence fails."""
     pass
 ```
 
-**Logging:** The executor uses `logging.getLogger("typedata.engine")`. It logs at INFO for lifecycle events (connecting, registering sources, starting execution, completion with row count) and at ERROR for failures (with the original exception attached). It does not use `click.echo` -- that is the CLI layer's job.
+**Logging:** The executor uses `logging.getLogger("fyrnheim.engine")`. It logs at INFO for lifecycle events (connecting, registering sources, starting execution, completion with row count) and at ERROR for failures (with the original exception attached). It does not use `click.echo` -- that is the CLI layer's job.
 
 ---
 
 ## File Layout
 
 ```
-src/typedata/engine/
+src/fyrnheim/engine/
     __init__.py          # Public exports: DuckDBExecutor, ExecutionResult
     executor.py          # DuckDBExecutor class
-    errors.py            # TypedataEngineError hierarchy
+    errors.py            # FyrnheimEngineError hierarchy
     _loader.py           # Internal: transform module loading via importlib
 ```
 

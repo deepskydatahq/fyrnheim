@@ -1,13 +1,13 @@
-"""typedata -- Define typed Python entities, generate transformations, run anywhere."""
+"""fyrnheim -- Define typed Python entities, generate transformations, run anywhere."""
 
-from typedata.components import (
+from fyrnheim.components import (
     ComputedColumn as ComputedColumn,
     DataQualityChecks as DataQualityChecks,
     LifecycleFlags as LifecycleFlags,
     Measure as Measure,
     TimeBasedMetrics as TimeBasedMetrics,
 )
-from typedata.core import (
+from fyrnheim.core import (
     ActivityConfig as ActivityConfig,
     ActivityType as ActivityType,
     AggregationSource as AggregationSource,
@@ -39,7 +39,7 @@ from typedata.core import (
     TypeCast as TypeCast,
     UnionSource as UnionSource,
 )
-from typedata.primitives import (
+from fyrnheim.primitives import (
     account_id_from_domain as account_id_from_domain,
     any_value as any_value,
     avg_ as avg_,
@@ -80,7 +80,7 @@ from typedata.primitives import (
     sum_ as sum_,
     to_json_struct as to_json_struct,
 )
-from typedata.quality import (
+from fyrnheim.quality import (
     CheckResult as CheckResult,
     CustomSQL as CustomSQL,
     EntityResult as EntityResult,
@@ -105,15 +105,15 @@ __version__ = "0.1.0"
 
 # Lazy imports for generator/engine symbols that require ibis
 _LAZY_IMPORTS = {
-    "generate": "typedata._generate",
-    "GenerateResult": "typedata._generate",
-    "IbisCodeGenerator": "typedata.generators",
-    "run": "typedata.engine.runner",
-    "run_entity": "typedata.engine.runner",
-    "RunResult": "typedata.engine.runner",
-    "EntityRunResult": "typedata.engine.runner",
-    "DuckDBExecutor": "typedata.engine.executor",
-    "ExecutionResult": "typedata.engine.executor",
+    "generate": "fyrnheim._generate",
+    "GenerateResult": "fyrnheim._generate",
+    "IbisCodeGenerator": "fyrnheim.generators",
+    "run": "fyrnheim.engine.runner",
+    "run_entity": "fyrnheim.engine.runner",
+    "RunResult": "fyrnheim.engine.runner",
+    "EntityRunResult": "fyrnheim.engine.runner",
+    "DuckDBExecutor": "fyrnheim.engine.executor",
+    "ExecutionResult": "fyrnheim.engine.executor",
 }
 
 
@@ -126,7 +126,7 @@ def __getattr__(name: str):  # noqa: N807
         val = getattr(mod, name)
         globals()[name] = val
         return val
-    raise AttributeError(f"module 'typedata' has no attribute {name!r}")
+    raise AttributeError(f"module 'fyrnheim' has no attribute {name!r}")
 
 
 __all__ = [

@@ -6,7 +6,7 @@ import importlib.util
 import types
 from pathlib import Path
 
-from typedata.engine.errors import TransformModuleError
+from fyrnheim.engine.errors import TransformModuleError
 
 
 def load_transform_module(entity_name: str, generated_dir: Path) -> types.ModuleType:
@@ -28,7 +28,7 @@ def load_transform_module(entity_name: str, generated_dir: Path) -> types.Module
             f"Generated transform module not found: {module_path}"
         )
 
-    module_name = f"_typedata_generated_{entity_name}_transforms"
+    module_name = f"_fyrnheim_generated_{entity_name}_transforms"
     spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:
         raise TransformModuleError(

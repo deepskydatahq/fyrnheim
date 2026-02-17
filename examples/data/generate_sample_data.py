@@ -1,4 +1,4 @@
-"""Generate sample customer data for the typedata example.
+"""Generate sample customer data for the fyrnheim example.
 
 Run: python examples/data/generate_sample_data.py
 Output: examples/data/customers.parquet

@@ -23,7 +23,7 @@ Two files from `timo-data-stack/metadata/core/`:
 | **Divide** | Universal. Unit conversion (cents to dollars, etc.) is a common pattern. |
 | **Multiply** | Universal. Scaling transformation, pairs with Divide. |
 | **SourceOverrides** | Universal. Container for the four transform helpers above. Any source might need type casts, renames, and arithmetic transforms applied at read time. Keep it. |
-| **BaseSourceConfig** | Universal. The project/dataset/table + duckdb_path pattern with `read_table()` is the core Ibis dual-backend abstraction. This IS the typedata value prop. |
+| **BaseSourceConfig** | Universal. The project/dataset/table + duckdb_path pattern with `read_table()` is the core Ibis dual-backend abstraction. This IS the fyrnheim value prop. |
 | **BigQuerySource** | Universal. Standard warehouse table source with optional field list and overrides. Despite the name, `BaseSourceConfig.read_table()` already handles DuckDB too -- this is really "WarehouseTableSource." See rename discussion below. |
 | **DerivedSource** | Generic pattern. Identity-graph-based entity derivation is a framework concept (merge N dimension tables into one via matching keys). The class itself is tiny and clean: one validated string field pointing to a graph config. |
 | **DerivedEntitySource** | Generic pattern. Placeholder/marker for identity-graph-derived sources. Currently a stub (`identity_graph: Any`). Keep as a framework extension point. |
@@ -66,7 +66,7 @@ Two files from `timo-data-stack/metadata/core/`:
 
 3. **Remove the `import os` dependency** -- Move `os.path.expanduser` into `read_table()` only (it's already only used there). This is just a note that the import is legitimate and minimal.
 
-4. **Docstring cleanup** -- Update all docstrings to say "typedata" not "dbt" or "BigQuery-specific". Remove timo-specific examples from docstrings.
+4. **Docstring cleanup** -- Update all docstrings to say "fyrnheim" not "dbt" or "BigQuery-specific". Remove timo-specific examples from docstrings.
 
 ## Decision 3: SourceOverrides (renamed SourceTransforms)
 
@@ -79,13 +79,13 @@ Two files from `timo-data-stack/metadata/core/`:
 
 ## Decision 4: Exact file contents plan
 
-### `typedata/core/__init__.py`
+### `fyrnheim/core/__init__.py`
 
 Re-exports from both modules for convenience:
 
 ```python
-from typedata.core.types import IncrementalStrategy, MaterializationType, SourcePriority
-from typedata.core.source import (
+from fyrnheim.core.types import IncrementalStrategy, MaterializationType, SourcePriority
+from fyrnheim.core.source import (
     AggregationSource,
     BaseTableSource,
     DerivedEntitySource,
@@ -102,7 +102,7 @@ from typedata.core.source import (
 )
 ```
 
-### `typedata/core/types.py`
+### `fyrnheim/core/types.py`
 
 Copy verbatim from timo-data-stack. No changes needed -- it's three clean enums with no internal dependencies.
 
@@ -135,7 +135,7 @@ class SourcePriority(int, Enum):
     QUATERNARY = 4
 ```
 
-### `typedata/core/source.py`
+### `fyrnheim/core/source.py`
 
 Extracted and cleaned. Key changes from original:
 
@@ -147,7 +147,7 @@ Extracted and cleaned. Key changes from original:
 6. Clean docstrings (remove timo references, remove "dbt" references)
 
 ```python
-"""Source configuration classes for typedata entities."""
+"""Source configuration classes for fyrnheim entities."""
 
 import os
 from typing import Any, Literal
@@ -333,14 +333,14 @@ class UnionSource(BaseModel):
 
 ### Summary
 
-Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriority`) from `timo-data-stack/metadata/core/types.py` and ten source configuration classes from `timo-data-stack/metadata/core/source.py` into the typedata package. Four timo-specific classes are dropped (`SignalSourceConfig`, `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig`). Three classes are renamed for backend-neutrality (`BaseSourceConfig` to `BaseTableSource`, `BigQuerySource` to `TableSource`, `SourceOverrides` to `SourceTransforms`). `UnionSource` is redesigned to accept `list[TableSource]` instead of `list[SignalSourceConfig]`. All docstrings are cleaned of timo-specific and dbt-specific references.
+Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriority`) from `timo-data-stack/metadata/core/types.py` and ten source configuration classes from `timo-data-stack/metadata/core/source.py` into the fyrnheim package. Four timo-specific classes are dropped (`SignalSourceConfig`, `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig`). Three classes are renamed for backend-neutrality (`BaseSourceConfig` to `BaseTableSource`, `BigQuerySource` to `TableSource`, `SourceOverrides` to `SourceTransforms`). `UnionSource` is redesigned to accept `list[TableSource]` instead of `list[SignalSourceConfig]`. All docstrings are cleaned of timo-specific and dbt-specific references.
 
 ### Acceptance Criteria (Agent-Verifiable)
 
-1. **AC-1:** `from typedata.core.types import MaterializationType, IncrementalStrategy, SourcePriority` succeeds without error.
-2. **AC-2:** `from typedata.core.source import Field, TypeCast, Rename, Divide, Multiply` succeeds without error.
-3. **AC-3:** `from typedata.core.source import BaseTableSource, TableSource, DerivedSource, DerivedEntitySource, AggregationSource, EventAggregationSource, UnionSource, SourceTransforms` succeeds without error.
-4. **AC-4:** `from typedata.core import MaterializationType, IncrementalStrategy, SourcePriority, Field, TableSource, BaseTableSource, DerivedSource, UnionSource` succeeds (re-exports from `__init__.py`).
+1. **AC-1:** `from fyrnheim.core.types import MaterializationType, IncrementalStrategy, SourcePriority` succeeds without error.
+2. **AC-2:** `from fyrnheim.core.source import Field, TypeCast, Rename, Divide, Multiply` succeeds without error.
+3. **AC-3:** `from fyrnheim.core.source import BaseTableSource, TableSource, DerivedSource, DerivedEntitySource, AggregationSource, EventAggregationSource, UnionSource, SourceTransforms` succeeds without error.
+4. **AC-4:** `from fyrnheim.core import MaterializationType, IncrementalStrategy, SourcePriority, Field, TableSource, BaseTableSource, DerivedSource, UnionSource` succeeds (re-exports from `__init__.py`).
 5. **AC-5:** `TableSource(project="p", dataset="d", table="t")` validates successfully; `TableSource(project="", dataset="d", table="t")` raises `ValidationError`.
 6. **AC-6:** `Field(name="email", type="STRING")` validates successfully; default `nullable=True`, `description=None`, `json_path=None`.
 7. **AC-7:** `DerivedSource(identity_graph="person_graph")` validates successfully; `DerivedSource(identity_graph="")` raises `ValidationError`. Instance is frozen (immutable).
@@ -349,17 +349,17 @@ Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriori
 10. **AC-10:** `BaseTableSource.read_table()` with `backend="duckdb"` and no `duckdb_path` raises `ValueError`.
 11. **AC-11:** `MaterializationType.TABLE.value == "table"`, `IncrementalStrategy.MERGE.value == "merge"`, `SourcePriority.PRIMARY.value == 1`.
 12. **AC-12:** `SourceTransforms()` creates an empty transform container with four empty lists. `SourceTransforms(type_casts=[TypeCast(field="id", target_type="INT64")])` works.
-13. **AC-13:** None of the following names are importable from `typedata.core.source`: `SignalSourceConfig`, `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig`, `BigQuerySource`, `BaseSourceConfig`, `SourceOverrides`.
-14. **AC-14:** `ruff check src/typedata/core/` passes with no errors.
+13. **AC-13:** None of the following names are importable from `fyrnheim.core.source`: `SignalSourceConfig`, `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig`, `BigQuerySource`, `BaseSourceConfig`, `SourceOverrides`.
+14. **AC-14:** `ruff check src/fyrnheim/core/` passes with no errors.
 15. **AC-15:** `pytest tests/test_core_types.py tests/test_core_source.py -v` passes with all tests green.
 
 ### Implementation Tasks
 
-**Prerequisite:** Story M001-E001-S001 (package structure) must be completed first. The `src/typedata/core/__init__.py` file must already exist. If not yet done, implement S001 first.
+**Prerequisite:** Story M001-E001-S001 (package structure) must be completed first. The `src/fyrnheim/core/__init__.py` file must already exist. If not yet done, implement S001 first.
 
-#### Task 1: Create `src/typedata/core/types.py`
+#### Task 1: Create `src/fyrnheim/core/types.py`
 
-**File:** `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/core/types.py` (new file)
+**File:** `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/core/types.py` (new file)
 
 **Action:** Copy from `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/types.py` with docstring cleanup.
 
@@ -368,11 +368,11 @@ Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriori
 - `IncrementalStrategy` docstring: `"dbt incremental strategies."` becomes `"Strategies for incremental materialization."`
 - `SourcePriority` docstring: unchanged (already generic)
 
-**Exact content:** Use the code block from Decision 4 / `typedata/core/types.py` section of this design doc.
+**Exact content:** Use the code block from Decision 4 / `fyrnheim/core/types.py` section of this design doc.
 
-#### Task 2: Create `src/typedata/core/source.py`
+#### Task 2: Create `src/fyrnheim/core/source.py`
 
-**File:** `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/core/source.py` (new file)
+**File:** `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/core/source.py` (new file)
 
 **Action:** Extract from `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/core/source.py` with renames, deletions, and docstring cleanup.
 
@@ -397,19 +397,19 @@ Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriori
 - `DerivedSource`: Remove `"customer 360"` reference; remove `Example:` block with `person_identity_graph`; simplify docstring.
 - `UnionSource`: Remove signal-specific docstring and example; use the generic docstring from design doc.
 
-**Exact content:** Use the code block from Decision 4 / `typedata/core/source.py` section of this design doc.
+**Exact content:** Use the code block from Decision 4 / `fyrnheim/core/source.py` section of this design doc.
 
-#### Task 3: Update `src/typedata/core/__init__.py`
+#### Task 3: Update `src/fyrnheim/core/__init__.py`
 
-**File:** `/home/tmo/roadtothebeach/tmo/typedata/src/typedata/core/__init__.py` (exists, currently empty from S001)
+**File:** `/home/tmo/roadtothebeach/tmo/fyrnheim/src/fyrnheim/core/__init__.py` (exists, currently empty from S001)
 
 **Action:** Add re-exports for all public symbols from both `types.py` and `source.py`.
 
-**Exact content:** Use the code block from Decision 4 / `typedata/core/__init__.py` section of this design doc.
+**Exact content:** Use the code block from Decision 4 / `fyrnheim/core/__init__.py` section of this design doc.
 
 #### Task 4: Create `tests/test_core_types.py`
 
-**File:** `/home/tmo/roadtothebeach/tmo/typedata/tests/test_core_types.py` (new file)
+**File:** `/home/tmo/roadtothebeach/tmo/fyrnheim/tests/test_core_types.py` (new file)
 
 **Tests:**
 - `test_materialization_type_values` -- verify all 4 enum members and their string values
@@ -417,11 +417,11 @@ Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriori
 - `test_incremental_strategy_values` -- verify all 3 enum members and their string values
 - `test_source_priority_values` -- verify all 4 enum members and their int values
 - `test_source_priority_is_int_enum` -- verify `isinstance(SourcePriority.PRIMARY, int)` is True
-- `test_import_from_core_package` -- verify re-exports from `typedata.core` work
+- `test_import_from_core_package` -- verify re-exports from `fyrnheim.core` work
 
 #### Task 5: Create `tests/test_core_source.py`
 
-**File:** `/home/tmo/roadtothebeach/tmo/typedata/tests/test_core_source.py` (new file)
+**File:** `/home/tmo/roadtothebeach/tmo/fyrnheim/tests/test_core_source.py` (new file)
 
 **Tests organized by class:**
 
@@ -477,15 +477,15 @@ Extract three enums (`MaterializationType`, `IncrementalStrategy`, `SourcePriori
 - `test_union_source_empty_rejected` -- empty list raises ValidationError
 
 *Negative / boundary:*
-- `test_skipped_classes_not_importable` -- verify `SignalSourceConfig`, `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig` are not in `typedata.core.source`
-- `test_old_names_not_importable` -- verify `BigQuerySource`, `BaseSourceConfig`, `SourceOverrides` are not in `typedata.core.source`
+- `test_skipped_classes_not_importable` -- verify `SignalSourceConfig`, `ProductSourceConfig`, `ProductUnionSource`, `AnonSourceConfig` are not in `fyrnheim.core.source`
+- `test_old_names_not_importable` -- verify `BigQuerySource`, `BaseSourceConfig`, `SourceOverrides` are not in `fyrnheim.core.source`
 
 #### Task 6: Run quality gates
 
 ```bash
-cd /home/tmo/roadtothebeach/tmo/typedata
+cd /home/tmo/roadtothebeach/tmo/fyrnheim
 uv pip install -e ".[dev]"
-ruff check src/typedata/core/
+ruff check src/fyrnheim/core/
 pytest tests/test_core_types.py tests/test_core_source.py -v
 ```
 

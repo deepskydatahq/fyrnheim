@@ -4,7 +4,7 @@
 **Story:** M001-E003-S002-prep-dimension-generation
 **Depends on:** M001-E003-S001 (generator base + source generation)
 **Source:** `/home/tmo/roadtothebeach/tmo/timo-data-stack/metadata/generators/ibis_code_generator.py` (lines 261-320)
-**Target:** `src/typedata/generators/ibis_code_generator.py` (extend existing class from S001)
+**Target:** `src/fyrnheim/generators/ibis_code_generator.py` (extend existing class from S001)
 
 ---
 
@@ -67,7 +67,7 @@ These are **not currently handled by the IbisCodeGenerator at all**. The DuckDB 
 handles them in its staging layer (SQL `CAST`, `AS` renames, division expressions). The Ibis
 code generator skips them -- the `_generate_prep_function()` only processes `computed_columns`.
 
-This is a gap that typedata should fill.
+This is a gap that fyrnheim should fill.
 
 ---
 
@@ -81,7 +81,7 @@ that get embedded into generated `.mutate()` calls after `_bind_expression()` pr
 **Rationale:**
 
 - This is what the current generator does and it works. The primitives library
-  (`typedata.primitives`) produces expression strings at definition time. The generator
+  (`fyrnheim.primitives`) produces expression strings at definition time. The generator
   has no need to parse, compile, or interpret them -- it embeds them as Python source code.
 - `_bind_expression()` handles one simple task: if the expression does not already contain
   `t.` or `ibis.`, prefix it with `t.` so that bare column references bind to the table.
@@ -163,7 +163,7 @@ if overrides:
 
 - Generated code should be readable by anyone who knows Ibis. Adding an abstraction
   layer between the generated code and Ibis would mean users need to learn two APIs.
-- The typedata vision says "Pydantic + Ibis" -- Ibis *is* the abstraction layer. It
+- The fyrnheim vision says "Pydantic + Ibis" -- Ibis *is* the abstraction layer. It
   already handles backend portability. There is no benefit to wrapping it further.
 - The current timo-data-stack generator does this correctly: `.mutate()`, `.filter()`,
   `.select()`, `.cast()` are all direct Ibis API calls.
@@ -328,7 +328,7 @@ def dim_subscriptions(prep_subscriptions: ibis.Table) -> ibis.Table:
   then layer-specific computed columns. No deduplication needed -- if both define the
   same column name, it is a user error (Pydantic validation can catch this in a future story).
 - The current generator already does this merge in its `generate_module()` method
-  (the entity's `all_computed_columns` property). Typedata should replicate this.
+  (the entity's `all_computed_columns` property). Fyrnheim should replicate this.
 - When no computed columns exist at all, the function body is just `return t`.
 
 **When dimension layer has no prep predecessor:**
@@ -670,7 +670,7 @@ def test_dimension_without_prep_takes_source():
 
 2. **core_computed merging.** The current timo-data-stack Entity model has `core_computed`
    as a field. The E002 extraction stories need to confirm this field is preserved in
-   typedata's Entity model. If the field name changes, the dimension generator needs to
+   fyrnheim's Entity model. If the field name changes, the dimension generator needs to
    track that.
 
 3. **Expression validity.** The `_bind_expression()` heuristic is simple (check for `t.`
@@ -696,26 +696,26 @@ def test_dimension_without_prep_takes_source():
 ### Prerequisites
 
 S001 (generator base + source generation) must be complete. S001 delivers:
-- `src/typedata/generators/__init__.py` -- exports `IbisCodeGenerator`, `generate`
-- `src/typedata/generators/ibis_code_generator.py` -- class with `__init__`, `_generate_imports`,
+- `src/fyrnheim/generators/__init__.py` -- exports `IbisCodeGenerator`, `generate`
+- `src/fyrnheim/generators/ibis_code_generator.py` -- class with `__init__`, `_generate_imports`,
   `_generate_source_functions`, `_generate_single_source_functions`, `_bind_expression`,
   `generate_module`, `write_module`
 
 E001-S002 (core types) must be complete. S002 uses:
-- `TypeCast`, `Rename`, `Divide`, `Multiply`, `SourceTransforms` from `typedata.core.source`
+- `TypeCast`, `Rename`, `Divide`, `Multiply`, `SourceTransforms` from `fyrnheim.core.source`
 
 E002-S001 (layer configs) must be complete. S002 uses:
-- `PrepLayer`, `DimensionLayer` from `typedata.core.layer`
+- `PrepLayer`, `DimensionLayer` from `fyrnheim.core.layer`
 
 E002-S002 (entity) must be complete. S002 uses:
 - `Entity` with `core_computed`, `all_computed_columns`, `layers: LayersConfig`
 
 ### Naming Reconciliation
 
-The design doc uses timo-data-stack naming in some places. The typedata equivalents per
+The design doc uses timo-data-stack naming in some places. The fyrnheim equivalents per
 the upstream design decisions:
 
-| Design doc name | typedata name | Source |
+| Design doc name | fyrnheim name | Source |
 | --- | --- | --- |
 | `BigQuerySource` | `TableSource` | E001-S002 renames it |
 | `SourceOverrides` | `SourceTransforms` | E001-S002 renames it |
@@ -725,7 +725,7 @@ The generator must use `getattr(source, 'transforms', None)` (not `overrides`).
 
 ### Step 1: Add `IBIS_TYPE_MAP` constant and `_map_ibis_type` method
 
-**File:** `src/typedata/generators/ibis_code_generator.py`
+**File:** `src/fyrnheim/generators/ibis_code_generator.py`
 
 Add a module-level constant and an instance method:
 
@@ -761,7 +761,7 @@ it at module level avoids recreating it per instance and makes it testable indep
 
 ### Step 2: Add `_generate_source_transforms` method
 
-**File:** `src/typedata/generators/ibis_code_generator.py`
+**File:** `src/fyrnheim/generators/ibis_code_generator.py`
 
 This is a new private method. It reads `self.entity.source` and generates Ibis code for
 each transform category in the correct order: renames, type casts, divides, multiplies.
@@ -791,7 +791,7 @@ Key implementation details:
 
 ### Step 3: Update `_generate_prep_function` method
 
-**File:** `src/typedata/generators/ibis_code_generator.py`
+**File:** `src/fyrnheim/generators/ibis_code_generator.py`
 
 Replace the existing `_generate_prep_function` from S001 (which is either a stub or a
 direct copy of the timo-data-stack version that only handles computed columns).
@@ -819,7 +819,7 @@ The updated method has three code blocks assembled in order:
 
 ### Step 4: Update `_generate_dimension_function` method
 
-**File:** `src/typedata/generators/ibis_code_generator.py`
+**File:** `src/fyrnheim/generators/ibis_code_generator.py`
 
 Replace the existing `_generate_dimension_function`. Two changes from the timo-data-stack
 version:
@@ -841,7 +841,7 @@ comments from descriptions, `return dim` or `return t`.
 
 ### Step 5: Update `generate_module` to wire in prep and dimension
 
-**File:** `src/typedata/generators/ibis_code_generator.py`
+**File:** `src/fyrnheim/generators/ibis_code_generator.py`
 
 The `generate_module()` method from S001 should already have conditional blocks for
 `self.entity.layers.prep` and `self.entity.layers.dimension`. Verify that these blocks
@@ -982,7 +982,7 @@ After all code is written:
 
 1. Run `ast.parse()` on the test entity outputs to confirm syntactic validity.
 2. Run the test suite: `uv run pytest tests/generators/test_prep_dimension_generation.py -v`.
-3. Verify no import cycles between `typedata.generators` and `typedata.core`.
+3. Verify no import cycles between `fyrnheim.generators` and `fyrnheim.core`.
 4. Verify `generate_module()` produces a complete, well-structured Python file when given
    an entity with source + prep + dimension layers.
 
@@ -990,7 +990,7 @@ After all code is written:
 
 | File | Action | Description |
 | --- | --- | --- |
-| `src/typedata/generators/ibis_code_generator.py` | Modify | Add `IBIS_TYPE_MAP`, `_map_ibis_type`, `_generate_source_transforms`; update `_generate_prep_function`, `_generate_dimension_function` |
+| `src/fyrnheim/generators/ibis_code_generator.py` | Modify | Add `IBIS_TYPE_MAP`, `_map_ibis_type`, `_generate_source_transforms`; update `_generate_prep_function`, `_generate_dimension_function` |
 | `tests/generators/test_prep_dimension_generation.py` | Create | 13 test functions covering all acceptance criteria |
 
 ### Acceptance Criteria Checklist

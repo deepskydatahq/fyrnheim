@@ -7,7 +7,7 @@ created = 2026-02-16
 [outcome]
 description = """
 An examples/ directory contains a sample 'customers' entity with parquet test data,
-demonstrating the full typedata workflow: define → generate → run → query results.
+demonstrating the full fyrnheim workflow: define → generate → run → query results.
 """
 
 [acceptance_criteria]
@@ -40,7 +40,7 @@ depends_on = ["M001-E004-S003"]
 
 [handoff]
 implementation_hints = """
-- Create a realistic but simple example that showcases typedata's value
+- Create a realistic but simple example that showcases fyrnheim's value
 - Sample customer data with: id, email, name, created_at, plan, amount_cents
 - PrepLayer: hash email, cast created_at to date, divide amount_cents by 100
 - DimensionLayer: email_domain (extract_email_domain primitive), is_paying flag, signup_month

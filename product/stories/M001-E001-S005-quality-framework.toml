@@ -16,7 +16,7 @@ executable = true
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "QualityConfig, NotNull, Unique, InRange importable from typedata.quality"
+description = "QualityConfig, NotNull, Unique, InRange importable from fyrnheim.quality"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
@@ -32,7 +32,7 @@ description = "QualityConfig validates with checks list and primary_key"
 
 [[acceptance_criteria.criteria]]
 test = "unit"
-description = "QualityRunner, CheckResult, EntityResult importable from typedata.quality"
+description = "QualityRunner, CheckResult, EntityResult importable from fyrnheim.quality"
 
 [context]
 relevant_paths = [

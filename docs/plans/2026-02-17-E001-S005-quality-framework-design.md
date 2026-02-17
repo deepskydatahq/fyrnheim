@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-17
 **Source:** `timo-data-stack/metadata/quality/`
-**Target:** `typedata/quality/`
+**Target:** `fyrnheim/quality/`
 
 ---
 
@@ -36,9 +36,9 @@ The runner also hard-codes the BigQuery client (`google.cloud.bigquery`).
 
 **Phase 1 (this story):** Extract checks and runner as-is, but restructure into two layers:
 
-1. **`typedata.quality.checks`** -- Pure Pydantic models. Keep `get_where_clause()` returning SQL fragments for now, but mark it as the interface that will evolve.
-2. **`typedata.quality.results`** -- `CheckResult` and `EntityResult` (pure data, no backend dependency).
-3. **`typedata.quality.runner`** -- `QualityRunner` stays SQL-based but is explicitly labeled as the BigQuery-backed runner. Constructor takes an Ibis connection instead of project/dataset strings.
+1. **`fyrnheim.quality.checks`** -- Pure Pydantic models. Keep `get_where_clause()` returning SQL fragments for now, but mark it as the interface that will evolve.
+2. **`fyrnheim.quality.results`** -- `CheckResult` and `EntityResult` (pure data, no backend dependency).
+3. **`fyrnheim.quality.runner`** -- `QualityRunner` stays SQL-based but is explicitly labeled as the BigQuery-backed runner. Constructor takes an Ibis connection instead of project/dataset strings.
 
 **Phase 2 (future story):** Replace `get_where_clause() -> str` with `get_filter(table: ibis.Table) -> ibis.BooleanColumn` on each check. This makes checks portable across DuckDB, Postgres, BigQuery, etc. The runner then calls `table.filter(check.get_filter(table))` instead of building SQL strings.
 
@@ -161,7 +161,7 @@ Fix: This is a code smell -- the base class contract says "return SQL WHERE clau
 ## 6. Proposed Module Structure
 
 ```
-typedata/quality/
+fyrnheim/quality/
     __init__.py          # Re-exports public API
     checks.py            # QualityCheck ABC + 9 concrete check types + QualityConfig
     results.py           # CheckResult, EntityResult (pure data models)
@@ -176,10 +176,10 @@ Splitting `results.py` out of `runner.py` allows importing result types without 
 
 | Dependency | Required by | Notes |
 |------------|-------------|-------|
-| `pydantic` (>=2.0) | `checks.py`, `results.py` | Already a core typedata dependency |
+| `pydantic` (>=2.0) | `checks.py`, `results.py` | Already a core fyrnheim dependency |
 | `ibis-framework` | `runner.py` | Connection injection only in Phase 1; full expression API in Phase 2 |
 
-No new dependencies beyond what typedata already requires.
+No new dependencies beyond what fyrnheim already requires.
 
 ---
 
@@ -198,9 +198,9 @@ No new dependencies beyond what typedata already requires.
 
 ### Prerequisites
 
-This story depends on M001-E001-S001 (package structure), which creates the empty `src/typedata/quality/` sub-package. The implementation below assumes that skeleton exists.
+This story depends on M001-E001-S001 (package structure), which creates the empty `src/fyrnheim/quality/` sub-package. The implementation below assumes that skeleton exists.
 
-### Step 1: Create `src/typedata/quality/checks.py`
+### Step 1: Create `src/fyrnheim/quality/checks.py`
 
 Copy from `timo-data-stack/metadata/quality/checks.py` with the following modifications:
 
@@ -346,7 +346,7 @@ class CustomSQL(QualityCheck, BaseModel):
     """
 ```
 
-### Step 2: Create `src/typedata/quality/results.py` (new file)
+### Step 2: Create `src/fyrnheim/quality/results.py` (new file)
 
 Extract `CheckResult` and `EntityResult` from the source `runner.py` into a standalone module with zero runner dependencies.
 
@@ -390,7 +390,7 @@ class EntityResult(BaseModel):
 
 This is a direct lift with no modifications. Splitting it out means `results.py` can be imported without pulling in `ibis-framework`.
 
-### Step 3: Create `src/typedata/quality/runner.py`
+### Step 3: Create `src/fyrnheim/quality/runner.py`
 
 Copy from `timo-data-stack/metadata/quality/runner.py` with the following modifications:
 
@@ -507,7 +507,7 @@ LIMIT {limit}
 
 Same for `_build_count_query` ForeignKey branch.
 
-### Step 4: Update `src/typedata/quality/__init__.py`
+### Step 4: Update `src/fyrnheim/quality/__init__.py`
 
 Update re-exports to reflect the new `results.py` module:
 
@@ -558,11 +558,11 @@ The only change from the source is importing `CheckResult` and `EntityResult` fr
 
 | Test | Acceptance Criterion |
 |------|---------------------|
-| `test_imports` | QualityConfig, NotNull, Unique, InRange importable from `typedata.quality` |
+| `test_imports` | QualityConfig, NotNull, Unique, InRange importable from `fyrnheim.quality` |
 | `test_not_null_where_clause` | `NotNull('email').get_where_clause()` returns `"email IS NULL"` |
 | `test_in_range_where_clause` | `InRange('amount', min=0, max=10000).get_where_clause()` returns `"NOT (amount >= 0 AND amount <= 10000)"` |
 | `test_quality_config_validates` | `QualityConfig(checks=[NotNull('id')], primary_key='id')` validates |
-| `test_runner_result_imports` | QualityRunner, CheckResult, EntityResult importable from `typedata.quality` |
+| `test_runner_result_imports` | QualityRunner, CheckResult, EntityResult importable from `fyrnheim.quality` |
 | `test_not_empty_where_clause` | `NotEmpty('name').get_where_clause()` returns correct SQL |
 | `test_in_set_where_clause` | `InSet('status', ['A', 'B']).get_where_clause()` returns correct SQL |
 | `test_matches_pattern_where_clause` | `MatchesPattern('email', r'^.+@.+$').get_where_clause()` returns `REGEXP_CONTAINS` SQL |
@@ -604,11 +604,11 @@ Note: DuckDB end-to-end tests for the runner may need to skip `MaxAge` and `Matc
 
 Run `pytest tests/quality/` and confirm all acceptance criteria pass:
 
-1. QualityConfig, NotNull, Unique, InRange importable from `typedata.quality`
+1. QualityConfig, NotNull, Unique, InRange importable from `fyrnheim.quality`
 2. `NotNull('email').get_where_clause()` returns valid SQL fragment
 3. `InRange('amount', min=0, max=10000).get_where_clause()` returns correct SQL
 4. `QualityConfig` validates with checks list and primary_key
-5. QualityRunner, CheckResult, EntityResult importable from `typedata.quality`
+5. QualityRunner, CheckResult, EntityResult importable from `fyrnheim.quality`
 
 ### Summary of Changes from Source
 
@@ -629,7 +629,7 @@ Run `pytest tests/quality/` and confirm all acceptance criteria pass:
 ### Files Created/Modified
 
 ```
-src/typedata/quality/
+src/fyrnheim/quality/
     __init__.py          # Modified: import CheckResult/EntityResult from results
     checks.py            # New: from source with 6 modifications (1a-1f)
     results.py           # New: extracted from source runner.py

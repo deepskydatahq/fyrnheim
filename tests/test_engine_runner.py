@@ -5,13 +5,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from typedata import (
+from fyrnheim import (
     Entity,
     LayersConfig,
     PrepLayer,
     TableSource,
 )
-from typedata.engine.runner import (
+from fyrnheim.engine.runner import (
     EntityRunResult,
     RunResult,
     _resolve_generated_dir,
@@ -25,7 +25,7 @@ from typedata.engine.runner import (
 
 
 ENTITY_WITH_SOURCE_TEMPLATE = """\
-from typedata import Entity, LayersConfig, PrepLayer, TableSource
+from fyrnheim import Entity, LayersConfig, PrepLayer, TableSource
 
 entity = Entity(
     name="{name}",
@@ -265,29 +265,29 @@ class TestRunEntity:
 
 
 class TestLazyImports:
-    """Test lazy imports from top-level typedata package."""
+    """Test lazy imports from top-level fyrnheim package."""
 
     def test_run_importable(self):
-        import typedata
+        import fyrnheim
 
-        assert callable(typedata.run)
+        assert callable(fyrnheim.run)
 
     def test_run_entity_importable(self):
-        import typedata
+        import fyrnheim
 
-        assert callable(typedata.run_entity)
+        assert callable(fyrnheim.run_entity)
 
     def test_run_result_importable(self):
-        import typedata
+        import fyrnheim
 
-        assert typedata.RunResult is not None
+        assert fyrnheim.RunResult is not None
 
     def test_entity_run_result_importable(self):
-        import typedata
+        import fyrnheim
 
-        assert typedata.EntityRunResult is not None
+        assert fyrnheim.EntityRunResult is not None
 
     def test_duckdb_executor_importable(self):
-        import typedata
+        import fyrnheim
 
-        assert typedata.DuckDBExecutor is not None
+        assert fyrnheim.DuckDBExecutor is not None

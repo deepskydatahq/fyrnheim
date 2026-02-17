@@ -3,24 +3,24 @@
 import pytest
 from pydantic import ValidationError
 
-from typedata import Entity, Field, LayersConfig, PrepLayer, SourceMapping, TableSource
+from fyrnheim import Entity, Field, LayersConfig, PrepLayer, SourceMapping, TableSource
 
 
 class TestSourceMappingImport:
     """Verify SourceMapping is importable from expected paths."""
 
     def test_importable_from_top_level(self):
-        from typedata import SourceMapping as SM
+        from fyrnheim import SourceMapping as SM
 
         assert SM is not None
 
     def test_importable_from_core(self):
-        from typedata.core import SourceMapping as SM
+        from fyrnheim.core import SourceMapping as SM
 
         assert SM is not None
 
     def test_importable_from_module(self):
-        from typedata.core.source_mapping import SourceMapping as SM
+        from fyrnheim.core.source_mapping import SourceMapping as SM
 
         assert SM is not None
 

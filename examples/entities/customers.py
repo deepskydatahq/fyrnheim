@@ -1,4 +1,4 @@
-"""Sample customers entity demonstrating the full typedata workflow.
+"""Sample customers entity demonstrating the full fyrnheim workflow.
 
 This entity transforms raw customer records through two layers:
 - PrepLayer: email hashing, date casting, unit conversion
@@ -7,7 +7,7 @@ This entity transforms raw customer records through two layers:
 Quality checks validate the output: NotNull, Unique, InRange.
 """
 
-from typedata import (
+from fyrnheim import (
     ComputedColumn,
     DimensionLayer,
     Entity,
@@ -19,11 +19,11 @@ from typedata import (
     TableSource,
     Unique,
 )
-from typedata.primitives import date_trunc_month, hash_email
+from fyrnheim.primitives import date_trunc_month, hash_email
 
 entity = Entity(
     name="customers",
-    description="Sample customer entity for typedata demonstration",
+    description="Sample customer entity for fyrnheim demonstration",
     source=TableSource(
         project="example",
         dataset="raw",

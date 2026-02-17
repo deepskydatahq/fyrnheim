@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field as PydanticField
 
 from .types import MaterializationType
 
-# Forward reference: resolved to typedata.components.ComputedColumn
-# via model_rebuild() in typedata/__init__.py
+# Forward reference: resolved to fyrnheim.components.ComputedColumn
+# via model_rebuild() in fyrnheim/__init__.py
 ComputedColumn = Any
 
 

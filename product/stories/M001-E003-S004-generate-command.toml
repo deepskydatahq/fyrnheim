@@ -44,7 +44,7 @@ depends_on = ["M001-E003-S002", "M001-E003-S003"]
 implementation_hints = """
 - This is the public API entry point for code generation
 - In timo-data-stack this lives in scripts/generate_pydantic_entities.py (PydanticIbisGenerator)
-- For typedata, expose as typedata.generate(entity, output_dir='generated/')
+- For fyrnheim, expose as fyrnheim.generate(entity, output_dir='generated/')
 - The function should:
   1. Accept Entity instance
   2. Create IbisCodeGenerator(entity)

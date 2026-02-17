@@ -26,16 +26,16 @@ criteria = [
     "Entity.model_rebuild() resolves forward references to ComputedColumn, Measure, QualityConfig",
     "A sample entity with PrepLayer + DimensionLayer + computed columns validates without errors",
     "A sample entity with invalid config (e.g. missing required field) raises Pydantic ValidationError",
-    "Entity can reference quality checks from typedata.quality",
-    "Top-level typedata/__init__.py re-exports Entity, LayersConfig, and all source/layer types",
+    "Entity can reference quality checks from fyrnheim.quality",
+    "Top-level fyrnheim/__init__.py re-exports Entity, LayersConfig, and all source/layer types",
     "Test suite covers: valid entity creation, validation errors, layer configuration, source types",
 ]
 
 validator_context = [
-    "src/typedata/core/entity.py",
-    "src/typedata/core/layer.py",
-    "src/typedata/core/source_mapping.py",
-    "src/typedata/__init__.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/layer.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "src/fyrnheim/__init__.py",
     "tests/",
 ]
 
@@ -58,7 +58,7 @@ It uses TYPE_CHECKING imports for ComputedColumn, Measure, QualityConfig (resolv
 Key decisions:
 - Skip TenantExtension for now (multi-tenant is deferred) — or include as opt-in
 - The Source union type aggregates all source configs — evaluate which are generic vs timo-specific
-- model_rebuild() call must happen in typedata/__init__.py after all modules load
+- model_rebuild() call must happen in fyrnheim/__init__.py after all modules load
 - Keep the same forward-reference pattern (TYPE_CHECKING + model_rebuild)
 
 Layer 1+2 from dependency analysis. Depends on E001 being complete.

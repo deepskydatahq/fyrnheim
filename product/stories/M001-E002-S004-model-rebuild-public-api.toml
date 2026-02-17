@@ -6,8 +6,8 @@ created = 2026-02-16
 
 [outcome]
 description = """
-The top-level typedata/__init__.py calls model_rebuild() to resolve forward
-references and re-exports all public types. A user can `from typedata import Entity,
+The top-level fyrnheim/__init__.py calls model_rebuild() to resolve forward
+references and re-exports all public types. A user can `from fyrnheim import Entity,
 LayersConfig, PrepLayer, ComputedColumn, NotNull` etc. in a single import.
 """
 
@@ -20,15 +20,15 @@ description = "Entity.model_rebuild() resolves ComputedColumn, Measure, QualityC
 
 [[acceptance_criteria.criteria]]
 test = "integration"
-description = "from typedata import Entity, LayersConfig, PrepLayer, DimensionLayer works"
+description = "from fyrnheim import Entity, LayersConfig, PrepLayer, DimensionLayer works"
 
 [[acceptance_criteria.criteria]]
 test = "integration"
-description = "from typedata import ComputedColumn, Measure, NotNull, Unique works"
+description = "from fyrnheim import ComputedColumn, Measure, NotNull, Unique works"
 
 [[acceptance_criteria.criteria]]
 test = "integration"
-description = "from typedata import BigQuerySource, DerivedSource, Field works"
+description = "from fyrnheim import BigQuerySource, DerivedSource, Field works"
 
 [[acceptance_criteria.criteria]]
 test = "integration"
@@ -48,7 +48,7 @@ depends_on = ["M001-E002-S002", "M001-E002-S003", "M001-E001-S004", "M001-E001-S
 [handoff]
 implementation_hints = """
 - The timo-data-stack metadata/__init__.py does model_rebuild() then imports concrete entities
-- For typedata, we only need the model_rebuild() + re-exports (no concrete entities)
+- For fyrnheim, we only need the model_rebuild() + re-exports (no concrete entities)
 - Call order matters: import all modules, THEN model_rebuild(), THEN re-export
 - This is the integration story that proves the whole core works together
 - Test by creating a realistic entity with all features: source, layers, computed columns, quality

@@ -47,7 +47,7 @@ implementation_hints = """
 - Uses ComputedColumn = Any as placeholder (forward ref resolved later via model_rebuild)
 - Keep the same forward-reference pattern
 - has to_sql() methods that generate dbt SQL — evaluate if these should stay or be stripped
-  (they're dbt-specific, typedata uses Ibis instead)
+  (they're dbt-specific, fyrnheim uses Ibis instead)
 - Update import: from .types import MaterializationType
 """
 reference_files = [

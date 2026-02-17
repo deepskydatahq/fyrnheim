@@ -9,7 +9,7 @@
 
 ## 1. Summary
 
-A single public function `typedata.run()` orchestrates the full pipeline: discover entities from a directory, resolve dependency order, auto-generate transformation code if missing, execute each entity on a DuckDB backend, run quality checks, and return a structured summary. This is the top-level entry point that makes the entire framework usable with one call.
+A single public function `fyrnheim.run()` orchestrates the full pipeline: discover entities from a directory, resolve dependency order, auto-generate transformation code if missing, execute each entity on a DuckDB backend, run quality checks, and return a structured summary. This is the top-level entry point that makes the entire framework usable with one call.
 
 ---
 
@@ -25,12 +25,12 @@ main()
   -> execute_transformations()    # per-entity: import module -> call transform_fn -> persist
 ```
 
-Key observations for typedata extraction:
+Key observations for fyrnheim extraction:
 
-| Aspect | timo-data-stack behavior | typedata decision |
+| Aspect | timo-data-stack behavior | fyrnheim decision |
 |--------|--------------------------|-------------------|
 | Discovery | Hard-coded `entities/entities/` path | Parameterized `entities_dir` |
-| Code gen | Subprocess call to external script | Call `typedata.generate()` in-process |
+| Code gen | Subprocess call to external script | Call `fyrnheim.generate()` in-process |
 | Backends | BigQuery + DuckDB with env vars | DuckDB-only in v0.1; backend param for future |
 | Incremental | High water mark, timestamp columns | Skip for v0.1 (full refresh only) |
 | Failure | `raise SystemExit(1)` on any error | Graceful: skip entity, continue, report |
@@ -141,7 +141,7 @@ Logging (see 3.6) handles human-readable output separately.
 ```
 if auto_generate:
     for entity in sorted_entities:
-        typedata.generate(entity, output_dir=generated_dir)
+        fyrnheim.generate(entity, output_dir=generated_dir)
 else:
     # Verify generated files exist; skip entities where they don't
     for entity in sorted_entities:
@@ -153,7 +153,7 @@ else:
 
 **Why in-process, not subprocess:**
 
-timo-data-stack calls `subprocess.run(["uv", "run", "python", "scripts/generate_pydantic_entities.py", ...])` for each entity -- a hack needed because the generator and runner lived in different environments. In typedata, `generate()` is a library function in the same package. Calling it directly is faster, simpler, and produces better error messages.
+timo-data-stack calls `subprocess.run(["uv", "run", "python", "scripts/generate_pydantic_entities.py", ...])` for each entity -- a hack needed because the generator and runner lived in different environments. In fyrnheim, `generate()` is a library function in the same package. Calling it directly is faster, simpler, and produces better error messages.
 
 ### 3.4 Quality Check Integration
 
@@ -221,7 +221,7 @@ When `on_error="stop"`:
 | Callback protocol | Maximum flexibility | Over-engineered for v0.1; users can wrap `run()` themselves | **No** |
 | `logging` module | Zero dependencies; standard; configurable by caller; testable | Less pretty by default | **Yes** |
 
-**Logger name:** `typedata.engine` (matches the sub-package).
+**Logger name:** `fyrnheim.engine` (matches the sub-package).
 
 **Log levels used:**
 
@@ -244,19 +244,19 @@ When `on_error="stop"`:
 # User wants verbose output:
 import logging
 logging.basicConfig(level=logging.DEBUG)
-result = typedata.run("entities/", "data/")
+result = fyrnheim.run("entities/", "data/")
 
 # User wants quiet:
 logging.basicConfig(level=logging.WARNING)
-result = typedata.run("entities/", "data/")
+result = fyrnheim.run("entities/", "data/")
 
 # User wants JSON logs (e.g., for production):
 import json_log_handler  # hypothetical
-logging.getLogger("typedata").addHandler(json_log_handler)
-result = typedata.run("entities/", "data/")
+logging.getLogger("fyrnheim").addHandler(json_log_handler)
+result = fyrnheim.run("entities/", "data/")
 ```
 
-This is the standard Python pattern. Libraries log; applications configure logging. typedata is a library.
+This is the standard Python pattern. Libraries log; applications configure logging. fyrnheim is a library.
 
 ---
 
@@ -265,7 +265,7 @@ This is the standard Python pattern. Libraries log; applications configure loggi
 ### 4.1 Orchestration Flow
 
 ```
-typedata.run(entities_dir, data_dir, ...)
+fyrnheim.run(entities_dir, data_dir, ...)
     |
     v
 EntityRegistry.discover(entities_dir)       # From S001
@@ -276,7 +276,7 @@ EntityRegistry.resolve_order(entities)      # From S001 (topological sort)
     v
 for entity in sorted_entities:
     |
-    |-- [auto_generate] typedata.generate(entity, generated_dir)    # From E003-S004
+    |-- [auto_generate] fyrnheim.generate(entity, generated_dir)    # From E003-S004
     |
     |-- DuckDBExecutor.execute(entity)                              # From S002
     |       |-> register source parquet from data_dir
@@ -297,7 +297,7 @@ RunResult(entities=[...], total_duration, backend)
 ### 4.2 Module Placement
 
 ```
-src/typedata/
+src/fyrnheim/
     __init__.py          # re-exports: run, generate, Entity
     engine/
         __init__.py      # re-exports: run, RunResult, EntityRunResult
@@ -306,7 +306,7 @@ src/typedata/
         executor.py      # DuckDBExecutor (from S002)
 ```
 
-The `run()` function lives in `typedata.engine.runner` and is re-exported from both `typedata.engine` and `typedata` (top-level).
+The `run()` function lives in `fyrnheim.engine.runner` and is re-exported from both `fyrnheim.engine` and `fyrnheim` (top-level).
 
 ### 4.3 Companion Function: run_entity()
 
@@ -338,7 +338,7 @@ def run_entity(
 | Criterion | How it is satisfied |
 |-----------|---------------------|
 | `run(entities_dir, data_dir, backend='duckdb')` executes all entities in dependency order | `EntityRegistry.discover()` + `resolve_order()` + sequential execution loop |
-| `run()` generates transformation code if not already generated | `auto_generate=True` default calls `typedata.generate()` per entity before execution |
+| `run()` generates transformation code if not already generated | `auto_generate=True` default calls `fyrnheim.generate()` per entity before execution |
 | `run()` reports success/failure per entity with row counts | `RunResult.entities` is a list of `EntityRunResult` with `status`, `row_count`, `error` |
 | `run()` with quality checks reports check results per entity | `EntityRunResult.quality_results: list[CheckResult]` populated when `quality_checks=True` |
 | Errors during one entity don't prevent other entities from running | `on_error="skip"` default catches exceptions, records error, continues to next entity |
@@ -368,7 +368,7 @@ def run_entity(
 | BigQuery backend | v0.1 is DuckDB-only per vision; BigQuery support requires env var config, auth, dataset management | E005 or later |
 | Incremental processing | High water marks, timestamp columns, append mode -- significant complexity with minimal value for local dev | E005 or later |
 | DerivedSource / identity graphs | Multi-source joins need separate design; `run()` will skip DerivedSource entities with a warning in v0.1 | E005 or later |
-| CLI wrapper | `typedata run entities/ data/` command-line interface on top of `run()` | Separate epic |
+| CLI wrapper | `fyrnheim run entities/ data/` command-line interface on top of `run()` | Separate epic |
 | Parallel execution | Running independent entities concurrently | Future optimization |
 | Progress callbacks / rich output | Caller can configure logging; rich UI is an application concern | CLI epic |
 
@@ -380,17 +380,17 @@ def run_entity(
 
 This story depends on:
 - **M001-E004-S001** (EntityRegistry, discovery, dependency resolution): provides `EntityRegistry.discover()`, `EntityInfo`, `resolve_execution_order()`, `CircularDependencyError`
-- **M001-E004-S002** (DuckDB executor): provides `DuckDBExecutor`, `ExecutionResult`, `TypedataEngineError`
-- **M001-E003-S004** (generate function): provides `typedata.generate()`, `GenerateResult`
+- **M001-E004-S002** (DuckDB executor): provides `DuckDBExecutor`, `ExecutionResult`, `FyrnheimEngineError`
+- **M001-E003-S004** (generate function): provides `fyrnheim.generate()`, `GenerateResult`
 - **M001-E001-S005** (quality framework): provides `QualityRunner`, `CheckResult`
 
 If any dependency is not yet implemented, the corresponding integration points should be stubbed with clear interfaces matching the designs above. The plan is written assuming all dependencies exist.
 
 ---
 
-### Step 1: Create result dataclasses (`src/typedata/engine/runner.py`)
+### Step 1: Create result dataclasses (`src/fyrnheim/engine/runner.py`)
 
-**File:** `src/typedata/engine/runner.py` (new file)
+**File:** `src/fyrnheim/engine/runner.py` (new file)
 
 Define two frozen dataclasses at the top of the module:
 
@@ -404,9 +404,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from typedata.quality.results import CheckResult
+    from fyrnheim.quality.results import CheckResult
 
-log = logging.getLogger("typedata.engine")
+log = logging.getLogger("fyrnheim.engine")
 
 
 @dataclass(frozen=True)
@@ -448,7 +448,7 @@ class RunResult:
 Key decisions reflected:
 - `frozen=True` for immutability -- results are output-only value objects
 - `CheckResult` imported under `TYPE_CHECKING` to avoid circular imports and keep quality as an optional dependency at import time
-- Logger name `typedata.engine` as specified in design section 3.6
+- Logger name `fyrnheim.engine` as specified in design section 3.6
 
 **Verification:** Import the module; instantiate both dataclasses; confirm `ok`, `success_count`, `error_count`, `skipped_count` properties work.
 
@@ -505,7 +505,7 @@ gen_dir = _resolve_generated_dir(???, generated_dir)
 
 1. AUTO-GENERATE (if auto_generate=True):
    - log.debug("Generating: %s_transforms.py", entity.name)
-   - call typedata.generate(entity, output_dir=gen_dir)
+   - call fyrnheim.generate(entity, output_dir=gen_dir)
    - if generate raises, return EntityRunResult(status="error", error=str(e))
 
 2. VERIFY GENERATED FILE EXISTS (if auto_generate=False):
@@ -714,7 +714,7 @@ return run_result
 ```
 
 Key implementation details:
-- `_extract_dependencies()` is imported from `typedata.engine.resolution` (S001)
+- `_extract_dependencies()` is imported from `fyrnheim.engine.resolution` (S001)
 - The `DuckDBExecutor` is created once and shared across all entities via the `_executor` parameter
 - The `on_error="stop"` path marks ALL remaining entities as skipped, not just dependents
 - Logging follows the exact levels and messages from design section 3.6
@@ -723,13 +723,13 @@ Key implementation details:
 
 ---
 
-### Step 6: Update `typedata/engine/__init__.py` exports
+### Step 6: Update `fyrnheim/engine/__init__.py` exports
 
 Add the new public names to the engine package re-exports:
 
 ```python
-# In src/typedata/engine/__init__.py
-from typedata.engine.runner import (
+# In src/fyrnheim/engine/__init__.py
+from fyrnheim.engine.runner import (
     EntityRunResult,
     RunResult,
     run,
@@ -739,22 +739,22 @@ from typedata.engine.runner import (
 
 These join the existing exports from S001 (`EntityRegistry`, `EntityInfo`, `resolve_execution_order`, `CircularDependencyError`) and S002 (`DuckDBExecutor`, `ExecutionResult`).
 
-**Verification:** `from typedata.engine import run, RunResult, EntityRunResult, run_entity` succeeds.
+**Verification:** `from fyrnheim.engine import run, RunResult, EntityRunResult, run_entity` succeeds.
 
 ---
 
-### Step 7: Re-export `run` from `typedata/__init__.py`
+### Step 7: Re-export `run` from `fyrnheim/__init__.py`
 
 Add `run` to the top-level public API:
 
 ```python
-# In src/typedata/__init__.py
-from typedata.engine.runner import run
+# In src/fyrnheim/__init__.py
+from fyrnheim.engine.runner import run
 ```
 
-This enables the canonical usage: `import typedata; result = typedata.run("entities/", "data/")`.
+This enables the canonical usage: `import fyrnheim; result = fyrnheim.run("entities/", "data/")`.
 
-**Verification:** `import typedata; typedata.run` is the `run` function.
+**Verification:** `import fyrnheim; fyrnheim.run` is the `run` function.
 
 ---
 
@@ -768,8 +768,8 @@ All unit tests use mocks/stubs for the dependencies (EntityRegistry, DuckDBExecu
 |------|-----------------|-----|
 | `test_run_result_properties` | `ok`, `success_count`, `error_count`, `skipped_count` compute correctly from entity list | -- |
 | `test_run_discovers_and_executes_in_order` | Entities execute in topological order returned by `resolve_execution_order()` | AC1 |
-| `test_run_auto_generates_when_enabled` | `typedata.generate()` called for each entity when `auto_generate=True` | AC2 |
-| `test_run_skips_generate_when_disabled` | `typedata.generate()` NOT called when `auto_generate=False`; missing generated files cause skip | AC2 |
+| `test_run_auto_generates_when_enabled` | `fyrnheim.generate()` called for each entity when `auto_generate=True` | AC2 |
+| `test_run_skips_generate_when_disabled` | `fyrnheim.generate()` NOT called when `auto_generate=False`; missing generated files cause skip | AC2 |
 | `test_run_reports_per_entity_results` | Each entity has correct `status`, `row_count`, `error` in `RunResult.entities` | AC3 |
 | `test_run_quality_checks_reported` | `quality_results` populated when `quality_checks=True`; None when False | AC4 |
 | `test_run_quality_failure_does_not_change_status` | Entity with passing transform but failing quality check has `status="success"` | AC4 |
@@ -784,9 +784,9 @@ All unit tests use mocks/stubs for the dependencies (EntityRegistry, DuckDBExecu
 
 ```python
 # Mock EntityRegistry to return controlled entities
-@patch("typedata.engine.runner.EntityRegistry")
-@patch("typedata.engine.runner.resolve_execution_order")
-@patch("typedata.engine.runner.DuckDBExecutor")
+@patch("fyrnheim.engine.runner.EntityRegistry")
+@patch("fyrnheim.engine.runner.resolve_execution_order")
+@patch("fyrnheim.engine.runner.DuckDBExecutor")
 def test_run_discovers_and_executes_in_order(
     mock_executor_cls, mock_resolve, mock_registry_cls, tmp_path
 ):
@@ -840,9 +840,9 @@ Execute steps in this order to maintain a working state at each checkpoint:
 
 | File | Estimated lines |
 |------|----------------|
-| `src/typedata/engine/runner.py` | ~200 lines |
+| `src/fyrnheim/engine/runner.py` | ~200 lines |
 | `tests/engine/test_runner.py` | ~250 lines |
 | `tests/engine/test_runner_integration.py` | ~50 lines |
-| `src/typedata/engine/__init__.py` changes | ~5 lines |
-| `src/typedata/__init__.py` changes | ~2 lines |
+| `src/fyrnheim/engine/__init__.py` changes | ~5 lines |
+| `src/fyrnheim/__init__.py` changes | ~2 lines |
 | **Total** | **~507 lines** |

@@ -6,7 +6,7 @@ created = 2026-02-16
 
 [outcome]
 description = """
-A comprehensive integration test proves the full typedata pipeline works:
+A comprehensive integration test proves the full fyrnheim pipeline works:
 define a sample entity, generate Ibis code, execute on DuckDB, verify the
 output table has correct schema and data.
 """

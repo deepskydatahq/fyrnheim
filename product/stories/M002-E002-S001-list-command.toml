@@ -1,0 +1,83 @@
+id = "M002-E002-S001"
+parent = "M002-E002"
+title = "Implement `fyr list` command wrapping EntityRegistry.discover()"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The `fyr list` command discovers entity definitions in the configured entities_dir
+and displays them in a readable table showing entity name, layers, and source file.
+This is the simplest core command — pure read-only discovery with no side effects.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr list` discovers entities via EntityRegistry.discover(entities_dir) and prints a table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output shows each entity name, its layers (prep, dimension, snapshot, etc.), and source file path"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output format is plain aligned text, e.g. 'customers   prep, dimension   entities/customers.py'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A summary line prints the total entity count, e.g. '2 entities found'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When no entities are found, prints 'No entities found in <dir>' and exits with code 0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Respects fyrnheim.yaml entities_dir config from load_config()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Supports --entities-dir flag to override the config value"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When entities_dir does not exist, prints an error message and exits with code 1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests use click.testing.CliRunner to invoke the command and assert on output and exit_code"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/registry.py",
+]
+input_fixtures = [
+    "examples/entities/customers.py",
+]
+depends_on = ["M002-E001-S002"]
+
+[handoff]
+implementation_hints = """
+- Replace the stub `list` command in cli.py with a real implementation
+- Core logic:
+    config = load_config()
+    entities_dir = entities_dir_flag or config.entities_dir
+    registry = EntityRegistry()
+    registry.discover(entities_dir)
+    for name, info in registry.items():
+        click.echo(f"  {name:<20s} {', '.join(info.layers):<30s} {info.path}")
+    click.echo(f"\n{len(registry)} entities found")
+- Wrap the discover() call in try/except for FileNotFoundError
+- Exit code 0 always (even when no entities found — that's not an error)
+- Exit code 1 only for actual errors (bad directory, import failure)
+- Test with CliRunner using a tmp_path with a minimal entity .py file
+  and a fyrnheim.yaml pointing at it
+"""
+reference_files = [
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/cli.py",
+]

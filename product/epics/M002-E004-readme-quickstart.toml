@@ -1,0 +1,70 @@
+id = "M002-E004"
+parent = "M002"
+title = "README and quick-start tutorial"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The README tells the Fyrnheim story and walks a new user from install to
+running their first entity pipeline in under 5 minutes. A data engineer
+landing on the GitHub repo knows what this is, why they'd use it, and
+how to get started.
+"""
+
+job_story = """
+When I discover Fyrnheim on GitHub and want to understand what it does,
+I want a clear README with a quick-start tutorial,
+so that I can go from zero to a working pipeline in minutes and decide
+if this tool fits my needs.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "README has a one-line description and a concise 'what is this' section",
+    "README shows the install command: `pip install fyrnheim[duckdb]`",
+    "Quick-start tutorial covers: fyr init → define entity → fyr generate → fyr run",
+    "Tutorial includes actual command output showing what the user will see",
+    "README explains the core concepts: entities, layers, primitives, backends",
+    "README has a 'why not dbt' or comparison section (brief, honest)",
+    "README links to examples/ directory for more complex entity definitions",
+    "Tutorial is self-contained — copy-pasteable commands that work on a fresh install",
+    "No broken links or references to nonexistent files",
+]
+
+validator_context = [
+    "README.md",
+    "examples/entities/customers.py",
+]
+
+[context]
+relevant_paths = [
+    "VISION.md",
+    "README.md",
+    "examples/",
+]
+dependencies = ["M002-E002"]
+
+[notes]
+considerations = """
+The current README is just a one-liner. This epic replaces it with a proper
+project README.
+
+Structure:
+1. Tagline + badges
+2. What is Fyrnheim? (2-3 sentences)
+3. Quick Start (install, init, define entity, generate, run)
+4. Core Concepts (entities, layers, primitives, components, quality)
+5. Why Fyrnheim? (vs dbt — keep it factual and brief)
+6. Status + Contributing
+7. License
+
+The quick-start should use `fyr init` output so it's perfectly aligned
+with what the user actually sees. Wait until E001 and E002 are done to
+capture real command output.
+
+Keep it under 200 lines. Nobody reads long READMEs.
+"""
+
+estimated_stories = 2

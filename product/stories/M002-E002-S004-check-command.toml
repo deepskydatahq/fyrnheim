@@ -1,0 +1,116 @@
+id = "M002-E002-S004"
+parent = "M002-E002"
+title = "Implement `fyr check` command wrapping QualityRunner"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The `fyr check` command runs quality checks standalone against previously-executed
+entities using QualityRunner. It connects to the DuckDB database, discovers entities
+with quality configs, and prints per-check pass/fail results. This allows users to
+re-run quality checks without re-executing the full pipeline.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr check` discovers entities, connects to DuckDB, and runs QualityRunner.run_entity_checks() for each entity with quality config"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output shows per-entity header with entity name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Per-check output shows check name and pass/fail status, e.g. '  not_null(email)   pass' or '  unique(customer_id)   FAIL (3 failures)'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A summary line prints total counts, e.g. 'Checks: 5 passed, 1 failed across 2 entities'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr check --entity customers` runs checks only for the named entity"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When an entity has no quality config defined, it is skipped with a note in output"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When the target table does not exist in DuckDB (entity not yet run), prints an error for that entity and continues"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Respects fyrnheim.yaml config for entities_dir, data_dir, and output_dir (to locate the DuckDB state)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Supports --entities-dir and --data-dir flags to override config values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Exit code 0 when all checks pass; exit code 2 when any check fails; exit code 1 for runtime errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests use click.testing.CliRunner; quality check scenarios can mock QualityRunner or use a pre-populated DuckDB"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/quality/runner.py",
+    "src/fyrnheim/quality/checks.py",
+    "src/fyrnheim/quality/results.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/executor.py",
+]
+input_fixtures = [
+    "examples/entities/customers.py",
+]
+depends_on = ["M002-E001-S002"]
+
+[handoff]
+implementation_hints = """
+- Replace the stub `check` command in cli.py with a real implementation
+- This command runs checks WITHOUT re-running the pipeline. It needs to:
+  1. Discover entities (EntityRegistry)
+  2. Open a DuckDB connection (DuckDBExecutor or direct ibis.duckdb.connect())
+  3. For each entity with entity.quality config, run QualityRunner.run_entity_checks()
+  4. Print results
+- Core logic:
+    registry = EntityRegistry()
+    registry.discover(entities_dir)
+    executor = DuckDBExecutor(generated_dir=output_dir)
+    qr = QualityRunner(executor.connection)
+    total_pass = total_fail = 0
+    for name, info in registry.items():
+        entity = info.entity
+        if not entity.quality or not entity.quality.checks:
+            continue
+        click.echo(f"\n{name}:")
+        table_name = f"dim_{name}"  # or resolve from entity layers
+        result = qr.run_entity_checks(name, entity.quality, entity.quality.primary_key, table_name)
+        for cr in result.results:
+            status = "pass" if cr.passed else f"FAIL ({cr.failure_count} failures)"
+            click.echo(f"  {cr.check_name:<30s} {status}")
+            if cr.passed: total_pass += 1
+            else: total_fail += 1
+    executor.close()
+- Table name resolution: the entity's final table is typically dim_{name} or
+  snapshot_{name} depending on layers. May need to inspect EntityInfo.layers
+  to determine the correct table.
+- QualityRunner expects an ibis backend connection — get it from DuckDBExecutor.connection
+- Error handling: if a table doesn't exist in DuckDB, catch the error and report it
+  rather than crashing
+- Exit codes: 0 = all pass, 2 = check failures, 1 = runtime errors
+"""
+reference_files = [
+    "src/fyrnheim/quality/runner.py",
+    "src/fyrnheim/quality/results.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/cli.py",
+]

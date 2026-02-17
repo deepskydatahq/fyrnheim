@@ -1,0 +1,70 @@
+id = "M002-E001"
+parent = "M002"
+title = "CLI foundation and project config"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The `fyr` command exists and works. `fyr --help` shows available commands,
+`fyr init myproject` scaffolds a working project directory with config file
+and sample entity, and the config loading plumbing is in place for all other
+commands to build on.
+"""
+
+job_story = """
+When I install fyrnheim and want to start a new project,
+I want to run `fyr init myproject` and get a working scaffold,
+so that I can immediately start defining entities without figuring out
+the directory structure myself.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "`fyr --help` prints available commands (init, generate, run, check, list) with descriptions",
+    "`fyr init myproject` creates myproject/ with entities/, data/, generated/ dirs and fyrnheim.yaml",
+    "fyrnheim.yaml contains entities_dir, data_dir, output_dir, backend with sensible defaults",
+    "`fyr init myproject` also creates a sample entity file that works with `fyr generate`",
+    "`fyr init` with no argument scaffolds in the current directory",
+    "Running `fyr init` in an existing project warns but does not overwrite existing files",
+    "click is added as a dependency in pyproject.toml",
+    "Entry point `fyr = fyrnheim.cli:main` works after pip install",
+    "Config loading: commands read fyrnheim.yaml and resolve paths relative to project root",
+    "Tests cover init scaffolding (happy path, existing dir, missing arg)",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/cli/",
+    "tests/test_cli.py",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+]
+dependencies = []
+
+[notes]
+considerations = """
+This epic is the foundation — all other CLI epics depend on it.
+
+Key decisions:
+- Use click as the CLI framework (lighter than typer, no extra deps like rich)
+- CLI module structure: either single src/fyrnheim/cli.py or src/fyrnheim/cli/ package
+  (start with single file, split later if needed)
+- Config file format: fyrnheim.yaml with these keys:
+    entities_dir: entities/
+    data_dir: data/
+    output_dir: generated/
+    backend: duckdb
+- `fyr init` sample entity: simplified version of examples/entities/customers.py
+- `fyr init` sample data: copy or generate a small parquet file for the sample entity
+- Config resolution: look for fyrnheim.yaml in cwd, then walk up parents
+"""
+
+estimated_stories = 3

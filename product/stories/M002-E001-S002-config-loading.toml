@@ -1,0 +1,75 @@
+id = "M002-E001-S002"
+parent = "M002-E001"
+title = "Project config loading from fyrnheim.yaml"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+A load_config() function finds and parses fyrnheim.yaml, resolving paths
+relative to the config file location. CLI commands can call it to get
+project settings without each command reimplementing config logic.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_config() finds fyrnheim.yaml in the current directory"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_config() walks up parent directories if fyrnheim.yaml is not in cwd"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_config() returns a dataclass/dict with entities_dir, data_dir, output_dir, backend"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Paths in config are resolved relative to the directory containing fyrnheim.yaml"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing keys get sensible defaults: entities_dir='entities', data_dir='data', output_dir='generated', backend='duckdb'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_config() returns None (or raises) when no fyrnheim.yaml is found anywhere"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CLI commands accept --entities-dir, --data-dir, --output-dir flags that override config values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Flag overrides take precedence over config file values"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+]
+input_fixtures = []
+depends_on = ["M002-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- Config module: either in cli.py or a small src/fyrnheim/config.py
+- Use pyyaml (already a dependency) to parse fyrnheim.yaml
+- Config dataclass:
+    @dataclass
+    class ProjectConfig:
+        project_root: Path
+        entities_dir: Path
+        data_dir: Path
+        output_dir: Path
+        backend: str = "duckdb"
+- Walk-up logic: start at cwd, check for fyrnheim.yaml, go to parent, repeat until /
+- CLI flag overrides: use click's callback or a shared decorator that merges config + flags
+- Test with tmp_path fixtures that create fyrnheim.yaml in various locations
+"""
+reference_files = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+]

@@ -1,0 +1,77 @@
+id = "M002-E004-S001"
+parent = "M002-E004"
+title = "Rewrite README with project overview and core concepts"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+README.md is rewritten with a compelling project description, install
+instructions, core concepts explanation, and comparison to dbt. A data
+engineer reading it understands what Fyrnheim is and why they'd use it.
+"""
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "README opens with a one-line tagline and 2-3 sentence description of what Fyrnheim does"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Install section shows `pip install fyrnheim[duckdb]`"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Core concepts section explains: entities, layers (prep/dimension/snapshot), primitives, components, quality checks"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Each concept is 1-3 sentences with a short code snippet or example"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "'Why Fyrnheim?' section compares to dbt in a factual, concise way (typed vs untyped, Python vs SQL+Jinja, local dev)"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Status section honestly states alpha status and what's supported (DuckDB) vs planned (BigQuery, Snowflake)"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "License section states MIT"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "README is under 200 lines total"
+
+[context]
+relevant_paths = [
+    "README.md",
+    "VISION.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Structure:
+1. # Fyrnheim + tagline
+2. ## What is Fyrnheim? (2-3 sentences from VISION.md, condensed)
+3. ## Install
+4. ## Core Concepts (entities, layers, primitives, components, quality)
+5. ## Why Fyrnheim? (vs dbt table or bullet points)
+6. ## Status
+7. ## License
+
+Draw from VISION.md but make it much more concise. The README is marketing +
+quick reference, not documentation.
+
+Do NOT include the quick-start tutorial yet — that's S002 and needs real
+CLI output from E001/E002.
+"""
+reference_files = [
+    "VISION.md",
+    "README.md",
+]

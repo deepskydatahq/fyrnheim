@@ -1,0 +1,79 @@
+id = "M002-E001-S001"
+parent = "M002-E001"
+title = "Add click dependency and create CLI skeleton with main group"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The `fyr` CLI command exists with a click group, `fyr --help` shows the
+command list, and `fyr --version` prints the version. All subcommands
+are registered as stubs (no-op) so the help text is complete from day one.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "click>=8.1.0 is added to pyproject.toml core dependencies"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`uv pip install -e '.[duckdb,dev]'` succeeds with click installed"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "src/fyrnheim/cli.py exists with a click.group() named `main`"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr --help` prints a usage line and lists commands: init, generate, run, check, list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr --version` prints 'fyr, version X.Y.Z' using fyrnheim.__version__"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Each subcommand (init, generate, run, check, list) is registered with a one-line help string"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Subcommands are stubs that print 'Not implemented yet' — they will be filled in by later stories"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing 452 tests still pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+- Add `click>=8.1.0` to pyproject.toml dependencies list
+- Create src/fyrnheim/cli.py with:
+    import click
+    from fyrnheim import __version__
+
+    @click.group()
+    @click.version_option(version=__version__, prog_name="fyr")
+    def main(): ...
+
+    @main.command()
+    def init(): ...
+    # etc for generate, run, check, list
+
+- The entry point `fyr = "fyrnheim.cli:main"` already exists in pyproject.toml
+- Keep it simple: single file, no subpackage yet
+- Test with click.testing.CliRunner
+"""
+reference_files = [
+    "src/fyrnheim/__init__.py",
+    "pyproject.toml",
+]

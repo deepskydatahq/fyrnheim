@@ -1,0 +1,93 @@
+id = "M002-E003-S001"
+parent = "M002-E003"
+title = "Shared error handler and --verbose flag for all CLI commands"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+A shared error handler wraps all CLI commands, catching known exceptions and
+printing actionable messages. The --verbose/-v flag enables full tracebacks
+and debug logging.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A shared decorator/context manager catches FileNotFoundError, ValueError, ImportError, and engine errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Caught exceptions print 'Error: {message}' to stderr, not a Python traceback"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Each error type includes a 'Hint:' line suggesting what to do (e.g., 'Run `fyr init`', 'Check fyrnheim.yaml')"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr --verbose` or `fyr -v` is a top-level flag on the main group"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "With --verbose, full Python tracebacks are printed on error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "With --verbose, logging is set to DEBUG level (shows discovery, generation, execution details)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Without --verbose, logging is set to WARNING (quiet by default)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing commands (init, generate, run, check, list) use the shared error handler"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/errors.py",
+]
+input_fixtures = []
+depends_on = ["M002-E002-S003"]
+
+[handoff]
+implementation_hints = """
+Pattern: a decorator or click pass_context that wraps command execution:
+
+    def handle_errors(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            try:
+                return f(*args, **kwargs)
+            except FileNotFoundError as e:
+                _print_error(str(e), hint="Check your fyrnheim.yaml paths")
+                raise SystemExit(1)
+            except FyrnheimEngineError as e:
+                _print_error(str(e))
+                raise SystemExit(1)
+            ...
+
+The --verbose flag should be on the main group and passed via click context:
+
+    @click.group()
+    @click.option('-v', '--verbose', is_flag=True)
+    @click.pass_context
+    def main(ctx, verbose):
+        ctx.ensure_object(dict)
+        ctx.obj['verbose'] = verbose
+        logging.basicConfig(level=logging.DEBUG if verbose else logging.WARNING)
+
+Error messages from engine/errors.py:
+- FyrnheimEngineError (base)
+- ExecutionError
+- TransformModuleError
+- SourceNotFoundError
+"""
+reference_files = [
+    "src/fyrnheim/engine/errors.py",
+    "src/fyrnheim/cli.py",
+]

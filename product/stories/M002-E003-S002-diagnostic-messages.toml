@@ -1,0 +1,87 @@
+id = "M002-E003-S002"
+parent = "M002-E003"
+title = "Specific diagnostic messages for every common failure mode"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+Every common failure a new user hits produces a specific, helpful error
+message with exact wording that guides them to the fix.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing fyrnheim.yaml: 'No fyrnheim.yaml found. Run `fyr init` to create a project.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing entities dir: 'Entities directory not found: {path}. Check entities_dir in fyrnheim.yaml.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No entities found: 'No entities found in {dir}. Create a .py file with `entity = Entity(...)`.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing data file: 'Data file not found: {path} (entity: {name}). Check data_dir in fyrnheim.yaml.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDB not installed: 'DuckDB backend not available. Install with: pip install fyrnheim[duckdb]'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity syntax error: 'Error loading {file}: {error} (line {lineno})'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Duplicate entity name: 'Duplicate entity name \"{name}\": defined in {path1} and {path2}'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Each test creates the specific failure condition and asserts on the exact error message substring"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All 7 error scenarios tested via CliRunner with exit code 1"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/errors.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/runner.py",
+]
+input_fixtures = []
+depends_on = ["M002-E003-S001"]
+
+[handoff]
+implementation_hints = """
+This story is mostly about writing tests and tuning error messages.
+
+The error handler from S001 catches exceptions — this story adds specific
+hint messages per exception type and context. Some hints need to inspect
+the exception to provide good guidance:
+
+- FileNotFoundError: check if it mentions 'entities' or 'data' to pick the right hint
+- ImportError with 'duckdb': suggest pip install fyrnheim[duckdb]
+- ValueError with 'Duplicate entity': the existing error message already includes both paths
+
+For the DuckDB-not-installed check, add an early check in `fyr run` / `fyr check`:
+    try:
+        import duckdb
+    except ImportError:
+        _print_error("DuckDB backend not available.", hint="Install with: pip install fyrnheim[duckdb]")
+        raise SystemExit(1)
+
+Test approach: use tmp_path to create broken project structures (missing dirs,
+bad entity files, no data) and invoke via CliRunner, asserting on output content.
+"""
+reference_files = [
+    "src/fyrnheim/engine/errors.py",
+    "src/fyrnheim/engine/registry.py",
+]

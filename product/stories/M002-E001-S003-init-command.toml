@@ -1,0 +1,96 @@
+id = "M002-E001-S003"
+parent = "M002-E001"
+title = "Implement fyr init command with scaffolding and sample entity"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+`fyr init myproject` creates a ready-to-use project directory with config,
+directories, a sample entity, and sample data so that `fyr generate && fyr run`
+works immediately after init.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr init myproject` creates myproject/ directory with entities/, data/, generated/ subdirs"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr init myproject` creates myproject/fyrnheim.yaml with default config values"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr init myproject` creates myproject/entities/customers.py with a working sample entity"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr init myproject` creates myproject/data/customers.parquet with sample data (at least 5 rows)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr init` with no argument scaffolds in the current directory (creates fyrnheim.yaml, entities/, data/ in cwd)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Running `fyr init` in a directory that already has fyrnheim.yaml prints a warning and does not overwrite existing files"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Running `fyr init` in a directory with existing entities/ preserves existing entity files and only adds missing scaffold files"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "After `fyr init myproject`, running `cd myproject && fyr generate` succeeds (sample entity generates valid code)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output prints what was created: directory names, file names, and a 'next steps' hint"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+]
+input_fixtures = [
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+]
+depends_on = ["M002-E001-S002"]
+
+[handoff]
+implementation_hints = """
+- Sample entity: simplified version of examples/entities/customers.py
+  (maybe fewer computed columns to keep it approachable)
+- Sample data: either bundle examples/data/customers.parquet as package data,
+  or generate it inline with a small Python snippet using pandas/pyarrow
+  Bundling is simpler — use importlib.resources or __file__ relative path
+- Add examples/data/customers.parquet to package_data in pyproject.toml if bundling
+- fyrnheim.yaml template:
+    # Fyrnheim project config
+    entities_dir: entities
+    data_dir: data
+    output_dir: generated
+    backend: duckdb
+- Print output like:
+    Created myproject/
+      fyrnheim.yaml
+      entities/customers.py
+      data/customers.parquet
+      generated/
+
+    Next steps:
+      cd myproject
+      fyr generate
+      fyr run
+- For the 'no overwrite' behavior: check each file before writing, skip if exists, warn
+"""
+reference_files = [
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+    "src/fyrnheim/cli.py",
+]

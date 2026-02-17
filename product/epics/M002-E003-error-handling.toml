@@ -1,0 +1,72 @@
+id = "M002-E003"
+parent = "M002"
+title = "Error handling and helpful diagnostics"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+Every common failure mode produces a clear, actionable error message instead
+of a Python traceback. Users know what went wrong and how to fix it.
+"""
+
+job_story = """
+When something goes wrong (missing files, bad config, import errors),
+I want the CLI to tell me exactly what's wrong and how to fix it,
+so that I don't have to read Python tracebacks or guess at the problem.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Missing fyrnheim.yaml: prints 'No fyrnheim.yaml found. Run `fyr init` to create a project.'",
+    "Missing entities directory: prints the path and suggests checking fyrnheim.yaml",
+    "No entities found: prints 'No entities found in {dir}. Create a .py file with `entity = Entity(...)`.'",
+    "Missing data files: prints which file is missing and for which entity",
+    "DuckDB not installed: prints 'DuckDB backend not available. Install with: pip install fyrnheim[duckdb]'",
+    "Entity import error (syntax error in entity file): prints file path, line number, and error",
+    "Duplicate entity names: prints both file paths",
+    "No tracebacks shown by default — only with `fyr --verbose` or `fyr -v`",
+    "--verbose flag shows full tracebacks and debug logging",
+    "Tests cover each error scenario with assertions on the error message content",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/cli/",
+    "tests/test_cli.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/errors.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/registry.py",
+]
+dependencies = ["M002-E002"]
+
+[notes]
+considerations = """
+The existing code already raises meaningful exceptions:
+- FileNotFoundError from EntityRegistry.discover() and run()
+- ValueError for unsupported backends and duplicate entities
+- ImportError for bad entity files
+- TransformModuleError, ExecutionError, SourceNotFoundError from engine
+
+The CLI layer needs to catch these and format them nicely. Pattern:
+
+  try:
+      result = run(...)
+  except FileNotFoundError as e:
+      click.echo(f"Error: {e}", err=True)
+      click.echo("Hint: check your fyrnheim.yaml entities_dir setting", err=True)
+      raise SystemExit(1)
+
+The --verbose flag should configure logging to DEBUG and let exceptions
+propagate with full tracebacks.
+
+Consider a shared error handler decorator for all commands to avoid
+repetition.
+"""
+
+estimated_stories = 2

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from fyrnheim.engine.errors import SourceNotFoundError
 from fyrnheim.engine.executor import DuckDBExecutor
 from fyrnheim.engine.registry import EntityRegistry
 from fyrnheim.engine.resolution import _extract_dependencies, resolve_execution_order
@@ -98,7 +99,12 @@ def _register_entity_source(
     if duckdb_path:
         resolved = data_dir / duckdb_path
         source_name = f"source_{entity.name}"
-        executor.register_parquet(source_name, resolved)
+        try:
+            executor.register_parquet(source_name, resolved)
+        except SourceNotFoundError:
+            raise SourceNotFoundError(
+                f"Data file not found: {resolved} (entity: {entity.name})"
+            ) from None
 
 
 # ---------------------------------------------------------------------------

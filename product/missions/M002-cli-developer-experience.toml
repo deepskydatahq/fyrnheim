@@ -1,0 +1,87 @@
+id = "M002"
+title = "Build the fyr CLI and end-to-end developer experience"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+A data engineer can `pip install fyrnheim[duckdb]`, run `fyr init` to scaffold
+a project, define an entity in Python, then `fyr generate` and `fyr run` to see
+results — all with clear terminal output showing what happened. The README walks
+them through this in under 5 minutes.
+"""
+
+user_progress = "From 'library I can only use via Python API, no idea where to start' to 'fyr init, define entity, fyr run — working pipeline in 5 minutes'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "`pip install fyrnheim[duckdb]` makes `fyr` available as a CLI command",
+    "`fyr init myproject` creates a project directory with entities/, data/, and fyrnheim.yaml config",
+    "`fyr generate` discovers entities and generates transform modules, printing what it did",
+    "`fyr run` executes transforms on DuckDB, printing entity names, layers, row counts, and timings",
+    "`fyr check` runs quality checks and prints pass/fail results per entity",
+    "`fyr list` shows discovered entities with their layers and status",
+    "All commands produce clear, readable terminal output (not raw dicts or tracebacks)",
+    "Errors produce helpful messages: missing entity dir, no entities found, missing data files, backend not installed",
+    "README.md contains a quick-start tutorial that covers install → init → define entity → generate → run",
+    "`fyr --help` and `fyr <command> --help` show useful documentation",
+    "Test suite covers CLI commands: init, generate, run, check, list (both happy path and error cases)",
+    "Existing 452 tests still pass — CLI is additive, no regression",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/cli/",
+    "tests/test_cli.py",
+    "tests/test_cli/",
+    "README.md",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "product/missions/M001-extract-core-framework.toml",
+]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/_generate.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/quality/runner.py",
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+]
+
+[notes]
+considerations = """
+CLI commands map directly to existing Python API:
+
+  fyr init        → scaffold project (new functionality)
+  fyr generate    → calls fyrnheim.generate()
+  fyr run         → calls fyrnheim.run()
+  fyr check       → calls fyrnheim.quality.QualityRunner
+  fyr list        → calls fyrnheim.engine.EntityRegistry.discover()
+
+Key decisions:
+- Use a lightweight CLI framework (click, typer, or plain argparse) — keep deps minimal
+- Project config file: fyrnheim.yaml with entities_dir, data_dir, output_dir, backend
+- Default backend: duckdb (error with helpful message if duckdb extra not installed)
+- Terminal output: structured and readable but NOT a TUI — keep it simple
+- `fyr init` should include a sample entity so `fyr generate && fyr run` works immediately
+- Error messages should guide the user toward the fix, not just report the failure
+
+What this mission does NOT include:
+- BigQuery executor (that's a separate backend mission)
+- Activity/analytics layer generation (separate layer-completion mission)
+- Watch mode / hot reload (future enhancement)
+- Config file schema validation (keep it simple — just yaml with known keys)
+- Publishing to PyPI (separate release mission)
+
+Dependencies to add:
+- click or typer (CLI framework) — prefer click for fewer transitive deps
+- pyyaml already in deps (for config file)
+
+The existing `fyr = "fyrnheim.cli:main"` entry point in pyproject.toml is already declared.
+The CLI module just needs to be built.
+"""

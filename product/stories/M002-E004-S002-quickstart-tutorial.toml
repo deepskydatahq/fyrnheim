@@ -1,0 +1,76 @@
+id = "M002-E004-S002"
+parent = "M002-E004"
+title = "Add quick-start tutorial to README with real CLI output"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The README contains a step-by-step quick-start tutorial that takes a user
+from install to a working pipeline in under 5 minutes, with real `fyr`
+command output so they know exactly what to expect.
+"""
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Quick-start section appears right after the install section in README"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Tutorial covers 5 steps: install, fyr init, (optional: show entity code), fyr generate, fyr run"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Each step shows the command to run and the expected terminal output"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Terminal output is captured from actual `fyr` commands (not made up)"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Tutorial shows the sample entity code that `fyr init` creates, with brief annotations"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Tutorial ends with a 'next steps' section pointing to examples/ and linking to core concepts"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "All commands in the tutorial are copy-pasteable and work on a fresh `pip install fyrnheim[duckdb]`"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "README still under 200 lines total (including the overview from S001)"
+
+[context]
+relevant_paths = [
+    "README.md",
+    "examples/entities/customers.py",
+    "src/fyrnheim/cli.py",
+]
+input_fixtures = []
+depends_on = ["M002-E004-S001", "M002-E002-S003"]
+
+[handoff]
+implementation_hints = """
+This story MUST be done after E001 and E002 are implemented, because it
+needs to capture real CLI output.
+
+Workflow:
+1. Run `fyr init quickstart-demo` in a temp dir
+2. Run `fyr generate` and `fyr run` in the demo dir
+3. Capture the terminal output
+4. Paste into README with ``` code blocks
+5. Add brief annotations between steps
+
+The tutorial should feel effortless — 5 commands, done. No explanation of
+every flag, just the golden path. Advanced usage goes in docs later.
+"""
+reference_files = [
+    "README.md",
+    "examples/entities/customers.py",
+]

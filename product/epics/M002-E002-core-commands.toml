@@ -1,0 +1,83 @@
+id = "M002-E002"
+parent = "M002"
+title = "Core CLI commands: generate, run, check, list"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The four core commands work end-to-end: `fyr generate` produces transform modules,
+`fyr run` executes them on DuckDB, `fyr check` runs quality checks, and `fyr list`
+shows discovered entities. Each command reads fyrnheim.yaml for config and prints
+clear, structured terminal output.
+"""
+
+job_story = """
+When I have defined entities in my fyrnheim project,
+I want to run `fyr generate`, `fyr run`, and `fyr check` from my terminal,
+so that I can iterate on entity definitions without writing Python scripts to
+call the library API.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "`fyr generate` discovers entities, generates transform modules, prints entity names and output paths",
+    "`fyr generate --dry-run` shows what would be generated without writing files",
+    "`fyr run` executes all entities on DuckDB, prints per-entity status, row counts, and timing",
+    "`fyr run --entity customers` runs only the specified entity",
+    "`fyr check` runs quality checks and prints pass/fail per check per entity",
+    "`fyr list` shows discovered entities with their layers (prep, dimension, snapshot, etc.)",
+    "All commands respect fyrnheim.yaml config (entities_dir, data_dir, output_dir, backend)",
+    "All commands support --entities-dir, --data-dir, --output-dir flags to override config",
+    "Exit codes: 0 for success, 1 for errors, 2 for quality check failures",
+    "Tests cover each command's happy path and common error cases",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/cli/",
+    "tests/test_cli.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/_generate.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/quality/runner.py",
+    "src/fyrnheim/engine/registry.py",
+]
+dependencies = ["M002-E001"]
+
+[notes]
+considerations = """
+Each command is a thin wrapper around an existing Python API:
+
+  fyr generate  → fyrnheim.generate() for each discovered entity
+  fyr run       → fyrnheim.run(entities_dir, data_dir)
+  fyr check     → fyrnheim.quality.QualityRunner (needs executor connection)
+  fyr list      → fyrnheim.engine.EntityRegistry.discover()
+
+The run() function already does discover + generate + execute + quality checks.
+The CLI needs to add readable terminal output on top of it. Consider whether
+`fyr run` should delegate to run() entirely or build its own pipeline for
+better output control.
+
+`fyr check` is interesting because the current run() function runs quality
+checks inline. The CLI command should support running checks standalone
+(against previously-generated tables), which may need a slight API extension.
+
+Output formatting: plain text with alignment, not tables or colors (keep it
+simple, no rich dependency). Something like:
+
+  $ fyr run
+  Discovering entities... 2 found
+  Running on duckdb
+
+    customers    prep → dim       12 rows    0.3s  ✓
+    products     prep → dim       48 rows    0.2s  ✓
+
+  Done: 2 success, 0 errors (0.5s)
+"""
+
+estimated_stories = 4

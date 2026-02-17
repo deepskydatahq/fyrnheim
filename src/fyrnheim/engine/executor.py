@@ -152,15 +152,15 @@ class DuckDBExecutor:
         conn = self._conn
         backend = "duckdb"
 
-        # Source function
-        source_fn = getattr(module, f"source_{entity_name}", None)
-        if source_fn is not None:
-            t = source_fn(conn, backend)
+        # Prefer registered source (has correct resolved path from runner)
+        source_name = f"source_{entity_name}"
+        if source_name in self._registered_sources:
+            t = conn.table(source_name)
         else:
-            # Try to find a registered source table directly
-            source_name = f"source_{entity_name}"
-            if source_name in self._registered_sources:
-                t = conn.table(source_name)
+            # Fall back to source function in generated code
+            source_fn = getattr(module, f"source_{entity_name}", None)
+            if source_fn is not None:
+                t = source_fn(conn, backend)
             else:
                 raise ExecutionError(
                     f"No source function or registered source for {entity_name}"

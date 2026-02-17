@@ -1,0 +1,100 @@
+id = "M002-E002-S002"
+parent = "M002-E002"
+title = "Implement `fyr generate` command wrapping fyrnheim.generate()"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The `fyr generate` command discovers all entities, generates Ibis transform modules
+for each one via fyrnheim.generate(), and prints per-entity status showing entity
+name, output path, and whether the file was written or unchanged. Supports --dry-run
+to preview without writing.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr generate` discovers entities and calls fyrnheim.generate() for each, writing transform modules to output_dir"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output prints one line per entity: entity name, output file path, and status (written/unchanged)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output format example: '  customers   generated/customers_transforms.py   written'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A summary line prints counts, e.g. 'Generated: 2 written, 1 unchanged'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr generate --dry-run` calls generate(entity, dry_run=True), prints what would be generated, does not write files"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dry-run output is clearly labeled, e.g. 'Dry run — no files written'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Respects fyrnheim.yaml config for entities_dir and output_dir"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Supports --entities-dir and --output-dir flags to override config values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When an entity fails to generate, prints the error, continues to next entity, and exits with code 1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Exit code 0 when all entities generate successfully; exit code 1 when any entity fails"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests use click.testing.CliRunner with a tmp_path containing a minimal entity and fyrnheim.yaml"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/_generate.py",
+    "src/fyrnheim/engine/registry.py",
+]
+input_fixtures = [
+    "examples/entities/customers.py",
+]
+depends_on = ["M002-E001-S002"]
+
+[handoff]
+implementation_hints = """
+- Replace the stub `generate` command in cli.py with a real implementation
+- Core logic:
+    config = load_config()
+    registry = EntityRegistry()
+    registry.discover(entities_dir)
+    errors = 0
+    for name, info in registry.items():
+        try:
+            result = generate(info.entity, output_dir=output_dir, dry_run=dry_run)
+            status = "written" if result.written else "unchanged"
+            click.echo(f"  {name:<20s} {result.output_path}   {status}")
+        except Exception as e:
+            click.echo(f"  {name:<20s} ERROR: {e}", err=True)
+            errors += 1
+    sys.exit(1 if errors else 0)
+- Import generate from fyrnheim._generate (or fyrnheim.generate via lazy import)
+- Add click.option('--dry-run', is_flag=True) to the command
+- The generate() function returns GenerateResult with entity_name, code, output_path, written
+- Test: create a tmp entity, run CliRunner, assert output file exists and output mentions 'written'
+- Test dry-run: assert output file does NOT exist and output mentions 'dry run'
+"""
+reference_files = [
+    "src/fyrnheim/_generate.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/cli.py",
+]

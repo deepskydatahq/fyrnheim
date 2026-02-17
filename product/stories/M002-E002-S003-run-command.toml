@@ -1,0 +1,107 @@
+id = "M002-E002-S003"
+parent = "M002-E002"
+title = "Implement `fyr run` command wrapping fyrnheim.run()"
+status = "done"
+created = 2026-02-17
+
+[outcome]
+description = """
+The `fyr run` command executes the full fyrnheim pipeline (discover, generate,
+execute, quality checks) via fyrnheim.engine.runner.run(), printing structured
+per-entity progress with row counts, timing, and pass/fail status. Supports
+--entity flag to run a single entity.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr run` calls fyrnheim.engine.runner.run(entities_dir, data_dir) and prints per-entity results"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output shows discovery count, e.g. 'Discovering entities... 2 found'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output shows backend, e.g. 'Running on duckdb'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Per-entity output shows name, layer chain, row count, duration, and status marker"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output format example: '  customers    prep -> dim       12 rows    0.3s  ok'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A summary line prints counts and total time, e.g. 'Done: 2 success, 0 errors (0.5s)'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr run --entity customers` runs only the named entity via run_entity()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When --entity specifies an unknown entity name, prints an error and exits with code 1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Respects fyrnheim.yaml config for entities_dir, data_dir, output_dir, and backend"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Supports --entities-dir, --data-dir, and --output-dir flags to override config values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Exit code 0 when RunResult.ok is True; exit code 1 when any entity errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Exit code 2 when quality checks fail (all entities ran but checks reported failures)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests use click.testing.CliRunner with tmp_path containing a sample entity, data parquet, and fyrnheim.yaml"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/executor.py",
+]
+input_fixtures = [
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+]
+depends_on = ["M002-E001-S002"]
+
+[handoff]
+implementation_hints = """
+- Replace the stub `run` command in cli.py with a real implementation
+- Core logic:
+    config = load_config()
+    result = run(entities_dir, data_dir, backend=backend, generated_dir=output_dir)
+    for er in result.entities:
+        status_mark = "ok" if er.status == "success" else er.status
+        click.echo(f"  {er.entity_name:<16s} {er.row_count or '-':>6} rows  {er.duration_seconds:5.1f}s  {status_mark}")
+    click.echo(f"\nDone: {result.success_count} success, {result.error_count} errors ({result.total_duration_seconds:.1f}s)")
+- For --entity flag: discover first, look up the entity, then call run_entity() directly
+- The run() function returns RunResult with .entities list of EntityRunResult,
+  each with entity_name, status, row_count, duration_seconds, quality_results
+- Quality check failures: inspect quality_results on each EntityRunResult.
+  If any check has passed=False, exit with code 2 (distinct from runtime errors=1)
+- For layer chain display, discover via EntityRegistry to get EntityInfo.layers,
+  then join as "prep -> dim" etc.
+- Test with a real entity + parquet file in tmp_path for full integration;
+  consider mocking run() for unit-level tests of output formatting
+"""
+reference_files = [
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/cli.py",
+]

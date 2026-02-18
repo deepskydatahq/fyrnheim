@@ -1,11 +1,12 @@
 """Tests for fyrnheim.config — project configuration loading."""
 
+
 from pathlib import Path
 
 import pytest
 import yaml
 
-from fyrnheim.config import ConfigError, ProjectConfig, find_config, load_config
+from fyrnheim.config import ConfigError, find_config, load_config, resolve_config
 
 
 class TestFindConfig:
@@ -83,6 +84,26 @@ class TestLoadConfig:
         with pytest.raises(ConfigError, match="Expected a mapping"):
             load_config(tmp_path)
 
+    def test_absolute_path_preserved(self, tmp_path):
+        abs_ent = tmp_path / "elsewhere" / "my_entities"
+        (tmp_path / "fyrnheim.yaml").write_text(f"entities_dir: {abs_ent}\n")
+        cfg = load_config(tmp_path)
+        assert cfg.entities_dir == abs_ent
+
+    def test_mixed_absolute_and_relative(self, tmp_path):
+        abs_data = tmp_path / "shared_data"
+        (tmp_path / "fyrnheim.yaml").write_text(
+            yaml.dump({
+                "entities_dir": "src/entities",
+                "data_dir": str(abs_data),
+                "output_dir": "build/gen",
+            })
+        )
+        cfg = load_config(tmp_path)
+        assert cfg.entities_dir == tmp_path / "src" / "entities"
+        assert cfg.data_dir == abs_data
+        assert cfg.output_dir == tmp_path / "build" / "gen"
+
     def test_unknown_keys_ignored(self, tmp_path):
         (tmp_path / "fyrnheim.yaml").write_text("unknown_key: value\nbackend: duckdb\n")
         cfg = load_config(tmp_path)
@@ -96,3 +117,39 @@ class TestProjectConfig:
         cfg = load_config(tmp_path)
         with pytest.raises(AttributeError):
             cfg.backend = "bigquery"
+
+
+class TestResolveConfig:
+    def test_no_config_no_overrides(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.entities_dir == Path("entities")
+        assert cfg.data_dir == Path("data")
+        assert cfg.output_dir == Path("generated")
+        assert cfg.backend == "duckdb"
+
+    def test_config_values_used(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("entities_dir: my_ents\nbackend: bigquery\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.entities_dir == tmp_path / "my_ents"
+        assert cfg.backend == "bigquery"
+
+    def test_cli_overrides_config(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("entities_dir: config_ents\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(entities_dir="/cli/path")
+        assert cfg.entities_dir == Path("/cli/path")
+
+    def test_partial_overrides(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("entities_dir: cfg_ent\ndata_dir: cfg_dat\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(entities_dir="cli_ent")
+        assert cfg.entities_dir == Path("cli_ent")
+        assert cfg.data_dir == tmp_path / "cfg_dat"
+
+    def test_project_root_from_config(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("{}\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.project_root == tmp_path

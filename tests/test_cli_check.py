@@ -1,6 +1,5 @@
 """Tests for fyr check command."""
 
-from pathlib import Path
 
 import ibis
 from click.testing import CliRunner

@@ -38,6 +38,14 @@ def find_config(start_dir: Path) -> Path | None:
         current = parent
 
 
+def _resolve_dir(project_root: Path, raw_path: str) -> Path:
+    """Resolve a directory: absolute paths kept as-is, relative paths joined to project_root."""
+    p = Path(raw_path)
+    if p.is_absolute():
+        return p
+    return project_root / p
+
+
 def load_config(start_dir: Path) -> ProjectConfig | None:
     """Find and parse fyrnheim.yaml. Returns None if not found, raises ConfigError if malformed."""
     config_path = find_config(start_dir)
@@ -59,8 +67,41 @@ def load_config(start_dir: Path) -> ProjectConfig | None:
 
     return ProjectConfig(
         project_root=project_root,
-        entities_dir=project_root / raw.get("entities_dir", "entities"),
-        data_dir=project_root / raw.get("data_dir", "data"),
-        output_dir=project_root / raw.get("output_dir", "generated"),
+        entities_dir=_resolve_dir(project_root, raw.get("entities_dir", "entities")),
+        data_dir=_resolve_dir(project_root, raw.get("data_dir", "data")),
+        output_dir=_resolve_dir(project_root, raw.get("output_dir", "generated")),
         backend=raw.get("backend", "duckdb"),
+    )
+
+
+@dataclass(frozen=True)
+class ResolvedConfig:
+    """Effective configuration after merging config file with CLI overrides."""
+
+    entities_dir: Path
+    data_dir: Path
+    output_dir: Path
+    backend: str
+    project_root: Path
+
+
+def resolve_config(
+    *,
+    entities_dir: str | None = None,
+    data_dir: str | None = None,
+    output_dir: str | None = None,
+) -> ResolvedConfig:
+    """Load project config and merge CLI overrides.
+
+    CLI args take precedence over fyrnheim.yaml values,
+    which take precedence over built-in defaults.
+    """
+    config = load_config(Path.cwd())
+
+    return ResolvedConfig(
+        entities_dir=Path(entities_dir) if entities_dir else (config.entities_dir if config else Path("entities")),
+        data_dir=Path(data_dir) if data_dir else (config.data_dir if config else Path("data")),
+        output_dir=Path(output_dir) if output_dir else (config.output_dir if config else Path("generated")),
+        backend=config.backend if config else "duckdb",
+        project_root=config.project_root if config else Path("."),
     )

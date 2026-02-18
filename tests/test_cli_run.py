@@ -1,6 +1,5 @@
 """Tests for fyr run command."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 from click.testing import CliRunner

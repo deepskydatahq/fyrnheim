@@ -244,6 +244,39 @@ def dim_items(prep_items):
             assert result.row_count == 3
 
 
+    def test_execute_source_fn_fallback(self, tmp_path):
+        """source_fn in module is used when no source is registered."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+            # Deliberately do NOT register_parquet -- forces source_fn path
+            assert "source_customers" not in executor._registered_sources
+            result = executor.execute("customers")
+            assert result.success is True
+            assert result.row_count == 3
+
+    def test_execute_no_source_raises(self, tmp_path):
+        """Raises ExecutionError when no registered source and no source_fn."""
+        gen_dir = tmp_path / "generated"
+        code = """\
+import ibis
+
+def prep_widgets(source_widgets):
+    return source_widgets
+
+def dim_widgets(prep_widgets):
+    return prep_widgets
+"""
+        _create_transform_module(gen_dir, "widgets", code)
+
+        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+            with pytest.raises(ExecutionError, match="No source function or registered source"):
+                executor.execute("widgets")
+
+
 class TestExecutionResultDataclass:
     """Test ExecutionResult frozen dataclass."""
 

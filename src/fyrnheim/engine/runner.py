@@ -103,7 +103,8 @@ def _register_entity_source(
             executor.register_parquet(source_name, resolved)
         except SourceNotFoundError:
             raise SourceNotFoundError(
-                f"Data file not found: {resolved} (entity: {entity.name})"
+                f"Data file not found: {duckdb_path} "
+                f"(entity: {entity.name}, data_dir: {data_dir})"
             ) from None
 
 

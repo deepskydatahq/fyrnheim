@@ -1,6 +1,5 @@
 """Tests for fyr list command."""
 
-from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -46,7 +45,7 @@ def _make_project(tmp_path, entities):
 
 class TestListDiscoversEntities:
     def test_list_discovers_entities(self, tmp_path, monkeypatch):
-        entities_dir = _make_project(tmp_path, [("customers", ENTITY_WITH_DIM)])
+        _make_project(tmp_path, [("customers", ENTITY_WITH_DIM)])
         monkeypatch.chdir(tmp_path)
         result = CliRunner().invoke(main, ["list"])
         assert result.exit_code == 0

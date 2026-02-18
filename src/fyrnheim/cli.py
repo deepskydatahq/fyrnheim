@@ -83,7 +83,7 @@ def handle_errors(f):
                     click.echo(f"Error loading {exc.filename}: {exc.msg} (line {exc.lineno})", err=True)
                 else:
                     click.echo(f"Error: {exc}", err=True)
-            raise SystemExit(1)
+            raise SystemExit(1) from None
         except Exception as exc:
             ctx = click.get_current_context(silent=True)
             verbose = (ctx.obj or {}).get("verbose", False) if ctx else False
@@ -96,7 +96,7 @@ def handle_errors(f):
                 if hint:
                     click.echo(f"Hint: {hint}", err=True)
 
-            raise SystemExit(1)
+            raise SystemExit(1) from None
 
     return wrapper
 
@@ -153,7 +153,7 @@ _LAYER_SHORT = {"dimension": "dim"}
 
 
 def _format_layers(layers: list[str]) -> str:
-    return " -> ".join(_LAYER_SHORT.get(l, l) for l in layers)
+    return " -> ".join(_LAYER_SHORT.get(layer, layer) for layer in layers)
 
 
 def _has_quality_failures(entities: list) -> bool:
@@ -263,25 +263,23 @@ def init(project_name: str | None) -> None:
 def generate(dry_run: bool, entities_dir: str | None, output_dir: str | None) -> None:
     """Generate transformation code from entity definitions."""
     from fyrnheim._generate import generate as _generate_fn
-    from fyrnheim.config import load_config
+    from fyrnheim.config import resolve_config
     from fyrnheim.engine.registry import EntityRegistry
 
-    config = load_config(Path.cwd())
-    entities_path = Path(entities_dir) if entities_dir else (config.entities_dir if config else Path("entities"))
-    out_path = Path(output_dir) if output_dir else (config.output_dir if config else Path("generated"))
+    cfg = resolve_config(entities_dir=entities_dir, output_dir=output_dir)
 
-    if not entities_path.exists():
-        click.echo(f"Error: Entities directory not found: {entities_path}", err=True)
+    if not cfg.entities_dir.exists():
+        click.echo(f"Error: Entities directory not found: {cfg.entities_dir}", err=True)
         raise SystemExit(1)
 
     registry = EntityRegistry()
-    registry.discover(entities_path)
+    registry.discover(cfg.entities_dir)
 
     if len(registry) == 0:
-        click.echo(f"No entities found in {entities_path}")
+        click.echo(f"No entities found in {cfg.entities_dir}")
         return
 
-    click.echo(f"Generating transforms from {entities_path}")
+    click.echo(f"Generating transforms from {cfg.entities_dir}")
     if dry_run:
         click.echo("Dry run -- no files will be written\n")
 
@@ -291,7 +289,7 @@ def generate(dry_run: bool, entities_dir: str | None, output_dir: str | None) ->
 
     for name, info in registry.items():
         try:
-            result = _generate_fn(info.entity, output_dir=out_path, dry_run=dry_run)
+            result = _generate_fn(info.entity, output_dir=cfg.output_dir, dry_run=dry_run)
             if result.written:
                 status = "written"
                 written += 1
@@ -322,23 +320,18 @@ def generate(dry_run: bool, entities_dir: str | None, output_dir: str | None) ->
 @handle_errors
 def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None, output_dir: str | None) -> None:
     """Execute the pipeline: discover, generate, transform, check."""
-    from fyrnheim.config import load_config
+    from fyrnheim.config import resolve_config
     from fyrnheim.engine.registry import EntityRegistry
-    from fyrnheim.engine.runner import run as engine_run
-    from fyrnheim.engine.runner import run_entity as engine_run_entity
+    from fyrnheim.engine.runner import run as engine_run, run_entity as engine_run_entity
 
-    config = load_config(Path.cwd())
-    ent_dir = Path(entities_dir) if entities_dir else (config.entities_dir if config else Path("entities"))
-    dat_dir = Path(data_dir) if data_dir else (config.data_dir if config else Path("data"))
-    out_dir = Path(output_dir) if output_dir else (config.output_dir if config else Path("generated"))
-    backend = config.backend if config else "duckdb"
+    cfg = resolve_config(entities_dir=entities_dir, data_dir=data_dir, output_dir=output_dir)
 
-    if not ent_dir.exists():
-        click.echo(f"Error: Entities directory not found: {ent_dir}", err=True)
+    if not cfg.entities_dir.exists():
+        click.echo(f"Error: Entities directory not found: {cfg.entities_dir}", err=True)
         raise SystemExit(1)
 
     registry = EntityRegistry()
-    registry.discover(ent_dir)
+    registry.discover(cfg.entities_dir)
 
     click.echo(f"Discovering entities... {len(registry)} found")
 
@@ -353,10 +346,10 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
             click.echo(f"Error: Entity '{entity_name}' not found. Available: {available}", err=True)
             raise SystemExit(1)
 
-        click.echo(f"Running {entity_name} on {backend}")
+        click.echo(f"Running {entity_name} on {cfg.backend}")
         click.echo()
 
-        er = engine_run_entity(info.entity, dat_dir, backend=backend, generated_dir=out_dir)
+        er = engine_run_entity(info.entity, cfg.data_dir, backend=cfg.backend, generated_dir=cfg.output_dir)
         _print_entity_result(er, registry)
 
         click.echo()
@@ -368,10 +361,10 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
             raise SystemExit(2)
         return
 
-    click.echo(f"Running on {backend}")
+    click.echo(f"Running on {cfg.backend}")
     click.echo()
 
-    result = engine_run(ent_dir, dat_dir, backend=backend, generated_dir=out_dir)
+    result = engine_run(cfg.entities_dir, cfg.data_dir, backend=cfg.backend, generated_dir=cfg.output_dir)
 
     for er in result.entities:
         _print_entity_result(er, registry)
@@ -396,25 +389,23 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
 @handle_errors
 def check(entity_name: str | None, entities_dir: str | None, output_dir: str | None, db_path: str | None) -> None:
     """Run quality checks against previously-executed entities."""
-    from fyrnheim.config import load_config
+    from fyrnheim.config import resolve_config
     from fyrnheim.engine.executor import DuckDBExecutor
     from fyrnheim.engine.registry import EntityRegistry
     from fyrnheim.quality import QualityRunner
 
-    config = load_config(Path.cwd())
-    ent_dir = Path(entities_dir) if entities_dir else (config.entities_dir if config else Path("entities"))
-    out_dir = Path(output_dir) if output_dir else (config.output_dir if config else Path("generated"))
+    cfg = resolve_config(entities_dir=entities_dir, output_dir=output_dir)
 
     if db_path is None:
-        convention = Path(config.project_root if config else ".") / "fyrnheim.duckdb"
+        convention = cfg.project_root / "fyrnheim.duckdb"
         db_path = str(convention) if convention.exists() else ":memory:"
 
-    if not ent_dir.exists():
-        click.echo(f"Error: Entities directory not found: {ent_dir}", err=True)
+    if not cfg.entities_dir.exists():
+        click.echo(f"Error: Entities directory not found: {cfg.entities_dir}", err=True)
         raise SystemExit(1)
 
     registry = EntityRegistry()
-    registry.discover(ent_dir)
+    registry.discover(cfg.entities_dir)
 
     if entity_name:
         info = registry.get(entity_name)
@@ -429,7 +420,7 @@ def check(entity_name: str | None, entities_dir: str | None, output_dir: str | N
         click.echo("No entities found.")
         return
 
-    executor = DuckDBExecutor(db_path=db_path, generated_dir=out_dir)
+    executor = DuckDBExecutor(db_path=db_path, generated_dir=cfg.output_dir)
     total_pass = total_fail = total_error = entities_checked = 0
     try:
         qr = QualityRunner(executor.connection)
@@ -496,23 +487,20 @@ def check(entity_name: str | None, entities_dir: str | None, output_dir: str | N
 @handle_errors
 def list_cmd(entities_dir: str | None) -> None:
     """List discovered entities."""
-    from fyrnheim.config import load_config
+    from fyrnheim.config import resolve_config
     from fyrnheim.engine.registry import EntityRegistry
 
-    config = load_config(Path.cwd())
-    if entities_dir is None:
-        entities_dir = str(config.entities_dir) if config else "entities"
+    cfg = resolve_config(entities_dir=entities_dir)
 
-    path = Path(entities_dir)
-    if not path.exists():
-        click.echo(f"Error: Entities directory not found: {entities_dir}", err=True)
+    if not cfg.entities_dir.exists():
+        click.echo(f"Error: Entities directory not found: {cfg.entities_dir}", err=True)
         raise SystemExit(1)
 
     registry = EntityRegistry()
-    registry.discover(path)
+    registry.discover(cfg.entities_dir)
 
     if len(registry) == 0:
-        click.echo(f"No entities found in {entities_dir}")
+        click.echo(f"No entities found in {cfg.entities_dir}")
         return
 
     for _name, info in registry.items():

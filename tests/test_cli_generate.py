@@ -1,6 +1,5 @@
 """Tests for fyr generate command."""
 
-from pathlib import Path
 
 from click.testing import CliRunner
 

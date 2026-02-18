@@ -1,0 +1,107 @@
+id = "M003-E003-S001"
+parent = "M003-E003"
+title = "Add analytics layer code generation to IbisCodeGenerator"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+IbisCodeGenerator has a _generate_analytics_function() method that produces an
+analytics_{name} function from AnalyticsLayer config. The generated function
+groups the dim output by date + optional dimensions and applies metric aggregations.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_generate_analytics_function() produces valid Python code that parses with ast.parse()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated function is named analytics_{entity_name} and takes dim output as input"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Input parameter name follows existing pattern: dim > prep > source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code extracts date from date_expression and groups by it"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Each AnalyticsMetric in config becomes an aggregation in the generated code"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Metrics use a safe, structured approach (not raw eval) — e.g., mapping metric_type to known Ibis agg methods"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Optional dimensions are included in the group_by"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate_module() includes analytics function when entity.layers.analytics is set"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing generation tests still pass"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/analytics.py",
+    "tests/test_ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Add _generate_analytics_function() to IbisCodeGenerator.
+
+Key design decision: How to handle metric expressions safely.
+
+Option A (recommended): Use structured metric definitions.
+The AnalyticsMetric.expression field contains Ibis expression strings like
+"_.count()" or "_['amount_cents'].sum()". Generate code that uses these as-is
+in the generated module (they execute at runtime, not at generation time).
+
+Generated code pattern:
+    def analytics_customers(dim_customers: ibis.Table) -> ibis.Table:
+        t = dim_customers
+        date_col = t.created_at.date()  # from date_expression
+        return t.group_by(
+            date=date_col,
+            # optional dimensions
+            plan=t.plan,
+        ).aggregate(
+            new_customers=t.count(),         # from metric expression
+            total_revenue=t.amount_cents.sum(),  # from metric expression
+        )
+
+The metric expressions need careful handling:
+- expression "_.count()" → replace "_" with "t" → "t.count()"
+- expression "_['amount_cents'].sum()" → "t['amount_cents'].sum()"
+- This is code that gets written to the generated file and executed at runtime
+
+Use _bind_expression() pattern (already exists) for binding column references.
+
+Update generate_module():
+    if self.entity.layers.analytics:
+        parts.append(self._generate_analytics_function())
+
+Tests: Create test entities with various metric configurations and verify:
+- Generated code parses
+- Function signature is correct
+- group_by includes date + dimensions
+- aggregate includes all metrics
+"""
+reference_files = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/analytics.py",
+    "tests/test_ibis_code_generator.py",
+]

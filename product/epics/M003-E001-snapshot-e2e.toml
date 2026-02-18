@@ -1,0 +1,74 @@
+id = "M003-E001"
+parent = "M003"
+title = "Snapshot layer end-to-end verification"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The snapshot layer generates code, executes on DuckDB, and produces correct output
+verified by E2E tests. The snapshot table has deduplication, surrogate keys, and
+optional validity ranges — all proven working with real data.
+"""
+
+job_story = """
+When I define an entity with a SnapshotLayer,
+I want `fyr generate` and `fyr run` to produce a deduplicated snapshot table,
+so that I can track entity state over time with daily snapshots.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "E2E test: entity with prep + dim + snapshot generates valid Python code",
+    "E2E test: snapshot execution on DuckDB produces correct table with ds column, snapshot_key, and deduplication",
+    "E2E test: duplicate rows are deduplicated (one row per entity per snapshot date)",
+    "E2E test: include_validity_range=True adds valid_from and valid_to columns",
+    "Executor creates output table named snapshot_{entity_name} (separate from dim_{entity_name})",
+    "Runner correctly persists both dim and snapshot tables when entity has both layers",
+    "Existing 544 tests still pass",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_e2e_pipeline.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/layer.py",
+    "tests/test_e2e_pipeline.py",
+    "tests/test_snapshot_generation.py",
+]
+
+dependencies = []
+
+[notes]
+considerations = """
+The snapshot layer already has:
+- SnapshotLayer config in core/layer.py
+- _generate_snapshot_function() in the generator
+- apply_snapshot() runtime in engine/snapshot.py
+- Executor checks for snapshot_fn in _run_transform_pipeline()
+
+What's missing:
+- E2E test verifying the full generate → execute → verify output flow
+- The executor currently creates only ONE table (dim_{name}) — snapshot needs its
+  own output table (snapshot_{name}). This likely requires changes to the executor
+  and runner to persist intermediate layer outputs or run snapshot as a separate step.
+
+Key decision: Should the executor create TWO tables (dim + snapshot) or should
+snapshot replace the dim output? The vision is that snapshot is a separate table
+tracking daily state, so it should be snapshot_{name} alongside dim_{name}.
+
+This epic is smallest-scope and should be done first — it validates existing code
+and surfaces any bugs in snapshot generation before we build activity/analytics.
+"""
+
+estimated_stories = 2  # S001 multi-table output, S002 snapshot e2e test

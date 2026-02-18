@@ -1,0 +1,109 @@
+id = "M003-E004-S001"
+parent = "M003-E004"
+title = "Update sample customers entity with snapshot and activity layers"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The examples/entities/customers.py sample entity demonstrates 4 layers (prep, dim,
+snapshot, activity). The sample data supports all layers. `fyr generate && fyr run`
+in the examples directory produces dim, snapshot, and activity tables.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "customers.py entity defines LayersConfig with prep + dimension + snapshot + activity"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "SnapshotLayer configured with natural_key='id' and sensible defaults"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "ActivityConfig with at least 2 activity types: row_appears + status_becomes"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/data/customers.parquet has updated_at column (needed for snapshot dedup)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr generate` in examples/ produces customers_transforms.py with all 4 layer functions"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`fyr run` in examples/ creates dim_customers, snapshot_customers, and activity_customers tables"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "fyr list shows customers entity with [prep, dimension, snapshot, activity] layers"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing tests still pass"
+
+[context]
+relevant_paths = [
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+    "src/fyrnheim/_scaffold/",
+]
+input_fixtures = [
+    "examples/data/customers.parquet",
+]
+depends_on = ["M003-E001-S002", "M003-E002-S003"]
+
+[handoff]
+implementation_hints = """
+Update examples/entities/customers.py to add:
+
+1. SnapshotLayer:
+    snapshot=SnapshotLayer(
+        enabled=True,
+        natural_key="id",
+        date_column="ds",
+        deduplication_order_by="updated_at DESC",
+    )
+
+2. ActivityConfig:
+    activity=ActivityConfig(
+        model_name="activity_customers",
+        entity_id_field="id",
+        person_id_field="id",
+        types=[
+            ActivityType(
+                name="signed_up",
+                trigger="row_appears",
+                timestamp_field="created_at",
+            ),
+            ActivityType(
+                name="upgraded_plan",
+                trigger="status_becomes",
+                field="plan",
+                values=["pro", "enterprise"],
+                timestamp_field="updated_at",
+            ),
+        ],
+    )
+
+Check that examples/data/customers.parquet has an updated_at column. If not,
+regenerate the parquet with that column added.
+
+Update imports at top of file to include SnapshotLayer, ActivityConfig, ActivityType.
+
+Optionally update the scaffold entity (src/fyrnheim/_scaffold/) to include
+snapshot + activity layers so `fyr init` projects demonstrate the full stack.
+
+Also check if the CLI output from `fyr run` and `fyr list` correctly shows the
+new layers. `fyr list` reads from EntityInfo.layers which already detects all
+layer types, so it should work automatically.
+"""
+reference_files = [
+    "examples/entities/customers.py",
+    "examples/data/customers.parquet",
+    "src/fyrnheim/_scaffold/",
+]

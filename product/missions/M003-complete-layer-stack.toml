@@ -1,0 +1,97 @@
+id = "M003"
+title = "Complete the transformation layer stack"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+All five entity layers — prep, dimension, snapshot, activity, analytics — generate
+code and execute end-to-end on DuckDB. A data engineer defines an entity with any
+combination of layers and gets working Ibis transformations for each, verified by
+tests. The sample customers entity demonstrates all five layers.
+"""
+
+user_progress = "From 'only prep and dim layers actually work' to 'all five layers generate and execute — the full entity lifecycle works'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Snapshot layer: `fyr generate` produces snapshot function, `fyr run` executes it with dedup + surrogate key, E2E test verifies output",
+    "Activity layer: `fyr generate` produces activity function from ActivityConfig, `fyr run` creates activity stream table with entity_id, activity_type, timestamp, E2E test verifies output",
+    "Analytics layer: `fyr generate` produces analytics function from AnalyticsLayer, `fyr run` creates date-grain aggregated table with metrics, E2E test verifies output",
+    "Generator handles all five layers when entity defines them (prep → dim → snapshot → activity → analytics)",
+    "Executor runs layers in correct order: prep → dim → snapshot, activity reads from dim output, analytics reads from dim output",
+    "Sample entity (customers or new) demonstrates at least snapshot + one of activity/analytics",
+    "Each new layer has unit tests (generation) and integration tests (execution on DuckDB)",
+    "Existing 544 tests still pass — new layers are additive, no regression",
+    "CLI output from `fyr run` and `fyr list` shows all active layers per entity",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/core/analytics.py",
+    "src/fyrnheim/core/entity.py",
+    "tests/test_e2e_pipeline.py",
+    "examples/entities/customers.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "product/missions/M001-extract-core-framework.toml",
+    "product/missions/M002-cli-developer-experience.toml",
+]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/core/analytics.py",
+    "src/fyrnheim/core/layer.py",
+    "src/fyrnheim/core/entity.py",
+    "examples/entities/customers.py",
+]
+
+[notes]
+considerations = """
+Current state (post M001+M002):
+- Prep and dimension layers: fully working (generate + execute + E2E tests)
+- Snapshot layer: generator produces code, runtime apply_snapshot() exists, but NO E2E test
+- Activity layer: Pydantic types exist (ActivityConfig, ActivityType), zero generation or execution
+- Analytics layer: Pydantic types exist (AnalyticsLayer, AnalyticsMetric), zero generation or execution
+
+Layer execution order matters:
+  prep → dim → snapshot (reads dim output)
+  prep → dim → activity (reads dim output)
+  prep → dim → analytics (reads dim output)
+
+Snapshot, activity, and analytics all read from the dimension layer output.
+They are independent of each other — can run in any order after dim.
+
+Key design patterns established in M001:
+- Generator: IbisCodeGenerator methods like _generate_prep_function(), _generate_dim_function()
+- Executor: _run_transform_pipeline() calls source → prep → dim → snapshot in sequence
+- Runner: run_entity() orchestrates registry + generate + execute
+- Generated code pattern: function per layer, e.g. source_X(), prep_X(), dim_X(), snapshot_X()
+
+Activity layer concept:
+- Converts dimension rows into an activity stream (event log)
+- Each ActivityType maps to a row in the output: entity_id, activity_type, timestamp
+- Triggers: "row_appears" (new row = event), "status_becomes" (field == value), "field_changes"
+- Output table: activity_{entity_name}
+
+Analytics layer concept:
+- Date-grain aggregation of dimension data
+- Each AnalyticsMetric is an Ibis aggregation expression grouped by date + optional dimensions
+- Output table: analytics_{entity_name}
+
+What this mission does NOT include:
+- AnalyticsModel (combining multiple entity analytics layers — that's a future cross-entity feature)
+- BigQuery or other backends (separate mission)
+- Component auto-expansion (separate concern)
+"""

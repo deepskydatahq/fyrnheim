@@ -1,0 +1,79 @@
+id = "M003-E002-S002"
+parent = "M003-E002"
+title = "Add activity layer execution to executor pipeline"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The executor recognizes and runs activity_{name} functions from generated modules,
+creating activity_{name} tables in DuckDB. Activity runs after dim, reading from
+the dim output.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Executor detects activity_{name} function in generated module via getattr"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Activity function receives dim output table as input (not the chained pipeline result)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Executor creates activity_{name} table in DuckDB with activity output"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Activity table creation is separate from dim table (both exist after execution)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When no activity function exists, executor skips it (no error)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ExecutionResult reports activity table info (row count or additional_tables)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing executor tests still pass"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+]
+input_fixtures = []
+depends_on = ["M003-E001-S001", "M003-E002-S001"]
+
+[handoff]
+implementation_hints = """
+Extend the multi-table pattern from E001-S001 (which adds snapshot as a separate
+table). Activity follows the same approach:
+
+In execute() or _run_transform_pipeline(), after dim is persisted:
+
+    # Activity (separate output, reads from dim)
+    activity_fn = getattr(module, f"activity_{entity_name}", None)
+    if activity_fn:
+        activity_t = activity_fn(dim_table)  # dim output, not the chained t
+        conn.create_table(f"activity_{entity_name}", activity_t, overwrite=True)
+
+Key: activity reads from dim output (the table BEFORE snapshot, not after).
+Both snapshot and activity read from the same dim output independently.
+
+The execution order is:
+  source → prep → dim → persist dim
+  dim output → snapshot → persist snapshot (independent)
+  dim output → activity → persist activity (independent)
+
+Update ExecutionResult.additional_tables or similar to report the activity table.
+"""
+reference_files = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+]

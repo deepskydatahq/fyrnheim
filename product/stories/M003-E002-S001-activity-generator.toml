@@ -1,0 +1,108 @@
+id = "M003-E002-S001"
+parent = "M003-E002"
+title = "Add activity layer code generation to IbisCodeGenerator"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+IbisCodeGenerator has a _generate_activity_function() method that produces an
+activity_{name} function from ActivityConfig. The generated function transforms
+dimension rows into an activity stream with entity_id, activity_type, and
+timestamp columns.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_generate_activity_function() produces valid Python code that parses with ast.parse()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated function is named activity_{entity_name} and takes dim output as input"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Input parameter name follows existing pattern: dim > prep > source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "'row_appears' trigger: generates SELECT of entity_id, literal activity_type, timestamp_field for all rows"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "'status_becomes' trigger: generates filtered SELECT where field matches one of the specified values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Multiple activity types are UNION'd together into a single output table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output columns are standardized: entity_id (from entity_id_field), activity_type (string literal), ts (from timestamp_field)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate_module() includes activity function when entity.layers.activity is set"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing generation tests still pass"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/activity.py",
+    "tests/test_ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Add _generate_activity_function() to IbisCodeGenerator. Follow the snapshot pattern:
+
+1. Determine input name (dim > prep > source).
+2. For each ActivityType in config.types, generate a sub-expression:
+
+   For "row_appears":
+     t.select(
+         entity_id=t["{config.entity_id_field}"],
+         activity_type=ibis.literal("{activity_type.name}"),
+         ts=t["{activity_type.timestamp_field}"],
+     )
+
+   For "status_becomes":
+     t.filter(t["{activity_type.field}"].isin({activity_type.values})).select(
+         entity_id=t["{config.entity_id_field}"],
+         activity_type=ibis.literal("{activity_type.name}"),
+         ts=t["{activity_type.timestamp_field}"],
+     )
+
+3. If multiple types: ibis.union(part1, part2, ...) or part1.union(part2).
+4. Return the unioned result.
+
+For "field_changes" trigger: This is complex (needs lag/window). For this story,
+either skip it or generate a simplified version that selects rows where the field
+is not null. The full implementation can be a follow-up.
+
+Update generate_module() to add:
+    if self.entity.layers.activity:
+        parts.append(self._generate_activity_function())
+
+Add an import for the snapshot function pattern (from fyrnheim.engine.snapshot)
+only if needed — activity likely doesn't need a runtime helper since the logic
+is pure Ibis expressions.
+
+Tests: Add to test_ibis_code_generator.py or a new test_activity_generation.py.
+Create test entities with ActivityConfig + various trigger types and verify the
+generated code parses and contains expected function signatures.
+"""
+reference_files = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/activity.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_snapshot_generation.py",
+]

@@ -1,0 +1,65 @@
+id = "M003-E003-S002"
+parent = "M003-E003"
+title = "Add analytics layer execution to executor pipeline"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The executor recognizes and runs analytics_{name} functions from generated modules,
+creating analytics_{name} tables in DuckDB. Analytics runs after dim, reading from
+the dim output.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Executor detects analytics_{name} function in generated module via getattr"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Analytics function receives dim output table as input"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Executor creates analytics_{name} table in DuckDB with aggregated output"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Analytics table creation is separate from dim table (both exist)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When no analytics function exists, executor skips it (no error)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing executor tests still pass"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+]
+input_fixtures = []
+depends_on = ["M003-E001-S001", "M003-E003-S001"]
+
+[handoff]
+implementation_hints = """
+Same pattern as activity executor (E002-S002). After dim is persisted:
+
+    # Analytics (separate output, reads from dim)
+    analytics_fn = getattr(module, f"analytics_{entity_name}", None)
+    if analytics_fn:
+        analytics_t = analytics_fn(dim_table)
+        conn.create_table(f"analytics_{entity_name}", analytics_t, overwrite=True)
+
+This should be straightforward if E001-S001 (multi-table) and E002-S002 (activity
+executor) are already done — same pattern, different function name.
+"""
+reference_files = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+]

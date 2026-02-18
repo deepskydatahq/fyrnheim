@@ -1,13 +1,17 @@
 """Sample customers entity demonstrating the full fyrnheim workflow.
 
-This entity transforms raw customer records through two layers:
+This entity transforms raw customer records through four layers:
 - PrepLayer: email hashing, date casting, unit conversion
 - DimensionLayer: business logic columns (email domain, paying flag, signup cohort)
+- SnapshotLayer: daily snapshot with dedup by email_hash
+- ActivityConfig: signup (row_appears) + became_paying (status_becomes)
 
 Quality checks validate the output: NotNull, Unique, InRange.
 """
 
 from fyrnheim import (
+    ActivityConfig,
+    ActivityType,
     ComputedColumn,
     DimensionLayer,
     Entity,
@@ -16,6 +20,7 @@ from fyrnheim import (
     NotNull,
     PrepLayer,
     QualityConfig,
+    SnapshotLayer,
     TableSource,
     Unique,
 )
@@ -70,6 +75,29 @@ entity = Entity(
                     description="Signup month for cohort analysis",
                 ),
             ],
+        ),
+        snapshot=SnapshotLayer(
+            natural_key="email_hash",
+            deduplication_order_by="created_at DESC",
+        ),
+        activity=ActivityConfig(
+            model_name="activity_customers",
+            types=[
+                ActivityType(
+                    name="signup",
+                    trigger="row_appears",
+                    timestamp_field="created_at",
+                ),
+                ActivityType(
+                    name="became_paying",
+                    trigger="status_becomes",
+                    timestamp_field="created_at",
+                    field="plan",
+                    values=["pro", "starter", "enterprise"],
+                ),
+            ],
+            entity_id_field="id",
+            person_id_field="email_hash",
         ),
     ),
     quality=QualityConfig(

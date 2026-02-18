@@ -25,6 +25,7 @@ class ExecutionResult:
     columns: list[str]
     success: bool
     error: str | None = None
+    snapshot_target_name: str | None = None
 
 
 class DuckDBExecutor:
@@ -109,9 +110,16 @@ class DuckDBExecutor:
 
         module = load_transform_module(entity_name, gen_dir)
 
-        # Resolve target name
+        # Detect snapshot function to determine target naming
+        has_snapshot = getattr(module, f"snapshot_{entity_name}", None) is not None
+        snapshot_target_name: str | None = None
+
         if target_name is None:
-            target_name = f"dim_{entity_name}"
+            if has_snapshot:
+                target_name = f"snapshot_{entity_name}"
+                snapshot_target_name = target_name
+            else:
+                target_name = f"dim_{entity_name}"
 
         try:
             result_table = self._run_transform_pipeline(entity_name, module)
@@ -120,7 +128,7 @@ class DuckDBExecutor:
                 f"Transform execution failed for {entity_name}: {e}"
             ) from e
 
-        # Persist result
+        # Persist final result
         try:
             self._conn.create_table(target_name, result_table, overwrite=True)
         except Exception as e:
@@ -141,6 +149,7 @@ class DuckDBExecutor:
             row_count=row_count,
             columns=columns,
             success=True,
+            snapshot_target_name=snapshot_target_name,
         )
 
     def _run_transform_pipeline(self, entity_name: str, module: Any) -> ibis.Table:
@@ -148,6 +157,9 @@ class DuckDBExecutor:
 
         Looks for: source_{name} -> prep_{name} -> dim_{name} -> snapshot_{name}
         Calls each function that exists, chaining the output.
+
+        When snapshot is present, dim_{name} is persisted as an intermediate
+        table before snapshot runs, so both tables are available.
         """
         conn = self._conn
         backend = "duckdb"
@@ -176,10 +188,27 @@ class DuckDBExecutor:
         if dim_fn is not None:
             t = dim_fn(t)
 
+        # Capture dim result for branch layers (activity, analytics)
+        dim_result = t
+
         # Snapshot function
         snapshot_fn = getattr(module, f"snapshot_{entity_name}", None)
         if snapshot_fn is not None:
+            # Persist dim as intermediate table before snapshot
+            conn.create_table(f"dim_{entity_name}", t, overwrite=True)
             t = snapshot_fn(t)
+
+        # Activity layer (branch from dim, not snapshot)
+        activity_fn = getattr(module, f"activity_{entity_name}", None)
+        if activity_fn is not None:
+            activity_table = activity_fn(dim_result)
+            conn.create_table(f"activity_{entity_name}", activity_table, overwrite=True)
+
+        # Analytics layer (branch from dim, not snapshot)
+        analytics_fn = getattr(module, f"analytics_{entity_name}", None)
+        if analytics_fn is not None:
+            analytics_table = analytics_fn(dim_result)
+            conn.create_table(f"analytics_{entity_name}", analytics_table, overwrite=True)
 
         return t
 

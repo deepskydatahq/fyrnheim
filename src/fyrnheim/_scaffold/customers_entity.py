@@ -1,6 +1,11 @@
-"""Sample customers entity -- edit or replace this with your own."""
+"""Sample customers entity -- edit or replace this with your own.
+
+Demonstrates: prep, dimension, snapshot, and activity layers.
+"""
 
 from fyrnheim import (
+    ActivityConfig,
+    ActivityType,
     ComputedColumn,
     DimensionLayer,
     Entity,
@@ -9,6 +14,7 @@ from fyrnheim import (
     NotNull,
     PrepLayer,
     QualityConfig,
+    SnapshotLayer,
     TableSource,
     Unique,
 )
@@ -53,6 +59,29 @@ entity = Entity(
                     description="True if customer is on a paid plan",
                 ),
             ],
+        ),
+        snapshot=SnapshotLayer(
+            natural_key="email_hash",
+            deduplication_order_by="created_at DESC",
+        ),
+        activity=ActivityConfig(
+            model_name="activity_customers",
+            types=[
+                ActivityType(
+                    name="signup",
+                    trigger="row_appears",
+                    timestamp_field="created_at",
+                ),
+                ActivityType(
+                    name="became_paying",
+                    trigger="status_becomes",
+                    timestamp_field="created_at",
+                    field="plan",
+                    values=["pro", "starter", "enterprise"],
+                ),
+            ],
+            entity_id_field="id",
+            person_id_field="email_hash",
         ),
     ),
     quality=QualityConfig(

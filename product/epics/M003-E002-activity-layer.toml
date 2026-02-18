@@ -1,0 +1,87 @@
+id = "M003-E002"
+parent = "M003"
+title = "Activity layer generation and execution"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The activity layer converts dimension table rows into an activity stream — an event
+log with entity_id, activity_type, and timestamp. Generator produces the activity
+function from ActivityConfig, executor runs it on DuckDB, creating an
+activity_{entity_name} table.
+"""
+
+job_story = """
+When I define an entity with ActivityConfig specifying activity types and triggers,
+I want `fyr generate` and `fyr run` to produce an activity stream table,
+so that I can query "what happened to this entity and when" for analytics and debugging.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Generator: _generate_activity_function() produces valid Python/Ibis code from ActivityConfig",
+    "Generator: activity function reads from dim output (or prep/source if no dim)",
+    "Generator: each ActivityType produces rows with (entity_id, activity_type, ts) columns",
+    "Generator: 'row_appears' trigger creates one activity row per input row",
+    "Generator: 'status_becomes' trigger filters rows where field matches value",
+    "Generator: 'field_changes' trigger is handled (may be simplified for first implementation)",
+    "Executor: runs activity function and creates activity_{entity_name} table",
+    "E2E test: entity with activity config generates code, executes, produces correct activity rows",
+    "Unit tests: generation tests for each trigger type",
+    "Existing tests still pass",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/core/activity.py",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/core/entity.py",
+]
+
+dependencies = ["M003-E001"]
+
+[notes]
+considerations = """
+Activity layer transforms dimension rows into events. The concept:
+
+Given an entity "customers" with ActivityConfig:
+  types = [
+    ActivityType(name="signed_up", trigger="row_appears", timestamp_field="created_at"),
+    ActivityType(name="upgraded", trigger="status_becomes", field="plan", values=["pro", "enterprise"], timestamp_field="updated_at"),
+  ]
+
+The generated activity function should produce:
+  | entity_id | activity_type | ts                  |
+  |-----------|---------------|---------------------|
+  | cust_001  | signed_up     | 2025-01-15 10:30:00 |
+  | cust_002  | signed_up     | 2025-01-16 09:00:00 |
+  | cust_001  | upgraded      | 2025-02-01 14:00:00 |
+
+Implementation approach:
+- For each ActivityType, generate a SELECT that filters/transforms rows into the
+  standard (entity_id, activity_type, ts) schema
+- UNION ALL all activity type SELECTs together
+- The "field_changes" trigger is hard to implement without windowing (requires
+  comparing current vs previous row). Consider simplifying to just "field_not_null"
+  or deferring to a later iteration.
+
+Input resolution follows the same pattern as snapshot:
+  dim > prep > source (prefer most processed input)
+
+Output: activity_{entity_name} table, separate from dim and snapshot tables.
+
+The identity field comes from ActivityConfig.entity_id_field.
+"""
+
+estimated_stories = 3  # S001 generator, S002 executor, S003 e2e

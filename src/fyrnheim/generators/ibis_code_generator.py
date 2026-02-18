@@ -179,6 +179,12 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         if self.entity.layers.snapshot and self.entity.layers.snapshot.enabled:
             parts.append(self._generate_snapshot_function())
 
+        if self.entity.layers.activity:
+            parts.append(self._generate_activity_function())
+
+        if self.entity.layers.analytics:
+            parts.append(self._generate_analytics_function())
+
         return "\n\n".join(p for p in parts if p)
 
     def _map_ibis_type(self, type_str: str) -> str:
@@ -339,6 +345,109 @@ def snapshot_{self.entity_name}({input_name}: ibis.Table) -> ibis.Table:
         dedup_descending={dedup_desc},
         include_validity_range={include_validity},
     )
+"""
+        return func
+
+    def _generate_analytics_function(self) -> str:
+        """Generate analytics aggregation function."""
+        analytics = self.entity.layers.analytics
+        if analytics is None:
+            return ""
+
+        # Determine input: prefer dim, then prep, then source
+        if self.entity.layers.dimension:
+            input_name = f"dim_{self.entity_name}"
+        elif self.entity.layers.prep:
+            input_name = f"prep_{self.entity_name}"
+        else:
+            input_name = f"source_{self.entity_name}"
+
+        date_expr = self._bind_expression(analytics.date_expression)
+
+        # Build aggregation expressions
+        agg_lines = []
+        for m in analytics.metrics:
+            expr = self._bind_expression(m.expression)
+            agg_lines.append(f"        {m.name}={expr},")
+
+        # Build group_by arguments
+        group_parts = ['"_date"']
+        for d in analytics.dimensions:
+            group_parts.append(f'"{d}"')
+        group_by = ", ".join(group_parts)
+
+        func = f"""
+def analytics_{self.entity_name}({input_name}: ibis.Table) -> ibis.Table:
+    \"\"\"Analytics aggregation for {self.entity_name}.\"\"\"
+    t = {input_name}
+    t = t.mutate(_date={date_expr})
+    return t.group_by({group_by}).aggregate(
+{chr(10).join(agg_lines)}
+    )
+"""
+        return func
+
+    def _generate_activity_function(self) -> str:
+        """Generate activity layer function that produces an event stream."""
+        activity = self.entity.layers.activity
+        if activity is None:
+            return ""
+
+        # Determine input: prefer dim, then prep, then source
+        if self.entity.layers.dimension:
+            input_name = f"dim_{self.entity_name}"
+        elif self.entity.layers.prep:
+            input_name = f"prep_{self.entity_name}"
+        else:
+            input_name = f"source_{self.entity_name}"
+
+        entity_id = activity.entity_id_field
+        identity = activity.identity_field
+
+        # Build per-trigger SELECT parts
+        parts_code = []
+        for at in activity.types:
+            if at.trigger == "row_appears":
+                part = (
+                    f"\n    # Activity: {at.name} (row_appears)\n"
+                    f"    act_{at.name} = t.select(\n"
+                    f'        entity_id=t.{entity_id}.cast("string"),\n'
+                    f'        identity=t.{identity}.cast("string"),\n'
+                    f"        ts=t.{at.timestamp_field},\n"
+                    f'        activity_type=ibis.literal("{at.name}"),\n'
+                    f"    )"
+                )
+                parts_code.append(part)
+            elif at.trigger == "status_becomes":
+                values_repr = repr(at.values)
+                part = (
+                    f"\n    # Activity: {at.name} (status_becomes on {at.field})\n"
+                    f"    act_{at.name} = t.filter(\n"
+                    f"        t.{at.field}.isin({values_repr})\n"
+                    f"    ).select(\n"
+                    f'        entity_id=t.{entity_id}.cast("string"),\n'
+                    f'        identity=t.{identity}.cast("string"),\n'
+                    f"        ts=t.{at.timestamp_field},\n"
+                    f'        activity_type=ibis.literal("{at.name}"),\n'
+                    f"    )"
+                )
+                parts_code.append(part)
+            # field_changes: skip for v1
+
+        activity_names = [f"act_{at.name}" for at in activity.types]
+        if len(activity_names) == 1:
+            union_line = f"    return {activity_names[0]}"
+        else:
+            union_args = ", ".join(activity_names)
+            union_line = f"    return ibis.union({union_args})"
+
+        func = f"""
+def activity_{self.entity_name}({input_name}: ibis.Table) -> ibis.Table:
+    \"\"\"Activity stream for {self.entity_name}.\"\"\"
+    t = {input_name}
+{"".join(parts_code)}
+
+{union_line}
 """
         return func
 

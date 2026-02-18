@@ -1,0 +1,94 @@
+id = "M003-E003"
+parent = "M003"
+title = "Analytics layer generation and execution"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The analytics layer aggregates dimension data at date grain, producing per-period
+metric tables. Generator produces the analytics function from AnalyticsLayer config,
+executor runs it on DuckDB, creating an analytics_{entity_name} table with date +
+metrics columns.
+"""
+
+job_story = """
+When I define an entity with AnalyticsLayer specifying date expression and metrics,
+I want `fyr generate` and `fyr run` to produce a date-grain aggregated table,
+so that I can track entity metrics over time without writing aggregation SQL.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Generator: _generate_analytics_function() produces valid Python/Ibis code from AnalyticsLayer",
+    "Generator: analytics function reads from dim output (or prep/source if no dim)",
+    "Generator: groups by date expression + optional dimensions",
+    "Generator: each AnalyticsMetric becomes an aggregation column in output",
+    "Executor: runs analytics function and creates analytics_{entity_name} table",
+    "E2E test: entity with analytics config generates code, executes, produces correct aggregated rows",
+    "Unit tests: generation tests for metrics, dimensions, date expressions",
+    "Existing tests still pass",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/core/analytics.py",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/core/analytics.py",
+    "src/fyrnheim/core/entity.py",
+]
+
+dependencies = ["M003-E001"]
+
+[notes]
+considerations = """
+Analytics layer aggregates entity data at date grain. The concept:
+
+Given an entity "customers" with AnalyticsLayer:
+  model_name = "analytics_customers"
+  date_expression = "created_at.date()"
+  metrics = [
+    AnalyticsMetric(name="new_customers", expression="_.count()", metric_type="event"),
+    AnalyticsMetric(name="total_revenue", expression="_['amount_cents'].sum()", metric_type="event"),
+  ]
+  dimensions = ["plan"]
+
+The generated analytics function should produce:
+  | date       | plan       | new_customers | total_revenue |
+  |------------|------------|---------------|---------------|
+  | 2025-01-15 | free       | 3             | 0             |
+  | 2025-01-15 | pro        | 2             | 29800         |
+  | 2025-01-16 | enterprise | 1             | 99900         |
+
+Implementation approach:
+- Generate a function that: extracts date from date_expression, groups by date +
+  dimensions, applies each metric's aggregation expression
+- Metric expressions are Ibis expression strings that need to be evaluated in context
+  of the grouped table. They reference column names from the input table.
+- The expression format needs to be well-defined: e.g., "t.count()" or
+  "t['amount_cents'].sum()". Consider whether expressions are evaluated as-is
+  (code injection risk) or parsed into known Ibis operations.
+
+Key design decision: How to safely evaluate metric expressions. Options:
+1. Eval with restricted namespace (ibis + table reference) — simple but risky
+2. Support a fixed set of aggregation operations (count, sum, avg, min, max) — safe but limited
+3. Generate code that references column + operation separately — safest
+
+Input resolution: same pattern as activity (dim > prep > source).
+
+Output: analytics_{entity_name} table, separate from other layer outputs.
+
+Scope note: AnalyticsModel (combining multiple entities' analytics) is OUT OF SCOPE
+for this mission. Each entity gets its own analytics table.
+"""
+
+estimated_stories = 3  # S001 generator, S002 executor, S003 e2e

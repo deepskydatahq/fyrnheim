@@ -1,0 +1,98 @@
+id = "M003-E002-S003"
+parent = "M003-E002"
+title = "End-to-end test for activity layer generation and execution"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+An E2E test proves the full activity flow: define entity with ActivityConfig →
+generate code → execute on DuckDB → verify activity table has correct rows with
+entity_id, activity_type, and ts columns matching the configured triggers.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity with prep + dim + activity generates module containing activity_{name} function"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Execution creates both dim_{name} and activity_{name} tables in DuckDB"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "activity table has columns: entity_id, activity_type, ts"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "'row_appears' trigger: every input row produces an activity row with the configured type name"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "'status_becomes' trigger: only rows matching the field/values filter produce activity rows"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Multiple activity types produce rows that are UNION'd together in the output"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Row counts are correct: e.g., 10 input rows with 3 'pro' plans → 10 'signed_up' + 3 'upgraded' = 13 activity rows"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+]
+input_fixtures = []
+depends_on = ["M003-E002-S001", "M003-E002-S002"]
+
+[handoff]
+implementation_hints = """
+Add E2E test (in test_e2e_pipeline.py or new test_e2e_activity.py):
+
+1. Create parquet with customer data including plan and created_at columns:
+   - Mix of 'free', 'pro', 'enterprise' plans
+   - Known counts per plan
+
+2. Define entity with PrepLayer + DimensionLayer + ActivityConfig:
+    activity=ActivityConfig(
+        model_name="activity_customers",
+        entity_id_field="id",
+        person_id_field="id",
+        types=[
+            ActivityType(
+                name="signed_up",
+                trigger="row_appears",
+                timestamp_field="created_at",
+            ),
+            ActivityType(
+                name="upgraded",
+                trigger="status_becomes",
+                field="plan",
+                values=["pro", "enterprise"],
+                timestamp_field="updated_at",
+            ),
+        ],
+    )
+
+3. Generate + execute.
+
+4. Verify:
+   - dim_customers table exists with all rows
+   - activity_customers table exists
+   - activity table has entity_id, activity_type, ts columns
+   - Count "signed_up" rows == total input rows (row_appears → one per row)
+   - Count "upgraded" rows == rows where plan in ('pro', 'enterprise')
+   - Total activity rows = signed_up count + upgraded count
+   - Spot-check: a specific customer with plan='pro' appears in both activity types
+"""
+reference_files = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/core/activity.py",
+]

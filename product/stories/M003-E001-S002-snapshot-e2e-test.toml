@@ -1,0 +1,92 @@
+id = "M003-E001-S002"
+parent = "M003-E001"
+title = "End-to-end test for snapshot layer generation and execution"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+An E2E test proves the full snapshot flow: define entity with SnapshotLayer →
+generate code → execute on DuckDB → verify snapshot table has correct dedup,
+surrogate keys, and snapshot date column.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity with prep + dim + snapshot generates a module containing snapshot_{name} function"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Execution creates both dim_{name} and snapshot_{name} tables in DuckDB"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "snapshot_{name} table has 'ds' column with snapshot date"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "snapshot_{name} table has 'snapshot_key' surrogate key column"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Duplicate rows in input are deduplicated (one row per natural_key per ds)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "With include_validity_range=True, snapshot table has valid_from and valid_to columns"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Row counts are correct: dim table has all rows, snapshot has deduplicated rows"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = ["M003-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Add a new test class or test functions to test_e2e_pipeline.py (or a new file
+test_e2e_snapshot.py) that:
+
+1. Creates a parquet file with some duplicate rows (same natural key, different
+   updated_at timestamps) to verify deduplication works.
+
+2. Defines an entity with PrepLayer + DimensionLayer + SnapshotLayer:
+    SnapshotLayer(
+        enabled=True,
+        natural_key="id",
+        date_column="ds",
+        deduplication_order_by="updated_at DESC",
+    )
+
+3. Generates code and verifies snapshot_customers function exists in output.
+
+4. Executes and checks:
+   - dim_customers table exists with all rows (including duplicates)
+   - snapshot_customers table exists with deduplicated rows
+   - snapshot table has ds, snapshot_key columns
+   - Row where same id appears twice in input → only one row in snapshot
+
+5. Optional: test include_validity_range=True adds valid_from/valid_to.
+
+The test data should have at least 2 rows with the same id but different
+updated_at values to prove dedup works. E.g.:
+  id=1, name="Alice", updated_at="2025-01-01"
+  id=1, name="Alice Updated", updated_at="2025-01-15"
+  id=2, name="Bob", updated_at="2025-01-01"
+
+Expected: dim has 3 rows, snapshot has 2 rows (id=1 keeps the Jan 15 row).
+"""
+reference_files = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]

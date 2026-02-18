@@ -1,0 +1,98 @@
+id = "M003-E003-S003"
+parent = "M003-E003"
+title = "End-to-end test for analytics layer generation and execution"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+An E2E test proves the full analytics flow: define entity with AnalyticsLayer →
+generate code → execute on DuckDB → verify analytics table has correct date-grain
+aggregations matching the configured metrics and dimensions.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity with prep + dim + analytics generates module containing analytics_{name} function"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Execution creates both dim_{name} and analytics_{name} tables in DuckDB"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "analytics table has date column from date_expression"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "analytics table has one column per configured metric"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Metric values are correct: e.g., count matches number of rows per date, sum matches expected total"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "With dimensions configured, analytics table has rows per date per dimension value"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Row count matches expected: number of distinct (date, dimension) combinations in input data"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/core/analytics.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+]
+input_fixtures = []
+depends_on = ["M003-E003-S001", "M003-E003-S002"]
+
+[handoff]
+implementation_hints = """
+Add E2E test (in test_e2e_pipeline.py or new test_e2e_analytics.py):
+
+1. Create parquet with customer data including dates and amounts:
+   - Spread across 3+ distinct dates
+   - Mix of plans for dimension testing
+   - Known amounts for sum verification
+
+2. Define entity with PrepLayer + DimensionLayer + AnalyticsLayer:
+    analytics=AnalyticsLayer(
+        model_name="analytics_customers",
+        date_expression="t.created_at.cast('date')",
+        metrics=[
+            AnalyticsMetric(
+                name="new_customers",
+                expression="t.count()",
+                metric_type="event",
+            ),
+            AnalyticsMetric(
+                name="total_revenue",
+                expression="t.amount_cents.sum()",
+                metric_type="event",
+            ),
+        ],
+        dimensions=["plan"],
+    )
+
+3. Generate + execute.
+
+4. Verify:
+   - dim_customers table exists with all rows
+   - analytics_customers table exists
+   - analytics table has date, plan, new_customers, total_revenue columns
+   - Count of rows == number of distinct (date, plan) combos
+   - Spot-check: for a specific date + plan, new_customers == expected count
+   - Spot-check: total_revenue for a specific group == expected sum
+
+Test without dimensions too (simpler case — just date grouping).
+"""
+reference_files = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/core/analytics.py",
+]

@@ -1,0 +1,79 @@
+id = "M003-E004"
+parent = "M003"
+title = "Full-stack integration and updated sample entity"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+All five layers work together in a single entity. The sample customers entity is
+updated to demonstrate snapshot + activity layers. CLI output from `fyr run` and
+`fyr list` shows all active layers per entity. A comprehensive E2E test exercises
+the full five-layer pipeline.
+"""
+
+job_story = """
+When I define an entity with all five layers configured,
+I want `fyr generate && fyr run` to produce all output tables (dim, snapshot, activity, analytics),
+so that I can see the full power of Fyrnheim's layer system working end-to-end.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Sample customers entity updated with snapshot + at least one of activity/analytics",
+    "`fyr generate` on updated entity generates code for all configured layers",
+    "`fyr run` on updated entity creates all output tables (dim, snapshot, activity/analytics)",
+    "`fyr list` shows all active layers per entity",
+    "`fyr run` output includes per-layer status and row counts",
+    "E2E test exercises entity with 4+ layers and verifies all output tables",
+    "Runner correctly orders layer execution: prep → dim → [snapshot, activity, analytics]",
+    "All tests pass, including existing 544",
+]
+
+validator_context = [
+    "examples/entities/customers.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_e2e_pipeline.py",
+]
+
+[context]
+relevant_paths = [
+    "examples/entities/customers.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/_scaffold/",
+    "tests/test_e2e_pipeline.py",
+]
+
+dependencies = ["M003-E001", "M003-E002", "M003-E003"]
+
+[notes]
+considerations = """
+This is the integration epic — it ties together the work from E001-E003.
+
+Key changes:
+1. Update examples/entities/customers.py to add SnapshotLayer + ActivityConfig
+   (analytics optional, depends on whether the customers dataset supports it)
+2. Update the scaffold entity (src/fyrnheim/_scaffold/) if we want new projects
+   to demonstrate the new layers
+3. Ensure runner.py creates multiple output tables per entity:
+   - dim_{name}: always (if dim layer exists)
+   - snapshot_{name}: if snapshot layer exists
+   - activity_{name}: if activity layer exists
+   - analytics_{name}: if analytics layer exists
+4. Update CLI output to show per-layer status in `fyr run` output
+5. Update `fyr list` to show all configured layers (it already reads them from
+   EntityInfo.layers, so this may work automatically)
+
+The runner/executor changes for multi-table output may have been started in E001
+(for snapshot). This epic ensures it all works together cleanly.
+
+This epic should be relatively light — mostly integration testing and sample updates,
+not new functionality.
+"""
+
+estimated_stories = 2  # S001 sample entity, S002 full-stack e2e

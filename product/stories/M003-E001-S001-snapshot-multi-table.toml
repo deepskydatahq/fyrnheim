@@ -1,0 +1,86 @@
+id = "M003-E001-S001"
+parent = "M003-E001"
+title = "Executor creates separate snapshot table alongside dim table"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+The executor and runner produce both dim_{name} and snapshot_{name} tables when an
+entity has a snapshot layer. This establishes the multi-table output pattern that
+activity and analytics layers will reuse.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "executor.execute() returns ExecutionResult with target_name='dim_{name}' for entities without snapshot"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "executor.execute() creates snapshot_{name} table when snapshot function exists in generated module"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Both dim_{name} and snapshot_{name} tables exist in DuckDB after execution of entity with snapshot layer"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ExecutionResult is extended to report multiple output tables (or execute returns additional info about snapshot)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run_entity() works unchanged — snapshot table creation is handled inside executor"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing tests still pass (snapshot_fn currently chains into the single output — need to separate it)"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "tests/test_engine_executor.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Current behavior: _run_transform_pipeline() chains source → prep → dim → snapshot
+sequentially, returning ONE table. The snapshot output replaces the dim output.
+
+Desired behavior: The executor should persist dim_{name} BEFORE running snapshot,
+then persist snapshot_{name} separately. Two options:
+
+Option A (simpler): Split _run_transform_pipeline() so that dim output is persisted
+first, then snapshot runs and creates its own table. The execute() method runs the
+pipeline up to dim, persists dim_{name}, then if snapshot exists, runs snapshot and
+persists snapshot_{name}.
+
+Option B: _run_transform_pipeline() returns a dict of {table_name: ibis.Table} for
+all layers. execute() persists each one.
+
+Recommend Option A for simplicity — it maps cleanly to the existing code and
+extends naturally for activity/analytics later.
+
+Key change in _run_transform_pipeline or execute():
+    # Run up to dim
+    t = source → prep → dim
+    conn.create_table(f"dim_{name}", t, overwrite=True)
+
+    # Snapshot (separate output)
+    snapshot_fn = getattr(module, f"snapshot_{name}", None)
+    if snapshot_fn:
+        snapshot_t = snapshot_fn(t)  # uses dim output as input
+        conn.create_table(f"snapshot_{name}", snapshot_t, overwrite=True)
+
+ExecutionResult may need an additional field like `additional_tables: dict[str, int]`
+to report snapshot row counts. Or just report the primary (dim) table as before.
+"""
+reference_files = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+]

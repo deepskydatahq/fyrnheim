@@ -1,0 +1,99 @@
+id = "M003-E004-S002"
+parent = "M003-E004"
+title = "Comprehensive E2E test exercising all five layers together"
+status = "done"
+created = 2026-02-18
+
+[outcome]
+description = """
+A single E2E test defines an entity with all five layers (prep, dim, snapshot,
+activity, analytics), generates code, executes on DuckDB, and verifies all output
+tables exist with correct data. This is the M003 validation test.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity defines all 5 layers: prep, dimension, snapshot, activity, analytics"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "generate() produces module with source, prep, dim, snapshot, activity, analytics functions"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "execute() creates 4 output tables: dim_{name}, snapshot_{name}, activity_{name}, analytics_{name}"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "dim table has all input rows with computed columns from prep + dim layers"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "snapshot table has deduplicated rows with ds and snapshot_key columns"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "activity table has entity_id, activity_type, ts columns with correct row counts per trigger"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "analytics table has date-grain aggregations with metric columns"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Quality checks still run correctly on the dim table"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Runner reports success for the entity with all layers"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests (544+) still pass"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+]
+input_fixtures = []
+depends_on = ["M003-E004-S001"]
+
+[handoff]
+implementation_hints = """
+Add a comprehensive test to test_e2e_pipeline.py (or new test_e2e_full_stack.py):
+
+1. Create test data with:
+   - 10+ rows with varied dates, plans, amounts
+   - 2+ rows with same id for snapshot dedup testing
+   - updated_at column for snapshot ordering
+   - Mix of 'free', 'pro', 'enterprise' plans for activity filtering
+
+2. Define entity with ALL layers:
+   - PrepLayer: email_hash, amount_dollars
+   - DimensionLayer: is_paying, email_domain
+   - SnapshotLayer: natural_key="id", dedup by updated_at
+   - ActivityConfig: signed_up (row_appears) + upgraded (status_becomes)
+   - AnalyticsLayer: new_customers (count), total_revenue (sum), by date + plan
+
+3. Generate + execute via runner.
+
+4. Verify ALL output tables:
+   - dim_{name}: all rows, computed columns correct
+   - snapshot_{name}: deduplicated, has ds + snapshot_key
+   - activity_{name}: correct activity types and counts
+   - analytics_{name}: correct aggregations per date/plan
+
+5. Run quality checks on dim table.
+
+This test is the "proof it all works" validation for M003.
+It should exercise the runner (not just executor) to verify the full orchestration.
+"""
+reference_files = [
+    "tests/test_e2e_pipeline.py",
+    "src/fyrnheim/engine/runner.py",
+]

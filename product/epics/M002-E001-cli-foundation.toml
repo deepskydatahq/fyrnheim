@@ -1,7 +1,7 @@
 id = "M002-E001"
 parent = "M002"
 title = "CLI foundation and project config"
-status = "done"
+status = "complete"
 created = 2026-02-17
 
 [outcome]

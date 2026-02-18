@@ -1,7 +1,7 @@
 id = "M002-E002-S004"
 parent = "M002-E002"
 title = "Implement `fyr check` command wrapping QualityRunner"
-status = "done"
+status = "complete"
 created = 2026-02-17
 
 [outcome]

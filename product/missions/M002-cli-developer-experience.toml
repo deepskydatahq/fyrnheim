@@ -1,6 +1,6 @@
 id = "M002"
 title = "Build the fyr CLI and end-to-end developer experience"
-status = "done"
+status = "complete"
 created = 2026-02-17
 
 [outcome]

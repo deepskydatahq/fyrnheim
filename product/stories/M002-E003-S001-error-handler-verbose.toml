@@ -1,7 +1,7 @@
 id = "M002-E003-S001"
 parent = "M002-E003"
 title = "Shared error handler and --verbose flag for all CLI commands"
-status = "done"
+status = "complete"
 created = 2026-02-17
 
 [outcome]

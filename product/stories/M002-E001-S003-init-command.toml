@@ -1,7 +1,7 @@
 id = "M002-E001-S003"
 parent = "M002-E001"
 title = "Implement fyr init command with scaffolding and sample entity"
-status = "done"
+status = "complete"
 created = 2026-02-17
 
 [outcome]

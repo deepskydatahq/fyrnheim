@@ -1,7 +1,7 @@
 id = "M002-E002-S002"
 parent = "M002-E002"
 title = "Implement `fyr generate` command wrapping fyrnheim.generate()"
-status = "done"
+status = "complete"
 created = 2026-02-17
 
 [outcome]

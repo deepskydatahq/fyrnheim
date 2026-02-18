@@ -1,7 +1,7 @@
 id = "M001-E001-S003"
 parent = "M001-E001"
 title = "Extract activity and analytics layer config classes"
-status = "ready"
+status = "complete"
 created = 2026-02-16
 
 [outcome]

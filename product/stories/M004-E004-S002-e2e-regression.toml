@@ -1,0 +1,29 @@
+# Story: E2E regression test via IbisExecutor
+
+id = "M004-E004-S002"
+parent = "M004-E004"
+title = "E2E regression test: full pipeline through IbisExecutor on DuckDB"
+status = "draft"
+depends_on = ["M004-E004-S001"]
+
+[outcome]
+description = """
+A dedicated E2E test proves the full generate → IbisExecutor.execute() →
+verify output pipeline works on DuckDB through the new generic executor.
+This is the final regression gate before the mission is complete.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "E2E test: entity defined → code generated → IbisExecutor executes on DuckDB → output verified"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All ~596 existing tests pass (full suite regression)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test for missing extras: importing bigquery backend without ibis[bigquery] gives helpful error"

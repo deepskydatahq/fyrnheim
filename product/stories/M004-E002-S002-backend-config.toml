@@ -1,0 +1,38 @@
+# Story: Backend config in fyrnheim.yaml
+
+id = "M004-E002-S002"
+parent = "M004-E002"
+title = "Support BigQuery connection params in fyrnheim.yaml config"
+status = "draft"
+depends_on = ["M004-E002-S001"]
+
+[outcome]
+description = """
+fyrnheim.yaml supports a backends section with per-backend connection params.
+ProjectConfig carries backend_config dict. Config example:
+
+  backend: bigquery
+  backends:
+    bigquery:
+      project_id: deepskydata
+      dataset_id: timodata_model_dev
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_config() parses backends.bigquery.project_id and dataset_id from YAML"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ProjectConfig has backend_config: dict field carrying parsed backend params"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "resolve_config() passes backend_config through to ResolvedConfig"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing backends section defaults to empty dict (DuckDB needs no extra config)"

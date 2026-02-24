@@ -1,0 +1,33 @@
+# Epic: CLI --backend flag
+
+id = "M004-E003"
+parent = "M004"
+title = "Add --backend CLI flag to fyr run"
+status = "draft"
+
+[outcome]
+description = """
+`fyr run --backend bigquery` overrides the backend from fyrnheim.yaml.
+The CLI passes backend through config resolution to the runner. Terminal
+output displays which backend is being used.
+"""
+
+job_story = "When I run fyr run --backend bigquery I want to execute against BigQuery so that I can test production without editing my config file"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr run accepts --backend flag (click option)",
+    "Flag overrides fyrnheim.yaml backend setting in resolve_config()",
+    "fyr run output displays backend name (e.g. 'Backend: bigquery')",
+    "fyr run --help shows --backend option with description",
+    "Unit tests: --backend flag passes through to runner, overrides config",
+    "Default behavior unchanged when --backend not provided",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "tests/test_cli_run.py",
+]
+
+depends_on = ["M004-E002"]

@@ -1,0 +1,33 @@
+# Story: Add --backend flag to fyr run
+
+id = "M004-E003-S001"
+parent = "M004-E003"
+title = "Add --backend CLI option to fyr run command"
+status = "draft"
+depends_on = ["M004-E002-S003"]
+
+[outcome]
+description = """
+fyr run accepts --backend flag. When provided, it overrides the backend
+from fyrnheim.yaml. The resolved backend is passed to the runner.
+Terminal output displays the active backend.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run --backend bigquery passes backend='bigquery' to runner"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run without --backend uses fyrnheim.yaml value (default: duckdb)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run output includes 'Backend: <name>' line"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run --help shows --backend option"

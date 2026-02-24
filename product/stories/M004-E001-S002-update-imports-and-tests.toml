@@ -1,0 +1,33 @@
+# Story: Update all imports and tests for IbisExecutor
+
+id = "M004-E001-S002"
+parent = "M004-E001"
+title = "Update all imports and test files from DuckDBExecutor to IbisExecutor"
+status = "draft"
+depends_on = ["M004-E001-S001"]
+
+[outcome]
+description = """
+All files that import DuckDBExecutor are updated to use IbisExecutor.
+This includes runner.py, test files, and E2E tests. The public API
+(__init__.py) exports IbisExecutor. All ~596 tests pass.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No remaining references to DuckDBExecutor in src/ or tests/"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "runner.py uses IbisExecutor.duckdb() to create executor"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Public API exports IbisExecutor from fyrnheim.engine"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All ~596 existing tests pass (uv run pytest)"

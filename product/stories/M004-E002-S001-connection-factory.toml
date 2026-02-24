@@ -1,0 +1,34 @@
+# Story: Connection factory function
+
+id = "M004-E002-S001"
+parent = "M004-E002"
+title = "Add create_connection() factory that maps backend string to Ibis connection"
+status = "draft"
+depends_on = ["M004-E001-S002"]
+
+[outcome]
+description = """
+A create_connection(backend, **kwargs) function in engine/ creates the
+appropriate Ibis connection. DuckDB: ibis.duckdb.connect(db_path).
+BigQuery: ibis.bigquery.connect(project_id, dataset_id). Unknown backend
+raises ValueError. Missing BigQuery extras raises helpful ImportError.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "create_connection('duckdb', db_path=':memory:') returns ibis DuckDB connection"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "create_connection('bigquery', project_id='x', dataset_id='y') calls ibis.bigquery.connect (mocked)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "create_connection('unknown') raises ValueError with supported backends listed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "create_connection('bigquery', ...) when ibis[bigquery] not installed raises ImportError with install hint"

@@ -1,0 +1,29 @@
+# Story: Pass backend_config from CLI through to runner
+
+id = "M004-E003-S002"
+parent = "M004-E003"
+title = "Wire backend_config from resolved config through CLI to runner"
+status = "draft"
+depends_on = ["M004-E003-S001"]
+
+[outcome]
+description = """
+The CLI reads backend_config from resolved config and passes it to
+engine_run() and engine_run_entity(). This ensures BigQuery project_id
+and dataset_id flow from fyrnheim.yaml through to the connection factory.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CLI passes backend_config=cfg.backend_config to engine_run()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CLI passes backend_config to engine_run_entity() for single entity mode"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "End-to-end: fyr run with backend=duckdb works as before (regression test)"

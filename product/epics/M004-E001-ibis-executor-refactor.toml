@@ -1,0 +1,35 @@
+# Epic: Refactor DuckDBExecutor → IbisExecutor
+
+id = "M004-E001"
+parent = "M004"
+title = "Refactor DuckDBExecutor into generic IbisExecutor"
+status = "draft"
+
+[outcome]
+description = """
+DuckDBExecutor is replaced by IbisExecutor that accepts any ibis.BaseBackend
+connection. The constructor takes a connection + backend string instead of a
+db_path. DuckDB remains the default. All ~596 existing tests pass unchanged.
+"""
+
+job_story = "When I look at the executor code I want it to be backend-agnostic so that adding new backends doesn't require changing the executor"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "DuckDBExecutor renamed to IbisExecutor in executor.py",
+    "Constructor accepts (conn: ibis.BaseBackend, backend: str) instead of (db_path: str)",
+    "Hardcoded backend='duckdb' on line 165 replaced with self._backend parameter",
+    "Hardcoded ibis.duckdb.connect() on line 54 removed — connection injected from outside",
+    "A convenience constructor or factory for DuckDB preserved (e.g. IbisExecutor.duckdb(db_path))",
+    "All existing tests pass with minimal changes (update DuckDBExecutor → IbisExecutor imports)",
+    "E2E pipeline tests still work end-to-end on DuckDB",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+    "tests/test_e2e_pipeline.py",
+]
+
+depends_on = []

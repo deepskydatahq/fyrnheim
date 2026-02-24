@@ -1,0 +1,36 @@
+# Epic: BigQuery test coverage
+
+id = "M004-E004"
+parent = "M004"
+title = "BigQuery mock tests and E2E regression validation"
+status = "draft"
+
+[outcome]
+description = """
+Mock-based tests prove the BigQuery path works without live credentials.
+An E2E regression test confirms the full pipeline (generate → execute)
+works through the new IbisExecutor on DuckDB. Source functions receive
+the correct backend string.
+"""
+
+job_story = "When I run the test suite I want confidence that BigQuery execution works so that I can ship without live BigQuery testing in CI"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Mock test: IbisExecutor with mocked ibis.BaseBackend executes a transform pipeline",
+    "Mock test: source functions receive backend='bigquery' string",
+    "Mock test: connection factory called with BigQuery config params",
+    "E2E regression: full generate → IbisExecutor.execute() → verify output on DuckDB",
+    "All ~596 existing tests still pass",
+    "Test for error case: unknown backend raises clear error from connection factory",
+    "Test for error case: BigQuery extras not installed raises helpful ImportError message",
+]
+
+validator_context = [
+    "tests/test_engine_executor.py",
+    "tests/test_engine_runner.py",
+    "tests/test_e2e_pipeline.py",
+]
+
+depends_on = ["M004-E003"]

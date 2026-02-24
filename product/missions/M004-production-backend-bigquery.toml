@@ -1,0 +1,130 @@
+# Mission: Production Backend — BigQuery Executor
+# Unblock timo-data-stack migration by making fyrnheim backend-agnostic
+
+id = "M004"
+title = "Production backend: generic Ibis executor with BigQuery support"
+status = "draft"
+created = 2026-02-24
+depends_on = ["M001", "M002", "M003"]
+
+[outcome]
+description = """
+A data engineer can run `fyr run --backend bigquery` against a BigQuery dataset
+and get the same results as DuckDB — same entity definition, same generated code,
+different target. The executor accepts any Ibis backend connection, not just DuckDB.
+This unblocks timo-data-stack migration and delivers Value Level 3 (Production Backend).
+"""
+
+user_progress = "From 'fyrnheim only works on DuckDB locally' to 'same entity runs on BigQuery in production with zero code changes'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "DuckDBExecutor replaced by generic IbisExecutor that accepts any ibis.BaseBackend connection",
+    "runner.py backend validation removed — any backend string accepted",
+    "executor no longer hardcodes backend='duckdb' — uses the backend parameter throughout",
+    "CLI `fyr run` accepts `--backend` flag that overrides fyrnheim.yaml setting",
+    "Config system supports backend='bigquery' without errors",
+    "Generated source functions receive correct backend string ('bigquery' or 'duckdb')",
+    "BigQuery connection created via ibis.bigquery.connect(project_id=..., dataset_id=...)",
+    "BigQuery connection config (project_id, dataset_id) loadable from fyrnheim.yaml",
+    "All existing ~596 DuckDB tests still pass — executor refactor is backwards-compatible",
+    "New unit tests cover: IbisExecutor with DuckDB connection, IbisExecutor with mock BigQuery connection",
+    "New unit tests cover: CLI --backend flag, config backend='bigquery', runner with non-duckdb backend",
+    "E2E test demonstrates generate → execute on DuckDB via the new IbisExecutor (proves no regression)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_engine_executor.py",
+    "tests/test_engine_runner.py",
+    "tests/test_cli_run.py",
+    "tests/test_e2e_pipeline.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "Replace DuckDBExecutor with generic IbisExecutor accepting any ibis.BaseBackend connection",
+    "Remove backend='duckdb' hardcoding in runner.py and executor.py",
+    "Add --backend CLI flag to fyr run",
+    "Add BigQuery connection config to fyrnheim.yaml schema (project_id, dataset_id)",
+    "Add connection factory: backend string → ibis connection",
+    "Unit tests for IbisExecutor with DuckDB and mock BigQuery connections",
+    "Backwards compatibility: all existing tests pass unchanged",
+]
+out_of_scope = [
+    "BigQuery integration tests requiring live credentials (test with mocks)",
+    "Specialized union source types (SignalSourceConfig, ProductSourceConfig, AnonSourceConfig)",
+    "SourceMapping and TenantExtension patterns",
+    "Identity graph resolution",
+    "Incremental processing / high water mark",
+    "SQL-to-Ibis expression converter",
+    "Analytics daily combine (cross-entity post-processing)",
+    "Snowflake or Postgres backend testing (Ibis handles them, but not tested here)",
+]
+acceptable_breakage = [
+    "DuckDBExecutor class renamed to IbisExecutor — any code importing DuckDBExecutor by name breaks",
+    "Executor constructor signature changes (accepts connection instead of db_path)",
+]
+
+[notes]
+considerations = """
+Codebase exploration findings (2026-02-24):
+
+The generated code and source types ALREADY support BigQuery:
+- source functions have `elif backend == "bigquery"` branches
+- BaseTableSource.read_table() handles BigQuery via conn.table(name, database=(project, dataset))
+- pyproject.toml declares [bigquery] extras with ibis-framework[bigquery]
+
+The blocker is exactly 3 hardcoded constraints:
+1. runner.py:265 — raises ValueError for non-duckdb backends
+2. executor.py:165 — hardcodes backend = "duckdb"
+3. executor.py:54 — hardcodes ibis.duckdb.connect()
+
+Approach: Generic IbisExecutor (Option A)
+- Replace DuckDBExecutor with IbisExecutor that accepts any ibis.BaseBackend connection
+- Add a connection factory function: (backend, config) → ibis connection
+- The executor itself is backend-agnostic — it just calls Ibis APIs
+- DuckDB path: ibis.duckdb.connect(db_path)
+- BigQuery path: ibis.bigquery.connect(project_id=..., dataset_id=...)
+- Connection config lives in fyrnheim.yaml under a [backends] or [bigquery] section
+
+Testing strategy:
+- All 596 existing tests run against DuckDB via IbisExecutor (proves regression-free)
+- New unit tests mock ibis.BaseBackend for BigQuery path
+- No live BigQuery credentials needed in CI
+- Integration test with real BigQuery is out of scope (manual verification)
+
+Risk: Executor refactor touches the core execution path. Mitigation: IbisExecutor
+preserves the same execute() interface, just accepts connection instead of db_path.
+
+Sequencing recommendation for epic breakdown:
+1. Extract IbisExecutor from DuckDBExecutor (pure refactor, all tests pass)
+2. Add connection factory + config support
+3. Remove backend validation in runner
+4. Add CLI --backend flag
+5. Add BigQuery-specific tests with mocks
+
+Briefing context: timo-data-stack is the first production consumer. Their simplest
+entities (_ghost_person, _mailerlite_person) need only BigQuery executor to migrate.
+This mission unblocks those. More complex patterns (union sources, source mapping,
+identity graph) are separate missions.
+"""

@@ -3,7 +3,7 @@
 id = "M004-E002-S002"
 parent = "M004-E002"
 title = "Support BigQuery connection params in fyrnheim.yaml config"
-status = "draft"
+status = "in-progress"
 depends_on = ["M004-E002-S001"]
 
 [outcome]

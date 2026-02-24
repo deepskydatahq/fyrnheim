@@ -3,7 +3,7 @@
 id = "M004-E001-S001"
 parent = "M004-E001"
 title = "Rename DuckDBExecutor to IbisExecutor and accept injected connection"
-status = "draft"
+status = "in-progress"
 depends_on = []
 
 [outcome]

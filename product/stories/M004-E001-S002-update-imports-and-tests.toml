@@ -3,7 +3,7 @@
 id = "M004-E001-S002"
 parent = "M004-E001"
 title = "Update all imports and test files from DuckDBExecutor to IbisExecutor"
-status = "draft"
+status = "in-progress"
 depends_on = ["M004-E001-S001"]
 
 [outcome]

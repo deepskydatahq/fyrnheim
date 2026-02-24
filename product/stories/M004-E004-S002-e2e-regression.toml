@@ -3,7 +3,7 @@
 id = "M004-E004-S002"
 parent = "M004-E004"
 title = "E2E regression test: full pipeline through IbisExecutor on DuckDB"
-status = "draft"
+status = "in-progress"
 depends_on = ["M004-E004-S001"]
 
 [outcome]

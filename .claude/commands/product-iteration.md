@@ -1,6 +1,6 @@
 ---
 description: Product retrospective after completing features - learn and plan next steps
-allowed-tools: Bash(git:*), Bash(hte tasks:*), Skill, Read, Write, Glob, Grep
+allowed-tools: Bash(git:*), Bash(bd:*), Skill, Read, Write, Glob, Grep
 ---
 
 # Product Iteration
@@ -51,13 +51,13 @@ Evaluate through these frameworks:
 - What does the user want to feel when using this?
 - What friction exists between intent and outcome?
 
-### 4. Update Hypotheses
+### 4. Update Mission Status
 
-Read HYPOTHESES.md and update:
-- Which hypothesis did this work test?
-- Status change: 🟢 Validated / 🔴 Invalidated / 🟡 Inconclusive
-- Add evidence with date
-- Note any new hypotheses generated
+Check the relevant mission TOML in `product/missions/`:
+- Did this work validate the mission's testing criteria?
+- Update status if appropriate (active -> complete)
+- Add evidence/notes with date
+- Note any new missions or roadmap updates needed
 
 ### 5. Generate Next Iterations
 
@@ -80,7 +80,7 @@ After presenting recommendations, ask:
 If yes, for each recommendation:
 
 ```bash
-hte tasks create --title "[Iteration Name]" --status brainstorm --data '{"body":"## Recommended Iteration\n\n**From:** Product iteration retrospective\n\n**What:** [Description]\n\n**Why:** [Product lens rationale]\n\n**Impact:** [Expected transformation improvement]\n\n**Generated Hypothesis:**\n- Belief: [What we believe]\n- Test: [How we'"'"'ll know]\n\n---\n*Created via /product-iteration*"}'
+bd create "[Iteration Name]" --labels brainstorm -d "## Recommended Iteration\n\n**From:** Product iteration retrospective\n\n**What:** [Description]\n\n**Why:** [Product lens rationale]\n\n**Impact:** [Expected transformation improvement]\n\n**Generated Hypothesis:**\n- Belief: [What we believe]\n- Test: [How we'll know]\n\n---\n*Created via /product-iteration*"
 ```
 
 ## Output Format
@@ -102,11 +102,11 @@ Present findings as:
 ### Simplicity Check
 [What's essential? What could be removed?]
 
-### Hypothesis Update
-- Tested: [H#]
-- Status: [Validated/Invalidated/Inconclusive]
+### Mission Update
+- Mission: [M###]
+- Status: [Complete/Active/Needs refinement]
 - Evidence: [What we learned]
-- New hypotheses: [If any]
+- Follow-up: [New missions or roadmap changes needed]
 
 ### Recommended Next Iterations
 
@@ -123,18 +123,18 @@ Present findings as:
 
 ## After Running This Command
 
-1. HYPOTHESES.md should be updated with learnings
-2. If major insight, consider running `/product-roadmap` to review investment areas
-3. Created tasks enter the dev workflow: `/brainstorm` → `/plan-issue` → `/pick-issue`
+1. Relevant mission TOML should be updated with learnings
+2. If major insight, consider running `/product-values` to review value ladder updates needed
+3. Created tasks enter the dev workflow: `/brainstorm` -> `/plan-issue` -> `/pick-issue`
 
 ## Connection to Dev Workflow
 
 ```
 /pick-issue completes
-    ↓
-/retro → technical follow-ups → HTE tasks
-    ↓
-/product-iteration → product insights → HYPOTHESES.md + optional tasks
-    ↓
-/product-hypotheses select → next bet → brainstorm task
+    |
+/retro -> technical follow-ups -> Beads tasks
+    |
+/product-iteration -> product insights -> mission updates + optional tasks
+    |
+/brainstorm-epics -> next mission -> brainstorm task
 ```

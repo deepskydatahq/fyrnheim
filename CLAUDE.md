@@ -6,7 +6,38 @@ Best practices and conventions for working on Fyrnheim.
 
 ## Overview
 
-Fyrnheim — vision and tech stack to be defined via `/product-vision`.
+Fyrnheim is a Python-native dbt alternative that lets data teams define typed entities in Python and run transformations on any backend via Ibis.
+
+**Target users:** Data engineers and analytics engineers on Python-first teams.
+
+---
+
+## Tech Stack
+
+- **Language:** Python >=3.11
+- **Core:** Pydantic, Ibis Framework, Click
+- **Testing:** pytest, pytest-cov
+- **Linting:** ruff, mypy
+- **Package manager:** uv
+
+---
+
+## Development
+
+```bash
+# Install dependencies
+uv sync --all-extras
+
+# Run tests
+uv run pytest
+
+# Lint
+uv run ruff check src/ tests/
+uv run mypy src/
+
+# CLI
+uv run fyr --help
+```
 
 ---
 
@@ -84,7 +115,8 @@ bd status
 | Command | Description |
 |---------|-------------|
 | `/new-feature` | Brainstorm idea → design doc → Beads task |
-| `/brainstorm-epics` | Generate mission candidates from vision + roadmap |
+| `/plan-mission` | Plan a mission with codebase exploration and scope mapping |
+| `/brainstorm-epics` | Generate mission candidates from vision + value ladder |
 | `/brainstorm` | Interactive brainstorm for `brainstorm` queue |
 | `/brainstorm-auto` | Autonomous brainstorm with expert personas (from `.claude/experts/`) |
 | `/plan-issue` | Process `plan` queue |
@@ -95,20 +127,61 @@ bd status
 | `/product-story-handoff` | Create Beads tasks from ready stories |
 | `/product-judgment` | Validate story/epic/mission completion |
 
+### Headless Automation
+
+```bash
+# Brainstorm tasks (brainstorm → plan)
+./scripts/brainstorm-issues.sh              # Single task
+./scripts/brainstorm-issues.sh --loop       # Process all brainstorm tasks
+./scripts/brainstorm-issues.sh <task-id>    # Brainstorm specific task
+
+# Plan tasks (plan → ready)
+./scripts/plan-issues.sh                    # Single task
+./scripts/plan-issues.sh --loop             # Process all plan tasks
+./scripts/plan-issues.sh --max 5            # Limit to 5 tasks
+
+# Implement tasks (ready → done)
+./scripts/run-issue.sh                      # Single task
+./scripts/run-issue.sh --loop               # Process all ready tasks
+./scripts/run-issue.sh --max 5              # Limit to 5 tasks
+```
+
+All scripts support `--loop`, `--max N`, and `--continue-on-error` flags.
+
+### Parallel Automation
+
+For faster processing, use parallel workers with file-based locking:
+
+```bash
+# Parallel brainstorming (3 workers default)
+./scripts/brainstorm-parallel.sh            # 3 workers
+./scripts/brainstorm-parallel.sh -w 5       # 5 workers
+
+# Parallel planning (3 workers default)
+./scripts/plan-parallel.sh                  # 3 workers
+./scripts/plan-parallel.sh -w 5             # 5 workers
+
+# Parallel implementation with dependency awareness
+./scripts/run-parallel.sh                   # 3 workers, respects task dependencies
+./scripts/run-parallel.sh -w 5              # 5 workers
+```
+
+Workers automatically skip tasks with unresolved dependencies (registered via `bd dep add`).
+
 ---
 
 ## Product Thinking
 
-Strategic product commands that sit above the development workflow, using a structured hierarchy of TOML files.
+The full development workflow (vision → value ladder → missions → epics → stories → tasks → implementation) is documented in [HOW_WE_WORK.md](./HOW_WE_WORK.md). That document is the primary reference for how ideas become shipped features.
+
+### Quick Reference
 
 ```
 VISION.md              ← "What transformation?" (rarely)
     ↓
-ROADMAP.md             ← "Where investing?" (periodic)
+VALUES.md              ← "What value?" (when levels change)
     ↓
-HYPOTHESES.md          ← "What bets?" (living)
-    ↓
-product/missions/      ← /product-epic creates mission TOML (per hypothesis)
+product/missions/      ← Outcome-oriented work packages
     ↓
 product/epics/         ← /product-mission-breakdown creates epic TOMLs
     ↓
@@ -117,8 +190,6 @@ product/stories/       ← /product-epic-breakdown creates story TOMLs
 Beads tasks            ← /product-story-handoff creates bd tasks
     ↓
 Task Pipeline → /retro → /product-judgment validates up the hierarchy
-    ↓
-product iteration      ← "What did we learn?"
 ```
 
 ### Product Commands
@@ -126,20 +197,48 @@ product iteration      ← "What did we learn?"
 | Command | Artifact | Updates |
 |---------|----------|---------|
 | `/product-vision` | VISION.md | Rarely (pivots only) |
-| `/product-roadmap` | ROADMAP.md | Periodic (monthly/quarterly) |
-| `/product-hypotheses` | HYPOTHESES.md | Constantly (living) |
-| `/product-epic` | Creates mission TOML + breakdowns | Per hypothesis |
+| `/product-values` | VALUES.md | When levels change |
+| `/brainstorm-epics` | Mission candidates | From value levels + ideas |
 | `/product-mission-breakdown` | Creates epic TOMLs from mission | Per mission |
 | `/product-epic-breakdown` | Creates story TOMLs from epic | Per epic |
 | `/product-story-handoff` | Creates Beads tasks from stories | When stories are ready |
 | `/product-judgment` | Validates completion up hierarchy | After implementation |
-| `/product-iteration` | Updates HYPOTHESES.md | After features |
+| `/product-iteration` | Updates value ladder with learnings | After features |
 
 ### The Flow
 
-1. **Starting:** `/product-vision` → `/product-roadmap` → `/product-hypotheses`
-2. **Planning:** `/product-epic` → mission TOML → `/product-mission-breakdown` → `/product-epic-breakdown`
+1. **Direction:** `/product-vision` → `/product-values`
+2. **Planning:** `/brainstorm-epics` → mission TOML → `/product-mission-breakdown` → `/product-epic-breakdown`
 3. **Handoff:** `/product-story-handoff` → Beads tasks with `brainstorm` label
 4. **Implementation:** Task pipeline (brainstorm → plan → ready → implement → close)
 5. **Validation:** `/product-judgment` → validates story → epic → mission
-6. **Learning:** `/product-iteration` → update hypotheses → next cycle
+6. **Learning:** `/product-iteration` → update value ladder → next cycle
+
+---
+
+## Testing
+
+**Commands:**
+```bash
+uv run pytest                           # All tests
+uv run pytest tests/test_cli.py         # Specific test file
+uv run pytest -x                        # Stop on first failure
+uv run pytest --cov=fyrnheim            # With coverage
+```
+
+**Key patterns:**
+- Tests live in `tests/` directory
+- Use `pytest` fixtures for setup
+- Write tests for all new functions and modules
+
+---
+
+## Critical Rules
+
+**Every feature must have tests**
+- Write tests for all new functions and modules
+- Never mark work complete until tests pass
+
+**Work is not complete until pushed**
+- Always push to remote before ending a session
+- Create PRs for all feature branches

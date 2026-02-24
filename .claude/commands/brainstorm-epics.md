@@ -1,5 +1,5 @@
 ---
-description: Generate mission candidates from vision, roadmap, and ideas (self-directed or expert-driven via .claude/experts/ catalog)
+description: Generate mission candidates from vision, value ladder, and ideas (self-directed or expert-driven via .claude/experts/ catalog)
 allowed-tools: Bash(git:*), Bash(bd:*), Skill, Task, Read, Write, Glob, Grep
 ---
 
@@ -20,7 +20,7 @@ Present structured candidates, let user select, then create mission TOMLs and op
 ## Prerequisites
 
 - VISION.md should exist (run `/product-vision` if not)
-- ROADMAP.md should exist (run `/product-roadmap` if not)
+- VALUES.md should exist (run `/product-values` if not)
 
 If either file is missing, the command can still run but will have less strategic context. Consider creating them first for better results.
 
@@ -28,25 +28,25 @@ If either file is missing, the command can still run but will have less strategi
 
 ```
                          brainstorm-epics
-                              │
-                    ┌─────────┴─────────┐
-                    ▼                   ▼
+                              |
+                    +---------+---------+
+                    v                   v
              Self-Directed        Product Expert
-                    │                   │
-                    ▼                   ▼
+                    |                   |
+                    v                   v
          User explores ideas    Expert Panel generates:
          with guidance          - Product Expert (from catalog)
-                    │           - Technical Expert (from catalog)
-                    │           - Design Reviewer (from catalog)
-                    │                   │
-                    └─────────┬─────────┘
-                              ▼
+                    |           - Technical Expert (from catalog)
+                    |           - Design Reviewer (from catalog)
+                    |                   |
+                    +---------+---------+
+                              v
                     3 structured candidates
-                              │
-                              ▼
+                              |
+                              v
                        user selects
-                              │
-                              ▼
+                              |
+                              v
               Create mission TOML + optional breakdown
 ```
 
@@ -68,7 +68,7 @@ First, ask the user how they want to brainstorm:
 Run these in parallel:
 
 1. Read VISION.md - extract transformation, beliefs, target users, current phase
-2. Read ROADMAP.md - extract focus areas, key questions, sequencing
+2. Read VALUES.md - extract value levels and statuses
 3. Check existing missions: `ls product/missions/` - avoid duplicates
 4. Run `git log --oneline -30` - understand recent momentum
 
@@ -91,7 +91,7 @@ If user selected Product Expert mode, launch an expert brainstorming session:
 #### 2b.1 Gather Context
 Run these in parallel:
 1. Read VISION.md
-2. Read ROADMAP.md
+2. Read VALUES.md
 3. Check existing missions: `ls product/missions/`
 4. Run `git log --oneline -30`
 
@@ -118,8 +118,8 @@ You are a product expert generating mission candidates for a software project.
 ### Vision
 {VISION.md content}
 
-### Roadmap
-{ROADMAP.md content}
+### Value Ladder
+{VALUES.md content}
 
 ### Existing Missions (avoid duplicates)
 {ls product/missions/ output}
@@ -137,7 +137,7 @@ For each candidate, provide:
 3. **User Progress**: From [current state] to [desired state]
 4. **Magic Moment**: What would make someone say "wow"?
 5. **Scope**: S / M / L
-6. **Roadmap Connection**: Which focus area this serves
+6. **Value Level**: Which value level(s) this advances
 7. **Why Now**: What makes this timely
 8. **Potential Epics**: 3-5 rough epic ideas
 ```
@@ -214,7 +214,7 @@ Each candidate should have:
 - **Problem:** What pain point or opportunity this addresses (2-3 sentences)
 - **User Progress:** From [current state] to [desired state]
 - **Scope:** S / M / L
-- **Roadmap Connection:** Which focus area this serves
+- **Value Level:** Which value level(s) this advances
 - **Why now:** What makes this timely given current state
 - **Potential epics:** 3-5 rough epic ideas
 
@@ -229,7 +229,7 @@ Here are [N] mission candidates based on [inputs used]:
 **Problem:** ...
 **User Progress:** From ... to ...
 **Scope:** M
-**Roadmap Connection:** [Focus Area]
+**Value Level:** [Level(s)]
 **Why now:** ...
 **Potential epics:**
 - Epic idea 1

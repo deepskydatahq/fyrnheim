@@ -1,61 +1,61 @@
 ---
-description: Break a hypothesis into an epic with child tasks for testing
-allowed-tools: Bash(git:*), Bash(hte tasks:*), Skill, Read, Write, Glob, Grep
+description: Break a mission into an epic with child tasks for testing
+allowed-tools: Bash(git:*), Bash(bd:*), Skill, Read, Write, Glob, Grep
 ---
 
 # Product Epic
 
-Break a hypothesis into an epic with child tasks for testing.
+Break a mission into an epic with child tasks for implementation.
 
 ## Purpose
 
-Bridges strategy → tactics. Takes a hypothesis from HYPOTHESES.md and creates:
-- One epic task (the hypothesis itself)
-- Multiple child tasks (work needed to test it)
+Bridges strategy -> tactics. Takes a mission from `product/missions/` and creates:
+- One epic task (the mission outcome)
+- Multiple child tasks (work needed to deliver it)
 
 ## When to Use
 
-- After creating/updating HYPOTHESES.md
-- When ready to start testing a hypothesis
+- After creating a new mission TOML
+- When ready to start working on a mission
 - When current epic is complete and you need the next one
 
 ## Prerequisites
 
-- HYPOTHESES.md must exist with at least one untested (🟡) hypothesis
+- A mission TOML must exist in `product/missions/` with status "active" or "draft"
 
 ## Instructions
 
-### 1. Select Hypothesis
+### 1. Select Mission
 
-1. Read HYPOTHESES.md
-2. Filter to 🟡 Untested hypotheses
+1. Read mission TOMLs in `product/missions/`
+2. Filter to active/draft missions
 3. Score by priority:
    - **Impact:** How much does this serve the transformation?
    - **Uncertainty:** How unsure are we? (higher = more valuable to test)
-   - **Effort:** How hard to test?
+   - **Effort:** How hard to deliver?
 4. Present top choice to user with reasoning
 5. Confirm before proceeding (or let user pick different one)
 
 ### 2. Brainstorm Work Items
 
-Invoke `superpowers:brainstorming` skill to identify work needed to test the hypothesis.
+Invoke `superpowers:brainstorming` skill to identify work needed to deliver the mission outcome.
 
 Consider:
-- What do we need to **prepare** before testing?
-- What do we need to **build or change** to run the test?
-- How will we **run** the test?
+- What do we need to **prepare** before building?
+- What do we need to **build or change** to deliver the outcome?
+- How will we **test** it works?
 - How will we **measure** results?
-- How will we **analyze** and document learnings?
+- How will we **validate** against the mission's testing criteria?
 
 Aim for 3-7 concrete work items. Each should be:
 - Small enough to complete in a focused session
 - Clear about what "done" looks like
-- Necessary to test the hypothesis (no nice-to-haves)
+- Necessary to deliver the mission outcome (no nice-to-haves)
 
 ### 3. Create Epic Task
 
 ```bash
-hte tasks create --title "Epic: Test [H#] - [Hypothesis Name]" --status brainstorm --data '{"body":"## Hypothesis\n\n**Belief:** [From HYPOTHESES.md]\n\n**Test:** [From HYPOTHESES.md]\n\n**Investment Area:** [From HYPOTHESES.md]\n\n---\n\n## Child Tasks\n\n(Child tasks will be linked here after creation)\n\n---\n\n*Created via /product-epic*"}'
+bd create "Epic: [Mission ID] - [Mission Name]" --labels brainstorm -d "## Mission\n\n**Outcome:** [From mission TOML]\n\n**Testing Criteria:** [From mission TOML]\n\n---\n\n## Child Tasks\n\n(Child tasks will be linked here after creation)\n\n---\n\n*Created via /product-epic*"
 ```
 
 Note the epic task ID for the next step.
@@ -65,7 +65,7 @@ Note the epic task ID for the next step.
 For each work item identified in step 2:
 
 ```bash
-hte tasks create --title "[Task title]" --status brainstorm --data '{"body":"## Context\n\nPart of epic task [EPIC_ID]: Test [H#] - [Hypothesis Name]\n\n## Goal\n\n[What this task accomplishes toward testing the hypothesis]\n\n## Done When\n\n[Clear completion criteria]\n\n---\n\n*Created via /product-epic*"}'
+bd create "[Task title]" --labels brainstorm -d "## Context\n\nPart of epic task [EPIC_ID]: [Mission ID] - [Mission Name]\n\n## Goal\n\n[What this task accomplishes toward the mission outcome]\n\n## Done When\n\n[Clear completion criteria]\n\n---\n\n*Created via /product-epic*"
 ```
 
 Collect all child task IDs.
@@ -75,13 +75,11 @@ Collect all child task IDs.
 Update the epic task body to include the child task links:
 
 ```
-## Hypothesis
+## Mission
 
-**Belief:** [From HYPOTHESES.md]
+**Outcome:** [From mission TOML]
 
-**Test:** [From HYPOTHESES.md]
-
-**Investment Area:** [From HYPOTHESES.md]
+**Testing Criteria:** [From mission TOML]
 
 ---
 
@@ -97,21 +95,19 @@ Update the epic task body to include the child task links:
 *Created via /product-epic*
 ```
 
-### 6. Update HYPOTHESES.md
+### 6. Update Mission Status
 
-Change the hypothesis status from 🟡 Untested to 🔵 Testing.
+If the mission was in draft status, update it to active:
 
-Add to Evidence section:
-```markdown
-**Evidence:**
-- [Date]: Epic created (task [EPIC_ID]) with [N] child tasks
+```toml
+status = "active"
 ```
 
 ### 7. Commit Changes
 
 ```bash
-git add HYPOTHESES.md
-git commit -m "docs: start testing [H#] - [Hypothesis Name]"
+git add product/missions/
+git commit -m "docs: start working on [Mission ID] - [Mission Name]"
 ```
 
 ## Pipeline Integration
@@ -120,28 +116,24 @@ After `/product-epic` completes, child tasks enter the normal pipeline:
 
 ```
 /product-epic
-    │
-    ▼
-brainstorm ──► plan ──► ready
-     │            │        │
+    |
+    v
+brainstorm --> plan --> ready
+     |            |        |
 /brainstorm  /plan-issue  /pick-issue
 ```
 
-When all child tasks are complete, run `/product-iteration` to:
-- Analyze results
-- Update hypothesis status (Validated/Invalidated)
-- Document learnings
-- Generate follow-up hypotheses if needed
+When all child tasks are complete, run `/product-judgment` to validate the mission outcome.
 
 ## Example Output
 
-**Epic:** `Epic: Test H2 - Interview Completion` (task 01KFJ4YM...)
+**Epic:** `Epic: M009 - Refinement Loop` (task 01KFJ4YM...)
 
 **Children:**
-- `Recruit 5 test users from target audience` (01KFJ4YN...) - brainstorm
-- `Set up session recording for user tests` (01KFJ4YP...) - brainstorm
-- `Create post-interview feedback questions` (01KFJ4YQ...) - brainstorm
-- `Run test sessions and document observations` (01KFJ4YR...) - brainstorm
-- `Analyze results and update hypothesis` (01KFJ4YS...) - brainstorm
+- `Design MCP update tool interface` (01KFJ4YN...) - brainstorm
+- `Implement update_definition tool` (01KFJ4YP...) - brainstorm
+- `Add cascading update logic` (01KFJ4YQ...) - brainstorm
+- `Build confidence tracking system` (01KFJ4YR...) - brainstorm
+- `Test refinement with real profile` (01KFJ4YS...) - brainstorm
 
-**HYPOTHESES.md updated:** H2 status changed to 🔵 Testing
+**Mission updated:** M009 status changed to active

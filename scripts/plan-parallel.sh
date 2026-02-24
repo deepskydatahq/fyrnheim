@@ -5,9 +5,12 @@
 # Spawns N parallel workers that each claim and process plan tasks.
 # Uses file locking to prevent double-claiming.
 
-set -e
+set -euo pipefail
 
 source "$(dirname "$0")/lib/log.sh"
+
+# Disable set -e for worker subshells — workers handle errors via trap + explicit checks
+set +e
 
 WORKERS=3
 MAX_TASKS=0
@@ -53,18 +56,35 @@ echo ""
 
 log_activity "plan-parallel" "START" "-" "Parallel session" "workers=$WORKERS"
 
-# Worker function
+# Worker function — runs in background subshell, must not use set -e
 worker() {
     local WORKER_ID="$1"
     local PROCESSED=0
     local FAILED=0
+    local CURRENT_TASK_ID=""
+    local CURRENT_LOCK_FILE=""
+
+    # Trap: on unexpected exit, release lock and reset task
+    cleanup_worker() {
+        if [[ -n "$CURRENT_TASK_ID" ]]; then
+            echo "[Plan Worker $WORKER_ID] Unexpected exit — resetting $CURRENT_TASK_ID"
+            bd update "$CURRENT_TASK_ID" --status open 2>/dev/null || true
+        fi
+        if [[ -n "$CURRENT_LOCK_FILE" && -f "$CURRENT_LOCK_FILE" ]]; then
+            rm -f "$CURRENT_LOCK_FILE"
+        fi
+    }
+    trap cleanup_worker EXIT
 
     echo "[Plan Worker $WORKER_ID] Started"
 
     while true; do
+        CURRENT_TASK_ID=""
+        CURRENT_LOCK_FILE=""
+
         # Fetch available tasks (open status only)
-        TASKS=$(bd list --label plan --json | jq '[.[] | select(.status == "open")]')
-        COUNT=$(echo "$TASKS" | jq 'length')
+        TASKS=$(bd list --label plan --json 2>/dev/null | jq '[.[] | select(.status == "open")]' 2>/dev/null) || TASKS="[]"
+        COUNT=$(echo "$TASKS" | jq 'length' 2>/dev/null) || COUNT=0
 
         if [[ "$COUNT" -eq 0 ]]; then
             echo "[Plan Worker $WORKER_ID] No more open tasks. Exiting."
@@ -74,14 +94,14 @@ worker() {
         # Try to claim a task (try each until one succeeds)
         CLAIMED=false
         for i in $(seq 0 $((COUNT - 1))); do
-            TASK_ID=$(echo "$TASKS" | jq -r ".[$i].id")
-            TASK_TITLE=$(echo "$TASKS" | jq -r ".[$i].title")
+            TASK_ID=$(echo "$TASKS" | jq -r ".[$i].id" 2>/dev/null) || continue
+            TASK_TITLE=$(echo "$TASKS" | jq -r ".[$i].title" 2>/dev/null) || continue
 
             # Try to acquire lock
             LOCK_FILE="$LOCK_DIR/$TASK_ID.lock"
             if (set -o noclobber; echo $$ > "$LOCK_FILE") 2>/dev/null; then
                 # Double-check task is still open
-                CURRENT_STATUS=$(bd show "$TASK_ID" --json | jq -r '.[0].status')
+                CURRENT_STATUS=$(bd show "$TASK_ID" --json 2>/dev/null | jq -r '.[0].status' 2>/dev/null) || CURRENT_STATUS="unknown"
                 if [[ "$CURRENT_STATUS" != "open" ]]; then
                     rm -f "$LOCK_FILE"
                     continue
@@ -89,6 +109,8 @@ worker() {
 
                 # Claim the task
                 bd update "$TASK_ID" --status in_progress 2>/dev/null || true
+                CURRENT_TASK_ID="$TASK_ID"
+                CURRENT_LOCK_FILE="$LOCK_FILE"
                 CLAIMED=true
                 echo "[Plan Worker $WORKER_ID] Claimed: $TASK_ID - $TASK_TITLE"
                 log_activity "plan-parallel:w$WORKER_ID" "CLAIM" "$TASK_ID" "$TASK_TITLE"
@@ -105,19 +127,13 @@ worker() {
         # Process the task
         echo "[Plan Worker $WORKER_ID] Processing $TASK_ID..."
 
-        if [[ "$CONTINUE_ON_ERROR" == true ]]; then
-            set +e
-        fi
-
         TASK_START=$SECONDS
         claude --dangerously-skip-permissions -p "Run /plan-issue $TASK_ID"
         EXIT_CODE=$?
         DURATION=$((SECONDS - TASK_START))
 
-        set -e
-
         # Release lock
-        rm -f "$LOCK_FILE"
+        rm -f "$CURRENT_LOCK_FILE"
 
         if [[ "$EXIT_CODE" -ne 0 ]]; then
             echo "[Plan Worker $WORKER_ID] Task $TASK_ID failed (exit $EXIT_CODE)"
@@ -125,6 +141,8 @@ worker() {
             FAILED=$((FAILED + 1))
             # Reset status on failure
             bd update "$TASK_ID" --status open 2>/dev/null || true
+            CURRENT_TASK_ID=""
+            CURRENT_LOCK_FILE=""
 
             if [[ "$CONTINUE_ON_ERROR" != true ]]; then
                 break
@@ -134,6 +152,8 @@ worker() {
             ensure_plan_body "$TASK_ID" "$TASK_TITLE" "Plan Worker $WORKER_ID"
             log_activity "plan-parallel:w$WORKER_ID" "SUCCESS" "$TASK_ID" "$TASK_TITLE" "duration=${DURATION}s"
             PROCESSED=$((PROCESSED + 1))
+            CURRENT_TASK_ID=""
+            CURRENT_LOCK_FILE=""
         fi
 
         # Check max
@@ -144,6 +164,11 @@ worker() {
 
         sleep 1
     done
+
+    # Clear trap state so cleanup doesn't double-reset
+    CURRENT_TASK_ID=""
+    CURRENT_LOCK_FILE=""
+    trap - EXIT
 
     echo "[Plan Worker $WORKER_ID] Finished. Processed: $PROCESSED, Failed: $FAILED"
 }

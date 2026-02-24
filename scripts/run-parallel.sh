@@ -6,9 +6,12 @@
 # Workers skip tasks that have unresolved dependencies.
 # Uses file locking to prevent double-claiming.
 
-set -e
+set -euo pipefail
 
 source "$(dirname "$0")/lib/log.sh"
+
+# Disable set -e for worker subshells — workers handle errors via trap + explicit checks
+set +e
 
 WORKERS=3
 MAX_TASKS=0
@@ -89,18 +92,35 @@ create_slug() {
     echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-50
 }
 
-# Worker function
+# Worker function — runs in background subshell, must not use set -e
 worker() {
     local WORKER_ID="$1"
     local PROCESSED=0
     local FAILED=0
+    local CURRENT_TASK_ID=""
+    local CURRENT_LOCK_FILE=""
+
+    # Trap: on unexpected exit, release lock and reset task
+    cleanup_worker() {
+        if [[ -n "$CURRENT_TASK_ID" ]]; then
+            echo "[Run Worker $WORKER_ID] Unexpected exit — resetting $CURRENT_TASK_ID"
+            bd update "$CURRENT_TASK_ID" --status open 2>/dev/null || true
+        fi
+        if [[ -n "$CURRENT_LOCK_FILE" && -f "$CURRENT_LOCK_FILE" ]]; then
+            rm -f "$CURRENT_LOCK_FILE"
+        fi
+    }
+    trap cleanup_worker EXIT
 
     echo "[Run Worker $WORKER_ID] Started"
 
     while true; do
+        CURRENT_TASK_ID=""
+        CURRENT_LOCK_FILE=""
+
         # Fetch available tasks (ready label, open status only)
-        TASKS=$(bd list --label ready --json | jq '[.[] | select(.status == "open")]')
-        COUNT=$(echo "$TASKS" | jq 'length')
+        TASKS=$(bd list --label ready --json 2>/dev/null | jq '[.[] | select(.status == "open")]' 2>/dev/null) || TASKS="[]"
+        COUNT=$(echo "$TASKS" | jq 'length' 2>/dev/null) || COUNT=0
 
         if [[ "$COUNT" -eq 0 ]]; then
             echo "[Run Worker $WORKER_ID] No more open ready tasks. Exiting."
@@ -110,8 +130,8 @@ worker() {
         # Try to claim a task (try each until one succeeds)
         CLAIMED=false
         for i in $(seq 0 $((COUNT - 1))); do
-            TASK_ID=$(echo "$TASKS" | jq -r ".[$i].id")
-            TASK_TITLE=$(echo "$TASKS" | jq -r ".[$i].title")
+            TASK_ID=$(echo "$TASKS" | jq -r ".[$i].id" 2>/dev/null) || continue
+            TASK_TITLE=$(echo "$TASKS" | jq -r ".[$i].title" 2>/dev/null) || continue
 
             # Check dependencies first
             if has_unresolved_deps "$TASK_ID"; then
@@ -124,7 +144,7 @@ worker() {
             LOCK_FILE="$LOCK_DIR/$TASK_ID.lock"
             if (set -o noclobber; echo $$ > "$LOCK_FILE") 2>/dev/null; then
                 # Double-check task is still open
-                CURRENT_STATUS=$(bd show "$TASK_ID" --json | jq -r '.[0].status')
+                CURRENT_STATUS=$(bd show "$TASK_ID" --json 2>/dev/null | jq -r '.[0].status' 2>/dev/null) || CURRENT_STATUS="unknown"
                 if [[ "$CURRENT_STATUS" != "open" ]]; then
                     rm -f "$LOCK_FILE"
                     continue
@@ -132,6 +152,8 @@ worker() {
 
                 # Claim the task
                 bd update "$TASK_ID" --status in_progress 2>/dev/null || true
+                CURRENT_TASK_ID="$TASK_ID"
+                CURRENT_LOCK_FILE="$LOCK_FILE"
                 CLAIMED=true
                 echo "[Run Worker $WORKER_ID] Claimed: $TASK_ID - $TASK_TITLE"
                 log_activity "run-parallel:w$WORKER_ID" "CLAIM" "$TASK_ID" "$TASK_TITLE"
@@ -143,7 +165,7 @@ worker() {
             # Check if all remaining tasks are blocked
             BLOCKED_COUNT=0
             for i in $(seq 0 $((COUNT - 1))); do
-                TID=$(echo "$TASKS" | jq -r ".[$i].id")
+                TID=$(echo "$TASKS" | jq -r ".[$i].id" 2>/dev/null) || continue
                 if has_unresolved_deps "$TID"; then
                     BLOCKED_COUNT=$((BLOCKED_COUNT + 1))
                 fi
@@ -180,8 +202,8 @@ worker() {
         fi
 
         # Get task description for the prompt
-        TASK_DATA=$(bd show "$TASK_ID" --json | jq '.[0]')
-        TASK_BODY=$(echo "$TASK_DATA" | jq -r '.description')
+        TASK_DATA=$(bd show "$TASK_ID" --json 2>/dev/null | jq '.[0]' 2>/dev/null) || TASK_DATA="{}"
+        TASK_BODY=$(echo "$TASK_DATA" | jq -r '.description' 2>/dev/null) || TASK_BODY="(could not load description)"
 
         # Build the prompt
         PROMPT="# Implement Task
@@ -279,20 +301,14 @@ Branch: $BRANCH
 
 Begin by reading the project context, then extract all steps and implement them."
 
-        if [[ "$CONTINUE_ON_ERROR" == true ]]; then
-            set +e
-        fi
-
         TASK_START=$SECONDS
         # Run Claude Code in the worktree directory
         (cd "$WORKTREE_PATH" && claude --dangerously-skip-permissions -p "$PROMPT")
         EXIT_CODE=$?
         DURATION=$((SECONDS - TASK_START))
 
-        set -e
-
         # Release lock
-        rm -f "$LOCK_FILE"
+        rm -f "$CURRENT_LOCK_FILE"
 
         if [[ "$EXIT_CODE" -ne 0 ]]; then
             echo "[Run Worker $WORKER_ID] Task $TASK_ID failed (exit $EXIT_CODE)"
@@ -300,6 +316,8 @@ Begin by reading the project context, then extract all steps and implement them.
             FAILED=$((FAILED + 1))
             # Reset status on failure
             bd update "$TASK_ID" --status open 2>/dev/null || true
+            CURRENT_TASK_ID=""
+            CURRENT_LOCK_FILE=""
 
             if [[ "$CONTINUE_ON_ERROR" != true ]]; then
                 break
@@ -307,13 +325,15 @@ Begin by reading the project context, then extract all steps and implement them.
         else
             echo "[Run Worker $WORKER_ID] Task $TASK_ID completed"
             # Safety net: ensure task was closed
-            CURRENT_STATUS=$(bd show "$TASK_ID" --json 2>/dev/null | jq -r '.[0].status' 2>/dev/null)
+            CURRENT_STATUS=$(bd show "$TASK_ID" --json 2>/dev/null | jq -r '.[0].status' 2>/dev/null) || CURRENT_STATUS="unknown"
             if [[ "$CURRENT_STATUS" != "closed" ]]; then
                 echo "[Run Worker $WORKER_ID] Task not closed, fixing..."
                 bd close "$TASK_ID" 2>/dev/null || true
             fi
             log_activity "run-parallel:w$WORKER_ID" "SUCCESS" "$TASK_ID" "$TASK_TITLE" "duration=${DURATION}s"
             PROCESSED=$((PROCESSED + 1))
+            CURRENT_TASK_ID=""
+            CURRENT_LOCK_FILE=""
         fi
 
         # Check max
@@ -324,6 +344,11 @@ Begin by reading the project context, then extract all steps and implement them.
 
         sleep 1
     done
+
+    # Clear trap state so cleanup doesn't double-reset
+    CURRENT_TASK_ID=""
+    CURRENT_LOCK_FILE=""
+    trap - EXIT
 
     echo "[Run Worker $WORKER_ID] Finished. Processed: $PROCESSED, Failed: $FAILED"
 }

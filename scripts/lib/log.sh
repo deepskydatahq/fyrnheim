@@ -66,16 +66,13 @@ ensure_plan_body() {
 
     TASK_JSON=$(bd show "$TASK_ID" --json 2>/dev/null)
 
-    # Check label transition (two-step: add first, then remove — single command is unreliable)
-    if echo "$TASK_JSON" | jq -r '.[0].labels[]?' 2>/dev/null | grep -q "plan"; then
-        echo "[$LOG_PREFIX] Label not transitioned, fixing: plan → ready"
-        bd update "$TASK_ID" --add-label ready 2>/dev/null || true
-        bd update "$TASK_ID" --remove-label plan 2>/dev/null || true
-    fi
-
-    # Check if body contains plan content
+    # Check if body contains plan content BEFORE transitioning label
     CURRENT_BODY=$(echo "$TASK_JSON" | jq -r '.[0].description // ""' 2>/dev/null)
-    if ! echo "$CURRENT_BODY" | grep -qi "Implementation Plan\|Plan document\|### Steps\|### Tasks\|Step [0-9]"; then
+    HAS_PLAN=false
+
+    if echo "$CURRENT_BODY" | grep -qi "Implementation Plan\|Plan document\|### Steps\|### Tasks\|Step [0-9]\|### Overview"; then
+        HAS_PLAN=true
+    else
         echo "[$LOG_PREFIX] Task body missing plan content, looking for plan doc..."
         SLUG=$(echo "$TASK_TITLE" | sed 's/^M[0-9]*-E[0-9]*-S[0-9]*: //' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
         PLAN_DOC=$(ls docs/plans/*"$SLUG"*-plan.md docs/plans/*"$SLUG"*-implementation*.md 2>/dev/null | head -1)
@@ -86,12 +83,21 @@ ensure_plan_body() {
         if [[ -n "$PLAN_DOC" && -f "$PLAN_DOC" ]]; then
             echo "[$LOG_PREFIX] Found plan doc: $PLAN_DOC"
             PLAN_BODY=$(head -c 1500 "$PLAN_DOC")
-            # Append plan content to existing body
             NEW_BODY="${CURRENT_BODY}"$'\n\n'"## Implementation Plan"$'\n\n'"${PLAN_BODY}"$'\n\n'"---"$'\n'"*Plan doc: ${PLAN_DOC}*"
             bd update "$TASK_ID" -d "$NEW_BODY" 2>/dev/null || true
             echo "[$LOG_PREFIX] Plan content appended to task body"
+            HAS_PLAN=true
         else
-            echo "[$LOG_PREFIX] WARNING: No plan doc found for task"
+            echo "[$LOG_PREFIX] WARNING: No plan doc found — keeping task as 'plan'"
+        fi
+    fi
+
+    # Only transition label if plan content actually exists
+    if [[ "$HAS_PLAN" == true ]]; then
+        if echo "$TASK_JSON" | jq -r '.[0].labels[]?' 2>/dev/null | grep -q "plan"; then
+            echo "[$LOG_PREFIX] Plan verified, transitioning: plan → ready"
+            bd update "$TASK_ID" --add-label ready 2>/dev/null || true
+            bd update "$TASK_ID" --remove-label plan 2>/dev/null || true
         fi
     fi
 }

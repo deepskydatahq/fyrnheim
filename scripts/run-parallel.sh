@@ -1,9 +1,10 @@
 #!/bin/bash
 # Parallel implementation workers with dependency awareness
-# Usage: ./run-parallel.sh [--workers N] [--max N] [--continue-on-error]
+# Usage: ./run-parallel.sh [--workers N] [--max N] [--max-retries N] [--continue-on-error]
 #
 # Spawns N parallel workers that each claim and process ready tasks.
 # Workers skip tasks that have unresolved dependencies.
+# Tracks retries per task — skips tasks that have failed too many times.
 # Uses file locking to prevent double-claiming.
 
 set -euo pipefail
@@ -15,8 +16,10 @@ set +e
 
 WORKERS=3
 MAX_TASKS=0
+MAX_RETRIES=2
 CONTINUE_ON_ERROR=false
 LOCK_DIR="/tmp/run-locks"
+RETRY_DIR="/tmp/run-retries"
 
 # Get the repo root for worktree calculations
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -33,34 +36,59 @@ while [[ $# -gt 0 ]]; do
             MAX_TASKS="$2"
             shift 2
             ;;
+        --max-retries)
+            MAX_RETRIES="$2"
+            shift 2
+            ;;
         --continue-on-error)
             CONTINUE_ON_ERROR=true
             shift
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: ./run-parallel.sh [--workers N] [--max N] [--continue-on-error]"
+            echo "Usage: ./run-parallel.sh [--workers N] [--max N] [--max-retries N] [--continue-on-error]"
             exit 1
             ;;
     esac
 done
 
-# Create lock directory
-mkdir -p "$LOCK_DIR"
+# Create directories
+mkdir -p "$LOCK_DIR" "$RETRY_DIR"
 
-# Cleanup old locks on start
+# Cleanup old locks on start (but preserve retry counts)
 find "$LOCK_DIR" -name "*.lock" -mmin +60 -delete 2>/dev/null || true
 
 echo "=========================================="
 echo "Parallel Implementation"
 echo "  Workers: $WORKERS"
 echo "  Max tasks: ${MAX_TASKS:-unlimited}"
+echo "  Max retries per task: $MAX_RETRIES"
 echo "  Lock dir: $LOCK_DIR"
 echo "  Worktree base: $WORKTREE_BASE"
 echo "=========================================="
 echo ""
 
 log_activity "run-parallel" "START" "-" "Parallel session" "workers=$WORKERS"
+
+# Get retry count for a task (0 if never tried)
+get_retries() {
+    local TASK_ID="$1"
+    local RETRY_FILE="$RETRY_DIR/$TASK_ID.retries"
+    if [[ -f "$RETRY_FILE" ]]; then
+        cat "$RETRY_FILE" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+# Increment retry count for a task
+inc_retries() {
+    local TASK_ID="$1"
+    local RETRY_FILE="$RETRY_DIR/$TASK_ID.retries"
+    local COUNT
+    COUNT=$(get_retries "$TASK_ID")
+    echo $((COUNT + 1)) > "$RETRY_FILE"
+}
 
 # Function to check if a task has unresolved dependencies
 has_unresolved_deps() {
@@ -129,9 +157,16 @@ worker() {
 
         # Try to claim a task (try each until one succeeds)
         CLAIMED=false
+        ALL_BLOCKED_OR_MAXED=true
         for i in $(seq 0 $((COUNT - 1))); do
             TASK_ID=$(echo "$TASKS" | jq -r ".[$i].id" 2>/dev/null) || continue
             TASK_TITLE=$(echo "$TASKS" | jq -r ".[$i].title" 2>/dev/null) || continue
+
+            # Check retry count
+            RETRIES=$(get_retries "$TASK_ID")
+            if [[ "$RETRIES" -ge "$MAX_RETRIES" ]]; then
+                continue
+            fi
 
             # Check dependencies first
             if has_unresolved_deps "$TASK_ID"; then
@@ -139,6 +174,8 @@ worker() {
                 log_activity "run-parallel:w$WORKER_ID" "SKIP" "$TASK_ID" "$TASK_TITLE" "blocked by deps"
                 continue
             fi
+
+            ALL_BLOCKED_OR_MAXED=false
 
             # Try to acquire lock
             LOCK_FILE="$LOCK_DIR/$TASK_ID.lock"
@@ -155,24 +192,15 @@ worker() {
                 CURRENT_TASK_ID="$TASK_ID"
                 CURRENT_LOCK_FILE="$LOCK_FILE"
                 CLAIMED=true
-                echo "[Run Worker $WORKER_ID] Claimed: $TASK_ID - $TASK_TITLE"
-                log_activity "run-parallel:w$WORKER_ID" "CLAIM" "$TASK_ID" "$TASK_TITLE"
+                echo "[Run Worker $WORKER_ID] Claimed: $TASK_ID - $TASK_TITLE (attempt $((RETRIES + 1))/$MAX_RETRIES)"
+                log_activity "run-parallel:w$WORKER_ID" "CLAIM" "$TASK_ID" "$TASK_TITLE" "attempt=$((RETRIES + 1))"
                 break
             fi
         done
 
         if [[ "$CLAIMED" != true ]]; then
-            # Check if all remaining tasks are blocked
-            BLOCKED_COUNT=0
-            for i in $(seq 0 $((COUNT - 1))); do
-                TID=$(echo "$TASKS" | jq -r ".[$i].id" 2>/dev/null) || continue
-                if has_unresolved_deps "$TID"; then
-                    BLOCKED_COUNT=$((BLOCKED_COUNT + 1))
-                fi
-            done
-
-            if [[ "$BLOCKED_COUNT" -eq "$COUNT" ]]; then
-                echo "[Run Worker $WORKER_ID] All remaining tasks are blocked. Waiting for dependencies..."
+            if [[ "$ALL_BLOCKED_OR_MAXED" == true ]]; then
+                echo "[Run Worker $WORKER_ID] All remaining tasks are blocked or hit max retries. Waiting..."
                 sleep 30
             else
                 echo "[Run Worker $WORKER_ID] Could not claim any task. Waiting..."
@@ -314,6 +342,7 @@ Begin by reading the project context, then extract all steps and implement them.
             echo "[Run Worker $WORKER_ID] Task $TASK_ID failed (exit $EXIT_CODE)"
             log_activity "run-parallel:w$WORKER_ID" "FAIL" "$TASK_ID" "$TASK_TITLE" "exit=$EXIT_CODE duration=${DURATION}s"
             FAILED=$((FAILED + 1))
+            inc_retries "$TASK_ID"
             # Reset status on failure
             bd update "$TASK_ID" --status open 2>/dev/null || true
             CURRENT_TASK_ID=""
@@ -354,8 +383,8 @@ Begin by reading the project context, then extract all steps and implement them.
 }
 
 # Export for subshells
-export CONTINUE_ON_ERROR MAX_TASKS LOCK_DIR WORKTREE_BASE
-export -f worker has_unresolved_deps create_slug
+export CONTINUE_ON_ERROR MAX_TASKS MAX_RETRIES LOCK_DIR RETRY_DIR WORKTREE_BASE
+export -f worker has_unresolved_deps create_slug get_retries inc_retries
 
 # Spawn workers
 PIDS=()
@@ -386,8 +415,22 @@ echo "=========================================="
 # Show final status
 echo ""
 echo "Final task status:"
-echo "  Ready: $(bd list --label ready --json | jq '[.[] | select(.status == "open")] | length')"
-echo "  In Progress: $(bd list --label ready --json | jq '[.[] | select(.status == "in_progress")] | length')"
-echo "  Closed: $(bd list --label ready --json | jq '[.[] | select(.status == "closed")] | length')"
+echo "  Ready: $(bd list --label ready --json 2>/dev/null | jq '[.[] | select(.status == "open")] | length')"
+echo "  In Progress: $(bd list --label ready --json 2>/dev/null | jq '[.[] | select(.status == "in_progress")] | length')"
+echo "  Closed: $(bd list --label ready --json 2>/dev/null | jq '[.[] | select(.status == "closed")] | length')"
+
+if ls "$RETRY_DIR"/*.retries &>/dev/null; then
+    echo ""
+    echo "Retry counts:"
+    for f in "$RETRY_DIR"/*.retries; do
+        TASK_ID=$(basename "$f" .retries)
+        COUNT=$(cat "$f")
+        if [[ "$COUNT" -ge "$MAX_RETRIES" ]]; then
+            echo "  $TASK_ID: $COUNT attempts (MAX REACHED)"
+        else
+            echo "  $TASK_ID: $COUNT attempts"
+        fi
+    done
+fi
 
 exit $TOTAL_EXIT

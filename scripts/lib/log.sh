@@ -92,12 +92,24 @@ ensure_plan_body() {
         fi
     fi
 
-    # Only transition label if plan content actually exists
+    # Re-read task in case Claude changed labels during the run
+    TASK_JSON=$(bd show "$TASK_ID" --json 2>/dev/null)
+
     if [[ "$HAS_PLAN" == true ]]; then
+        # Plan exists — ensure label is ready
         if echo "$TASK_JSON" | jq -r '.[0].labels[]?' 2>/dev/null | grep -q "plan"; then
             echo "[$LOG_PREFIX] Plan verified, transitioning: plan → ready"
             bd update "$TASK_ID" --add-label ready 2>/dev/null || true
             bd update "$TASK_ID" --remove-label plan 2>/dev/null || true
         fi
+    else
+        # No plan — revert if Claude falsely promoted to ready
+        if echo "$TASK_JSON" | jq -r '.[0].labels[]?' 2>/dev/null | grep -q "ready"; then
+            echo "[$LOG_PREFIX] No plan content found — reverting ready → plan"
+            bd update "$TASK_ID" --add-label plan 2>/dev/null || true
+            bd update "$TASK_ID" --remove-label ready 2>/dev/null || true
+        fi
+        # Also reset status so it's picked up again
+        bd update "$TASK_ID" --status open 2>/dev/null || true
     fi
 }

@@ -1,0 +1,59 @@
+# Story: Generate .relabel() from field_mappings
+
+id = "M005-E001-S002"
+parent = "M005-E001"
+title = "Generate .relabel() calls in source functions when field_mappings present"
+status = "draft"
+depends_on = ["M005-E001-S001"]
+
+[outcome]
+description = """
+When IbisCodeGenerator has a SourceMapping with non-empty field_mappings, the generated
+source function appends .relabel({source_col: entity_field, ...}) to the return
+expressions. The mapping dict is inverted (field_mappings stores entity_field→source_col,
+but .relabel() needs source_col→entity_field). Empty field_mappings produce no .relabel()
+call. Works for both DuckDB and BigQuery branches in generated code.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated source function includes .relabel({'id': 'transaction_id'}) when field_mappings={'transaction_id': 'id'}"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Both DuckDB and BigQuery return branches include the .relabel() call"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Multiple field_mappings produce a single .relabel() with all entries"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Empty field_mappings (default) produces no .relabel() — generated code unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated module with field_mappings passes ast.parse (valid Python)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing codegen tests pass — no regressions from new code path"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "tests/test_ibis_code_generator.py",
+]
+
+[handoff]
+implementation_hints = """
+1. In _generate_single_source_function(), check self.source_mapping for field_mappings
+2. If non-empty, invert the dict: {v: k for k, v in field_mappings.items()}
+3. Append .relabel(inverted) to both conn.read_parquet() and conn.table() return lines
+4. Use repr() for the dict literal in generated code
+5. field_mappings is {entity_field: source_column} — .relabel() needs {source_column: entity_field}
+"""

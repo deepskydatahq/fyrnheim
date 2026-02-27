@@ -1,0 +1,58 @@
+# Story: E2E test for SourceMapping field_mappings on DuckDB
+
+id = "M005-E001-S003"
+parent = "M005-E001"
+title = "E2E test verifying SourceMapping field_mappings execute correctly on DuckDB"
+status = "draft"
+depends_on = ["M005-E001-S002"]
+
+[outcome]
+description = """
+An end-to-end test creates a Parquet file with source column names (e.g. 'id',
+'subtotal'), defines an entity with SourceMapping field_mappings that rename them
+to entity names (e.g. 'transaction_id', 'amount_cents'), generates code, executes
+on DuckDB, and verifies the output table has entity field names — not source column
+names. This proves the full pipeline works: SourceMapping → codegen → execution.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Parquet with columns {id, subtotal, created} generates + executes with field_mappings renaming to {transaction_id, amount_cents, created_at}"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Output table columns use entity field names, not source column names"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Row count matches input data (no rows lost during rename)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity with empty field_mappings still works (backward compatible E2E)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "All existing E2E tests still pass — no regressions"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/generators/_generate.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Follow the existing E2E pattern in test_e2e_ibis_executor.py (sample_parquet fixture)
+2. Create Parquet with source column names (id, subtotal, created)
+3. Define Entity with required_fields using entity names (transaction_id, amount_cents, created_at)
+4. Create SourceMapping with field_mappings connecting them
+5. Use generate(entity, output_dir, source_mapping=sm) to produce code
+6. Execute with IbisExecutor and verify output column names
+7. Also test run_entity() path if SourceMapping can be passed through
+"""

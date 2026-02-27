@@ -1,0 +1,49 @@
+# Story: Wire SourceMapping into IbisCodeGenerator
+
+id = "M005-E001-S001"
+parent = "M005-E001"
+title = "Accept optional SourceMapping in IbisCodeGenerator and generate() function"
+status = "draft"
+depends_on = []
+
+[outcome]
+description = """
+IbisCodeGenerator constructor accepts an optional source_mapping: SourceMapping | None
+parameter (default None). The public generate() function in _generate.py also accepts
+and passes through the optional SourceMapping. No change to generated code yet — this
+is pure wiring so S002 can use it.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisCodeGenerator(entity, source_mapping=sm) stores source_mapping as self.source_mapping"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisCodeGenerator(entity) without source_mapping defaults to None"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate(entity, output_dir, source_mapping=sm) passes source_mapping to IbisCodeGenerator"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing codegen tests pass unchanged (backward compatible)"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/generators/_generate.py",
+    "src/fyrnheim/core/source_mapping.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Add source_mapping param to IbisCodeGenerator.__init__ (line 40-42)
+2. Store as self.source_mapping (default None)
+3. Update generate() in _generate.py to accept source_mapping kwarg and pass to constructor
+4. No changes to any _generate_*() methods yet
+"""

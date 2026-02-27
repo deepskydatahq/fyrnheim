@@ -246,11 +246,11 @@ class TestWriteModule:
 
 def _activity_entity(trigger="row_appears", **trigger_kwargs):
     """Create an entity with activity config for testing."""
-    at_kwargs = dict(
-        name="created",
-        trigger=trigger,
-        timestamp_field="created_at",
-    )
+    at_kwargs = {
+        "name": "created",
+        "trigger": trigger,
+        "timestamp_field": "created_at",
+    }
     at_kwargs.update(trigger_kwargs)
     return Entity(
         name="users",

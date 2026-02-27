@@ -253,7 +253,7 @@ class TestRunBackendFlag:
         _make_project(tmp_path, ["test"])
         monkeypatch.chdir(tmp_path)
         with patch("fyrnheim.engine.runner.run", return_value=_success_result(backend="bigquery")) as mock_run:
-            result = CliRunner().invoke(main, ["run", "--backend", "bigquery"])
+            CliRunner().invoke(main, ["run", "--backend", "bigquery"])
         assert mock_run.call_args.kwargs["backend"] == "bigquery"
 
     def test_backend_flag_shows_in_output(self, tmp_path, monkeypatch):
@@ -267,7 +267,7 @@ class TestRunBackendFlag:
         _make_project(tmp_path, ["test"])
         monkeypatch.chdir(tmp_path)
         with patch("fyrnheim.engine.runner.run", return_value=_success_result()) as mock_run:
-            result = CliRunner().invoke(main, ["run"])
+            CliRunner().invoke(main, ["run"])
         assert mock_run.call_args.kwargs["backend"] == "duckdb"
 
     def test_help_shows_backend_option(self):
@@ -282,6 +282,12 @@ class TestRunBackendFlag:
             result = CliRunner().invoke(main, ["run", "--entity", "alpha", "--backend", "bigquery"])
         assert mock_run_entity.call_args.kwargs["backend"] == "bigquery"
         assert "Running alpha on bigquery" in result.output
+
+
+    def test_invalid_backend_rejected(self):
+        result = CliRunner().invoke(main, ["run", "--backend", "postgres"])
+        assert result.exit_code != 0
+        assert "Invalid value" in result.output or "invalid choice" in result.output.lower()
 
 
 class TestRunEdgeCases:

@@ -192,3 +192,24 @@ class TestBackendConfig:
         monkeypatch.chdir(tmp_path)
         cfg = resolve_config()
         assert cfg.backend_config == {"project_id": "test-proj"}
+
+    def test_backend_config_cli_override(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "backend: bigquery\n"
+            "backend_config:\n"
+            "  project_id: yaml-proj\n"
+            "  dataset_id: yaml-ds\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(backend_config={"project_id": "cli-proj", "dataset_id": "cli-ds"})
+        assert cfg.backend_config == {"project_id": "cli-proj", "dataset_id": "cli-ds"}
+
+    def test_backend_config_cli_none_uses_yaml(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "backend: bigquery\n"
+            "backend_config:\n"
+            "  project_id: yaml-proj\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(backend_config=None)
+        assert cfg.backend_config == {"project_id": "yaml-proj"}

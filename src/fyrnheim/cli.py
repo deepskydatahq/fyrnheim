@@ -317,7 +317,7 @@ def generate(dry_run: bool, entities_dir: str | None, output_dir: str | None) ->
 @click.option("--entities-dir", type=click.Path(), default=None, help="Override entities directory.")
 @click.option("--data-dir", type=click.Path(), default=None, help="Override data directory.")
 @click.option("--output-dir", type=click.Path(), default=None, help="Override generated output directory.")
-@click.option("--backend", default=None, help="Override backend engine (e.g. duckdb, bigquery).")
+@click.option("--backend", default=None, type=click.Choice(["duckdb", "bigquery"], case_sensitive=False), help="Override backend engine.")
 @handle_errors
 def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None, output_dir: str | None, backend: str | None) -> None:
     """Execute the pipeline: discover, generate, transform, check."""

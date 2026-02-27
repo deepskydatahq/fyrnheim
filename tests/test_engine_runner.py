@@ -129,6 +129,8 @@ class TestEntityRunResultDataclass:
     def test_defaults(self):
         result = EntityRunResult(entity_name="x", status="success")
         assert result.row_count is None
+        assert result.activity_row_count is None
+        assert result.analytics_row_count is None
         assert result.error is None
         assert result.duration_seconds == 0.0
         assert result.quality_results is None
@@ -257,6 +259,27 @@ class TestRunEntity:
         assert result.status == "success"
         assert result.row_count == 3
         assert result.entity_name == "items"
+
+    def test_run_entity_activity_analytics_row_counts_none_by_default(self, tmp_path):
+        """Entities without activity/analytics layers should have None row counts."""
+        data_dir = tmp_path / "data"
+        parquet_path = _create_parquet(data_dir, "items")
+        generated_dir = tmp_path / "generated"
+
+        entity = Entity(
+            name="items",
+            description="Test items",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_items")),
+            source=TableSource(
+                project="p", dataset="d", table="items",
+                duckdb_path=str(parquet_path),
+            ),
+        )
+
+        result = run_entity(entity, data_dir, generated_dir=generated_dir)
+        assert result.status == "success"
+        assert result.activity_row_count is None
+        assert result.analytics_row_count is None
 
     def test_run_entity_unsupported_backend(self, tmp_path):
         entity = Entity(

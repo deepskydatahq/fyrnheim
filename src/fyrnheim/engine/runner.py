@@ -33,6 +33,8 @@ class EntityRunResult:
     entity_name: str
     status: Literal["success", "skipped", "error"]
     row_count: int | None = None
+    activity_row_count: int | None = None
+    analytics_row_count: int | None = None
     error: str | None = None
     duration_seconds: float = 0.0
     quality_results: list[CheckResult] | None = None
@@ -177,11 +179,14 @@ def run_entity(
         if own_executor:
             conn = create_connection(backend, **(backend_config or {}))
             executor = IbisExecutor(conn=conn, backend=backend, generated_dir=gen_dir)
+        assert executor is not None  # guaranteed: either _executor was given or we just created one
         _register_entity_source(executor, entity, data_dir)
 
         log.info("Transforming: %s", entity.name)
         exec_result = executor.execute(entity.name, generated_dir=gen_dir)
         row_count = exec_result.row_count
+        activity_row_count = exec_result.activity_row_count
+        analytics_row_count = exec_result.analytics_row_count
     except Exception as e:
         return EntityRunResult(
             entity_name=entity.name,
@@ -217,6 +222,8 @@ def run_entity(
         entity_name=entity.name,
         status="success",
         row_count=row_count,
+        activity_row_count=activity_row_count,
+        analytics_row_count=analytics_row_count,
         duration_seconds=duration,
         quality_results=quality_results,
     )

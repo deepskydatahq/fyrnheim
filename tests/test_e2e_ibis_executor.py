@@ -24,7 +24,6 @@ from fyrnheim._generate import generate
 from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.executor import IbisExecutor
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

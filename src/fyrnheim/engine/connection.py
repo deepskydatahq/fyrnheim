@@ -7,6 +7,8 @@ from typing import Any
 
 import ibis
 
+SUPPORTED_BACKENDS = ["duckdb", "bigquery"]
+
 
 def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
     """Create an Ibis backend connection by name.
@@ -38,9 +40,12 @@ def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
             ) from None
         project_id = kwargs.get("project_id")
         dataset_id = kwargs.get("dataset_id")
+        if not project_id or not dataset_id:
+            raise ValueError(
+                "BigQuery backend requires 'project_id' and 'dataset_id' in backend_config."
+            )
         return ibis.bigquery.connect(project_id=project_id, dataset_id=dataset_id)
 
-    supported = ["duckdb", "bigquery"]
     raise ValueError(
-        f"Unsupported backend: {backend!r}. Supported backends: {supported}"
+        f"Unsupported backend: {backend!r}. Supported backends: {SUPPORTED_BACKENDS}"
     )

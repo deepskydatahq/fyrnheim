@@ -1,6 +1,9 @@
 """fyrnheim.engine -- Entity discovery, dependency resolution, and execution."""
 
-from fyrnheim.engine.connection import create_connection as create_connection
+from fyrnheim.engine.connection import (
+    SUPPORTED_BACKENDS as SUPPORTED_BACKENDS,
+    create_connection as create_connection,
+)
 from fyrnheim.engine.errors import (
     ExecutionError as ExecutionError,
     FyrnheimEngineError as FyrnheimEngineError,

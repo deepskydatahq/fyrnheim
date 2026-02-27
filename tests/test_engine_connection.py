@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import ibis
 import pytest
 
-from fyrnheim.engine.connection import create_connection
+from fyrnheim.engine.connection import SUPPORTED_BACKENDS, create_connection
 
 
 class TestCreateConnectionDuckDB:
@@ -50,6 +50,25 @@ class TestCreateConnectionBigQuery:
                 create_connection("bigquery", project_id="x", dataset_id="y")
 
 
+class TestCreateConnectionBigQueryValidation:
+    """Test BigQuery parameter validation."""
+
+    def test_missing_project_id_raises(self):
+        with patch.dict("sys.modules", {"ibis.backends.bigquery": MagicMock()}):
+            with pytest.raises(ValueError, match="project_id"):
+                create_connection("bigquery", dataset_id="ds")
+
+    def test_missing_dataset_id_raises(self):
+        with patch.dict("sys.modules", {"ibis.backends.bigquery": MagicMock()}):
+            with pytest.raises(ValueError, match="dataset_id"):
+                create_connection("bigquery", project_id="proj")
+
+    def test_missing_both_raises(self):
+        with patch.dict("sys.modules", {"ibis.backends.bigquery": MagicMock()}):
+            with pytest.raises(ValueError, match="project_id"):
+                create_connection("bigquery")
+
+
 class TestCreateConnectionUnsupported:
     """Test create_connection with unsupported backends."""
 
@@ -64,6 +83,19 @@ class TestCreateConnectionUnsupported:
     def test_error_lists_bigquery(self):
         with pytest.raises(ValueError, match="bigquery"):
             create_connection("unknown")
+
+
+class TestSupportedBackends:
+    """Test SUPPORTED_BACKENDS constant."""
+
+    def test_contains_duckdb(self):
+        assert "duckdb" in SUPPORTED_BACKENDS
+
+    def test_contains_bigquery(self):
+        assert "bigquery" in SUPPORTED_BACKENDS
+
+    def test_is_list(self):
+        assert isinstance(SUPPORTED_BACKENDS, list)
 
 
 class TestCreateConnectionLazyImport:

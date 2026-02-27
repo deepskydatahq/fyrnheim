@@ -97,6 +97,7 @@ def resolve_config(
     data_dir: str | None = None,
     output_dir: str | None = None,
     backend: str | None = None,
+    backend_config: dict[str, str] | None = None,
 ) -> ResolvedConfig:
     """Load project config and merge CLI overrides.
 
@@ -111,5 +112,5 @@ def resolve_config(
         output_dir=Path(output_dir) if output_dir else (config.output_dir if config else Path("generated")),
         backend=backend if backend else (config.backend if config else "duckdb"),
         project_root=config.project_root if config else Path("."),
-        backend_config=config.backend_config if config else None,
+        backend_config=backend_config if backend_config is not None else (config.backend_config if config else None),
     )

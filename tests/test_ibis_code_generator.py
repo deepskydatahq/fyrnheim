@@ -609,3 +609,131 @@ class TestAnalyticsCodeGeneration:
         tree = ast.parse(code)
         func_names = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
         assert "analytics_users" in func_names
+
+
+# ---------------------------------------------------------------------------
+# Union source field_mappings / literal_columns codegen tests
+# ---------------------------------------------------------------------------
+
+
+class TestUnionSourceFieldMappingsCodegen:
+    """Test codegen for UnionSource with field_mappings and literal_columns."""
+
+    def _make_union_entity(self, sources):
+        """Helper to create a union entity with given sources."""
+        return Entity(
+            name="signals",
+            description="Unified signals",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_signals")),
+            source=UnionSource(sources=sources),
+            required_fields=[Field(name="id", type="STRING")],
+        )
+
+    def test_rename_generated_for_field_mappings(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+                field_mappings={"contact_email": "email"},
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        # field_mappings={source: unified}, .rename() needs {new: old}
+        assert ".rename({'email': 'contact_email'})" in code
+
+    def test_mutate_literal_generated(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+                literal_columns={"product_type": "video"},
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert ".mutate(product_type=ibis.literal('video'))" in code
+
+    def test_both_rename_and_mutate_chained(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+                field_mappings={"contact_email": "email"},
+                literal_columns={"source": "hubspot"},
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert ".rename(" in code
+        assert ".mutate(" in code
+        # rename comes before mutate
+        rename_pos = code.index(".rename(")
+        mutate_pos = code.index(".mutate(")
+        assert rename_pos < mutate_pos
+
+    def test_empty_mappings_no_suffix(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        # Should not have per-source rename or mutate (only existing _build_rename_suffix may appear)
+        assert ".mutate(" not in code
+
+    def test_multiple_sources_different_mappings(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+                field_mappings={"contact_email": "email"},
+            ),
+            TableSource(
+                project="w", dataset="s", table="customers",
+                duckdb_path="~/data/customers.parquet",
+                field_mappings={"email_address": "email"},
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert ".rename({'email': 'contact_email'})" in code
+        assert ".rename({'email': 'email_address'})" in code
+
+    def test_generated_module_valid_python(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+                field_mappings={"contact_email": "email", "contact_name": "name"},
+                literal_columns={"source": "hubspot", "priority": 1},
+            ),
+            TableSource(
+                project="w", dataset="s", table="customers",
+                duckdb_path="~/data/customers.parquet",
+                field_mappings={"email_address": "email"},
+                literal_columns={"source": "stripe"},
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        ast.parse(code)  # Must not raise
+
+    def test_union_aggregator_unchanged(self):
+        entity = self._make_union_entity([
+            TableSource(
+                project="w", dataset="h", table="contacts",
+                duckdb_path="~/data/contacts.parquet",
+                field_mappings={"contact_email": "email"},
+            ),
+            TableSource(
+                project="w", dataset="s", table="customers",
+                duckdb_path="~/data/customers.parquet",
+            ),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "def source_signals(" in code
+        assert "ibis.union(*parts)" in code

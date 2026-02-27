@@ -1,0 +1,160 @@
+# Mission: Source Resolution — Enable all timo-growth-stack entities on fyrnheim
+# Close the source-type gaps so every timo-data-stack entity runs via `fyr run`
+
+id = "M005"
+title = "Source resolution: enable all timo-growth-stack entities on fyrnheim"
+status = "draft"
+created = 2026-02-27
+depends_on = ["M004"]
+
+[outcome]
+description = """
+All 9 timo-data-stack entities can be defined in fyrnheim and executed via `fyr run`
+on DuckDB (full refresh mode). This means: SourceMapping field_mappings are applied as
+renames during source reads, identity graph resolution generates FULL OUTER JOIN +
+PriorityCoalesce code for DerivedSource entities, and enhanced UnionSource supports
+per-source field normalization for signals/product/anon patterns. After this mission,
+the custom orchestration in timo-data-stack/scripts/run_transformations.py is replaceable
+by the fyrnheim CLI for all entity types.
+"""
+
+user_progress = "From 'only simple TableSource entities work' to 'all 9 timo-data-stack entities — including identity graph, source mappings, and specialized unions — run via fyr run'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "SourceMapping field_mappings generate source-level renames in transform code (entity field names used downstream)",
+    "IbisCodeGenerator accepts SourceMapping and applies field_mappings during source function generation",
+    "Identity graph codegen: DerivedSource entities generate cascading FULL OUTER JOIN on match key",
+    "Identity graph codegen: PriorityCoalesce generates .fillna() chains ordered by source priority",
+    "Identity graph codegen: auto-generates source flags (is_{source_name}), source IDs, first-seen dates",
+    "Identity graph: generated code is valid Python that parses and executes on DuckDB",
+    "Enhanced UnionSource: per-source field_mappings normalize columns before union",
+    "Enhanced UnionSource: literal columns (e.g. product_type='video') supported via source config",
+    "AggregationSource codegen: generates GROUP BY + aggregate expressions from source entity",
+    "E2E test: transactions entity with SourceMapping field_mappings executes correctly",
+    "E2E test: person entity with DerivedSource + identity graph executes on DuckDB with 2+ sources",
+    "E2E test: signals-style entity with multi-source UnionSource + field normalization executes",
+    "All existing 682+ tests still pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/layer.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/components/computed_column.py",
+]
+
+[scope]
+in_scope = [
+    "SourceMapping codegen: field_mappings applied as column renames during source read in generated code",
+    "Identity graph codegen: DerivedSource generates cascading FULL OUTER JOIN + PriorityCoalesce",
+    "Identity graph codegen: auto-generated source flags, source IDs, first-seen dates, engagement level",
+    "Identity graph builder/config: IdentityGraphConfig with sources, match key, field mappings, priorities",
+    "Enhanced UnionSource: per-source field_mappings for column normalization before union",
+    "Enhanced UnionSource: literal/constant columns (product_type, source_platform, signal_type_value)",
+    "AggregationSource codegen: GROUP BY + aggregation from source entity dimension table",
+    "E2E tests for each new source pattern on DuckDB",
+    "Unit tests for all new generator code paths",
+]
+out_of_scope = [
+    "Incremental processing / high water mark / INSERT vs overwrite (separate mission M006)",
+    "TenantExtension class (single-tenant for now; computed columns already work via entity layers)",
+    "BigQuery integration tests (M004 established mock pattern; this mission uses DuckDB E2E)",
+    "Analytics daily combine (cross-entity post-aggregation — separate concern)",
+    "Export pipeline (JSON/Parquet/CSV output for dashboards)",
+    "CI/CD workflow migration",
+    "Schema management (target_schema enforcement in DDL)",
+    "DLT pipeline integration (extraction stays separate)",
+]
+acceptable_breakage = [
+    "UnionSource may gain new optional fields (field_mappings, literal_columns) — existing UnionSource usage unaffected due to defaults",
+    "IbisCodeGenerator constructor may accept SourceMapping in addition to Entity — backwards compatible",
+    "Generated code structure for DerivedSource entities differs from TableSource (multi-input function signature)",
+]
+
+[notes]
+considerations = """
+Codebase exploration findings (2026-02-27):
+
+IDENTITY GRAPH (person + account — most complex gap):
+The timo-data-stack identity graph uses a fluent IdentityGraphBuilder that produces
+an IdentityGraphConfig with sources, match key, field mappings, and priorities.
+Generated code performs cascading FULL OUTER JOINs on the match key, then uses
+.fillna() chains (priority-ordered COALESCE) for field resolution. It auto-generates
+source flags (is_{source}), source IDs, first-seen dates, and an engagement_level
+CASE expression. The DerivedSource type already exists in fyrnheim but produces no
+generated code. This is ~300-400 LOC of new generator logic.
+
+Key pattern: person_transforms.py has a `source_person(conn, backend)` that returns
+a dict of source tables, and a `transform_person(sources: dict)` that performs the
+join chain. This is a fundamentally different function signature from single-source
+entities. The executor needs to handle this multi-input pattern.
+
+SOURCEMAPPING (transactions + subscriptions — partially implemented):
+SourceMapping already exists in fyrnheim with required_field validation. What's
+missing is generator support: field_mappings should produce column renames during
+source reads so downstream code uses entity field names. This is ~100 LOC.
+
+In timo-data-stack, TenantExtension wraps SourceMapping to add tenant-specific
+computed columns. For the single-tenant case (timo), this is equivalent to putting
+extra computed_columns on the entity's dimension layer, which already works. So
+TenantExtension is out of scope.
+
+SPECIALIZED UNIONS (product, signals, anon — runtime normalization):
+Critical discovery: in timo-data-stack, the union + field normalization happens at
+runtime in get_source(), NOT in generated code. Generated functions receive already-
+normalized tables. The three patterns (SignalSourceConfig, ProductSourceConfig,
+AnonSourceConfig) have different semantics but share a common need: per-source field
+mappings + optional literal columns + UNION ALL.
+
+Rather than implementing 3 new source types, enhance UnionSource with:
+- Per-source field_mappings (dict[str, str] on each sub-source)
+- Per-source literal_columns (dict[str, Any] — constant values like product_type="video")
+- The generator produces per-source SELECT with renames + literals, then UNION ALL
+
+This generalizes all three patterns without domain-specific types.
+
+AGGREGATIONSOURCE (account entity):
+AggregationSource is defined in fyrnheim but the code generator path needs verification.
+The account entity aggregates from person (GROUP BY account_id with computed columns
+like COUNT(DISTINCT person_id), BOOL_OR(is_lemonsqueezy_transaction)). This requires
+the generator to produce a function that takes the source entity's dimension table as
+input and applies GROUP BY + aggregation expressions.
+
+SEQUENCING RECOMMENDATION:
+Epic 1: SourceMapping codegen (quick win — unblocks transactions, subscriptions)
+Epic 2: Enhanced UnionSource (unblocks product, signals, anon)
+Epic 3: Identity graph codegen (unblocks person)
+Epic 4: AggregationSource codegen (unblocks account, depends on person)
+
+Epic 1 and 2 are independent and could be parallelized. Epic 3 is the heaviest.
+Epic 4 depends on Epic 3 because account depends on person.
+
+RISK MITIGATION:
+- Identity graph join chain may hit column name conflicts in Ibis outer_join.
+  Mitigation: use suffixes parameter or explicit column selection after each join.
+- UnionSource field normalization changes the source→prep boundary.
+  Mitigation: normalization happens inside source functions, prep sees clean columns.
+- AggregationSource depends on another entity being executed first.
+  Mitigation: dependency resolution already handles this via topological sort.
+"""

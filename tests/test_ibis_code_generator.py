@@ -14,6 +14,7 @@ from fyrnheim import (
     Field,
     LayersConfig,
     PrepLayer,
+    SourceMapping,
     TableSource,
     UnionSource,
 )
@@ -79,6 +80,120 @@ class TestConstructor:
         gen = IbisCodeGenerator(simple_entity)
         assert gen.entity_name == "transactions"
         assert gen.entity is simple_entity
+
+
+class TestConstructorWithSourceMapping:
+    """Test IbisCodeGenerator accepts optional SourceMapping."""
+
+    def test_source_mapping_defaults_to_none(self, simple_entity):
+        gen = IbisCodeGenerator(simple_entity)
+        assert gen.source_mapping is None
+
+    def test_source_mapping_stored_when_provided(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        assert gen.source_mapping is sm
+
+    def test_generate_module_unchanged_without_source_mapping(self, simple_entity):
+        gen_without = IbisCodeGenerator(simple_entity)
+        gen_with_none = IbisCodeGenerator(simple_entity, source_mapping=None)
+        assert gen_without.generate_module() == gen_with_none.generate_module()
+
+
+class TestRenameGeneration:
+    """Test .rename() generation from SourceMapping.field_mappings."""
+
+    def test_no_rename_when_no_source_mapping(self, simple_entity):
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert ".rename(" not in code
+
+    def test_no_rename_when_empty_field_mappings(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_source_functions()
+        assert ".rename(" not in code
+
+    def test_single_rename_in_duckdb_branch(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_source_functions()
+        assert "conn.read_parquet(parquet_path).rename(" in code
+
+    def test_single_rename_in_bigquery_branch(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_source_functions()
+        assert ").rename(" in code
+        # bigquery branch also has .rename()
+        lines = code.split("\n")
+        rename_lines = [line for line in lines if ".rename(" in line]
+        assert len(rename_lines) == 2  # duckdb + bigquery
+
+    def test_multiple_renames(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id", "amount_cents": "subtotal"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_source_functions()
+        assert "'transaction_id': 'id'" in code
+        assert "'amount_cents': 'subtotal'" in code
+
+    def test_rename_dict_not_inverted(self, simple_entity):
+        """field_mappings {entity_field: source_col} passed directly to .rename()."""
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_source_functions()
+        assert "{'transaction_id': 'id'}" in code
+
+    def test_rename_is_valid_python(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id", "amount_cents": "subtotal"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_full_module_with_rename_valid(self, simple_entity):
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen.generate_module()
+        ast.parse(code)
+
+    def test_backward_compat_existing_tests_unaffected(self, simple_entity):
+        """Existing usage without source_mapping produces identical code."""
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert ".rename(" not in code
+        assert "conn.read_parquet" in code
 
 
 class TestGenerateImports:

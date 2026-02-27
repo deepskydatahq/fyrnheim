@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fyrnheim.core import Entity
+from fyrnheim.core.source_mapping import SourceMapping
 from fyrnheim.generators import IbisCodeGenerator
 
 
@@ -23,6 +24,7 @@ def generate(
     entity: Entity,
     output_dir: str | Path = "generated",
     dry_run: bool = False,
+    source_mapping: SourceMapping | None = None,
 ) -> GenerateResult:
     """Generate Ibis transformation code for a single entity.
 
@@ -38,7 +40,7 @@ def generate(
     output_dir = Path(output_dir)
     output_path = output_dir / f"{entity.name}_transforms.py"
 
-    generator = IbisCodeGenerator(entity)
+    generator = IbisCodeGenerator(entity, source_mapping=source_mapping)
     code = generator.generate_module()
 
     if dry_run:

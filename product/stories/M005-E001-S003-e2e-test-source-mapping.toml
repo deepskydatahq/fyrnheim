@@ -3,7 +3,7 @@
 id = "M005-E001-S003"
 parent = "M005-E001"
 title = "E2E test verifying SourceMapping field_mappings execute correctly on DuckDB"
-status = "ready"
+status = "complete"
 depends_on = ["M005-E001-S002"]
 
 [outcome]

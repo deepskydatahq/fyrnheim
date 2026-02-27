@@ -15,6 +15,7 @@ from fyrnheim.core.source import (
     TableSource,
     UnionSource,
 )
+from fyrnheim.core.source_mapping import SourceMapping
 
 IBIS_TYPE_MAP: dict[str, str] = {
     "timestamp": "timestamp",
@@ -37,9 +38,14 @@ IBIS_TYPE_MAP: dict[str, str] = {
 class IbisCodeGenerator:
     """Generate Ibis Python modules from entity definitions."""
 
-    def __init__(self, entity: Entity) -> None:
+    def __init__(
+        self,
+        entity: Entity,
+        source_mapping: SourceMapping | None = None,
+    ) -> None:
         self.entity = entity
         self.entity_name = entity.name
+        self.source_mapping = source_mapping
 
     def _generate_imports(self) -> str:
         """Generate module header with imports (no Hamilton)."""
@@ -81,11 +87,18 @@ import ibis
         else:
             return ""
 
+    def _build_rename_suffix(self) -> str:
+        """Build .rename() suffix from source_mapping.field_mappings, or empty string."""
+        if not self.source_mapping or not self.source_mapping.field_mappings:
+            return ""
+        return f".rename({self.source_mapping.field_mappings!r})"
+
     def _generate_single_source_function(
         self, source: TableSource | EventAggregationSource
     ) -> str:
         """Generate a single source function with backend switching."""
         name = self.entity_name
+        rename = self._build_rename_suffix()
 
         # Build DuckDB path
         if source.duckdb_path:
@@ -98,9 +111,9 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
     """Read {name} from configured source."""
     if backend == "duckdb":
         parquet_path = os.path.expanduser("{duckdb_path}")
-        return conn.read_parquet(parquet_path)
+        return conn.read_parquet(parquet_path){rename}
     elif backend == "bigquery":
-        return conn.table("{source.table}", database=("{source.project}", "{source.dataset}"))
+        return conn.table("{source.table}", database=("{source.project}", "{source.dataset}")){rename}
     else:
         raise ValueError(f"Unsupported backend: {{backend}}")
 '''

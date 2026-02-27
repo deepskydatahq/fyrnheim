@@ -16,8 +16,10 @@ from fyrnheim import (
     ComputedColumn,
     DimensionLayer,
     Entity,
+    Field,
     LayersConfig,
     PrepLayer,
+    SourceMapping,
     TableSource,
 )
 from fyrnheim._generate import generate
@@ -230,3 +232,123 @@ class TestMissingExtrasError:
         with patch.dict("sys.modules", {"ibis.backends.bigquery": None}):
             with pytest.raises(ImportError, match="pip install"):
                 create_connection("bigquery", project_id="x", dataset_id="y")
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for SourceMapping field_mappings
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def source_parquet(tmp_path):
+    """Parquet file with source-schema columns (not entity field names)."""
+    df = pd.DataFrame({
+        "id": [101, 102, 103],
+        "subtotal": [1000, 2500, 500],
+        "created": ["2024-01-01", "2024-02-15", "2024-03-10"],
+    })
+    path = tmp_path / "data" / "orders.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, index=False)
+    return path, len(df)
+
+
+@pytest.fixture()
+def mapped_entity_and_generated(source_parquet, tmp_path):
+    """Entity with SourceMapping field_mappings -> generate -> return artifacts."""
+    parquet_path, row_count = source_parquet
+    generated_dir = tmp_path / "generated_mapped"
+
+    entity = Entity(
+        name="orders",
+        description="Orders with field_mappings E2E",
+        required_fields=[
+            Field(name="transaction_id", type="STRING"),
+            Field(name="amount_cents", type="INT64"),
+            Field(name="created_at", type="STRING"),
+        ],
+        source=TableSource(
+            project="test", dataset="test", table="orders",
+            duckdb_path=str(parquet_path),
+        ),
+        layers=LayersConfig(
+            prep=PrepLayer(model_name="prep_orders"),
+            dimension=DimensionLayer(model_name="dim_orders"),
+        ),
+    )
+
+    sm = SourceMapping(
+        entity=entity,
+        source=entity.source,
+        field_mappings={
+            "transaction_id": "id",
+            "amount_cents": "subtotal",
+            "created_at": "created",
+        },
+    )
+
+    generate(entity, output_dir=generated_dir, source_mapping=sm)
+    return entity, sm, generated_dir, parquet_path, row_count
+
+
+class TestE2ESourceMappingFieldMappings:
+    """E2E tests verifying SourceMapping.field_mappings rename source cols to entity names."""
+
+    def test_output_has_entity_field_names(self, mapped_entity_and_generated):
+        _, _, generated_dir, _, _ = mapped_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("orders")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "transaction_id" in df.columns
+        assert "amount_cents" in df.columns
+        assert "created_at" in df.columns
+
+    def test_source_column_names_absent(self, mapped_entity_and_generated):
+        _, _, generated_dir, _, _ = mapped_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("orders")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "id" not in df.columns
+        assert "subtotal" not in df.columns
+        assert "created" not in df.columns
+
+    def test_row_count_preserved(self, mapped_entity_and_generated):
+        _, _, generated_dir, _, row_count = mapped_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("orders")
+
+        assert result.success is True
+        assert result.row_count == row_count
+
+    def test_field_values_preserved(self, mapped_entity_and_generated):
+        _, _, generated_dir, _, _ = mapped_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("orders")
+            df = executor.connection.table("dim_orders").to_pandas()
+
+        row = df[df["transaction_id"] == 101].iloc[0]
+        assert row["amount_cents"] == 1000
+
+        row = df[df["transaction_id"] == 102].iloc[0]
+        assert row["amount_cents"] == 2500
+
+    def test_empty_field_mappings_backward_compatible(self, entity_and_generated):
+        """Entity with no field_mappings (existing pattern) still executes correctly."""
+        _, generated_dir, _, row_count = entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("customers")
+
+        assert result.success is True
+        assert result.row_count == row_count

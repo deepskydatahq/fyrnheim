@@ -201,6 +201,28 @@ class TestTableSource:
         assert len(src.fields) == 1
         assert src.fields[0].name == "email"
 
+    def test_field_mappings_default_empty(self):
+        src = TableSource(project="p", dataset="d", table="t")
+        assert src.field_mappings == {}
+
+    def test_literal_columns_default_empty(self):
+        src = TableSource(project="p", dataset="d", table="t")
+        assert src.literal_columns == {}
+
+    def test_with_field_mappings(self):
+        src = TableSource(
+            project="p", dataset="d", table="t",
+            field_mappings={"contact_email": "email"},
+        )
+        assert src.field_mappings == {"contact_email": "email"}
+
+    def test_with_literal_columns(self):
+        src = TableSource(
+            project="p", dataset="d", table="t",
+            literal_columns={"product_type": "video"},
+        )
+        assert src.literal_columns == {"product_type": "video"}
+
 
 class TestDerivedEntitySource:
     """Tests for DerivedEntitySource model."""
@@ -320,6 +342,48 @@ class TestUnionSource:
             sources=[TableSource(project="p", dataset="d", table="t1")]
         )
         assert isinstance(src.sources[0], TableSource)
+
+    def test_union_source_with_field_mappings(self):
+        src = UnionSource(
+            sources=[
+                TableSource(
+                    project="p", dataset="d", table="t1",
+                    field_mappings={"contact_email": "email"},
+                ),
+                TableSource(project="p", dataset="d", table="t2"),
+            ]
+        )
+        assert src.sources[0].field_mappings == {"contact_email": "email"}
+        assert src.sources[1].field_mappings == {}
+
+    def test_union_source_with_literal_columns(self):
+        src = UnionSource(
+            sources=[
+                TableSource(
+                    project="p", dataset="d", table="t1",
+                    literal_columns={"product_type": "video"},
+                ),
+                TableSource(
+                    project="p", dataset="d", table="t2",
+                    literal_columns={"product_type": "audio"},
+                ),
+            ]
+        )
+        assert src.sources[0].literal_columns == {"product_type": "video"}
+        assert src.sources[1].literal_columns == {"product_type": "audio"}
+
+    def test_union_source_with_both_mappings_and_literals(self):
+        src = UnionSource(
+            sources=[
+                TableSource(
+                    project="p", dataset="d", table="t1",
+                    field_mappings={"contact_email": "email"},
+                    literal_columns={"source_system": "crm"},
+                ),
+            ]
+        )
+        assert src.sources[0].field_mappings == {"contact_email": "email"}
+        assert src.sources[0].literal_columns == {"source_system": "crm"}
 
 
 class TestOldNamesNotImportable:

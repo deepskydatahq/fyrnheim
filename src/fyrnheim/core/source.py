@@ -89,9 +89,24 @@ class BaseTableSource(BaseModel):
 
 
 class TableSource(BaseTableSource):
-    """Standard table source with optional field definitions and transforms."""
+    """Standard table source with optional field definitions and transforms.
+
+    When used inside a UnionSource, the optional field_mappings and
+    literal_columns enable per-source normalization before union:
+
+    - field_mappings: Rename source columns before union.
+      Keys are source column names, values are unified column names.
+      Example: {'contact_email': 'email'} renames the source's
+      'contact_email' column to 'email'.
+
+    - literal_columns: Inject constant values as new columns.
+      Example: {'product_type': 'video'} adds a column 'product_type'
+      with value 'video' for every row from this source.
+    """
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
+    field_mappings: dict[str, str] = PydanticField(default_factory=dict)
+    literal_columns: dict[str, Any] = PydanticField(default_factory=dict)
 
 
 class DerivedEntitySource(BaseModel):

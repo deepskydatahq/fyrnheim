@@ -149,14 +149,28 @@ def source_{name}(source_{source.source_entity}: ibis.Table) -> ibis.Table:
             else:
                 duckdb_path = f"~/timo-data/{sub_source.table}/**/*.parquet"
 
+            # Build per-source normalization suffix
+            suffix = ""
+            if sub_source.field_mappings:
+                # field_mappings: {source_col: unified_col}
+                # Ibis .rename(): {new_name: old_name} i.e. {unified_col: source_col}
+                rename_map = {v: k for k, v in sub_source.field_mappings.items()}
+                suffix += f".rename({rename_map!r})"
+            if sub_source.literal_columns:
+                literal_args = ", ".join(
+                    f"{col}=ibis.literal({val!r})"
+                    for col, val in sub_source.literal_columns.items()
+                )
+                suffix += f".mutate({literal_args})"
+
             func = f'''
 def {sub_name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
     """Read {src_label} for {name} union."""
     if backend == "duckdb":
         parquet_path = os.path.expanduser("{duckdb_path}")
-        return conn.read_parquet(parquet_path)
+        return conn.read_parquet(parquet_path){suffix}
     elif backend == "bigquery":
-        return conn.table("{sub_source.table}", database=("{sub_source.project}", "{sub_source.dataset}"))
+        return conn.table("{sub_source.table}", database=("{sub_source.project}", "{sub_source.dataset}")){suffix}
     else:
         raise ValueError(f"Unsupported backend: {{backend}}")
 '''

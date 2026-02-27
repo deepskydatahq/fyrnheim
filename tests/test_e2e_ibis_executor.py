@@ -21,6 +21,7 @@ from fyrnheim import (
     PrepLayer,
     SourceMapping,
     TableSource,
+    UnionSource,
 )
 from fyrnheim._generate import generate
 from fyrnheim.engine.connection import create_connection
@@ -352,3 +353,191 @@ class TestE2ESourceMappingFieldMappings:
 
         assert result.success is True
         assert result.row_count == row_count
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for UnionSource with per-source field normalization
+# ---------------------------------------------------------------------------
+
+
+class TestE2EUnionSourceFieldNormalization:
+    """E2E tests for UnionSource with per-source field_mappings and literal_columns."""
+
+    @pytest.fixture()
+    def union_parquets(self, tmp_path):
+        """Create two Parquet files with different column schemas."""
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # Source 1: hubspot contacts (3 rows)
+        hubspot_table = pa.table({
+            "contact_id": [1, 2, 3],
+            "contact_email": ["alice@example.com", "bob@example.com", "carol@example.com"],
+            "contact_name": ["Alice", "Bob", "Carol"],
+        })
+        hubspot_path = tmp_path / "hubspot_contacts.parquet"
+        pq.write_table(hubspot_table, hubspot_path)
+
+        # Source 2: stripe customers (2 rows)
+        stripe_table = pa.table({
+            "customer_id": [101, 102],
+            "email_address": ["dave@example.com", "eve@example.com"],
+            "full_name": ["Dave", "Eve"],
+        })
+        stripe_path = tmp_path / "stripe_customers.parquet"
+        pq.write_table(stripe_table, stripe_path)
+
+        return hubspot_path, stripe_path
+
+    def _make_entity(self, hubspot_path, stripe_path):
+        """Build a UnionSource entity with field_mappings and literal_columns."""
+        return Entity(
+            name="contacts",
+            description="Unified contacts",
+            source=UnionSource(
+                sources=[
+                    TableSource(
+                        project="test", dataset="test", table="hubspot_contacts",
+                        duckdb_path=str(hubspot_path),
+                        field_mappings={"contact_id": "id", "contact_email": "email", "contact_name": "name"},
+                        literal_columns={"source_platform": "hubspot"},
+                    ),
+                    TableSource(
+                        project="test", dataset="test", table="stripe_customers",
+                        duckdb_path=str(stripe_path),
+                        field_mappings={"customer_id": "id", "email_address": "email", "full_name": "name"},
+                        literal_columns={"source_platform": "stripe"},
+                    ),
+                ]
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_contacts"),
+            ),
+        )
+
+    def test_output_has_entity_field_names(self, tmp_path, union_parquets):
+        """Two Parquet files with different column names produce unified table with entity field names."""
+        hubspot_path, stripe_path = union_parquets
+        entity = self._make_entity(hubspot_path, stripe_path)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("contacts")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        # Entity field names should be present
+        assert "id" in df.columns
+        assert "email" in df.columns
+        assert "name" in df.columns
+        # Source-native column names should be absent
+        assert "contact_id" not in df.columns
+        assert "contact_email" not in df.columns
+        assert "customer_id" not in df.columns
+        assert "email_address" not in df.columns
+
+    def test_literal_columns_correct_values(self, tmp_path, union_parquets):
+        """literal_columns produce correct values per source in output."""
+        hubspot_path, stripe_path = union_parquets
+        entity = self._make_entity(hubspot_path, stripe_path)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("contacts")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "source_platform" in df.columns
+        hubspot_rows = df[df["source_platform"] == "hubspot"]
+        stripe_rows = df[df["source_platform"] == "stripe"]
+        assert len(hubspot_rows) == 3
+        assert len(stripe_rows) == 2
+
+    def test_row_count_equals_sum(self, tmp_path, union_parquets):
+        """Row count in output equals sum of rows from both input Parquet files."""
+        hubspot_path, stripe_path = union_parquets
+        entity = self._make_entity(hubspot_path, stripe_path)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("contacts")
+
+        assert result.row_count == 5  # 3 hubspot + 2 stripe
+
+    def test_output_columns_complete(self, tmp_path, union_parquets):
+        """Output table has the expected columns: entity fields + literal columns."""
+        hubspot_path, stripe_path = union_parquets
+        entity = self._make_entity(hubspot_path, stripe_path)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("contacts")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        expected_cols = {"id", "email", "name", "source_platform"}
+        assert expected_cols.issubset(set(df.columns))
+
+    def test_plain_union_backward_compatible(self, tmp_path):
+        """UnionSource with no field_mappings and no literal_columns still works."""
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # Create two Parquet files with SAME column names
+        table1 = pa.table({
+            "id": [1, 2, 3],
+            "email": ["a@ex.com", "b@ex.com", "c@ex.com"],
+            "name": ["A", "B", "C"],
+        })
+        path1 = tmp_path / "source1.parquet"
+        pq.write_table(table1, path1)
+
+        table2 = pa.table({
+            "id": [4, 5],
+            "email": ["d@ex.com", "e@ex.com"],
+            "name": ["D", "E"],
+        })
+        path2 = tmp_path / "source2.parquet"
+        pq.write_table(table2, path2)
+
+        entity = Entity(
+            name="plain_contacts",
+            description="Plain union without mappings",
+            source=UnionSource(
+                sources=[
+                    TableSource(
+                        project="test", dataset="test", table="source1",
+                        duckdb_path=str(path1),
+                    ),
+                    TableSource(
+                        project="test", dataset="test", table="source2",
+                        duckdb_path=str(path2),
+                    ),
+                ]
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_plain_contacts"),
+            ),
+        )
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("plain_contacts")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert len(df) == 5
+        assert "id" in df.columns
+        assert "email" in df.columns
+        assert "name" in df.columns

@@ -146,9 +146,7 @@ class InSet(QualityCheck, BaseModel):
 class MatchesPattern(QualityCheck, BaseModel):
     """Check that values match a regex pattern.
 
-    # TODO: REGEXP_CONTAINS is BigQuery-specific SQL. For portable usage,
-    # consider using backend-specific regex functions (e.g., REGEXP_MATCHES
-    # for PostgreSQL/DuckDB, REGEXP for MySQL).
+    Uses Ibis re_search() for portable regex matching across backends.
     """
 
     column: str
@@ -158,10 +156,14 @@ class MatchesPattern(QualityCheck, BaseModel):
         super().__init__(column=column, pattern=pattern)
 
     def get_where_clause(self) -> str:
-        # TODO: REGEXP_CONTAINS is BigQuery-specific. Other backends use different
-        # regex syntax (e.g., ~ for PostgreSQL, REGEXP for MySQL/DuckDB).
-        escaped_pattern = self.pattern.replace("'", "\\'")
-        return f"NOT REGEXP_CONTAINS({self.column}, r'{escaped_pattern}')"
+        raise NotImplementedError(
+            "MatchesPattern uses Ibis expressions for portable regex. "
+            "Use requires_special_query path."
+        )
+
+    @property
+    def requires_special_query(self) -> bool:
+        return True
 
     @property
     def display_name(self) -> str:

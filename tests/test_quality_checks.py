@@ -132,12 +132,14 @@ class TestInSet:
 
 
 class TestMatchesPattern:
-    def test_get_where_clause(self) -> None:
+    def test_requires_special_query(self) -> None:
         check = MatchesPattern("email", r"^.+@.+$")
-        result = check.get_where_clause()
-        assert "REGEXP_CONTAINS" in result
-        assert "email" in result
-        assert "^.+@.+$" in result
+        assert check.requires_special_query is True
+
+    def test_get_where_clause_raises(self) -> None:
+        check = MatchesPattern("email", r"^.+@.+$")
+        with pytest.raises(NotImplementedError, match="Ibis expressions"):
+            check.get_where_clause()
 
     def test_display_name(self) -> None:
         check = MatchesPattern("email", r"^.+@.+$")

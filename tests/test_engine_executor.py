@@ -345,6 +345,193 @@ def dim_widgets(prep_widgets):
                 executor.execute("widgets")
 
 
+class TestIbisExecutorActivityBranch:
+    """Test activity branch execution in _run_transform_pipeline."""
+
+    def test_activity_table_created(self, tmp_path):
+        """activity_{name} table is created when activity function exists."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers
+
+def activity_customers(dim_customers):
+    t = dim_customers
+    return t.select(
+        entity_id=t.id.cast("string"),
+        name=t.name,
+    )
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            executor.execute("customers")
+            activity = executor.connection.table("activity_customers").to_pandas()
+            assert len(activity) == 3
+            assert "entity_id" in activity.columns
+
+    def test_activity_receives_dim_not_snapshot(self, tmp_path):
+        """Activity branches from dim, not snapshot."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers.mutate(dim_marker=ibis.literal("from_dim"))
+
+def snapshot_customers(dim_customers):
+    return dim_customers.mutate(snap_marker=ibis.literal("from_snap"))
+
+def activity_customers(dim_customers):
+    # Should have dim_marker but NOT snap_marker
+    return dim_customers.select(
+        entity_id=dim_customers.id.cast("string"),
+        has_dim=dim_customers.dim_marker,
+    )
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            executor.execute("customers")
+            activity = executor.connection.table("activity_customers").to_pandas()
+            assert "has_dim" in activity.columns
+            assert (activity["has_dim"] == "from_dim").all()
+
+
+class TestIbisExecutorAnalyticsBranch:
+    """Test analytics branch execution in _run_transform_pipeline."""
+
+    def test_analytics_table_created(self, tmp_path):
+        """analytics_{name} table is created when analytics function exists."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers
+
+def analytics_customers(dim_customers):
+    return dim_customers.group_by("name").aggregate(
+        total=dim_customers.amount_cents.sum(),
+    )
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            executor.execute("customers")
+            analytics = executor.connection.table("analytics_customers").to_pandas()
+            assert len(analytics) == 3  # 3 unique names
+            assert "total" in analytics.columns
+
+    def test_analytics_receives_dim_not_snapshot(self, tmp_path):
+        """Analytics branches from dim, not snapshot."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers.mutate(dim_flag=ibis.literal(1))
+
+def snapshot_customers(dim_customers):
+    return dim_customers.mutate(snap_flag=ibis.literal(2))
+
+def analytics_customers(dim_customers):
+    return dim_customers.group_by("name").aggregate(
+        dim_check=dim_customers.dim_flag.sum(),
+    )
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            executor.execute("customers")
+            analytics = executor.connection.table("analytics_customers").to_pandas()
+            assert "dim_check" in analytics.columns
+            assert (analytics["dim_check"] == 1).all()
+
+
+class TestIbisExecutorBranchCombinations:
+    """Test combinations of activity + analytics branches."""
+
+    def test_both_branches_created(self, tmp_path):
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers
+
+def activity_customers(dim_customers):
+    return dim_customers.select(entity_id=dim_customers.id.cast("string"))
+
+def analytics_customers(dim_customers):
+    return dim_customers.group_by("name").aggregate(cnt=dim_customers.id.count())
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            executor.execute("customers")
+            tables = executor.connection.list_tables()
+            assert "activity_customers" in tables
+            assert "analytics_customers" in tables
+            assert "dim_customers" in tables
+
+    def test_no_branches_still_works(self, tmp_path):
+        """Pipeline with no activity/analytics branches works fine."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers")
+            assert result.success is True
+            tables = executor.connection.list_tables()
+            assert "activity_customers" not in tables
+            assert "analytics_customers" not in tables
+
+
 class TestExecutionResultDataclass:
     """Test ExecutionResult frozen dataclass."""
 
@@ -363,3 +550,87 @@ class TestExecutionResultDataclass:
         )
         assert result.entity_name == "x"
         assert result.error is None
+
+    def test_activity_analytics_row_counts_default_none(self):
+        result = ExecutionResult(
+            entity_name="x", target_name="dim_x", row_count=10,
+            columns=["a"], success=True,
+        )
+        assert result.activity_row_count is None
+        assert result.analytics_row_count is None
+
+    def test_activity_analytics_row_counts_set(self):
+        result = ExecutionResult(
+            entity_name="x", target_name="dim_x", row_count=10,
+            columns=["a"], success=True,
+            activity_row_count=5, analytics_row_count=3,
+        )
+        assert result.activity_row_count == 5
+        assert result.analytics_row_count == 3
+
+
+class TestExecutionResultRowCounts:
+    """Test that execute() populates activity/analytics row counts."""
+
+    def test_activity_row_count_populated(self, tmp_path):
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers
+
+def activity_customers(dim_customers):
+    return dim_customers.select(entity_id=dim_customers.id.cast("string"))
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers")
+            assert result.activity_row_count == 3
+            assert result.analytics_row_count is None
+
+    def test_analytics_row_count_populated(self, tmp_path):
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = f"""\
+import ibis
+
+def source_customers(conn, backend):
+    import os
+    return conn.read_parquet(os.path.expanduser("{parquet_path}"))
+
+def prep_customers(source_customers):
+    return source_customers
+
+def dim_customers(prep_customers):
+    return prep_customers
+
+def analytics_customers(dim_customers):
+    return dim_customers.group_by("name").aggregate(cnt=dim_customers.id.count())
+"""
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers")
+            assert result.activity_row_count is None
+            assert result.analytics_row_count == 3
+
+    def test_no_branches_row_counts_none(self, tmp_path):
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers")
+            assert result.activity_row_count is None
+            assert result.analytics_row_count is None

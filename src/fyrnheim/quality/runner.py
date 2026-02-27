@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from .checks import (
     ForeignKey,
+    MatchesPattern,
     MaxAge,
     QualityCheck,
     QualityConfig,
@@ -114,7 +115,9 @@ LIMIT {limit}"""
             select_columns = [primary_key] + [c for c in check.columns_to_show if c != primary_key]
 
             # Build appropriate query based on check type
-            if isinstance(check, Unique):
+            if isinstance(check, MatchesPattern):
+                return self._run_matches_pattern_check(table, check, primary_key, limit)
+            elif isinstance(check, Unique):
                 query = self.build_unique_check_query(table, check, select_columns, limit)
             elif isinstance(check, MaxAge):
                 query = self.build_max_age_check_query(table, check)
@@ -158,6 +161,42 @@ LIMIT {limit}"""
                 sample_failures=rows,
             )
 
+        except Exception as e:
+            return CheckResult(
+                check_name=check.display_name,
+                passed=False,
+                failure_count=0,
+                sample_failures=[],
+                error=str(e),
+            )
+
+    def _run_matches_pattern_check(
+        self,
+        table: str,
+        check: MatchesPattern,
+        primary_key: str,
+        limit: int = 10,
+    ) -> CheckResult:
+        """Run MatchesPattern check using portable Ibis re_search()."""
+        try:
+            t = self.connection.table(table)
+            col = t[check.column]
+            # Rows that do NOT match the pattern are failures
+            failures = t.filter(~col.re_search(check.pattern))
+            failure_count = failures.count().execute()
+
+            sample_failures: list[dict[str, Any]] = []
+            if failure_count > 0:
+                select_cols = [primary_key] + [c for c in [check.column] if c != primary_key]
+                sample = failures.select(*select_cols).limit(limit).to_pandas()
+                sample_failures = sample.to_dict("records")
+
+            return CheckResult(
+                check_name=check.display_name,
+                passed=(failure_count == 0),
+                failure_count=failure_count,
+                sample_failures=sample_failures,
+            )
         except Exception as e:
             return CheckResult(
                 check_name=check.display_name,

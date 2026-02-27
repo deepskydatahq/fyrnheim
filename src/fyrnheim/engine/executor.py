@@ -26,6 +26,8 @@ class ExecutionResult:
     success: bool
     error: str | None = None
     snapshot_target_name: str | None = None
+    activity_row_count: int | None = None
+    analytics_row_count: int | None = None
 
 
 class IbisExecutor:
@@ -133,7 +135,9 @@ class IbisExecutor:
                 target_name = f"dim_{entity_name}"
 
         try:
-            result_table = self._run_transform_pipeline(entity_name, module)
+            result_table, activity_row_count, analytics_row_count = (
+                self._run_transform_pipeline(entity_name, module)
+            )
         except Exception as e:
             raise ExecutionError(
                 f"Transform execution failed for {entity_name}: {e}"
@@ -161,9 +165,13 @@ class IbisExecutor:
             columns=columns,
             success=True,
             snapshot_target_name=snapshot_target_name,
+            activity_row_count=activity_row_count,
+            analytics_row_count=analytics_row_count,
         )
 
-    def _run_transform_pipeline(self, entity_name: str, module: Any) -> ibis.Table:
+    def _run_transform_pipeline(
+        self, entity_name: str, module: Any
+    ) -> tuple[ibis.Table, int | None, int | None]:
         """Execute the layer functions from a generated module in order.
 
         Looks for: source_{name} -> prep_{name} -> dim_{name} -> snapshot_{name}
@@ -177,9 +185,14 @@ class IbisExecutor:
 
         When snapshot is present, dim_{name} is persisted as an intermediate
         table before snapshot runs, so both tables are available.
+
+        Returns:
+            Tuple of (result_table, activity_row_count, analytics_row_count).
         """
         conn = self._conn
         backend = self._backend
+        activity_row_count: int | None = None
+        analytics_row_count: int | None = None
 
         # Prefer registered source (has correct resolved path from runner)
         source_name = f"source_{entity_name}"
@@ -219,15 +232,19 @@ class IbisExecutor:
         activity_fn = getattr(module, f"activity_{entity_name}", None)
         if activity_fn is not None:
             activity_table = activity_fn(dim_result)
-            conn.create_table(f"activity_{entity_name}", activity_table, overwrite=True)
+            activity_target = f"activity_{entity_name}"
+            conn.create_table(activity_target, activity_table, overwrite=True)
+            activity_row_count = conn.table(activity_target).count().execute()
 
         # Analytics layer (branch from dim, not snapshot)
         analytics_fn = getattr(module, f"analytics_{entity_name}", None)
         if analytics_fn is not None:
             analytics_table = analytics_fn(dim_result)
-            conn.create_table(f"analytics_{entity_name}", analytics_table, overwrite=True)
+            analytics_target = f"analytics_{entity_name}"
+            conn.create_table(analytics_target, analytics_table, overwrite=True)
+            analytics_row_count = conn.table(analytics_target).count().execute()
 
-        return t
+        return t, activity_row_count, analytics_row_count
 
     def close(self) -> None:
         """Close the backend connection."""

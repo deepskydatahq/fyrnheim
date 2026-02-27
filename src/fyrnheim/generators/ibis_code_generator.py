@@ -422,17 +422,34 @@ def analytics_{self.entity_name}({input_name}: ibis.Table) -> ibis.Table:
                 values_repr = repr(at.values)
                 part = (
                     f"\n    # Activity: {at.name} (status_becomes on {at.field})\n"
-                    f"    act_{at.name} = t.filter(\n"
+                    f"    _filtered = t.filter(\n"
                     f"        t.{at.field}.isin({values_repr})\n"
-                    f"    ).select(\n"
-                    f'        entity_id=t.{entity_id}.cast("string"),\n'
-                    f'        identity=t.{identity}.cast("string"),\n'
-                    f"        ts=t.{at.timestamp_field},\n"
+                    f"    )\n"
+                    f"    act_{at.name} = _filtered.select(\n"
+                    f'        entity_id=_filtered.{entity_id}.cast("string"),\n'
+                    f'        identity=_filtered.{identity}.cast("string"),\n'
+                    f"        ts=_filtered.{at.timestamp_field},\n"
                     f'        activity_type=ibis.literal("{at.name}"),\n'
                     f"    )"
                 )
                 parts_code.append(part)
-            # field_changes: skip for v1
+            elif at.trigger == "field_changes":
+                part = (
+                    f"\n    # Activity: {at.name} (field_changes on {at.field})\n"
+                    f"    _prev = t.{at.field}.lag().over(\n"
+                    f"        ibis.window(group_by=t.{entity_id}, order_by=t.{at.timestamp_field})\n"
+                    f"    )\n"
+                    f"    _changed = t.filter(\n"
+                    f"        _prev.notnull() & (_prev != t.{at.field})\n"
+                    f"    )\n"
+                    f"    act_{at.name} = _changed.select(\n"
+                    f'        entity_id=_changed.{entity_id}.cast("string"),\n'
+                    f'        identity=_changed.{identity}.cast("string"),\n'
+                    f"        ts=_changed.{at.timestamp_field},\n"
+                    f'        activity_type=ibis.literal("{at.name}"),\n'
+                    f"    )"
+                )
+                parts_code.append(part)
 
         activity_names = [f"act_{at.name}" for at in activity.types]
         if len(activity_names) == 1:

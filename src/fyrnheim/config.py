@@ -23,6 +23,7 @@ class ProjectConfig:
     data_dir: Path
     output_dir: Path
     backend: str
+    backend_config: dict[str, str] | None = None
 
 
 def find_config(start_dir: Path) -> Path | None:
@@ -65,12 +66,16 @@ def load_config(start_dir: Path) -> ProjectConfig | None:
     if not isinstance(raw, dict):
         raise ConfigError(f"Expected a mapping in {config_path}, got {type(raw).__name__}")
 
+    raw_backend_config = raw.get("backend_config")
+    backend_config = dict(raw_backend_config) if isinstance(raw_backend_config, dict) else None
+
     return ProjectConfig(
         project_root=project_root,
         entities_dir=_resolve_dir(project_root, raw.get("entities_dir", "entities")),
         data_dir=_resolve_dir(project_root, raw.get("data_dir", "data")),
         output_dir=_resolve_dir(project_root, raw.get("output_dir", "generated")),
         backend=raw.get("backend", "duckdb"),
+        backend_config=backend_config,
     )
 
 
@@ -83,6 +88,7 @@ class ResolvedConfig:
     output_dir: Path
     backend: str
     project_root: Path
+    backend_config: dict[str, str] | None = None
 
 
 def resolve_config(
@@ -90,6 +96,7 @@ def resolve_config(
     entities_dir: str | None = None,
     data_dir: str | None = None,
     output_dir: str | None = None,
+    backend: str | None = None,
 ) -> ResolvedConfig:
     """Load project config and merge CLI overrides.
 
@@ -102,6 +109,7 @@ def resolve_config(
         entities_dir=Path(entities_dir) if entities_dir else (config.entities_dir if config else Path("entities")),
         data_dir=Path(data_dir) if data_dir else (config.data_dir if config else Path("data")),
         output_dir=Path(output_dir) if output_dir else (config.output_dir if config else Path("generated")),
-        backend=config.backend if config else "duckdb",
+        backend=backend if backend else (config.backend if config else "duckdb"),
         project_root=config.project_root if config else Path("."),
+        backend_config=config.backend_config if config else None,
     )

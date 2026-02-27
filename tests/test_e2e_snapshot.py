@@ -23,7 +23,7 @@ from fyrnheim import (
     TableSource,
 )
 from fyrnheim._generate import GenerateResult, generate
-from fyrnheim.engine import DuckDBExecutor
+from fyrnheim.engine import IbisExecutor
 
 # ---------------------------------------------------------------------------
 # Result container
@@ -136,7 +136,7 @@ def snapshot_pipeline(snapshot_parquet, tmp_path):
 
     gen_result = generate(entity, output_dir=generated_dir)
 
-    with DuckDBExecutor(generated_dir=generated_dir) as executor:
+    with IbisExecutor.duckdb(generated_dir=generated_dir) as executor:
         exec_result = executor.execute("users")
 
         dim_df = executor.connection.table("dim_users").to_pandas()

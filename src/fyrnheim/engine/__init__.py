@@ -1,5 +1,6 @@
 """fyrnheim.engine -- Entity discovery, dependency resolution, and execution."""
 
+from fyrnheim.engine.connection import create_connection as create_connection
 from fyrnheim.engine.errors import (
     ExecutionError as ExecutionError,
     FyrnheimEngineError as FyrnheimEngineError,
@@ -7,8 +8,8 @@ from fyrnheim.engine.errors import (
     TransformModuleError as TransformModuleError,
 )
 from fyrnheim.engine.executor import (
-    DuckDBExecutor as DuckDBExecutor,
     ExecutionResult as ExecutionResult,
+    IbisExecutor as IbisExecutor,
 )
 from fyrnheim.engine.registry import EntityInfo as EntityInfo, EntityRegistry as EntityRegistry
 from fyrnheim.engine.resolution import (
@@ -24,7 +25,8 @@ from fyrnheim.engine.runner import (
 
 __all__ = [
     "CircularDependencyError",
-    "DuckDBExecutor",
+    "IbisExecutor",
+    "create_connection",
     "EntityInfo",
     "EntityRegistry",
     "EntityRunResult",

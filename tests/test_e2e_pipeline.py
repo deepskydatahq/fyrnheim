@@ -26,7 +26,7 @@ from fyrnheim import (
     Unique,
 )
 from fyrnheim._generate import GenerateResult, generate
-from fyrnheim.engine import DuckDBExecutor
+from fyrnheim.engine import IbisExecutor
 from fyrnheim.primitives import date_trunc_month, hash_email
 
 # ---------------------------------------------------------------------------
@@ -182,7 +182,7 @@ def e2e_pipeline(sample_customers_parquet, tmp_path):
     gen_result = generate(entity, output_dir=generated_dir)
 
     # Step 2: Execute on DuckDB
-    with DuckDBExecutor(generated_dir=generated_dir) as executor:
+    with IbisExecutor.duckdb(generated_dir=generated_dir) as executor:
         exec_result = executor.execute("customers")
         result_df = executor.connection.table(exec_result.target_name).to_pandas()
 
@@ -308,7 +308,7 @@ class TestEndToEnd:
         generated_dir = tmp_path / "bad_generated"
         generate(entity, output_dir=generated_dir)
 
-        with DuckDBExecutor(generated_dir=generated_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=generated_dir) as executor:
             exec_result = executor.execute("customers")
             qr = QualityRunner(executor.connection)
             entity_result = qr.run_entity_checks(

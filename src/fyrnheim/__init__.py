@@ -112,8 +112,9 @@ _LAZY_IMPORTS = {
     "run_entity": "fyrnheim.engine.runner",
     "RunResult": "fyrnheim.engine.runner",
     "EntityRunResult": "fyrnheim.engine.runner",
-    "DuckDBExecutor": "fyrnheim.engine.executor",
+    "IbisExecutor": "fyrnheim.engine.executor",
     "ExecutionResult": "fyrnheim.engine.executor",
+    "create_connection": "fyrnheim.engine.connection",
 }
 
 
@@ -241,6 +242,7 @@ __all__ = [
     "run_entity",
     "RunResult",
     "EntityRunResult",
-    "DuckDBExecutor",
+    "IbisExecutor",
     "ExecutionResult",
+    "create_connection",
 ]

@@ -23,7 +23,7 @@ from fyrnheim import (
     TableSource,
 )
 from fyrnheim._generate import GenerateResult, generate
-from fyrnheim.engine import DuckDBExecutor
+from fyrnheim.engine import IbisExecutor
 
 # ---------------------------------------------------------------------------
 # Result container
@@ -124,7 +124,7 @@ def analytics_pipeline(analytics_parquet, tmp_path):
 
     gen_result = generate(entity, output_dir=generated_dir)
 
-    with DuckDBExecutor(generated_dir=generated_dir) as executor:
+    with IbisExecutor.duckdb(generated_dir=generated_dir) as executor:
         executor.execute("sales")
 
         dim_df = executor.connection.table("dim_sales").to_pandas()
@@ -178,7 +178,7 @@ def analytics_with_dimensions_pipeline(analytics_parquet, tmp_path):
 
     generate(entity, output_dir=generated_dir)
 
-    with DuckDBExecutor(generated_dir=generated_dir) as executor:
+    with IbisExecutor.duckdb(generated_dir=generated_dir) as executor:
         executor.execute("sales")
         analytics_df = executor.connection.table("analytics_sales").to_pandas()
 

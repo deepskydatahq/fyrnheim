@@ -32,7 +32,7 @@ from fyrnheim import (
     Unique,
 )
 from fyrnheim._generate import GenerateResult, generate
-from fyrnheim.engine import DuckDBExecutor
+from fyrnheim.engine import IbisExecutor
 from fyrnheim.primitives import hash_email
 
 # ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ def full_pipeline(orders_parquet, orders_entity, tmp_path):
 
     gen_result = generate(entity, output_dir=generated_dir)
 
-    with DuckDBExecutor(generated_dir=generated_dir) as executor:
+    with IbisExecutor.duckdb(generated_dir=generated_dir) as executor:
         exec_result = executor.execute("orders")
 
         dim_df = executor.connection.table("dim_orders").to_pandas()

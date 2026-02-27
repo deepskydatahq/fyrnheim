@@ -1,15 +1,16 @@
-"""Tests for DuckDBExecutor and related engine components."""
+"""Tests for IbisExecutor and related engine components."""
 
 from pathlib import Path
 
+import ibis
 import pandas as pd
 import pytest
 
 from fyrnheim.engine import (
-    DuckDBExecutor,
     ExecutionError,
     ExecutionResult,
     FyrnheimEngineError,
+    IbisExecutor,
     SourceNotFoundError,
     TransformModuleError,
 )
@@ -107,45 +108,113 @@ class TestTransformModuleLoader:
 
 
 # ---------------------------------------------------------------------------
-# DuckDBExecutor tests
+# IbisExecutor tests
 # ---------------------------------------------------------------------------
 
 
-class TestDuckDBExecutorLifecycle:
-    """Test DuckDBExecutor connection lifecycle."""
+class TestIbisExecutorGenericConstructor:
+    """Test IbisExecutor accepts any Ibis connection + backend string."""
+
+    def test_accepts_conn_and_backend(self):
+        conn = ibis.duckdb.connect(":memory:")
+        executor = IbisExecutor(conn=conn, backend="duckdb")
+        assert executor.connection is conn
+        assert executor._backend == "duckdb"
+        executor.close()
+
+    def test_accepts_arbitrary_backend_string(self):
+        conn = ibis.duckdb.connect(":memory:")
+        executor = IbisExecutor(conn=conn, backend="bigquery")
+        assert executor._backend == "bigquery"
+        executor.close()
+
+    def test_context_manager(self):
+        conn = ibis.duckdb.connect(":memory:")
+        with IbisExecutor(conn=conn, backend="duckdb") as executor:
+            assert executor.connection is conn
+
+    def test_generated_dir(self, tmp_path):
+        conn = ibis.duckdb.connect(":memory:")
+        gen_dir = tmp_path / "gen"
+        executor = IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir)
+        assert executor._generated_dir == gen_dir
+        executor.close()
+
+
+class TestIbisExecutorDuckdbClassmethod:
+    """Test IbisExecutor.duckdb() convenience classmethod."""
 
     def test_creates_in_memory_connection(self):
-        executor = DuckDBExecutor()
+        executor = IbisExecutor.duckdb()
+        assert executor.connection is not None
+        assert executor._backend == "duckdb"
+        executor.close()
+
+    def test_file_based_connection(self, tmp_path):
+        db_path = tmp_path / "test.duckdb"
+        with IbisExecutor.duckdb(db_path=db_path) as executor:
+            assert executor.connection is not None
+            assert executor._backend == "duckdb"
+
+    def test_with_generated_dir(self, tmp_path):
+        gen_dir = tmp_path / "gen"
+        executor = IbisExecutor.duckdb(generated_dir=gen_dir)
+        assert executor._generated_dir == gen_dir
+        executor.close()
+
+
+class TestIbisExecutorBackendInPipeline:
+    """Test that _run_transform_pipeline uses self._backend."""
+
+    def test_pipeline_passes_backend_to_source_fn(self, tmp_path):
+        """source_fn receives the executor's backend string, not hardcoded 'duckdb'."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        conn = ibis.duckdb.connect(":memory:")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            result = executor.execute("customers")
+            assert result.success is True
+            assert result.row_count == 3
+
+
+class TestIbisExecutorLifecycle:
+    """Test IbisExecutor connection lifecycle (via .duckdb() classmethod)."""
+
+    def test_creates_in_memory_connection(self):
+        executor = IbisExecutor.duckdb()
         assert executor.connection is not None
         executor.close()
 
     def test_context_manager(self):
-        with DuckDBExecutor() as executor:
+        with IbisExecutor.duckdb() as executor:
             assert executor.connection is not None
 
     def test_file_based_connection(self, tmp_path):
         db_path = tmp_path / "test.duckdb"
-        with DuckDBExecutor(db_path=db_path) as executor:
+        with IbisExecutor.duckdb(db_path=db_path) as executor:
             assert executor.connection is not None
 
 
-class TestDuckDBExecutorRegisterParquet:
+class TestIbisExecutorRegisterParquet:
     """Test register_parquet method."""
 
     def test_register_parquet(self, tmp_path):
         parquet_path = _create_sample_parquet(tmp_path)
-        with DuckDBExecutor() as executor:
+        with IbisExecutor.duckdb() as executor:
             executor.register_parquet("source_customers", parquet_path)
             t = executor.connection.table("source_customers")
             assert t.count().execute() == 3
 
     def test_raises_on_missing_file(self, tmp_path):
-        with DuckDBExecutor() as executor:
+        with IbisExecutor.duckdb() as executor:
             with pytest.raises(SourceNotFoundError, match="Parquet file not found"):
                 executor.register_parquet("x", tmp_path / "nope.parquet")
 
 
-class TestDuckDBExecutorExecute:
+class TestIbisExecutorExecute:
     """Test execute method with generated transform modules."""
 
     def test_execute_pipeline(self, tmp_path):
@@ -154,7 +223,7 @@ class TestDuckDBExecutorExecute:
         code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
         _create_transform_module(gen_dir, "customers", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             result = executor.execute("customers")
             assert isinstance(result, ExecutionResult)
             assert result.success is True
@@ -169,7 +238,7 @@ class TestDuckDBExecutorExecute:
         code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
         _create_transform_module(gen_dir, "customers", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             result = executor.execute("customers", target_name="stg_customers")
             assert result.target_name == "stg_customers"
 
@@ -179,19 +248,19 @@ class TestDuckDBExecutorExecute:
         code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
         _create_transform_module(gen_dir, "customers", code)
 
-        with DuckDBExecutor() as executor:
+        with IbisExecutor.duckdb() as executor:
             result = executor.execute("customers", generated_dir=gen_dir)
             assert result.success is True
 
     def test_execute_no_generated_dir_raises(self):
-        with DuckDBExecutor() as executor:
+        with IbisExecutor.duckdb() as executor:
             with pytest.raises(ExecutionError, match="No generated_dir"):
                 executor.execute("customers")
 
     def test_execute_missing_module_raises(self, tmp_path):
         gen_dir = tmp_path / "generated"
         gen_dir.mkdir()
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             with pytest.raises(TransformModuleError, match="not found"):
                 executor.execute("missing_entity")
 
@@ -201,7 +270,7 @@ class TestDuckDBExecutorExecute:
         code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
         _create_transform_module(gen_dir, "customers", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             executor.execute("customers")
             t = executor.connection.table("dim_customers")
             df = t.to_pandas()
@@ -215,7 +284,7 @@ class TestDuckDBExecutorExecute:
         code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
         _create_transform_module(gen_dir, "customers", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             result1 = executor.execute("customers")
             result2 = executor.execute("customers")
             assert result1.row_count == result2.row_count
@@ -237,12 +306,11 @@ def dim_items(prep_items):
 """
         _create_transform_module(gen_dir, "items", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             executor.register_parquet("source_items", parquet_path)
             result = executor.execute("items")
             assert result.success is True
             assert result.row_count == 3
-
 
     def test_execute_source_fn_fallback(self, tmp_path):
         """source_fn in module is used when no source is registered."""
@@ -251,7 +319,7 @@ def dim_items(prep_items):
         code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
         _create_transform_module(gen_dir, "customers", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             # Deliberately do NOT register_parquet -- forces source_fn path
             assert "source_customers" not in executor._registered_sources
             result = executor.execute("customers")
@@ -272,7 +340,7 @@ def dim_widgets(prep_widgets):
 """
         _create_transform_module(gen_dir, "widgets", code)
 
-        with DuckDBExecutor(generated_dir=gen_dir) as executor:
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
             with pytest.raises(ExecutionError, match="No source function or registered source"):
                 executor.execute("widgets")
 

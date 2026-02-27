@@ -8,8 +8,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.errors import SourceNotFoundError
-from fyrnheim.engine.executor import DuckDBExecutor
+from fyrnheim.engine.executor import IbisExecutor
 from fyrnheim.engine.registry import EntityRegistry
 from fyrnheim.engine.resolution import _extract_dependencies, resolve_execution_order
 
@@ -83,7 +84,7 @@ def _resolve_generated_dir(
 
 
 def _register_entity_source(
-    executor: DuckDBExecutor,
+    executor: IbisExecutor,
     entity: Entity,
     data_dir: Path,
 ) -> None:
@@ -118,17 +119,19 @@ def run_entity(
     data_dir: str | Path,
     *,
     backend: str = "duckdb",
+    backend_config: dict[str, str] | None = None,
     generated_dir: str | Path | None = None,
     auto_generate: bool = True,
     quality_checks: bool = True,
-    _executor: DuckDBExecutor | None = None,
+    _executor: IbisExecutor | None = None,
 ) -> EntityRunResult:
     """Execute a single entity through the pipeline.
 
     Args:
         entity: The Entity to execute.
         data_dir: Base directory for parquet source data.
-        backend: Backend engine (only "duckdb" supported).
+        backend: Backend engine ("duckdb", "bigquery").
+        backend_config: Backend-specific connection arguments (e.g. project_id, dataset_id).
         generated_dir: Directory for generated transform code.
         auto_generate: If True, regenerate code before execution.
         quality_checks: If True, run quality checks after execution.
@@ -140,14 +143,6 @@ def run_entity(
     start_time = time.monotonic()
     data_dir = Path(data_dir)
     gen_dir = Path(generated_dir) if generated_dir else Path("generated")
-
-    if backend != "duckdb":
-        return EntityRunResult(
-            entity_name=entity.name,
-            status="error",
-            error=f"Unsupported backend: {backend}",
-            duration_seconds=time.monotonic() - start_time,
-        )
 
     # 1. Auto-generate
     if auto_generate:
@@ -177,8 +172,11 @@ def run_entity(
 
     # 2. Execute
     own_executor = _executor is None
-    executor = _executor or DuckDBExecutor(generated_dir=gen_dir)
+    executor: IbisExecutor | None = _executor
     try:
+        if own_executor:
+            conn = create_connection(backend, **(backend_config or {}))
+            executor = IbisExecutor(conn=conn, backend=backend, generated_dir=gen_dir)
         _register_entity_source(executor, entity, data_dir)
 
         log.info("Transforming: %s", entity.name)
@@ -192,7 +190,7 @@ def run_entity(
             duration_seconds=time.monotonic() - start_time,
         )
     finally:
-        if own_executor:
+        if own_executor and executor is not None:
             executor.close()
 
     # 3. Quality checks
@@ -234,6 +232,7 @@ def run(
     data_dir: str | Path,
     *,
     backend: str = "duckdb",
+    backend_config: dict[str, str] | None = None,
     generated_dir: str | Path | None = None,
     auto_generate: bool = True,
     quality_checks: bool = True,
@@ -244,7 +243,8 @@ def run(
     Args:
         entities_dir: Directory containing entity .py files.
         data_dir: Base directory for parquet source data.
-        backend: Backend engine (only "duckdb" supported).
+        backend: Backend engine ("duckdb", "bigquery").
+        backend_config: Backend-specific connection arguments (e.g. project_id, dataset_id).
         generated_dir: Directory for generated transform code.
             None means {entities_dir}/../generated/.
         auto_generate: If True, regenerate code before execution.
@@ -262,8 +262,6 @@ def run(
     # Validate
     if not entities_dir.is_dir():
         raise FileNotFoundError(f"Entities directory not found: {entities_dir}")
-    if backend != "duckdb":
-        raise ValueError(f"Unsupported backend: {backend}. Supported: 'duckdb'")
 
     # Phase 1: Discover
     log.info("Discovering entities in %s", entities_dir)
@@ -288,7 +286,8 @@ def run(
     results: list[EntityRunResult] = []
     failed_entities: set[str] = set()
 
-    with DuckDBExecutor(generated_dir=gen_dir) as executor:
+    conn = create_connection(backend, **(backend_config or {}))
+    with IbisExecutor(conn=conn, backend=backend, generated_dir=gen_dir) as executor:
         for entity_info in sorted_entities:
             entity = entity_info.entity
             entity_name = entity_info.name

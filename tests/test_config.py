@@ -153,3 +153,42 @@ class TestResolveConfig:
         monkeypatch.chdir(tmp_path)
         cfg = resolve_config()
         assert cfg.project_root == tmp_path
+
+    def test_backend_override(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("backend: duckdb\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(backend="bigquery")
+        assert cfg.backend == "bigquery"
+
+    def test_backend_default_without_override(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("backend: bigquery\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.backend == "bigquery"
+
+
+class TestBackendConfig:
+    def test_backend_config_parsed(self, tmp_path):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "backend: bigquery\n"
+            "backend_config:\n"
+            "  project_id: my-project\n"
+            "  dataset_id: my_dataset\n"
+        )
+        cfg = load_config(tmp_path)
+        assert cfg.backend_config == {"project_id": "my-project", "dataset_id": "my_dataset"}
+
+    def test_backend_config_none_when_absent(self, tmp_path):
+        (tmp_path / "fyrnheim.yaml").write_text("backend: duckdb\n")
+        cfg = load_config(tmp_path)
+        assert cfg.backend_config is None
+
+    def test_backend_config_flows_to_resolved(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "backend: bigquery\n"
+            "backend_config:\n"
+            "  project_id: test-proj\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.backend_config == {"project_id": "test-proj"}

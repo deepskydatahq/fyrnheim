@@ -1,4 +1,4 @@
-"""DuckDB execution engine for fyrnheim pipelines."""
+"""Ibis execution engine for fyrnheim pipelines."""
 
 from __future__ import annotations
 
@@ -28,35 +28,46 @@ class ExecutionResult:
     snapshot_target_name: str | None = None
 
 
-class DuckDBExecutor:
-    """Execute entity transformations on a DuckDB backend.
+class IbisExecutor:
+    """Execute entity transformations on any Ibis-supported backend.
 
     Usage::
 
-        with DuckDBExecutor() as executor:
+        with IbisExecutor.duckdb() as executor:
             executor.register_parquet("source_customers", Path("data/customers.parquet"))
             result = executor.execute("customers", generated_dir=Path("generated/"))
 
     Args:
-        db_path: DuckDB database path. ":memory:" (default) for in-memory,
-                 or a file path for persistent storage.
+        conn: An Ibis backend connection.
+        backend: Backend name (e.g. "duckdb", "bigquery").
         generated_dir: Default directory for generated transform modules.
     """
 
     def __init__(
         self,
-        db_path: str | Path = ":memory:",
+        conn: ibis.BaseBackend,
+        backend: str,
         generated_dir: str | Path | None = None,
     ) -> None:
-        self._db_path = str(db_path)
+        self._conn = conn
+        self._backend = backend
         self._generated_dir = Path(generated_dir) if generated_dir else None
         self._registered_sources: dict[str, Path] = {}
-        self._conn: ibis.BaseBackend = ibis.duckdb.connect(self._db_path)
-        log.info("DuckDB connected: %s", self._db_path)
+        log.info("%s backend connected", self._backend)
+
+    @classmethod
+    def duckdb(
+        cls,
+        db_path: str | Path = ":memory:",
+        generated_dir: str | Path | None = None,
+    ) -> IbisExecutor:
+        """Create an IbisExecutor with a DuckDB backend."""
+        conn = ibis.duckdb.connect(str(db_path))
+        return cls(conn=conn, backend="duckdb", generated_dir=generated_dir)
 
     @property
     def connection(self) -> ibis.BaseBackend:
-        """The underlying Ibis DuckDB connection."""
+        """The underlying Ibis backend connection."""
         return self._conn
 
     def register_parquet(self, name: str, path: str | Path) -> None:
@@ -156,13 +167,19 @@ class DuckDBExecutor:
         """Execute the layer functions from a generated module in order.
 
         Looks for: source_{name} -> prep_{name} -> dim_{name} -> snapshot_{name}
-        Calls each function that exists, chaining the output.
+        With optional branches from dim:
+            dim_{name} -> activity_{name}
+            dim_{name} -> analytics_{name}
+
+        Calls each function that exists, chaining the output along the main
+        pipeline.  Activity and analytics branch from the dim result (not
+        snapshot) and are persisted as separate tables.
 
         When snapshot is present, dim_{name} is persisted as an intermediate
         table before snapshot runs, so both tables are available.
         """
         conn = self._conn
-        backend = "duckdb"
+        backend = self._backend
 
         # Prefer registered source (has correct resolved path from runner)
         source_name = f"source_{entity_name}"
@@ -213,12 +230,12 @@ class DuckDBExecutor:
         return t
 
     def close(self) -> None:
-        """Close the DuckDB connection."""
+        """Close the backend connection."""
         if self._conn is not None:
             self._conn.disconnect()
-            log.info("DuckDB disconnected")
+            log.info("%s backend disconnected", self._backend)
 
-    def __enter__(self) -> DuckDBExecutor:
+    def __enter__(self) -> IbisExecutor:
         return self
 
     def __exit__(self, *args: object) -> None:

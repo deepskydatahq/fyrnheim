@@ -166,8 +166,14 @@ class TestRun:
     def test_unsupported_backend_raises(self, tmp_path):
         entities_dir = tmp_path / "entities"
         entities_dir.mkdir()
+        # Create at least one entity so pipeline reaches connection creation
+        parquet_path = _create_parquet(tmp_path / "data", "test")
+        entity_code = ENTITY_WITH_SOURCE_TEMPLATE.format(
+            name="test", duckdb_path=str(parquet_path)
+        )
+        (entities_dir / "test.py").write_text(entity_code)
         with pytest.raises(ValueError, match="Unsupported backend"):
-            run(entities_dir, tmp_path / "data", backend="bigquery")
+            run(entities_dir, tmp_path / "data", backend="postgres")
 
     def test_empty_directory(self, tmp_path):
         entities_dir = tmp_path / "entities"
@@ -259,7 +265,7 @@ class TestRunEntity:
             layers=LayersConfig(prep=PrepLayer(model_name="prep_x")),
             source=TableSource(project="p", dataset="d", table="x"),
         )
-        result = run_entity(entity, tmp_path, backend="bigquery")
+        result = run_entity(entity, tmp_path, backend="postgres")
         assert result.status == "error"
         assert "Unsupported backend" in result.error
 
@@ -287,7 +293,7 @@ class TestLazyImports:
 
         assert fyrnheim.EntityRunResult is not None
 
-    def test_duckdb_executor_importable(self):
+    def test_ibis_executor_importable(self):
         import fyrnheim
 
-        assert fyrnheim.DuckDBExecutor is not None
+        assert fyrnheim.IbisExecutor is not None

@@ -317,14 +317,15 @@ def generate(dry_run: bool, entities_dir: str | None, output_dir: str | None) ->
 @click.option("--entities-dir", type=click.Path(), default=None, help="Override entities directory.")
 @click.option("--data-dir", type=click.Path(), default=None, help="Override data directory.")
 @click.option("--output-dir", type=click.Path(), default=None, help="Override generated output directory.")
+@click.option("--backend", default=None, help="Override backend engine (e.g. duckdb, bigquery).")
 @handle_errors
-def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None, output_dir: str | None) -> None:
+def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None, output_dir: str | None, backend: str | None) -> None:
     """Execute the pipeline: discover, generate, transform, check."""
     from fyrnheim.config import resolve_config
     from fyrnheim.engine.registry import EntityRegistry
     from fyrnheim.engine.runner import run as engine_run, run_entity as engine_run_entity
 
-    cfg = resolve_config(entities_dir=entities_dir, data_dir=data_dir, output_dir=output_dir)
+    cfg = resolve_config(entities_dir=entities_dir, data_dir=data_dir, output_dir=output_dir, backend=backend)
 
     if not cfg.entities_dir.exists():
         click.echo(f"Error: Entities directory not found: {cfg.entities_dir}", err=True)
@@ -349,7 +350,7 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
         click.echo(f"Running {entity_name} on {cfg.backend}")
         click.echo()
 
-        er = engine_run_entity(info.entity, cfg.data_dir, backend=cfg.backend, generated_dir=cfg.output_dir)
+        er = engine_run_entity(info.entity, cfg.data_dir, backend=cfg.backend, backend_config=cfg.backend_config, generated_dir=cfg.output_dir)
         _print_entity_result(er, registry)
 
         click.echo()
@@ -364,7 +365,7 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
     click.echo(f"Running on {cfg.backend}")
     click.echo()
 
-    result = engine_run(cfg.entities_dir, cfg.data_dir, backend=cfg.backend, generated_dir=cfg.output_dir)
+    result = engine_run(cfg.entities_dir, cfg.data_dir, backend=cfg.backend, backend_config=cfg.backend_config, generated_dir=cfg.output_dir)
 
     for er in result.entities:
         _print_entity_result(er, registry)
@@ -390,7 +391,7 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
 def check(entity_name: str | None, entities_dir: str | None, output_dir: str | None, db_path: str | None) -> None:
     """Run quality checks against previously-executed entities."""
     from fyrnheim.config import resolve_config
-    from fyrnheim.engine.executor import DuckDBExecutor
+    from fyrnheim.engine.executor import IbisExecutor
     from fyrnheim.engine.registry import EntityRegistry
     from fyrnheim.quality import QualityRunner
 
@@ -420,7 +421,7 @@ def check(entity_name: str | None, entities_dir: str | None, output_dir: str | N
         click.echo("No entities found.")
         return
 
-    executor = DuckDBExecutor(db_path=db_path, generated_dir=cfg.output_dir)
+    executor = IbisExecutor.duckdb(db_path=db_path, generated_dir=cfg.output_dir)
     total_pass = total_fail = total_error = entities_checked = 0
     try:
         qr = QualityRunner(executor.connection)

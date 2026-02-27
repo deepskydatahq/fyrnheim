@@ -1,0 +1,41 @@
+# Epic: Enhanced UnionSource with per-source field normalization
+
+id = "M005-E002"
+parent = "M005"
+title = "Enhanced UnionSource with per-source field_mappings and literal columns"
+status = "draft"
+
+[outcome]
+description = """
+UnionSource gains optional per-source field_mappings (dict[str, str]) and
+literal_columns (dict[str, Any]) on each sub-source entry. The code generator
+produces per-source SELECT with renames + literal column injection, then UNION ALL.
+This generalizes the three timo-data-stack patterns (SignalSourceConfig,
+ProductSourceConfig, AnonSourceConfig) without domain-specific types. Unblocks
+product, signals, and anon entities.
+"""
+
+job_story = "When I define a UnionSource with per-source field_mappings and literal columns I want the generated code to normalize each source before the UNION ALL so my downstream code sees consistent column names"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "UnionSource sub-source entries accept optional field_mappings: dict[str, str]",
+    "UnionSource sub-source entries accept optional literal_columns: dict[str, Any]",
+    "Existing UnionSource usage without new fields still works (defaults to empty)",
+    "Generated code applies .relabel() per source before union",
+    "Generated code adds ibis.literal() columns for each literal_columns entry",
+    "Generated code produces UNION ALL across all normalized sources",
+    "Unit tests cover: no field_mappings, single source with renames, multiple sources with different mappings, literal columns",
+    "E2E test: multi-source UnionSource with field normalization + literal columns executes on DuckDB",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+depends_on = []

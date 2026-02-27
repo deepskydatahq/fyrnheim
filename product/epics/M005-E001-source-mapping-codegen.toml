@@ -1,0 +1,37 @@
+# Epic: SourceMapping field_mappings codegen
+
+id = "M005-E001"
+parent = "M005"
+title = "SourceMapping field_mappings applied as renames during source code generation"
+status = "draft"
+
+[outcome]
+description = """
+IbisCodeGenerator reads SourceMapping.field_mappings and generates column rename
+expressions (ibis .relabel()) in the source function. Downstream prep/dim code uses
+entity field names, not raw source column names. This unblocks transactions and
+subscriptions entities which have field_mappings defined in their SourceMapping.
+"""
+
+job_story = "When I define a SourceMapping with field_mappings I want the generated source function to rename columns automatically so that my prep layer uses entity field names"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IbisCodeGenerator accepts SourceMapping alongside Entity during generation",
+    "Generated source function includes .relabel() or equivalent column rename for each field_mapping entry",
+    "Entity field names (not source column names) appear in all downstream generated code",
+    "SourceMapping with empty field_mappings produces no renames (backward compatible)",
+    "Unit tests cover: single rename, multiple renames, empty mappings, identity mappings",
+    "E2E test: entity with SourceMapping field_mappings executes on DuckDB and produces correct column names",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+depends_on = []

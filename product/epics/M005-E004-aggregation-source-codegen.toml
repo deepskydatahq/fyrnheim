@@ -1,0 +1,42 @@
+# Epic: AggregationSource codegen verification and E2E testing
+
+id = "M005-E004"
+parent = "M005"
+title = "AggregationSource codegen generates GROUP BY + aggregation expressions"
+status = "draft"
+
+[outcome]
+description = """
+AggregationSource codegen is verified and tested end-to-end. The generator produces
+a function that takes the source entity's dimension table as input and applies
+GROUP BY on specified dimensions with aggregate expressions (COUNT, SUM, BOOL_OR,
+etc.) from computed columns. The executor correctly resolves the source entity
+dependency and passes its output as input. Unblocks the account entity which
+aggregates from person (GROUP BY account_id with COUNT(DISTINCT person_id), etc.).
+"""
+
+job_story = "When I define an AggregationSource entity that depends on another entity I want the generated code to GROUP BY the right dimensions and compute aggregates so that account-level rollups run via fyr run"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "AggregationSource codegen produces a function accepting source entity's table as input",
+    "Generated function applies GROUP BY on specified dimension columns",
+    "Aggregate expressions from entity computed columns appear in generated code",
+    "Executor resolves AggregationSource dependency — runs source entity first, passes output",
+    "Dependency resolution handles AggregationSource → source entity ordering correctly",
+    "Unit tests cover: single dimension GROUP BY, multiple dimensions, multiple aggregates",
+    "E2E test: account-style entity aggregating from person-style entity executes on DuckDB",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/resolution.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+depends_on = ["M005-E003"]

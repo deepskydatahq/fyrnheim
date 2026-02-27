@@ -1,0 +1,46 @@
+# Epic: Identity graph codegen for DerivedSource entities
+
+id = "M005-E003"
+parent = "M005"
+title = "DerivedSource identity graph codegen with cascading FULL OUTER JOIN and PriorityCoalesce"
+status = "draft"
+
+[outcome]
+description = """
+DerivedSource entities generate real transformation code instead of returning "".
+An IdentityGraphConfig model captures sources, match key, field mappings, and
+priorities. The code generator produces: (1) a multi-input source function that
+receives a dict of source tables, (2) cascading FULL OUTER JOIN on the match key,
+(3) PriorityCoalesce via .fillna() chains ordered by source priority, and
+(4) auto-generated columns: source flags (is_{source}), source IDs, first-seen
+dates. The executor is extended to handle multi-input DerivedSource entities.
+Unblocks the person entity (~300-400 LOC of new generator logic).
+"""
+
+job_story = "When I define a DerivedSource entity with an identity graph config I want fyrnheim to generate the full join chain and priority coalesce code so that person resolution runs via fyr run"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IdentityGraphConfig model exists with sources, match_key, field_mappings, priorities",
+    "DerivedSource codegen produces cascading FULL OUTER JOIN on match key",
+    "PriorityCoalesce generates .fillna() chains ordered by source priority",
+    "Auto-generated source flags (is_{source_name}) are Boolean columns in output",
+    "Auto-generated source ID columns preserve original IDs from each source",
+    "Auto-generated first-seen date columns track earliest appearance per source",
+    "Generated code is valid Python that parses without syntax errors",
+    "Executor handles multi-input DerivedSource — passes dict of source tables to transform function",
+    "Unit tests cover: 2 sources, 3+ sources, field priority ordering, source flag generation",
+    "E2E test: person-style entity with 2+ sources executes on DuckDB producing correct join output",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+depends_on = []

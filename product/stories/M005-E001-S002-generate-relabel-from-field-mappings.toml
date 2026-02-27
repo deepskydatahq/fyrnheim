@@ -3,7 +3,7 @@
 id = "M005-E001-S002"
 parent = "M005-E001"
 title = "Generate .relabel() calls in source functions when field_mappings present"
-status = "draft"
+status = "ready"
 depends_on = ["M005-E001-S001"]
 
 [outcome]

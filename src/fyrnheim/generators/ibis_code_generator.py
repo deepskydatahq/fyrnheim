@@ -134,7 +134,17 @@ def source_{name}(source_{source.source_entity}: ibis.Table) -> ibis.Table:
 '''
         if source.filter_expression:
             func += f"    t = t.filter({source.filter_expression})\n"
-        func += f'    return t.group_by("{source.group_by_column}")\n'
+
+        if source.aggregations:
+            agg_parts = []
+            for agg in source.aggregations:
+                expr = self._bind_expression(agg.expression)
+                agg_parts.append(f"        {agg.name}={expr},")
+            agg_body = "\n".join(agg_parts)
+            func += f'    return t.group_by("{source.group_by_column}").aggregate(\n{agg_body}\n    )\n'
+        else:
+            func += f'    return t.group_by("{source.group_by_column}").aggregate()\n'
+
         return func
 
     def _generate_union_source_functions(self, source: UnionSource) -> str:

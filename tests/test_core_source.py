@@ -463,6 +463,29 @@ class TestAggregationSource:
         assert src.filter_expression == "account_id IS NOT NULL"
         assert len(src.fields) == 1
 
+    def test_with_aggregations(self):
+        from fyrnheim.components.computed_column import ComputedColumn
+        src = AggregationSource(
+            source_entity="person",
+            group_by_column="account_id",
+            aggregations=[
+                ComputedColumn(name="person_count", expression="t.person_id.count()"),
+                ComputedColumn(name="total_amount", expression="t.amount.sum()"),
+            ],
+        )
+        assert len(src.aggregations) == 2
+        assert src.aggregations[0].name == "person_count"
+        assert src.aggregations[1].name == "total_amount"
+
+    def test_without_aggregations_backward_compatible(self):
+        src = AggregationSource(source_entity="person", group_by_column="account_id")
+        assert src.aggregations == []
+
+    def test_aggregations_default_empty(self):
+        src = AggregationSource(source_entity="person", group_by_column="account_id")
+        assert src.aggregations == []
+        assert src.source_entity == "person"
+
 
 class TestEventAggregationSource:
     """Tests for EventAggregationSource model."""

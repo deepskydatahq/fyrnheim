@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from fyrnheim import (
+    AggregationSource,
     ComputedColumn,
     DerivedSource,
     DimensionLayer,
@@ -697,3 +698,104 @@ class TestE2EIdentityGraphPerson:
         dave = df[df["email"] == "dave@ex.com"].iloc[0]
         assert pd.isna(dave["hubspot_id"])
         assert dave["stripe_id"] == "s2"
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for AggregationSource pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestE2EAggregationSource:
+    """E2E test: account-style entity aggregating from person-style entity on DuckDB."""
+
+    @pytest.fixture()
+    def aggregation_output(self, tmp_path):
+        """Full aggregation pipeline: person entity + account entity aggregation."""
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        from fyrnheim.components.computed_column import ComputedColumn as CC
+
+        # --- Create person parquet (6 rows, 3 accounts) ---
+        person_table = pa.table({
+            "person_id": ["p1", "p2", "p3", "p4", "p5", "p6"],
+            "account_id": ["acct_1", "acct_1", "acct_2", "acct_2", "acct_2", "acct_3"],
+            "name": ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank"],
+            "amount": [100, 200, 300, 400, 500, 150],
+        })
+        person_path = tmp_path / "person.parquet"
+        pq.write_table(person_table, person_path)
+
+        # --- Define person entity (TableSource) ---
+        person_entity = Entity(
+            name="person",
+            description="Person entity for aggregation test",
+            source=TableSource(
+                project="test", dataset="test", table="person",
+                duckdb_path=str(person_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_person"),
+                dimension=DimensionLayer(model_name="dim_person"),
+            ),
+        )
+
+        # --- Define account entity (AggregationSource) ---
+        account_entity = Entity(
+            name="account",
+            description="Account entity aggregating from person",
+            source=AggregationSource(
+                source_entity="person",
+                group_by_column="account_id",
+                aggregations=[
+                    CC(name="person_count", expression="t.person_id.count()"),
+                    CC(name="total_amount", expression="t.amount.sum()"),
+                ],
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_account"),
+                dimension=DimensionLayer(model_name="dim_account"),
+            ),
+        )
+
+        # --- Generate code for both entities ---
+        generated_dir = tmp_path / "generated"
+        generate(person_entity, output_dir=generated_dir)
+        generate(account_entity, output_dir=generated_dir)
+
+        # --- Execute in dependency order ---
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("person")
+            result = executor.execute("account", entity=account_entity)
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        return result, df
+
+    def test_row_count(self, aggregation_output):
+        """3 account rows from 6 person rows across 3 accounts."""
+        result, df = aggregation_output
+        assert result.row_count == 3
+        assert len(df) == 3
+
+    def test_aggregation_values_correct(self, aggregation_output):
+        """person_count and total_amount correct per account."""
+        _, df = aggregation_output
+
+        acct1 = df[df["account_id"] == "acct_1"].iloc[0]
+        assert acct1["person_count"] == 2
+        assert acct1["total_amount"] == 300
+
+        acct2 = df[df["account_id"] == "acct_2"].iloc[0]
+        assert acct2["person_count"] == 3
+        assert acct2["total_amount"] == 1200
+
+        acct3 = df[df["account_id"] == "acct_3"].iloc[0]
+        assert acct3["person_count"] == 1
+        assert acct3["total_amount"] == 150
+
+    def test_output_columns(self, aggregation_output):
+        """Output table has group_by key + aggregated fields."""
+        _, df = aggregation_output
+        expected_cols = {"account_id", "person_count", "total_amount"}
+        assert expected_cols.issubset(set(df.columns))

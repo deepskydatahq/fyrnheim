@@ -797,3 +797,168 @@ def dim_person(source_person):
             result = executor.execute("customers")
             assert result.success is True
             assert result.row_count == 3
+
+
+# ---------------------------------------------------------------------------
+# AggregationSource execution tests
+# ---------------------------------------------------------------------------
+
+
+class TestAggregationSourceExecution:
+    """Test AggregationSource detection and dispatch in executor."""
+
+    def _make_aggregation_entity(self):
+        """Create an AggregationSource entity."""
+        from fyrnheim.core.source import AggregationSource
+
+        return Entity(
+            name="account",
+            description="Account aggregation",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_account")),
+            source=AggregationSource(
+                source_entity="person",
+                group_by_column="account_id",
+            ),
+        )
+
+    def test_aggregation_source_calls_source_fn_with_dep_table(self, tmp_path):
+        """AggregationSource entity calls source_fn(dependency_table) not source_fn(conn, backend)."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        conn = ibis.duckdb.connect(":memory:")
+        # Create dependency table dim_person
+        df = pd.DataFrame({
+            "person_id": ["p1", "p2", "p3"],
+            "account_id": ["a1", "a1", "a2"],
+            "amount": [100, 200, 300],
+        })
+        conn.create_table("dim_person", df)
+
+        # Mock source function that accepts a table
+        code = '''\
+import ibis
+
+def source_account(source_person: ibis.Table) -> ibis.Table:
+    t = source_person
+    return t.group_by("account_id").aggregate(
+        person_count=t.person_id.count(),
+    )
+
+def prep_account(source_account):
+    return source_account
+
+def dim_account(prep_account):
+    return prep_account
+'''
+        (gen_dir / "account_transforms.py").write_text(code)
+
+        entity = self._make_aggregation_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            result = executor.execute("account", entity=entity)
+            assert result.success is True
+            assert result.row_count == 2  # 2 distinct account_ids
+
+    def test_missing_dependency_table_raises(self, tmp_path):
+        """ExecutionError when dependency dim table is missing."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        conn = ibis.duckdb.connect(":memory:")
+        # Do NOT create dim_person
+
+        code = '''\
+import ibis
+
+def source_account(source_person: ibis.Table) -> ibis.Table:
+    return source_person
+
+def dim_account(source_account):
+    return source_account
+'''
+        (gen_dir / "account_transforms.py").write_text(code)
+
+        entity = self._make_aggregation_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            with pytest.raises(ExecutionError, match="Dependency table.*dim_person.*not found"):
+                executor.execute("account", entity=entity)
+
+    def test_missing_source_fn_raises(self, tmp_path):
+        """ExecutionError when no source function exists in module."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        conn = ibis.duckdb.connect(":memory:")
+        df = pd.DataFrame({"person_id": ["p1"], "account_id": ["a1"]})
+        conn.create_table("dim_person", df)
+
+        # Module WITHOUT source_account function
+        code = '''\
+import ibis
+
+def dim_account(source_account):
+    return source_account
+'''
+        (gen_dir / "account_transforms.py").write_text(code)
+
+        entity = self._make_aggregation_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            with pytest.raises(ExecutionError, match="No source function for AggregationSource"):
+                executor.execute("account", entity=entity)
+
+    def test_table_source_backward_compatible(self, tmp_path):
+        """Existing TableSource entity still uses standard source_fn(conn, backend) path."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        from fyrnheim import TableSource
+
+        entity = Entity(
+            name="customers",
+            description="Test",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_customers")),
+            source=TableSource(project="p", dataset="d", table="customers", duckdb_path=str(parquet_path)),
+        )
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers", entity=entity)
+            assert result.success is True
+            assert result.row_count == 3
+
+    def test_dependency_table_resolved_correctly(self, tmp_path):
+        """Dependency table resolved as dim_{source_entity} from connection catalog."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        conn = ibis.duckdb.connect(":memory:")
+        df = pd.DataFrame({
+            "person_id": ["p1", "p2"],
+            "account_id": ["a1", "a1"],
+        })
+        conn.create_table("dim_person", df)
+
+        # Source function that verifies it received the right table
+        code = '''\
+import ibis
+
+def source_account(source_person: ibis.Table) -> ibis.Table:
+    t = source_person
+    # Verify we got the right table by checking columns
+    assert "person_id" in t.columns, f"Expected person_id column, got {t.columns}"
+    assert "account_id" in t.columns, f"Expected account_id column, got {t.columns}"
+    return t.group_by("account_id").aggregate(cnt=t.person_id.count())
+
+def prep_account(source_account):
+    return source_account
+
+def dim_account(prep_account):
+    return prep_account
+'''
+        (gen_dir / "account_transforms.py").write_text(code)
+
+        entity = self._make_aggregation_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            result = executor.execute("account", entity=entity)
+            assert result.success is True

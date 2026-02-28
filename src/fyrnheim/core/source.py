@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field as PydanticField, field_validator, model_validator
 
+from fyrnheim.components.computed_column import ComputedColumn
+
 
 class Field(BaseModel):
     """Defines a source field with its type and metadata."""
@@ -205,6 +207,7 @@ class AggregationSource(BaseModel):
     filter_expression: str | None = None
     fields: list[Field] | None = None
     depends_on: list[str] = PydanticField(default_factory=list)
+    aggregations: list[ComputedColumn] = PydanticField(default_factory=list)
 
 
 class EventAggregationSource(BaseTableSource):

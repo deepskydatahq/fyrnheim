@@ -1,0 +1,143 @@
+# Mission: Write timo-data-stack entity definitions and validate on DuckDB
+# Prove fyrnheim can replace the custom Python orchestration for all 9 entities
+
+id = "M006"
+title = "Write timo-data-stack entity definitions and validate with fyr run on DuckDB"
+status = "draft"
+created = 2026-02-28
+depends_on = ["M005"]
+
+[outcome]
+description = """
+All 9 timo-data-stack entities are defined as fyrnheim Entity() objects in an entities/
+directory and execute successfully via `fyr run --backend duckdb` using parquet exports
+of the real data. Each entity produces a dim table with correct row counts and column
+names. The dependency chain (leaf sources → person identity graph → account aggregation)
+resolves automatically via topological sort. After this mission, `fyr run` on a local
+DuckDB is a drop-in replacement for timo-data-stack/scripts/run_transformations.py.
+"""
+
+user_progress = "From 'fyrnheim has the framework but no real entities' to 'all 9 timo-data-stack entities run via fyr run on DuckDB with real data'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/ directory contains 9 entity definition files, one per timo-data-stack entity",
+    "ghost_person entity: TableSource reading Ghost platform data, prep + dim layers, executes on DuckDB",
+    "mailerlite_person entity: TableSource reading MailerLite data, prep + dim layers, executes on DuckDB",
+    "transactions entity: TableSource + SourceMapping with field_mappings, prep + dim layers, executes on DuckDB",
+    "subscriptions entity: TableSource + SourceMapping with field_mappings, prep + dim layers, executes on DuckDB",
+    "product entity: UnionSource with per-source field_mappings + literal_columns (product_type), executes on DuckDB",
+    "signals entity: UnionSource with per-source field_mappings + literal_columns (signal_type), executes on DuckDB",
+    "anon entity: UnionSource with per-source field_mappings + literal_columns (source_platform), executes on DuckDB",
+    "person entity: DerivedSource with IdentityGraphConfig (4 sources, email match key, priority coalesce), executes on DuckDB",
+    "account entity: AggregationSource (GROUP BY account_id from person, aggregations), executes on DuckDB",
+    "fyr run executes all 9 entities in correct dependency order without errors",
+    "Dependency chain works: leaf entities → person → account (3-tier topological sort)",
+    "Output dim tables have expected column names matching timo-data-stack output schema",
+    "All existing 783+ tests still pass — no regressions",
+]
+
+validator_context = [
+    "entities/",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/resolution.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "entities/",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/layer.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/components/computed_column.py",
+]
+
+[scope]
+in_scope = [
+    "Write 9 entity definition files in entities/ directory",
+    "Each entity uses the correct source type: TableSource, UnionSource, DerivedSource, or AggregationSource",
+    "SourceMapping field_mappings for transactions and subscriptions entities",
+    "UnionSource with per-source field_mappings and literal_columns for product, signals, anon entities",
+    "IdentityGraphConfig with 4 sources for person entity (ghost, mailerlite, transactions, subscriptions)",
+    "AggregationSource with GROUP BY account_id and aggregations for account entity",
+    "Computed columns in prep and dim layers matching timo-data-stack transformations",
+    "Quality checks (NotNull, Unique, InRange) where appropriate",
+    "Validation via fyr run on DuckDB with parquet exports of real data",
+    "Fix any minor framework bugs discovered during real-world validation",
+]
+out_of_scope = [
+    "BigQuery live testing (separate validation; framework supports it but this mission uses DuckDB)",
+    "Incremental processing / high water mark (M007 — every run is full overwrite for now)",
+    "Snapshot layer configuration (requires incremental infrastructure)",
+    "Activity and analytics layers (can be added later; dim layer is the priority)",
+    "CI/CD pipeline migration (orchestration is separate from entity definitions)",
+    "Export pipeline (writing outputs to Parquet/CSV/warehouse tables)",
+    "Schema management (target_schema enforcement)",
+    "New framework features — if gaps are found, they become separate fix tasks",
+    "TenantExtension / multi-tenancy",
+]
+acceptable_breakage = [
+    "entities/ directory will be created at the project root — this is the standard fyrnheim convention",
+    "Running fyr run will create a fyrnheim.duckdb file if db_path is configured",
+    "Entity names may differ slightly from timo-data-stack (ghost_person vs _ghost_person — fyrnheim names must match ^[a-z_][a-z0-9_]*$)",
+]
+
+[notes]
+considerations = """
+ENTITY INVENTORY (9 total, 3 tiers):
+
+Tier 1 — Leaf sources (7 entities, no dependencies, can run in parallel):
+  - ghost_person: TableSource (Ghost platform subscriber data)
+  - mailerlite_person: TableSource (MailerLite subscriber data)
+  - transactions: TableSource + SourceMapping (Lemonsqueezy, field_mappings for column renames)
+  - subscriptions: TableSource + SourceMapping (Lemonsqueezy, field_mappings for column renames)
+  - product: UnionSource (multiple content platforms, per-source field_mappings + product_type literal)
+  - signals: UnionSource (multiple engagement sources, per-source field_mappings + signal_type literal)
+  - anon: UnionSource (multiple anon tracking sources, per-source field_mappings + source_platform literal)
+
+Tier 2 — Identity graph (depends on tier 1):
+  - person: DerivedSource with IdentityGraphConfig
+    - 4 sources: ghost_person, mailerlite_person, transactions, subscriptions
+    - Match key: email
+    - Priority: ghost > mailerlite > transactions > subscriptions (TBD)
+    - Auto-columns: is_{source}, {source}_id, first_seen_{source}
+    - PriorityCoalesce for shared fields (name)
+
+Tier 3 — Aggregation (depends on tier 2):
+  - account: AggregationSource
+    - GROUP BY account_id from dim_person
+    - Aggregations: person_count, total_amount, is_paying, etc.
+
+IMPLEMENTATION STRATEGY:
+Start with the 2 simplest entities (ghost_person, mailerlite_person) to validate the
+basic pattern. Then add the 2 SourceMapping entities (transactions, subscriptions).
+Then the 3 UnionSource entities (product, signals, anon). Then person (identity graph).
+Finally account (aggregation from person).
+
+This ordering also matches the dependency chain — by the time we get to person, all
+4 of its source entities are already working.
+
+DATA REQUIREMENT:
+This mission requires parquet exports of real timo-data-stack data in a data/ directory.
+The exact column names, field mappings, and computed column expressions need to be
+referenced from the timo-data-stack source code (entity definitions and transforms).
+
+RISK:
+The main risk is discovering that the exact column names or expressions from
+timo-data-stack don't translate cleanly to fyrnheim's Ibis expression syntax.
+Mitigation: fix minor framework issues as they arise (counted as in-scope),
+but major new features become separate missions.
+"""

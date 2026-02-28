@@ -1,0 +1,41 @@
+# Epic: Simple TableSource entities (ghost_person + mailerlite_person)
+
+id = "M006-E001"
+parent = "M006"
+title = "Define ghost_person and mailerlite_person entities with TableSource"
+status = "draft"
+
+[outcome]
+description = """
+The two simplest timo-data-stack entities — ghost_person and mailerlite_person — are
+defined as fyrnheim Entity() objects and execute via fyr run on DuckDB. These are plain
+TableSource entities with no field_mappings, no unions, no identity graph. They read
+from parquet exports of Ghost and MailerLite platform data. Each produces a dim table
+with the correct columns. These entities also serve as source inputs to the person
+identity graph (E003), so their dim tables must contain the match key (email) and
+source ID fields that person will reference.
+"""
+
+job_story = "When I run fyr run I want ghost_person and mailerlite_person entities to produce dim tables from parquet data so that downstream entities can read from them"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/ghost_person.py defines an Entity with TableSource reading Ghost platform parquet data",
+    "entities/mailerlite_person.py defines an Entity with TableSource reading MailerLite parquet data",
+    "ghost_person entity has prep + dim layers and executes on DuckDB producing correct row count",
+    "mailerlite_person entity has prep + dim layers and executes on DuckDB producing correct row count",
+    "dim_ghost_person table contains email column (match key for person identity graph)",
+    "dim_mailerlite_person table contains email column (match key for person identity graph)",
+    "Both entities have appropriate computed columns in prep/dim layers",
+    "fyr run discovers and executes both entities without errors",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "entities/ghost_person.py",
+    "entities/mailerlite_person.py",
+    "src/fyrnheim/engine/runner.py",
+]
+
+depends_on = []

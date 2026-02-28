@@ -1,0 +1,41 @@
+# Epic: SourceMapping entities (transactions + subscriptions)
+
+id = "M006-E002"
+parent = "M006"
+title = "Define transactions and subscriptions entities with TableSource + SourceMapping"
+status = "draft"
+
+[outcome]
+description = """
+The transactions and subscriptions entities are defined using TableSource with
+SourceMapping field_mappings to rename source columns (e.g. Lemonsqueezy's 'id' to
+entity field 'transaction_id'). Each entity declares required_fields with the entity
+schema and a SourceMapping that bridges source column names to entity field names.
+The generated code includes .rename() calls in the source function. Both execute on
+DuckDB and produce dim tables with entity field names (not source column names). These
+entities also serve as source inputs to the person identity graph (E003).
+"""
+
+job_story = "When I run fyr run I want transactions and subscriptions entities to read from Lemonsqueezy data with column renames so that downstream code uses entity field names"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/transactions.py defines an Entity with TableSource and SourceMapping field_mappings",
+    "entities/subscriptions.py defines an Entity with TableSource and SourceMapping field_mappings",
+    "transactions output has entity field names (transaction_id, amount_cents, etc.) not source column names",
+    "subscriptions output has entity field names not source column names",
+    "Both entities have prep + dim layers and execute on DuckDB producing correct row counts",
+    "Both entities have appropriate computed columns matching timo-data-stack transformations",
+    "dim_transactions and dim_subscriptions tables contain email column for person identity graph",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "entities/transactions.py",
+    "entities/subscriptions.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+
+depends_on = []

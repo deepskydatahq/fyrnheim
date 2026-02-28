@@ -1,0 +1,41 @@
+# Epic: UnionSource entities (product + signals + anon)
+
+id = "M006-E003"
+parent = "M006"
+title = "Define product, signals, and anon entities with UnionSource field normalization"
+status = "draft"
+
+[outcome]
+description = """
+The product, signals, and anon entities are defined using UnionSource with per-source
+field_mappings and literal_columns. Each entity unions data from multiple upstream
+sources with different column schemas into a unified table. Per-source field_mappings
+rename columns to a common schema before union, and literal_columns inject type tags
+(product_type, signal_type, source_platform). All three execute on DuckDB and produce
+dim tables with unified column names and correct row counts (sum of all sub-sources).
+"""
+
+job_story = "When I run fyr run I want product, signals, and anon entities to union multiple data sources with normalized column names and type tags so that each entity has a single clean table"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/product.py defines an Entity with UnionSource, per-source field_mappings, and product_type literal_columns",
+    "entities/signals.py defines an Entity with UnionSource, per-source field_mappings, and signal_type literal_columns",
+    "entities/anon.py defines an Entity with UnionSource, per-source field_mappings, and source_platform literal_columns",
+    "product output has unified column names and product_type column with correct values per sub-source",
+    "signals output has unified column names and signal_type column with correct values per sub-source",
+    "anon output has unified column names and source_platform column with correct values per sub-source",
+    "Row counts equal sum of rows from all sub-source parquet files for each entity",
+    "All three entities have prep + dim layers and execute on DuckDB without errors",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "entities/product.py",
+    "entities/signals.py",
+    "entities/anon.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+
+depends_on = []

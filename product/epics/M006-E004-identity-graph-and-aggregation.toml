@@ -1,0 +1,46 @@
+# Epic: Identity graph (person) and aggregation (account) entities
+
+id = "M006-E004"
+parent = "M006"
+title = "Define person entity (identity graph) and account entity (aggregation from person)"
+status = "draft"
+
+[outcome]
+description = """
+The person entity is defined with DerivedSource and IdentityGraphConfig, merging 4
+source entities (ghost_person, mailerlite_person, transactions, subscriptions) via
+cascading FULL OUTER JOIN on email. Priority coalesce resolves shared fields. Auto-
+generated columns include source flags (is_ghost, is_mailerlite, etc.), source IDs,
+and first-seen dates. The account entity uses AggregationSource to GROUP BY account_id
+from dim_person with aggregations (person_count, total_amount, etc.). Both execute on
+DuckDB with fyr run resolving the full dependency chain automatically:
+leaf entities → person → account.
+"""
+
+job_story = "When I run fyr run I want the person identity graph to merge all source entities and the account aggregation to roll up from person so that the full 3-tier dependency chain works end-to-end"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/person.py defines an Entity with DerivedSource and IdentityGraphConfig (4 sources, email match key)",
+    "entities/account.py defines an Entity with AggregationSource (GROUP BY account_id from person)",
+    "person dim table has correct row count (unique emails across all 4 sources with overlap resolution)",
+    "person dim table has source flags: is_ghost, is_mailerlite, is_transactions, is_subscriptions",
+    "person dim table has source IDs and first-seen dates where configured",
+    "person dim table has shared fields resolved by priority (e.g. name from highest-priority source)",
+    "account dim table has correct row count (unique account_ids from person)",
+    "account dim table has aggregation columns (person_count, total_amount, etc.)",
+    "fyr run executes all 9 entities in correct dependency order: leaf → person → account",
+    "Full pipeline fyr run completes without errors on DuckDB",
+    "All existing tests still pass — no regressions",
+]
+
+validator_context = [
+    "entities/person.py",
+    "entities/account.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/engine/executor.py",
+]
+
+depends_on = ["M006-E001", "M006-E002"]

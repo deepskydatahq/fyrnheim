@@ -6,6 +6,8 @@ import ibis
 import pandas as pd
 import pytest
 
+from fyrnheim import Entity, LayersConfig, PrepLayer, DerivedSource
+from fyrnheim.core.source import IdentityGraphConfig, IdentityGraphSource
 from fyrnheim.engine import (
     ExecutionError,
     ExecutionResult,
@@ -634,3 +636,164 @@ def analytics_customers(dim_customers):
             result = executor.execute("customers")
             assert result.activity_row_count is None
             assert result.analytics_row_count is None
+
+
+# ---------------------------------------------------------------------------
+# DerivedSource execution tests
+# ---------------------------------------------------------------------------
+
+
+class TestDerivedSourceExecution:
+    """Test DerivedSource detection and dispatch in executor."""
+
+    def _make_derived_entity(self):
+        """Create a DerivedSource entity with identity graph config."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="hubspot", entity="hubspot_person",
+                    match_key_field="email", fields={"name": "full_name"},
+                    id_field="person_id",
+                ),
+                IdentityGraphSource(
+                    name="stripe", entity="stripe_customer",
+                    match_key_field="email", fields={"name": "name"},
+                    id_field="customer_id",
+                ),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        return Entity(
+            name="person",
+            description="Unified person",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
+            source=DerivedSource(identity_graph="person_graph", identity_graph_config=config),
+        )
+
+    def test_derived_source_calls_source_fn_with_dict(self, tmp_path):
+        """DerivedSource entity calls source_fn(sources_dict) not source_fn(conn, backend)."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        # Pre-populate dim tables
+        conn = ibis.duckdb.connect(":memory:")
+        df_hubspot = pd.DataFrame({"email": ["a@ex.com"], "full_name": ["Alice"], "person_id": ["h1"]})
+        df_stripe = pd.DataFrame({"email": ["b@ex.com"], "name": ["Bob"], "customer_id": ["s1"]})
+        conn.create_table("dim_hubspot_person", df_hubspot)
+        conn.create_table("dim_stripe_customer", df_stripe)
+
+        # Create a mock source function that accepts sources dict
+        code = """\
+import ibis
+
+def source_person(sources: dict) -> ibis.Table:
+    t_hubspot = sources["hubspot"]
+    t_stripe = sources["stripe"]
+    return ibis.union(t_hubspot.select("email"), t_stripe.select("email"))
+
+def prep_person(source_person):
+    return source_person
+
+def dim_person(prep_person):
+    return prep_person
+"""
+        (gen_dir / "person_transforms.py").write_text(code)
+
+        entity = self._make_derived_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            result = executor.execute("person", entity=entity)
+            assert result.success is True
+            assert result.row_count == 2
+
+    def test_sources_dict_keys_match_source_names(self, tmp_path):
+        """Sources dict uses ig_source.name as keys."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        conn = ibis.duckdb.connect(":memory:")
+        df1 = pd.DataFrame({"email": ["a@ex.com"], "full_name": ["Alice"], "person_id": ["h1"]})
+        df2 = pd.DataFrame({"email": ["b@ex.com"], "name": ["Bob"], "customer_id": ["s1"]})
+        conn.create_table("dim_hubspot_person", df1)
+        conn.create_table("dim_stripe_customer", df2)
+
+        # Source fn that captures the keys
+        code = """\
+import ibis
+
+def source_person(sources: dict) -> ibis.Table:
+    assert "hubspot" in sources, f"Expected 'hubspot' key, got {list(sources.keys())}"
+    assert "stripe" in sources, f"Expected 'stripe' key, got {list(sources.keys())}"
+    return sources["hubspot"].select("email")
+
+def prep_person(source_person):
+    return source_person
+
+def dim_person(prep_person):
+    return prep_person
+"""
+        (gen_dir / "person_transforms.py").write_text(code)
+
+        entity = self._make_derived_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            result = executor.execute("person", entity=entity)
+            assert result.success is True
+
+    def test_missing_dependency_table_raises(self, tmp_path):
+        """ExecutionError when dependency dim table is missing."""
+        gen_dir = tmp_path / "generated"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        conn = ibis.duckdb.connect(":memory:")
+        # Only create one of the two dependency tables
+        df1 = pd.DataFrame({"email": ["a@ex.com"]})
+        conn.create_table("dim_hubspot_person", df1)
+        # dim_stripe_customer is missing
+
+        code = """\
+import ibis
+
+def source_person(sources: dict) -> ibis.Table:
+    return sources["hubspot"]
+
+def dim_person(source_person):
+    return source_person
+"""
+        (gen_dir / "person_transforms.py").write_text(code)
+
+        entity = self._make_derived_entity()
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            with pytest.raises(ExecutionError, match="Dependency table"):
+                executor.execute("person", entity=entity)
+
+    def test_non_derived_source_backward_compatible(self, tmp_path):
+        """Existing TableSource entity with entity param still uses standard path."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        from fyrnheim import TableSource
+        entity = Entity(
+            name="customers",
+            description="Test",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_customers")),
+            source=TableSource(project="p", dataset="d", table="customers", duckdb_path=str(parquet_path)),
+        )
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers", entity=entity)
+            assert result.success is True
+            assert result.row_count == 3
+
+    def test_no_entity_param_backward_compatible(self, tmp_path):
+        """Existing call pattern without entity param still works."""
+        parquet_path = _create_sample_parquet(tmp_path)
+        gen_dir = tmp_path / "generated"
+        code = SIMPLE_TRANSFORM.format(parquet_path=str(parquet_path))
+        _create_transform_module(gen_dir, "customers", code)
+
+        with IbisExecutor.duckdb(generated_dir=gen_dir) as executor:
+            result = executor.execute("customers")
+            assert result.success is True
+            assert result.row_count == 3

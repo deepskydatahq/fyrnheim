@@ -14,6 +14,7 @@ import pytest
 
 from fyrnheim import (
     ComputedColumn,
+    DerivedSource,
     DimensionLayer,
     Entity,
     Field,
@@ -23,6 +24,7 @@ from fyrnheim import (
     TableSource,
     UnionSource,
 )
+from fyrnheim.core.source import IdentityGraphConfig, IdentityGraphSource
 from fyrnheim._generate import generate
 from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.executor import IbisExecutor
@@ -541,3 +543,157 @@ class TestE2EUnionSourceFieldNormalization:
         assert "id" in df.columns
         assert "email" in df.columns
         assert "name" in df.columns
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for DerivedSource identity graph
+# ---------------------------------------------------------------------------
+
+
+class TestE2EIdentityGraphPerson:
+    """E2E test: person-style entity with 2 source entities executes identity graph on DuckDB."""
+
+    @pytest.fixture()
+    def identity_graph_output(self, tmp_path):
+        """Full identity graph pipeline: 2 source entities + 1 derived person entity."""
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        # --- Create parquet files ---
+        hubspot_table = pa.table({
+            "person_id": ["h1", "h2", "h3"],
+            "email": ["alice@ex.com", "bob@ex.com", "carol@ex.com"],
+            "full_name": ["Alice H", "Bob H", "Carol H"],
+            "signup_date": ["2024-01-01", "2024-02-01", "2024-03-01"],
+        })
+        hubspot_path = tmp_path / "hubspot_person.parquet"
+        pq.write_table(hubspot_table, hubspot_path)
+
+        stripe_table = pa.table({
+            "customer_id": ["s1", "s2"],
+            "contact_email": ["bob@ex.com", "dave@ex.com"],
+            "name": ["Bob S", "Dave S"],
+            "created_at": ["2024-01-15", "2024-04-01"],
+        })
+        stripe_path = tmp_path / "stripe_person.parquet"
+        pq.write_table(stripe_table, stripe_path)
+
+        # --- Define entities ---
+        hubspot_entity = Entity(
+            name="hubspot_person",
+            description="HubSpot contacts",
+            source=TableSource(
+                project="test", dataset="test", table="hubspot_person",
+                duckdb_path=str(hubspot_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_hubspot_person"),
+                dimension=DimensionLayer(model_name="dim_hubspot_person"),
+            ),
+        )
+
+        stripe_entity = Entity(
+            name="stripe_person",
+            description="Stripe customers",
+            source=TableSource(
+                project="test", dataset="test", table="stripe_person",
+                duckdb_path=str(stripe_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_stripe_person"),
+                dimension=DimensionLayer(model_name="dim_stripe_person"),
+            ),
+        )
+
+        person_entity = Entity(
+            name="person",
+            description="Unified person entity",
+            source=DerivedSource(
+                identity_graph="person_graph",
+                identity_graph_config=IdentityGraphConfig(
+                    match_key="email",
+                    sources=[
+                        IdentityGraphSource(
+                            name="hubspot",
+                            entity="hubspot_person",
+                            match_key_field="email",
+                            fields={"name": "full_name"},
+                            id_field="person_id",
+                        ),
+                        IdentityGraphSource(
+                            name="stripe",
+                            entity="stripe_person",
+                            match_key_field="contact_email",
+                            fields={"name": "name"},
+                            id_field="customer_id",
+                        ),
+                    ],
+                    priority=["hubspot", "stripe"],
+                ),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_person"),
+                dimension=DimensionLayer(model_name="dim_person"),
+            ),
+        )
+
+        # --- Generate code for all entities ---
+        generated_dir = tmp_path / "generated"
+        generate(hubspot_entity, output_dir=generated_dir)
+        generate(stripe_entity, output_dir=generated_dir)
+        generate(person_entity, output_dir=generated_dir)
+
+        # --- Execute in dependency order ---
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("hubspot_person")
+            executor.execute("stripe_person")
+            result = executor.execute("person", entity=person_entity)
+
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        return result, df
+
+    def test_row_count_and_schema(self, identity_graph_output):
+        """AC1+AC5: 4 rows from 3+2 with 1 overlap, all expected columns present."""
+        result, df = identity_graph_output
+        assert result.row_count == 4
+        assert len(df) == 4
+        expected_cols = {"email", "name", "is_hubspot", "is_stripe", "hubspot_id", "stripe_id"}
+        assert expected_cols.issubset(set(df.columns))
+
+    def test_priority_coalesce_resolves_name(self, identity_graph_output):
+        """AC2: Overlap record uses primary source value."""
+        _, df = identity_graph_output
+        bob = df[df["email"] == "bob@ex.com"].iloc[0]
+        assert bob["name"] == "Bob H"
+        alice = df[df["email"] == "alice@ex.com"].iloc[0]
+        assert alice["name"] == "Alice H"
+        dave = df[df["email"] == "dave@ex.com"].iloc[0]
+        assert dave["name"] == "Dave S"
+
+    def test_source_flags_correct(self, identity_graph_output):
+        """AC3: is_hubspot and is_stripe flags correct."""
+        _, df = identity_graph_output
+        bob = df[df["email"] == "bob@ex.com"].iloc[0]
+        assert bool(bob["is_hubspot"]) is True
+        assert bool(bob["is_stripe"]) is True
+        alice = df[df["email"] == "alice@ex.com"].iloc[0]
+        assert bool(alice["is_hubspot"]) is True
+        assert bool(alice["is_stripe"]) is False
+        dave = df[df["email"] == "dave@ex.com"].iloc[0]
+        assert bool(dave["is_hubspot"]) is False
+        assert bool(dave["is_stripe"]) is True
+
+    def test_source_ids_preserved(self, identity_graph_output):
+        """AC4: Source IDs preserved, NULL when not from that source."""
+        _, df = identity_graph_output
+        bob = df[df["email"] == "bob@ex.com"].iloc[0]
+        assert bob["hubspot_id"] == "h2"
+        assert bob["stripe_id"] == "s1"
+        alice = df[df["email"] == "alice@ex.com"].iloc[0]
+        assert alice["hubspot_id"] == "h1"
+        assert pd.isna(alice["stripe_id"])
+        dave = df[df["email"] == "dave@ex.com"].iloc[0]
+        assert pd.isna(dave["hubspot_id"])
+        assert dave["stripe_id"] == "s2"

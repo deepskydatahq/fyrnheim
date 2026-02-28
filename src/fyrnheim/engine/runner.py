@@ -183,7 +183,7 @@ def run_entity(
         _register_entity_source(executor, entity, data_dir)
 
         log.info("Transforming: %s", entity.name)
-        exec_result = executor.execute(entity.name, generated_dir=gen_dir)
+        exec_result = executor.execute(entity.name, generated_dir=gen_dir, entity=entity)
         row_count = exec_result.row_count
         activity_row_count = exec_result.activity_row_count
         analytics_row_count = exec_result.analytics_row_count

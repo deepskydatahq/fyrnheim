@@ -9,6 +9,8 @@ from typing import Any
 
 import ibis
 
+from fyrnheim.core.entity import Entity
+from fyrnheim.core.source import DerivedSource
 from fyrnheim.engine._loader import load_transform_module
 from fyrnheim.engine.errors import ExecutionError, SourceNotFoundError
 
@@ -98,6 +100,7 @@ class IbisExecutor:
         entity_name: str,
         generated_dir: str | Path | None = None,
         target_name: str | None = None,
+        entity: Entity | None = None,
     ) -> ExecutionResult:
         """Load and execute a generated transform module for an entity.
 
@@ -136,7 +139,7 @@ class IbisExecutor:
 
         try:
             result_table, activity_row_count, analytics_row_count = (
-                self._run_transform_pipeline(entity_name, module)
+                self._run_transform_pipeline(entity_name, module, entity=entity)
             )
         except Exception as e:
             raise ExecutionError(
@@ -170,7 +173,7 @@ class IbisExecutor:
         )
 
     def _run_transform_pipeline(
-        self, entity_name: str, module: Any
+        self, entity_name: str, module: Any, *, entity: Entity | None = None
     ) -> tuple[ibis.Table, int | None, int | None]:
         """Execute the layer functions from a generated module in order.
 
@@ -198,6 +201,15 @@ class IbisExecutor:
         source_name = f"source_{entity_name}"
         if source_name in self._registered_sources:
             t = conn.table(source_name)
+        elif entity is not None and isinstance(entity.source, DerivedSource) and entity.source.identity_graph_config is not None:
+            # DerivedSource path: build sources_dict from catalog
+            source_fn = getattr(module, f"source_{entity_name}", None)
+            if source_fn is None:
+                raise ExecutionError(
+                    f"No source function for DerivedSource entity {entity_name}"
+                )
+            sources_dict = self._build_sources_dict(entity)
+            t = source_fn(sources_dict)
         else:
             # Fall back to source function in generated code
             source_fn = getattr(module, f"source_{entity_name}", None)
@@ -245,6 +257,29 @@ class IbisExecutor:
             analytics_row_count = conn.table(analytics_target).count().execute()
 
         return t, activity_row_count, analytics_row_count
+
+    def _build_sources_dict(self, entity: Entity) -> dict[str, ibis.Table]:
+        """Build sources dict for DerivedSource from dependency tables in catalog."""
+        source = entity.source
+        assert isinstance(source, DerivedSource)
+        config = source.identity_graph_config
+        if config is None:
+            raise ExecutionError(
+                f"DerivedSource entity {entity.name} has no identity_graph_config"
+            )
+
+        sources_dict: dict[str, ibis.Table] = {}
+        for ig_source in config.sources:
+            table_name = f"dim_{ig_source.entity}"
+            try:
+                sources_dict[ig_source.name] = self._conn.table(table_name)
+            except Exception:
+                raise ExecutionError(
+                    f"Dependency table '{table_name}' not found for "
+                    f"DerivedSource entity '{entity.name}'. "
+                    f"Ensure '{ig_source.entity}' executes before '{entity.name}'."
+                )
+        return sources_dict
 
     def close(self) -> None:
         """Close the backend connection."""

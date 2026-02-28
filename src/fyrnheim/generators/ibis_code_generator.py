@@ -11,6 +11,7 @@ from pathlib import Path
 from fyrnheim.core.entity import Entity
 from fyrnheim.core.source import (
     AggregationSource,
+    DerivedSource,
     EventAggregationSource,
     TableSource,
     UnionSource,
@@ -84,6 +85,10 @@ import ibis
             return self._generate_single_source_function(source)
         elif isinstance(source, AggregationSource):
             return self._generate_aggregation_source_function(source)
+        elif isinstance(source, DerivedSource):
+            if source.identity_graph_config is not None:
+                return self._generate_derived_source_function(source)
+            return ""
         else:
             return ""
 
@@ -189,6 +194,176 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         parts.append(union_func)
 
         return "\n".join(parts)
+
+    def _generate_derived_source_function(self, source: DerivedSource) -> str:
+        """Generate multi-input source function for identity graph join."""
+        config = source.identity_graph_config
+        name = self.entity_name
+        ig_sources = config.sources
+        priority = config.priority
+        match_key = config.match_key
+
+        # Identify shared fields (unified field name appears in 2+ sources)
+        field_to_sources: dict[str, list[str]] = {}
+        for src in ig_sources:
+            for unified_name in src.fields:
+                field_to_sources.setdefault(unified_name, []).append(src.name)
+        shared_fields = sorted(f for f, srcs in field_to_sources.items() if len(srcs) > 1)
+
+        # Unique fields (appear in exactly 1 source)
+        unique_fields: dict[str, str] = {}
+        for src in ig_sources:
+            for unified_name in src.fields:
+                if unified_name not in shared_fields:
+                    unique_fields[unified_name] = src.name
+
+        lines: list[str] = []
+        lines.append(f"\ndef source_{name}(sources: dict) -> ibis.Table:")
+        lines.append(f'    """Merge {name} from identity graph sources."""')
+
+        # Extract tables
+        for src in ig_sources:
+            lines.append(f'    t_{src.name} = sources["{src.name}"]')
+        lines.append("")
+
+        # Rename columns to unified names
+        for src in ig_sources:
+            rename_map: dict[str, str] = {}
+            if src.match_key_field != match_key:
+                rename_map[match_key] = src.match_key_field
+            for unified, source_col in src.fields.items():
+                if source_col != unified:
+                    rename_map[unified] = source_col
+            if rename_map:
+                lines.append(f"    t_{src.name} = t_{src.name}.rename({rename_map!r})")
+        lines.append("")
+
+        # Pre-join mutate: auto columns
+        for src in ig_sources:
+            parts_list: list[str] = []
+            parts_list.append(f"_{src.name}_match_key=t_{src.name}.{match_key}")
+            if src.id_field:
+                parts_list.append(f"{src.name}_id=t_{src.name}.{src.id_field}")
+            if src.date_field:
+                parts_list.append(f"first_seen_{src.name}=t_{src.name}.{src.date_field}")
+            args = ", ".join(parts_list)
+            lines.append(f"    t_{src.name} = t_{src.name}.mutate({args})")
+        lines.append("")
+
+        # Cascading FULL OUTER JOIN with .select() after each
+        for i in range(1, len(ig_sources)):
+            left = f"t_{ig_sources[0].name}" if i == 1 else "result"
+            right = f"t_{ig_sources[i].name}"
+
+            lines.append(f"    result = {left}.outer_join(")
+            lines.append(f"        {right}, {left}.{match_key} == {right}.{match_key},")
+            lines.append(f'        lname="", rname="_right",')
+            lines.append(f"    ).select(")
+
+            # Build the select list
+            select_items: list[str] = []
+
+            # Coalesced match key
+            select_items.append(
+                f"        {match_key}=ibis.coalesce({left}.{match_key}, {right}.{match_key})"
+            )
+
+            # Shared fields - per-source variants
+            for field_name in shared_fields:
+                for j in range(i + 1):
+                    src = ig_sources[j]
+                    if field_name in src.fields:
+                        col_name = f"{field_name}_{src.name}"
+                        if j < i and i > 1:
+                            # Already in result from prior join
+                            select_items.append(f"        {col_name}=result.{col_name}")
+                        elif j < i and i == 1:
+                            # First join, left side is original table
+                            select_items.append(
+                                f"        {col_name}=t_{ig_sources[0].name}.{field_name}"
+                            )
+                        else:
+                            # Right side of current join
+                            select_items.append(f"        {col_name}={right}.{field_name}")
+
+            # Unique fields
+            for field_name, src_name in sorted(unique_fields.items()):
+                src_idx = next(
+                    idx for idx, s in enumerate(ig_sources) if s.name == src_name
+                )
+                if src_idx < i:
+                    ref = f"t_{ig_sources[0].name}" if i == 1 else "result"
+                    select_items.append(f"        {field_name}={ref}.{field_name}")
+                elif src_idx == i:
+                    select_items.append(f"        {field_name}={right}.{field_name}")
+                # else: not yet joined, skip
+
+            # Auto columns (match key copies, IDs, dates)
+            for j in range(i + 1):
+                src = ig_sources[j]
+                if j < i:
+                    ref = f"t_{ig_sources[0].name}" if (j == 0 and i == 1) else "result"
+                else:
+                    ref = right
+                mk_col = f"_{src.name}_match_key"
+                select_items.append(f"        {mk_col}={ref}.{mk_col}")
+                if src.id_field:
+                    id_col = f"{src.name}_id"
+                    select_items.append(f"        {id_col}={ref}.{id_col}")
+                if src.date_field:
+                    date_col = f"first_seen_{src.name}"
+                    select_items.append(f"        {date_col}={ref}.{date_col}")
+
+            lines.append(",\n".join(select_items) + ",")
+            lines.append(f"    )")
+        lines.append("")
+
+        # PriorityCoalesce
+        coalesce_parts: list[str] = []
+        for field_name in shared_fields:
+            sources_with_field = [
+                s
+                for s in priority
+                if any(
+                    field_name in src.fields
+                    for src in ig_sources
+                    if src.name == s
+                )
+            ]
+            if len(sources_with_field) >= 2:
+                chain = f"result.{field_name}_{sources_with_field[0]}"
+                for s in sources_with_field[1:]:
+                    chain += f".fillna(result.{field_name}_{s})"
+                coalesce_parts.append(f"        {field_name}={chain}")
+        if coalesce_parts:
+            lines.append(f"    result = result.mutate(")
+            lines.append(",\n".join(coalesce_parts) + ",")
+            lines.append(f"    )")
+        lines.append("")
+
+        # Source flags
+        flag_parts = [
+            f"        is_{src.name}=result._{src.name}_match_key.notnull()"
+            for src in ig_sources
+        ]
+        lines.append(f"    result = result.mutate(")
+        lines.append(",\n".join(flag_parts) + ",")
+        lines.append(f"    )")
+        lines.append("")
+
+        # Drop intermediate columns
+        drop_list: list[str] = []
+        for field_name in shared_fields:
+            for src in ig_sources:
+                if field_name in src.fields:
+                    drop_list.append(f'"{field_name}_{src.name}"')
+        for src in ig_sources:
+            drop_list.append(f'"_{src.name}_match_key"')
+        lines.append(f"    result = result.drop({', '.join(drop_list)})")
+        lines.append("")
+        lines.append(f"    return result")
+
+        return "\n".join(lines)
 
     def generate_module(self) -> str:
         """Generate complete Python module source code."""

@@ -9,6 +9,7 @@ from fyrnheim import (
     ActivityType,
     AnalyticsLayer,
     AnalyticsMetric,
+    DerivedSource,
     DimensionLayer,
     Entity,
     Field,
@@ -18,6 +19,7 @@ from fyrnheim import (
     TableSource,
     UnionSource,
 )
+from fyrnheim.core.source import IdentityGraphConfig, IdentityGraphSource
 from fyrnheim.generators import IbisCodeGenerator
 
 
@@ -737,3 +739,208 @@ class TestUnionSourceFieldMappingsCodegen:
         code = gen._generate_source_functions()
         assert "def source_signals(" in code
         assert "ibis.union(*parts)" in code
+
+
+# ---------------------------------------------------------------------------
+# DerivedSource identity graph codegen tests
+# ---------------------------------------------------------------------------
+
+
+class TestDerivedSourceCodeGeneration:
+    """Test codegen for DerivedSource with identity graph config."""
+
+    def _make_config(self, **kwargs):
+        """Helper to create a minimal IdentityGraphConfig."""
+        defaults = dict(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="hubspot",
+                    entity="hubspot_person",
+                    match_key_field="hs_email",
+                    fields={"name": "full_name"},
+                    id_field="person_id",
+                ),
+                IdentityGraphSource(
+                    name="stripe",
+                    entity="stripe_customer",
+                    match_key_field="contact_email",
+                    fields={"name": "cust_name"},
+                    id_field="customer_id",
+                ),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        defaults.update(kwargs)
+        return IdentityGraphConfig(**defaults)
+
+    def _make_entity(self, config=None):
+        if config is None:
+            config = self._make_config()
+        return Entity(
+            name="person",
+            description="Unified person",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
+            source=DerivedSource(
+                identity_graph="person_graph",
+                identity_graph_config=config,
+            ),
+        )
+
+    def test_non_empty_output(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert len(code) > 0
+
+    def test_function_signature(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "def source_person(sources: dict) -> ibis.Table:" in code
+
+    def test_outer_join_present(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert ".outer_join(" in code
+
+    def test_fillna_chain_in_priority_order(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "name_hubspot" in code
+        assert "name_stripe" in code
+        assert ".fillna(" in code
+
+    def test_source_flags(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "is_hubspot" in code
+        assert "is_stripe" in code
+        assert ".notnull()" in code
+
+    def test_source_ids_when_id_field_set(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "hubspot_id" in code
+        assert "stripe_id" in code
+
+    def test_date_field_when_set(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="hubspot",
+                    entity="hubspot_person",
+                    match_key_field="email",
+                    fields={"name": "full_name"},
+                    date_field="signup_date",
+                ),
+                IdentityGraphSource(
+                    name="stripe",
+                    entity="stripe_customer",
+                    match_key_field="contact_email",
+                    fields={"name": "name"},
+                ),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        entity = self._make_entity(config)
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "first_seen_hubspot" in code
+
+    def test_ast_parse_valid(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        ast.parse(code)
+
+    def test_backward_compat_no_config(self):
+        entity = Entity(
+            name="person",
+            description="Person",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
+            source=DerivedSource(identity_graph="person_graph"),
+        )
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert code == ""
+
+    def test_three_sources_cascading_join(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="a",
+                    entity="a_entity",
+                    match_key_field="email",
+                    fields={"name": "name_a"},
+                ),
+                IdentityGraphSource(
+                    name="b",
+                    entity="b_entity",
+                    match_key_field="email",
+                    fields={"name": "name_b"},
+                ),
+                IdentityGraphSource(
+                    name="c",
+                    entity="c_entity",
+                    match_key_field="email",
+                    fields={"name": "name_c"},
+                ),
+            ],
+            priority=["a", "b", "c"],
+        )
+        entity = self._make_entity(config)
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        # Should have 2 outer_join calls
+        assert code.count(".outer_join(") == 2
+        assert "name_a" in code
+        assert "name_b" in code
+        assert "name_c" in code
+        ast.parse(gen.generate_module())
+
+    def test_rename_uses_correct_direction(self):
+        """Ibis .rename() takes {new_name: old_name}."""
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        # hubspot: match_key_field="hs_email" -> unified "email"
+        # So rename should be {'email': 'hs_email'}
+        assert "{'email': 'hs_email'" in code
+
+    def test_select_after_each_join(self):
+        """Each outer_join() must be followed by .select() (Ibis bug #10293)."""
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert ".outer_join(" in code
+        assert ").select(" in code
+
+    def test_drop_intermediate_columns(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert ".drop(" in code
+        assert '"name_hubspot"' in code
+        assert '"name_stripe"' in code
+        assert '"_hubspot_match_key"' in code
+        assert '"_stripe_match_key"' in code
+
+    def test_coalesce_match_key(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert "ibis.coalesce(" in code
+
+    def test_extract_source_tables(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert 't_hubspot = sources["hubspot"]' in code
+        assert 't_stripe = sources["stripe"]' in code

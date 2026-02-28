@@ -3,7 +3,7 @@
 id = "M006-E001"
 parent = "M006"
 title = "Define ghost_person and mailerlite_person entities with TableSource"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

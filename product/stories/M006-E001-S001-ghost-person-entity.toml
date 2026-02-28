@@ -1,0 +1,48 @@
+# Story: Define ghost_person entity with TableSource
+
+id = "M006-E001-S001"
+parent = "M006-E001"
+title = "Define ghost_person entity with TableSource reading Ghost member parquet data"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/ghost_person.py defining an Entity with TableSource pointing to Ghost
+member parquet data. The entity has 6 source fields (id, email, status, name, created_at,
+email_disabled), a PrepLayer for staging, and a DimensionLayer with computed columns
+(email_hash via hash_email primitive, created_at passthrough). The entity is marked
+is_internal=True since it feeds the person identity graph. The dim table contains the
+email column needed as match key for downstream identity resolution.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/ghost_person.py exists and defines entity = Entity(...) with name='ghost_person'",
+    "Entity uses TableSource with project/dataset/table pointing to Ghost member data",
+    "TableSource has duckdb_path for local parquet testing",
+    "Source has 6 fields: id (STRING), email (STRING), status (STRING), name (STRING), created_at (TIMESTAMP), email_disabled (BOOLEAN)",
+    "Entity has PrepLayer with model_name='prep_ghost_person'",
+    "Entity has DimensionLayer with model_name='dim_ghost_person'",
+    "DimensionLayer has email_hash computed column using hash_email primitive",
+    "Entity is marked is_internal=True",
+    "Entity imports resolve correctly (from fyrnheim import Entity, TableSource, etc.)",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack entity at /home/tmo/roadtothebeach/tmo/timo-data-stack/entities/entities/_ghost_person.py",
+    "Use fyrnheim imports: Entity, TableSource, LayersConfig, PrepLayer, DimensionLayer, ComputedColumn",
+    "Use fyrnheim.primitives.hash_email for email_hash computed column",
+    "Source fields: id, email, status, name, created_at, email_disabled",
+    "duckdb_path should use a relative path like 'data/ghost_members/*.parquet' or configurable",
+    "Follow pattern from examples/entities/customers.py",
+]
+
+key_files = [
+    "entities/ghost_person.py",
+    "examples/entities/customers.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+]

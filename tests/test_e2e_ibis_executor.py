@@ -799,3 +799,287 @@ class TestE2EAggregationSource:
         _, df = aggregation_output
         expected_cols = {"account_id", "person_count", "total_amount"}
         assert expected_cols.issubset(set(df.columns))
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for M006-E001: Simple TableSource entities (ghost_person + mailerlite_person)
+# ---------------------------------------------------------------------------
+
+
+class TestE2ESimpleTableSourceEntities:
+    """E2E test: ghost_person and mailerlite_person entities execute on DuckDB."""
+
+    @pytest.fixture()
+    def ghost_and_mailerlite_data(self, tmp_path):
+        """Create sample parquet files for Ghost members and MailerLite subscribers."""
+        # --- Ghost members parquet ---
+        ghost_df = pd.DataFrame({
+            "id": ["g1", "g2", "g3", "g4"],
+            "email": ["alice@example.com", "bob@test.org", "carol@example.com", "dave@corp.io"],
+            "status": ["paid", "free", "comped", "paid"],
+            "name": ["Alice Smith", "Bob Jones", "Carol White", "Dave Brown"],
+            "created_at": pd.to_datetime([
+                "2024-01-15T10:00:00",
+                "2024-02-20T14:30:00",
+                "2024-03-05T09:15:00",
+                "2024-04-10T16:45:00",
+            ]),
+            "email_disabled": [False, False, True, False],
+        })
+        ghost_dir = tmp_path / "data" / "ghost_members"
+        ghost_dir.mkdir(parents=True)
+        ghost_df.to_parquet(ghost_dir / "members.parquet", index=False)
+
+        # --- MailerLite subscribers parquet ---
+        ml_df = pd.DataFrame({
+            "id": ["m1", "m2", "m3"],
+            "email": ["bob@test.org", "eve@example.com", "frank@startup.co"],
+            "status": ["active", "unsubscribed", "active"],
+            "subscribed_at": pd.to_datetime([
+                "2024-01-10T08:00:00",
+                "2024-03-15T12:00:00",
+                "2024-05-01T10:30:00",
+            ]),
+            "source": ["organic", "referral", "ad_campaign"],
+        })
+        ml_dir = tmp_path / "data" / "mailerlite_subscribers"
+        ml_dir.mkdir(parents=True)
+        ml_df.to_parquet(ml_dir / "subscribers.parquet", index=False)
+
+        return tmp_path, len(ghost_df), len(ml_df)
+
+    @pytest.fixture()
+    def executed_entities(self, ghost_and_mailerlite_data):
+        """Generate and execute both entities on DuckDB, return connection + results."""
+        from fyrnheim.primitives import hash_email
+
+        base_dir, ghost_count, ml_count = ghost_and_mailerlite_data
+        data_dir = base_dir / "data"
+        generated_dir = base_dir / "generated"
+
+        # Define entities inline with duckdb_path pointing to temp data
+        ghost_entity = Entity(
+            name="ghost_person",
+            description="Ghost members for E2E test",
+            is_internal=True,
+            source=TableSource(
+                project="test", dataset="test", table="members",
+                duckdb_path=str(data_dir / "ghost_members" / "*.parquet"),
+                fields=[
+                    Field(name="id", type="STRING"),
+                    Field(name="email", type="STRING"),
+                    Field(name="status", type="STRING"),
+                    Field(name="name", type="STRING"),
+                    Field(name="created_at", type="TIMESTAMP"),
+                    Field(name="email_disabled", type="BOOLEAN"),
+                ],
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_ghost_person"),
+                dimension=DimensionLayer(
+                    model_name="dim_ghost_person",
+                    computed_columns=[
+                        ComputedColumn(
+                            name="email_hash",
+                            expression=hash_email("email"),
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+        ml_entity = Entity(
+            name="mailerlite_person",
+            description="MailerLite subscribers for E2E test",
+            is_internal=True,
+            source=TableSource(
+                project="test", dataset="test", table="subscribers",
+                duckdb_path=str(data_dir / "mailerlite_subscribers" / "*.parquet"),
+                fields=[
+                    Field(name="id", type="STRING"),
+                    Field(name="email", type="STRING"),
+                    Field(name="status", type="STRING"),
+                    Field(name="subscribed_at", type="TIMESTAMP"),
+                    Field(name="source", type="STRING"),
+                ],
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_mailerlite_person"),
+                dimension=DimensionLayer(
+                    model_name="dim_mailerlite_person",
+                    computed_columns=[
+                        ComputedColumn(
+                            name="email_hash",
+                            expression=hash_email("email"),
+                        ),
+                        ComputedColumn(
+                            name="created_at",
+                            expression="t.subscribed_at",
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+        # Generate code for both
+        generate(ghost_entity, output_dir=generated_dir)
+        generate(ml_entity, output_dir=generated_dir)
+
+        # Execute both on DuckDB
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            ghost_result = executor.execute("ghost_person")
+            ml_result = executor.execute("mailerlite_person")
+            ghost_df = executor.connection.table("dim_ghost_person").to_pandas()
+            ml_df = executor.connection.table("dim_mailerlite_person").to_pandas()
+
+        return ghost_result, ml_result, ghost_df, ml_df, ghost_count, ml_count
+
+    def test_ghost_person_row_count(self, executed_entities):
+        """ghost_person dim table has correct row count."""
+        ghost_result, _, ghost_df, _, ghost_count, _ = executed_entities
+        assert ghost_result.row_count == ghost_count
+        assert len(ghost_df) == ghost_count
+
+    def test_mailerlite_person_row_count(self, executed_entities):
+        """mailerlite_person dim table has correct row count."""
+        _, ml_result, _, ml_df, _, ml_count = executed_entities
+        assert ml_result.row_count == ml_count
+        assert len(ml_df) == ml_count
+
+    def test_ghost_person_has_email_column(self, executed_entities):
+        """dim_ghost_person contains email column (match key for identity graph)."""
+        _, _, ghost_df, _, _, _ = executed_entities
+        assert "email" in ghost_df.columns
+
+    def test_mailerlite_person_has_email_column(self, executed_entities):
+        """dim_mailerlite_person contains email column (match key for identity graph)."""
+        _, _, _, ml_df, _, _ = executed_entities
+        assert "email" in ml_df.columns
+
+    def test_ghost_person_has_email_hash(self, executed_entities):
+        """dim_ghost_person has email_hash computed column."""
+        _, _, ghost_df, _, _, _ = executed_entities
+        assert "email_hash" in ghost_df.columns
+        # All email_hash values should be non-null strings
+        assert ghost_df["email_hash"].notna().all()
+
+    def test_mailerlite_person_has_email_hash(self, executed_entities):
+        """dim_mailerlite_person has email_hash computed column."""
+        _, _, _, ml_df, _, _ = executed_entities
+        assert "email_hash" in ml_df.columns
+        assert ml_df["email_hash"].notna().all()
+
+    def test_mailerlite_person_has_created_at(self, executed_entities):
+        """dim_mailerlite_person has created_at mapped from subscribed_at."""
+        _, _, _, ml_df, _, _ = executed_entities
+        assert "created_at" in ml_df.columns
+        assert ml_df["created_at"].notna().all()
+
+    def test_ghost_person_preserves_source_columns(self, executed_entities):
+        """dim_ghost_person has all source columns."""
+        _, _, ghost_df, _, _, _ = executed_entities
+        expected = {"id", "email", "status", "name", "created_at", "email_disabled"}
+        assert expected.issubset(set(ghost_df.columns))
+
+    def test_mailerlite_person_preserves_source_columns(self, executed_entities):
+        """dim_mailerlite_person has all source columns."""
+        _, _, _, ml_df, _, _ = executed_entities
+        expected = {"id", "email", "status", "subscribed_at", "source"}
+        assert expected.issubset(set(ml_df.columns))
+
+    def test_both_entities_execute_successfully(self, executed_entities):
+        """Both entities report success."""
+        ghost_result, ml_result, _, _, _, _ = executed_entities
+        assert ghost_result.success is True
+        assert ml_result.success is True
+
+    def test_runner_discovers_and_executes_both(self, ghost_and_mailerlite_data):
+        """runner.run() discovers both entities from directory and executes them."""
+        from fyrnheim.engine.runner import run
+        from fyrnheim.primitives import hash_email
+
+        base_dir, ghost_count, ml_count = ghost_and_mailerlite_data
+        data_dir = base_dir / "data"
+        entities_dir = base_dir / "entities"
+        entities_dir.mkdir()
+        generated_dir = base_dir / "generated"
+
+        # Write entity files that point to temp parquet paths
+        ghost_code = f'''\
+from fyrnheim import (
+    ComputedColumn, DimensionLayer, Entity, Field,
+    LayersConfig, PrepLayer, TableSource,
+)
+from fyrnheim.primitives import hash_email
+
+entity = Entity(
+    name="ghost_person",
+    description="Ghost members",
+    is_internal=True,
+    source=TableSource(
+        project="test", dataset="test", table="members",
+        duckdb_path="{data_dir / "ghost_members" / "*.parquet"}",
+        fields=[
+            Field(name="id", type="STRING"),
+            Field(name="email", type="STRING"),
+            Field(name="status", type="STRING"),
+            Field(name="name", type="STRING"),
+            Field(name="created_at", type="TIMESTAMP"),
+            Field(name="email_disabled", type="BOOLEAN"),
+        ],
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_ghost_person"),
+        dimension=DimensionLayer(
+            model_name="dim_ghost_person",
+            computed_columns=[
+                ComputedColumn(name="email_hash", expression=hash_email("email")),
+            ],
+        ),
+    ),
+)
+'''
+        ml_code = f'''\
+from fyrnheim import (
+    ComputedColumn, DimensionLayer, Entity, Field,
+    LayersConfig, PrepLayer, TableSource,
+)
+from fyrnheim.primitives import hash_email
+
+entity = Entity(
+    name="mailerlite_person",
+    description="MailerLite subscribers",
+    is_internal=True,
+    source=TableSource(
+        project="test", dataset="test", table="subscribers",
+        duckdb_path="{data_dir / "mailerlite_subscribers" / "*.parquet"}",
+        fields=[
+            Field(name="id", type="STRING"),
+            Field(name="email", type="STRING"),
+            Field(name="status", type="STRING"),
+            Field(name="subscribed_at", type="TIMESTAMP"),
+            Field(name="source", type="STRING"),
+        ],
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_mailerlite_person"),
+        dimension=DimensionLayer(
+            model_name="dim_mailerlite_person",
+            computed_columns=[
+                ComputedColumn(name="email_hash", expression=hash_email("email")),
+                ComputedColumn(name="created_at", expression="t.subscribed_at"),
+            ],
+        ),
+    ),
+)
+'''
+        (entities_dir / "ghost_person.py").write_text(ghost_code)
+        (entities_dir / "mailerlite_person.py").write_text(ml_code)
+
+        result = run(entities_dir, data_dir, backend="duckdb", generated_dir=generated_dir)
+        assert result.ok is True
+        assert len(result.entities) == 2
+        assert all(e.status == "success" for e in result.entities)
+        total_rows = sum(e.row_count for e in result.entities)
+        assert total_rows == ghost_count + ml_count

@@ -1,0 +1,53 @@
+# Story: E2E validation of ghost_person and mailerlite_person on DuckDB
+
+id = "M006-E001-S003"
+parent = "M006-E001"
+title = "E2E test both simple entities execute via fyr run on DuckDB with sample parquet data"
+status = "complete"
+
+[outcome]
+description = """
+An E2E test creates sample parquet files for Ghost members and MailerLite subscribers,
+discovers both entities from the entities/ directory, generates code, and executes on DuckDB.
+Verifies: dim_ghost_person and dim_mailerlite_person tables exist with correct row counts,
+email column present (match key for identity graph), email_hash computed column present,
+and the runner executes both entities without errors. Also validates that fyr run discovers
+and resolves both entities correctly via the registry and runner.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "E2E test creates sample Ghost member parquet with realistic columns (id, email, status, name, created_at, email_disabled)",
+    "E2E test creates sample MailerLite subscriber parquet with realistic columns (id, email, status, subscribed_at, source)",
+    "Both entities discovered by EntityRegistry from entities/ directory",
+    "Code generated successfully for both entities",
+    "Both entities execute on DuckDB without errors",
+    "dim_ghost_person table has correct row count matching input parquet",
+    "dim_mailerlite_person table has correct row count matching input parquet",
+    "dim_ghost_person contains email column (match key for person identity graph)",
+    "dim_mailerlite_person contains email column (match key for person identity graph)",
+    "dim tables contain email_hash computed column",
+    "fyr run (runner.run) executes both entities successfully",
+    "All existing E2E tests still pass — no regressions",
+]
+
+depends_on = ["M006-E001-S001", "M006-E001-S002"]
+
+[implementation]
+hints = [
+    "Follow existing E2E test pattern in tests/test_e2e_ibis_executor.py",
+    "Create temporary parquet files with pyarrow in test fixtures",
+    "Use runner.run() to test full pipeline: discover → generate → execute",
+    "Verify output tables via DuckDB connection.table() or SQL queries",
+    "Sample data should have 3-5 rows each with realistic email addresses",
+    "Test both individual entity execution and full run() pipeline",
+]
+
+key_files = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/registry.py",
+    "entities/ghost_person.py",
+    "entities/mailerlite_person.py",
+]

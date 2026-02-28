@@ -8,6 +8,8 @@ from fyrnheim import (
     AggregationSource,
     DerivedSource,
     Entity,
+    IdentityGraphConfig,
+    IdentityGraphSource,
     LayersConfig,
     PrepLayer,
     TableSource,
@@ -112,6 +114,25 @@ class TestExtractDependencies:
             required_fields=[],
         )
         assert _extract_dependencies(entity) == []
+
+    def test_derived_source_with_identity_graph_config_auto_depends(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer", match_key_field="email"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        entity = Entity(
+            name="person",
+            description="Derived person",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
+            source=DerivedSource(identity_graph="person_graph", identity_graph_config=config),
+        )
+        deps = _extract_dependencies(entity)
+        assert "hubspot_person" in deps
+        assert "stripe_customer" in deps
 
 
 class TestResolveExecutionOrder:

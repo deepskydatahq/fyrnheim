@@ -11,6 +11,8 @@ from fyrnheim.core.source import (
     Divide,
     EventAggregationSource,
     Field,
+    IdentityGraphConfig,
+    IdentityGraphSource,
     Multiply,
     Rename,
     SourceTransforms,
@@ -260,6 +262,185 @@ class TestDerivedSource:
         ds = DerivedSource(identity_graph="person_graph")
         with pytest.raises(ValidationError):
             ds.identity_graph = "other_graph"
+
+    def test_identity_graph_config_default_none(self):
+        ds = DerivedSource(identity_graph="person_graph")
+        assert ds.identity_graph_config is None
+
+    def test_with_identity_graph_config(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer", match_key_field="email"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        ds = DerivedSource(identity_graph="person_graph", identity_graph_config=config)
+        assert ds.identity_graph_config is config
+
+    def test_depends_on_auto_derived_from_config(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer", match_key_field="email"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        ds = DerivedSource(identity_graph="person_graph", identity_graph_config=config)
+        assert ds.depends_on == ["hubspot_person", "stripe_customer"]
+
+    def test_depends_on_merged_with_explicit(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer", match_key_field="email"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        ds = DerivedSource(
+            identity_graph="person_graph",
+            identity_graph_config=config,
+            depends_on=["lookup_table"],
+        )
+        assert "lookup_table" in ds.depends_on
+        assert "hubspot_person" in ds.depends_on
+        assert "stripe_customer" in ds.depends_on
+
+    def test_depends_on_deduplicates(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer", match_key_field="email"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        ds = DerivedSource(
+            identity_graph="person_graph",
+            identity_graph_config=config,
+            depends_on=["hubspot_person"],
+        )
+        assert ds.depends_on.count("hubspot_person") == 1
+
+    def test_still_frozen_with_config(self):
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer", match_key_field="email"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        ds = DerivedSource(identity_graph="person_graph", identity_graph_config=config)
+        with pytest.raises(ValidationError):
+            ds.identity_graph = "other"
+
+
+class TestIdentityGraphSource:
+    """Tests for IdentityGraphSource model."""
+
+    def test_minimal_creation(self):
+        s = IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email")
+        assert s.name == "hubspot"
+        assert s.entity == "hubspot_person"
+        assert s.match_key_field == "email"
+        assert s.fields == {}
+        assert s.id_field is None
+        assert s.date_field is None
+
+    def test_full_creation(self):
+        s = IdentityGraphSource(
+            name="hubspot", entity="hubspot_person", match_key_field="email",
+            fields={"first_name": "firstname", "last_name": "lastname"},
+            id_field="contact_id", date_field="created_at",
+        )
+        assert s.fields == {"first_name": "firstname", "last_name": "lastname"}
+        assert s.id_field == "contact_id"
+        assert s.date_field == "created_at"
+
+    def test_empty_name_rejected(self):
+        with pytest.raises(ValidationError):
+            IdentityGraphSource(name="", entity="e", match_key_field="k")
+
+    def test_empty_entity_rejected(self):
+        with pytest.raises(ValidationError):
+            IdentityGraphSource(name="n", entity="", match_key_field="k")
+
+    def test_empty_match_key_field_rejected(self):
+        with pytest.raises(ValidationError):
+            IdentityGraphSource(name="n", entity="e", match_key_field="")
+
+    def test_frozen(self):
+        s = IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email")
+        with pytest.raises(ValidationError):
+            s.name = "other"
+
+
+class TestIdentityGraphConfig:
+    """Tests for IdentityGraphConfig model."""
+
+    def _make_sources(self, names=("hubspot", "stripe")):
+        return [
+            IdentityGraphSource(name=n, entity=f"{n}_person", match_key_field="email")
+            for n in names
+        ]
+
+    def test_valid_creation_two_sources(self):
+        sources = self._make_sources()
+        config = IdentityGraphConfig(match_key="email", sources=sources, priority=["hubspot", "stripe"])
+        assert config.match_key == "email"
+        assert len(config.sources) == 2
+        assert config.priority == ["hubspot", "stripe"]
+
+    def test_valid_creation_three_sources(self):
+        sources = self._make_sources(("a", "b", "c"))
+        config = IdentityGraphConfig(match_key="email", sources=sources, priority=["a", "b", "c"])
+        assert len(config.sources) == 3
+
+    def test_fewer_than_two_sources_rejected(self):
+        with pytest.raises(ValidationError):
+            IdentityGraphConfig(
+                match_key="email",
+                sources=[IdentityGraphSource(name="a", entity="a_person", match_key_field="email")],
+                priority=["a"],
+            )
+
+    def test_priority_missing_source_rejected(self):
+        sources = self._make_sources()
+        with pytest.raises(ValidationError, match="priority must contain exactly"):
+            IdentityGraphConfig(match_key="email", sources=sources, priority=["hubspot"])
+
+    def test_priority_extra_name_rejected(self):
+        sources = self._make_sources()
+        with pytest.raises(ValidationError, match="priority must contain exactly"):
+            IdentityGraphConfig(match_key="email", sources=sources, priority=["hubspot", "stripe", "extra"])
+
+    def test_empty_priority_rejected(self):
+        sources = self._make_sources()
+        with pytest.raises(ValidationError):
+            IdentityGraphConfig(match_key="email", sources=sources, priority=[])
+
+    def test_empty_match_key_rejected(self):
+        sources = self._make_sources()
+        with pytest.raises(ValidationError):
+            IdentityGraphConfig(match_key="", sources=sources, priority=["hubspot", "stripe"])
+
+    def test_duplicate_source_names_rejected(self):
+        sources = [
+            IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="email"),
+            IdentityGraphSource(name="hubspot", entity="hubspot_contacts", match_key_field="email"),
+        ]
+        with pytest.raises(ValidationError, match="Duplicate source names"):
+            IdentityGraphConfig(match_key="email", sources=sources, priority=["hubspot", "hubspot"])
+
+    def test_frozen(self):
+        sources = self._make_sources()
+        config = IdentityGraphConfig(match_key="email", sources=sources, priority=["hubspot", "stripe"])
+        with pytest.raises(ValidationError):
+            config.match_key = "other"
 
 
 class TestAggregationSource:

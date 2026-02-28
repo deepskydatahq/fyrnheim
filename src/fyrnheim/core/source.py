@@ -3,7 +3,7 @@
 import os
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field as PydanticField, field_validator
+from pydantic import BaseModel, ConfigDict, Field as PydanticField, field_validator, model_validator
 
 
 class Field(BaseModel):
@@ -116,21 +116,67 @@ class DerivedEntitySource(BaseModel):
     fields: list[Field] | None = None
 
 
+class IdentityGraphSource(BaseModel):
+    """Configuration for one source in an identity graph."""
+    model_config = ConfigDict(frozen=True)
+
+    name: str = PydanticField(min_length=1)
+    entity: str = PydanticField(min_length=1)
+    match_key_field: str = PydanticField(min_length=1)
+    fields: dict[str, str] = PydanticField(default_factory=dict)
+    id_field: str | None = None
+    date_field: str | None = None
+
+
+class IdentityGraphConfig(BaseModel):
+    """Configuration for an identity graph that merges multiple sources."""
+    model_config = ConfigDict(frozen=True)
+
+    match_key: str = PydanticField(min_length=1)
+    sources: list[IdentityGraphSource] = PydanticField(min_length=2)
+    priority: list[str]
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority_not_empty(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("priority must not be empty")
+        return v
+
+    @field_validator("sources")
+    @classmethod
+    def validate_unique_source_names(cls, v: list[IdentityGraphSource]) -> list[IdentityGraphSource]:
+        names = [s.name for s in v]
+        if len(names) != len(set(names)):
+            dupes = [n for n in names if names.count(n) > 1]
+            raise ValueError(f"Duplicate source names: {set(dupes)}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_priority_matches_sources(self) -> "IdentityGraphConfig":
+        source_names = {s.name for s in self.sources}
+        priority_names = set(self.priority)
+        if source_names != priority_names:
+            missing_from_priority = source_names - priority_names
+            extra_in_priority = priority_names - source_names
+            parts = []
+            if missing_from_priority:
+                parts.append(f"sources not in priority: {missing_from_priority}")
+            if extra_in_priority:
+                parts.append(f"priority names not in sources: {extra_in_priority}")
+            raise ValueError(
+                f"priority must contain exactly the source names. {'; '.join(parts)}"
+            )
+        return self
+
+
 class DerivedSource(BaseModel):
-    """Source for derived entities created via identity graph resolution.
-
-    Derived entities merge multiple dimension sources using identity matching
-    to create unified views.
-
-    Attributes:
-        identity_graph: Name of the identity graph configuration
-                       that defines source merging logic.
-        depends_on: Explicit list of entity names this derived entity depends on.
-    """
+    """Source for derived entities created via identity graph resolution."""
     model_config = ConfigDict(frozen=True)
 
     identity_graph: str = PydanticField(min_length=1)
     depends_on: list[str] = PydanticField(default_factory=list)
+    identity_graph_config: IdentityGraphConfig | None = None
 
     @field_validator("identity_graph")
     @classmethod
@@ -138,6 +184,15 @@ class DerivedSource(BaseModel):
         if not isinstance(v, str) or not v:
             raise ValueError("identity_graph must be a non-empty string")
         return v
+
+    @model_validator(mode="after")
+    def _derive_depends_on(self) -> "DerivedSource":
+        """Auto-populate depends_on from identity_graph_config sources."""
+        if self.identity_graph_config is not None:
+            config_entities = [s.entity for s in self.identity_graph_config.sources]
+            merged = list(dict.fromkeys(list(self.depends_on) + config_entities))
+            object.__setattr__(self, "depends_on", merged)
+        return self
 
 
 class AggregationSource(BaseModel):

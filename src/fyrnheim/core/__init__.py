@@ -22,6 +22,8 @@ from .source import (
     Divide as Divide,
     EventAggregationSource as EventAggregationSource,
     Field as Field,
+    IdentityGraphConfig as IdentityGraphConfig,
+    IdentityGraphSource as IdentityGraphSource,
     Multiply as Multiply,
     Rename as Rename,
     SourceTransforms as SourceTransforms,

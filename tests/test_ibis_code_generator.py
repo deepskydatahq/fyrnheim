@@ -7,8 +7,10 @@ import pytest
 from fyrnheim import (
     ActivityConfig,
     ActivityType,
+    AggregationSource,
     AnalyticsLayer,
     AnalyticsMetric,
+    ComputedColumn,
     DerivedSource,
     DimensionLayer,
     Entity,
@@ -944,3 +946,94 @@ class TestDerivedSourceCodeGeneration:
         code = gen._generate_source_functions()
         assert 't_hubspot = sources["hubspot"]' in code
         assert 't_stripe = sources["stripe"]' in code
+
+
+# ---------------------------------------------------------------------------
+# AggregationSource codegen tests
+# ---------------------------------------------------------------------------
+
+
+class TestAggregationSourceCodeGeneration:
+    """Tests for AggregationSource code generation."""
+
+    def _make_entity(self, aggregations=None, filter_expression=None):
+        source = AggregationSource(
+            source_entity="person",
+            group_by_column="account_id",
+            aggregations=aggregations or [],
+            filter_expression=filter_expression,
+        )
+        return Entity(
+            name="account",
+            description="Account entity",
+            source=source,
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_account")),
+        )
+
+    def test_function_signature(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        assert "def source_account(source_person: ibis.Table) -> ibis.Table:" in code
+
+    def test_aggregate_with_expressions(self):
+        entity = self._make_entity(aggregations=[
+            ComputedColumn(name="person_count", expression="t.person_id.count()"),
+            ComputedColumn(name="total_amount", expression="t.amount.sum()"),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        assert '.group_by("account_id").aggregate(' in code
+        assert "person_count=t.person_id.count()," in code
+        assert "total_amount=t.amount.sum()," in code
+
+    def test_empty_aggregations(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        assert '.group_by("account_id").aggregate()' in code
+
+    def test_filter_expression_included(self):
+        entity = self._make_entity(
+            aggregations=[
+                ComputedColumn(name="cnt", expression="t.id.count()"),
+            ],
+            filter_expression="t.status == 'active'",
+        )
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        assert "t = t.filter(t.status == 'active')" in code
+        assert '.group_by("account_id").aggregate(' in code
+
+    def test_ast_parse_valid(self):
+        entity = self._make_entity(aggregations=[
+            ComputedColumn(name="person_count", expression="t.person_id.count()"),
+            ComputedColumn(name="total_amount", expression="t.amount.sum()"),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        ast.parse(code)  # Should not raise
+
+    def test_ast_parse_valid_empty_aggregations(self):
+        entity = self._make_entity()
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        ast.parse(code)
+
+    def test_ast_parse_valid_with_filter(self):
+        entity = self._make_entity(
+            aggregations=[ComputedColumn(name="cnt", expression="t.id.count()")],
+            filter_expression="t.active == True",
+        )
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        ast.parse(code)
+
+    def test_expression_binding(self):
+        """Expressions without t. prefix get bound correctly."""
+        entity = self._make_entity(aggregations=[
+            ComputedColumn(name="cnt", expression="person_id.count()"),
+        ])
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        assert "cnt=t.person_id.count()," in code

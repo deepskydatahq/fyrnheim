@@ -10,7 +10,7 @@ from typing import Any
 import ibis
 
 from fyrnheim.core.entity import Entity
-from fyrnheim.core.source import DerivedSource
+from fyrnheim.core.source import AggregationSource, DerivedSource
 from fyrnheim.engine._loader import load_transform_module
 from fyrnheim.engine.errors import ExecutionError, SourceNotFoundError
 
@@ -210,6 +210,23 @@ class IbisExecutor:
                 )
             sources_dict = self._build_sources_dict(entity)
             t = source_fn(sources_dict)
+        elif entity is not None and isinstance(entity.source, AggregationSource):
+            # AggregationSource path: resolve dependency table and pass to source fn
+            source_fn = getattr(module, f"source_{entity_name}", None)
+            if source_fn is None:
+                raise ExecutionError(
+                    f"No source function for AggregationSource entity {entity_name}"
+                )
+            dep_table_name = f"dim_{entity.source.source_entity}"
+            try:
+                dep_table = self._conn.table(dep_table_name)
+            except Exception:
+                raise ExecutionError(
+                    f"Dependency table '{dep_table_name}' not found for "
+                    f"AggregationSource entity '{entity_name}'. "
+                    f"Ensure '{entity.source.source_entity}' executes before '{entity_name}'."
+                )
+            t = source_fn(dep_table)
         else:
             # Fall back to source function in generated code
             source_fn = getattr(module, f"source_{entity_name}", None)

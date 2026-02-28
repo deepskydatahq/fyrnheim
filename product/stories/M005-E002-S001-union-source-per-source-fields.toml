@@ -1,0 +1,61 @@
+# Story: Add per-source field_mappings and literal_columns to UnionSource model
+
+id = "M005-E002-S001"
+parent = "M005-E002"
+title = "Add optional field_mappings and literal_columns to UnionSource sub-source entries"
+status = "complete"
+depends_on = []
+
+[outcome]
+description = """
+UnionSource sub-source entries gain two optional fields: field_mappings (dict[str, str])
+for column renames before union, and literal_columns (dict[str, Any]) for injecting
+constant values (e.g. product_type='video'). Both default to empty so existing
+UnionSource usage is fully backward compatible. The model validates that field_mappings
+values are strings and literal_columns values are JSON-serializable primitives
+(str, int, float, bool).
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TableSource accepts optional field_mappings: dict[str, str] defaulting to empty dict"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TableSource accepts optional literal_columns: dict[str, Any] defaulting to empty dict"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing UnionSource construction without new fields still works unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "UnionSource with sub-source field_mappings={'email': 'contact_email'} stores correctly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "UnionSource with sub-source literal_columns={'product_type': 'video'} stores correctly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing source tests pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "tests/test_core_source.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Add field_mappings: dict[str, str] = Field(default_factory=dict) to TableSource
+2. Add literal_columns: dict[str, Any] = Field(default_factory=dict) to TableSource
+3. These fields are on TableSource (not a new subclass) because UnionSource.sources
+   is list[TableSource] — adding optional fields with defaults is backward compatible
+   and avoids type system complexity
+4. Add unit tests for new fields alongside existing TestUnionSource in test_core_source.py
+5. No changes to codegen yet — that's S002
+"""

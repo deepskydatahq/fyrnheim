@@ -3,7 +3,7 @@
 id = "M005-E004"
 parent = "M005"
 title = "AggregationSource codegen generates GROUP BY + aggregation expressions"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

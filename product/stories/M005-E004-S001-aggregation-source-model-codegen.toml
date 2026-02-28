@@ -1,0 +1,92 @@
+# Story: Fix AggregationSource model and codegen for GROUP BY + aggregate
+
+id = "M005-E004-S001"
+parent = "M005-E004"
+title = "Add aggregations to AggregationSource model and fix codegen to generate .group_by().aggregate()"
+status = "complete"
+depends_on = []
+
+[outcome]
+description = """
+AggregationSource gains an optional `aggregations: list[ComputedColumn]` field that
+defines the aggregate expressions (e.g. person_count=t.person_id.nunique()). The code
+generator's _generate_aggregation_source_function() is updated to generate
+`.group_by().aggregate(...)` using these expressions, producing a valid ibis.Table
+output. When aggregations is empty, the generated code calls `.aggregate()` with no
+args (returns just the group key column). Backward compatible: existing
+AggregationSource without aggregations still works.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AggregationSource accepts optional aggregations: list[ComputedColumn] defaulting to empty list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing AggregationSource(source_entity='person', group_by_column='account_id') works unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated source function has correct signature: source_{name}(source_{source_entity}: ibis.Table)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code calls .group_by(group_by_column).aggregate(...) with aggregation expressions"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code includes filter_expression when set"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code with no aggregations calls .group_by().aggregate() (empty aggregate)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated module passes ast.parse (valid Python)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing source and codegen tests pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_core_source.py",
+    "tests/test_ibis_code_generator.py",
+    "src/fyrnheim/components/computed_column.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Model change in source.py:
+   - Import ComputedColumn from fyrnheim.components.computed_column
+   - Add `aggregations: list[ComputedColumn] = PydanticField(default_factory=list)` to AggregationSource
+   - This is backward compatible (defaults to empty list)
+
+2. Codegen fix in ibis_code_generator.py:
+   - Current _generate_aggregation_source_function returns `t.group_by("col")` which is a GroupedTable, not Table
+   - Fix to return `t.group_by("col").aggregate(...)` using the aggregations list
+   - Each aggregation: name=expression in the .aggregate() call
+   - Use self._bind_expression() to bind column refs to `t.`
+   - When aggregations is empty: `t.group_by("col").aggregate()` (valid Ibis — returns just the group key)
+
+3. Expected generated code for account entity with 2 aggregations:
+   ```python
+   def source_account(source_person: ibis.Table) -> ibis.Table:
+       t = source_person
+       return t.group_by("account_id").aggregate(
+           person_count=t.person_id.nunique(),
+           total_revenue=t.revenue.sum(),
+       )
+   ```
+
+4. Tests needed:
+   - test_core_source.py: AggregationSource with/without aggregations
+   - test_ibis_code_generator.py: TestAggregationSourceCodeGeneration class with tests for
+     function signature, .aggregate() call, filter_expression, empty aggregations, ast.parse validity
+"""

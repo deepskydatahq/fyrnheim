@@ -1,0 +1,67 @@
+# Story: E2E test for enhanced UnionSource on DuckDB
+
+id = "M005-E002-S003"
+parent = "M005-E002"
+title = "E2E test verifying enhanced UnionSource with field normalization and literal columns on DuckDB"
+status = "complete"
+depends_on = ["M005-E002-S002"]
+
+[outcome]
+description = """
+An end-to-end test creates two Parquet files with different column schemas
+(simulating e.g. hubspot contacts and stripe customers), defines a UnionSource
+entity with per-source field_mappings to normalize column names and literal_columns
+to tag each source (e.g. source_platform='hubspot'). Code is generated, executed
+on DuckDB, and the output table is verified: all columns use entity field names,
+literal columns are present with correct values, and row count equals the sum of
+both input files. This proves the full pipeline: model → codegen → execution.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Two Parquet files with different column names (e.g. {contact_email, name} and {email_address, full_name}) produce a unified table with entity field names {email, name}"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "literal_columns={'source_platform': 'hubspot'} on source 1 and {'source_platform': 'stripe'} on source 2 produce correct values in output"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Row count in output equals sum of rows from both input Parquet files"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Output table has the expected columns: entity fields + literal columns"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "UnionSource with no field_mappings and no literal_columns still works (backward compatible E2E)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "All existing E2E tests still pass — no regressions"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/generators/_generate.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Follow the existing E2E pattern in test_e2e_ibis_executor.py
+2. Create two Parquet files with different column schemas:
+   - Source 1 (e.g. hubspot): {contact_email, name, signup_date}
+   - Source 2 (e.g. stripe): {email_address, full_name, created_at}
+3. Define UnionSource with two TableSources, each with:
+   - field_mappings normalizing to entity names {email, name, joined_date}
+   - literal_columns tagging the source {source_platform: 'hubspot'/'stripe'}
+4. Generate code, execute on DuckDB, verify output columns and row counts
+5. Also test the plain UnionSource path (no field_mappings/literal_columns) to confirm backward compat
+6. If runner.run_entity() supports UnionSource, test that path too
+"""

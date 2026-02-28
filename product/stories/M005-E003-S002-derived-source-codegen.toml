@@ -1,0 +1,100 @@
+# Story: DerivedSource codegen — join chain, PriorityCoalesce, auto columns
+
+id = "M005-E003-S002"
+parent = "M005-E003"
+title = "Generate cascading FULL OUTER JOIN, PriorityCoalesce, and auto columns for DerivedSource"
+status = "complete"
+depends_on = ["M005-E003-S001"]
+
+[outcome]
+description = """
+IbisCodeGenerator handles DerivedSource with IdentityGraphConfig by generating:
+(1) A multi-input source function that receives a dict of source tables keyed by
+source name, (2) cascading FULL OUTER JOIN on the match key across all sources,
+(3) PriorityCoalesce via .fillna() chains ordered by source priority for shared
+fields, (4) auto-generated columns: is_{source} Boolean flags, {source}_id
+columns preserving original IDs, and first_seen_{source} date columns. The
+generated function signature differs from single-source entities: it takes
+(sources: dict[str, ibis.Table]) instead of (conn, backend). This is the
+heaviest story (~200-300 LOC of generator logic).
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DerivedSource with IdentityGraphConfig generates a source function (not empty string)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated source function signature is source_{name}(sources: dict) not source_{name}(conn, backend)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code performs FULL OUTER JOIN (outer_join) on match_key for 2 sources"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code performs cascading FULL OUTER JOIN for 3+ sources (join chain)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code applies .fillna() chains for PriorityCoalesce fields in priority order"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code creates is_{source} Boolean columns (t.{match_key}.notnull() per source)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code preserves source IDs as {source}_id columns when id_field is set"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code creates first_seen_{source} date columns when date_field is set"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated module passes ast.parse (valid Python)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DerivedSource without identity_graph_config still generates empty string (backward compat)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing codegen tests pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_ibis_code_generator.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Import DerivedSource in ibis_code_generator.py
+2. Add DerivedSource check in _generate_source_functions() dispatch
+3. New method _generate_derived_source_function(source: DerivedSource):
+   a. Read identity_graph_config
+   b. Generate function signature: def source_{name}(sources: dict) -> ibis.Table:
+   c. Extract tables: t_{source.name} = sources["{source.name}"]
+   d. Rename match_key per source: t_{name} = t_{name}.rename({match_key: match_key_field})
+   e. Rename fields per source: apply field_mappings
+   f. Cascading FULL OUTER JOIN:
+      - First two: result = t_a.outer_join(t_b, match_key).select(...)
+      - Each additional: result = result.outer_join(t_next, match_key).select(...)
+   g. PriorityCoalesce per unified field:
+      - For each field in priority order: result = result.mutate(field=ibis.coalesce(field_a, field_b, ...))
+      - Or use .fillna() chain: field_a.fillna(field_b).fillna(field_c)
+   h. Auto columns:
+      - is_{source} = t_{source}.{match_key}.notnull() (before join, track which sources contributed)
+      - {source}_id = original ID column from each source
+      - first_seen_{source} = date column from each source
+4. The join pattern in Ibis:
+   - t1.outer_join(t2, "match_key") produces all columns from both tables
+   - Need to handle column name conflicts (use suffixes or explicit select)
+   - After join, coalesce common fields
+"""

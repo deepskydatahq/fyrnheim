@@ -3,7 +3,7 @@
 id = "M005-E002"
 parent = "M005"
 title = "Enhanced UnionSource with per-source field_mappings and literal columns"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

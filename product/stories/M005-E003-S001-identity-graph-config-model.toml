@@ -1,0 +1,90 @@
+# Story: IdentityGraphConfig model and DerivedSource wiring
+
+id = "M005-E003-S001"
+parent = "M005-E003"
+title = "Create IdentityGraphConfig model and wire into DerivedSource"
+status = "complete"
+depends_on = []
+
+[outcome]
+description = """
+New Pydantic models capture identity graph configuration: IdentityGraphSource
+(per-source config with entity name, match key field, field mappings, priority)
+and IdentityGraphConfig (match key, ordered sources). DerivedSource gains an
+optional identity_graph_config: IdentityGraphConfig | None field alongside the
+existing identity_graph: str name. The existing DerivedSource API is fully
+backward compatible. Dependency resolution auto-derives depends_on from the
+config's source entity references.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphSource model accepts name, entity, match_key_field, fields: dict[str, str], id_field, date_field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphConfig model accepts match_key: str, sources: list[IdentityGraphSource], priority: list[str]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphConfig validates that priority names match source names"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphConfig validates at least 2 sources (identity graph needs 2+ inputs)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DerivedSource accepts optional identity_graph_config: IdentityGraphConfig | None (default None)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing DerivedSource(identity_graph='person_graph') still works unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DerivedSource with identity_graph_config auto-populates depends_on from source entity names"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing DerivedSource and resolution tests pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/types.py",
+    "src/fyrnheim/engine/resolution.py",
+    "tests/test_core_source.py",
+    "tests/test_engine_resolution.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Create IdentityGraphSource in source.py:
+   - name: str (source label, e.g. "hubspot")
+   - entity: str (entity name to read from, e.g. "hubspot_person")
+   - match_key_field: str (column in this source for the join key)
+   - fields: dict[str, str] = {} ({unified_name: source_column})
+   - id_field: str | None = None (for auto-generated source ID column)
+   - date_field: str | None = None (for first-seen date tracking)
+
+2. Create IdentityGraphConfig in source.py:
+   - match_key: str (unified match key name in output)
+   - sources: list[IdentityGraphSource] (min 2)
+   - priority: list[str] (source names in coalesce order)
+   - Validator: priority names must match source names
+
+3. Update DerivedSource:
+   - Add identity_graph_config: IdentityGraphConfig | None = None
+   - Remove frozen config (need to allow computed depends_on)
+   - Or use a model_validator to auto-compute depends_on from config sources
+
+4. Update resolution.py _extract_dependencies():
+   - If DerivedSource has identity_graph_config, extract entity names from sources
+   - Merge with explicit depends_on (union, no duplicates)
+
+5. Export new types from fyrnheim.core and fyrnheim.__init__
+"""

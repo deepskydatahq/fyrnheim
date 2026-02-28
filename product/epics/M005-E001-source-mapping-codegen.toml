@@ -3,7 +3,7 @@
 id = "M005-E001"
 parent = "M005"
 title = "SourceMapping field_mappings applied as renames during source code generation"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

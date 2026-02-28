@@ -1,0 +1,79 @@
+# Story: Fix executor dispatch for AggregationSource entities
+
+id = "M005-E004-S002"
+parent = "M005-E004"
+title = "Extend executor to resolve AggregationSource dependency table and call source function correctly"
+status = "complete"
+depends_on = ["M005-E004-S001"]
+
+[outcome]
+description = """
+The executor detects AggregationSource entities and calls their generated source
+function with the correct argument: the dependency entity's dim table from the
+catalog (e.g. dim_person for an account entity aggregating from person). Currently
+the executor calls all source functions with (conn, backend), which is wrong for
+AggregationSource functions that expect (source_table: ibis.Table). This follows
+the same pattern established by DerivedSource in M005-E003-S003.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AggregationSource entity calls source_fn(dependency_table) not source_fn(conn, backend)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dependency table resolved as dim_{source_entity} from connection catalog"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing dependency table raises ExecutionError with helpful message"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Non-AggregationSource entities (TableSource) still use standard source_fn(conn, backend) path"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing executor tests pass unchanged — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+    "src/fyrnheim/core/source.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Executor change in executor.py:
+   - Add AggregationSource to imports (alongside DerivedSource)
+   - In _run_transform_pipeline(), add an AggregationSource branch after the DerivedSource branch:
+     ```python
+     elif entity is not None and isinstance(entity.source, AggregationSource):
+         source_fn = getattr(module, f"source_{entity_name}", None)
+         if source_fn is None:
+             raise ExecutionError(f"No source function for AggregationSource entity {entity_name}")
+         dep_table_name = f"dim_{entity.source.source_entity}"
+         try:
+             dep_table = self._conn.table(dep_table_name)
+         except Exception:
+             raise ExecutionError(
+                 f"Dependency table '{dep_table_name}' not found for "
+                 f"AggregationSource entity '{entity_name}'. "
+                 f"Ensure '{entity.source.source_entity}' executes before '{entity_name}'."
+             )
+         t = source_fn(dep_table)
+     ```
+   - The entity param was already added to execute() in M005-E003-S003
+   - runner.py already passes entity=entity (M005-E003-S003), no change needed
+
+2. Tests in test_engine_executor.py:
+   - Create dim_{source_entity} table in DuckDB catalog
+   - Create mock transform module with aggregation source function signature
+   - Verify source_fn called with the dependency table
+   - Verify missing table raises ExecutionError
+   - Verify backward compat with TableSource
+"""

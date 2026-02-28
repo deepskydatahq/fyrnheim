@@ -1,0 +1,72 @@
+# Story: Generate .relabel() and ibis.literal() in union sub-source functions
+
+id = "M005-E002-S002"
+parent = "M005-E002"
+title = "Generate per-source .relabel() and .mutate(ibis.literal()) in union source functions"
+status = "complete"
+depends_on = ["M005-E002-S001"]
+
+[outcome]
+description = """
+When _generate_union_source_functions() encounters sub-sources with non-empty
+field_mappings, it appends .relabel({old: new, ...}) to the return expression
+for that sub-source's function. When literal_columns is non-empty, it appends
+.mutate(col=ibis.literal(val), ...) to inject constant columns. Both transforms
+are applied per sub-source before the UNION ALL. Sub-sources with empty
+field_mappings/literal_columns generate the same code as before (no .relabel()
+or .mutate() calls).
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Sub-source with field_mappings={'email': 'contact_email'} generates .relabel({'contact_email': 'email'}) on return expression"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Sub-source with literal_columns={'product_type': 'video'} generates .mutate(product_type=ibis.literal('video')) on return expression"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Sub-source with both field_mappings and literal_columns generates both .relabel() and .mutate() chained"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Sub-source with empty field_mappings and empty literal_columns generates same code as before (no extra calls)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Multiple sub-sources with different field_mappings each get their own .relabel() in their respective functions"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated module with field_mappings and literal_columns passes ast.parse (valid Python)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Union aggregator function (source_{name}) unchanged — still calls sub-sources and ibis.union()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing union codegen tests pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+]
+
+[handoff]
+implementation_hints = """
+1. In _generate_union_source_functions(), for each sub_source check field_mappings and literal_columns
+2. If field_mappings is non-empty: append .relabel({v: k for k, v in field_mappings.items()})
+   to the return expression (same inversion pattern as E001-S002 — field_mappings stores
+   {entity_field: source_col}, .relabel() needs {source_col: entity_field})
+3. If literal_columns is non-empty: append .mutate(col=ibis.literal(val), ...) for each entry
+4. Chain order: read_parquet/table → .relabel() → .mutate() (renames first, then add literals)
+5. Sub-sources without mappings produce unchanged code (guard with if-checks)
+6. The union aggregator function stays the same — normalization happens in sub-source functions
+"""

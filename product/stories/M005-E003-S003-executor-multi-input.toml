@@ -1,0 +1,85 @@
+# Story: Executor multi-input support for DerivedSource
+
+id = "M005-E003-S003"
+parent = "M005-E003"
+title = "Extend executor to handle multi-input DerivedSource entities"
+status = "complete"
+depends_on = ["M005-E003-S002"]
+
+[outcome]
+description = """
+The executor detects DerivedSource entities and calls their generated source
+function with a dict of dependency tables instead of (conn, backend). When
+executing a DerivedSource entity, the executor looks up already-executed
+dependency entities from the connection's table catalog (they were persisted
+by earlier execution in dependency order). The source function receives
+{source_name: ibis.Table} and returns the joined result. No changes needed
+to the runner — dependency ordering already works via resolution.py.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Executor detects DerivedSource entity and calls source_fn(sources_dict) instead of source_fn(conn, backend)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "sources_dict is built from dependency entity tables already in the connection catalog"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing dependency table raises clear ExecutionError with entity name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Non-DerivedSource entities still use the existing source_fn(conn, backend) path"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The execute() method accepts optional entity: Entity parameter for source type detection"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing executor tests pass — no regressions"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+
+[handoff]
+implementation_hints = """
+1. The executor needs to know if an entity is DerivedSource to dispatch correctly.
+   Options:
+   a. Add entity: Entity | None param to execute() — executor checks entity.source type
+   b. Detect from generated module (e.g., inspect source function signature)
+   c. Pass metadata alongside entity_name
+
+   Option (a) is simplest: execute(entity_name, entity=entity, ...) passes the entity
+   for type inspection. Existing calls without entity continue working.
+
+2. In _run_transform_pipeline(), add a DerivedSource branch:
+   - If entity is provided and entity.source is DerivedSource:
+     - Get identity_graph_config.sources
+     - For each source, look up dim_{source.entity} from conn.tables
+     - Build sources_dict = {source.name: conn.table(f"dim_{source.entity}")}
+     - Call source_fn(sources_dict) instead of source_fn(conn, backend)
+   - Else: existing behavior
+
+3. The runner already executes entities in dependency order (topological sort),
+   so dependency tables will be in the connection catalog when DerivedSource runs.
+
+4. Update run_entity() in runner.py to pass entity to executor.execute():
+   executor.execute(entity.name, entity=entity, generated_dir=gen_dir)
+
+5. Tests:
+   - Mock the connection catalog with pre-populated tables
+   - Verify DerivedSource path calls source_fn with dict
+   - Verify non-DerivedSource path unchanged
+"""

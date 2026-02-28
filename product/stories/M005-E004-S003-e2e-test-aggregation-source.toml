@@ -1,0 +1,81 @@
+# Story: E2E test for AggregationSource pipeline on DuckDB
+
+id = "M005-E004-S003"
+parent = "M005-E004"
+title = "E2E test: account-style entity aggregating from person-style entity executes on DuckDB"
+status = "complete"
+depends_on = ["M005-E004-S002"]
+
+[outcome]
+description = """
+An end-to-end test defines a person entity (TableSource, 6 rows across 3 accounts)
+and an account entity (AggregationSource, GROUP BY account_id with aggregations for
+person_count and total_amount). The full pipeline executes: person generates + executes
+first (creating dim_person), then account generates + executes the aggregation. The
+test verifies: correct row count (3 account rows from 6 person rows), aggregation
+values correct (person_count, total_amount per account), and filter_expression works
+when set.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Person entity (6 rows, 3 accounts) + account entity aggregation produces 3 account rows"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Aggregation values correct: person_count matches COUNT per account, total_amount matches SUM"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Output table has expected columns: group_by key + aggregated fields"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "All existing E2E tests still pass — no regressions"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Test data design:
+   Person entity (6 rows):
+   | person_id | account_id | name    | amount |
+   |-----------|------------|---------|--------|
+   | p1        | acct_1     | Alice   | 100    |
+   | p2        | acct_1     | Bob     | 200    |
+   | p3        | acct_2     | Carol   | 300    |
+   | p4        | acct_2     | Dave    | 400    |
+   | p5        | acct_2     | Eve     | 500    |
+   | p6        | acct_3     | Frank   | 150    |
+
+   Expected account output (3 rows):
+   | account_id | person_count | total_amount |
+   |------------|-------------|--------------|
+   | acct_1     | 2           | 300          |
+   | acct_2     | 3           | 1200         |
+   | acct_3     | 1           | 150          |
+
+2. Entity definitions:
+   - person: TableSource reading person parquet, prep + dim layers
+   - account: AggregationSource(source_entity="person", group_by_column="account_id",
+       aggregations=[
+           ComputedColumn(name="person_count", expression="t.person_id.count()"),
+           ComputedColumn(name="total_amount", expression="t.amount.sum()"),
+       ])
+
+3. Execution flow (same pattern as identity graph E2E test):
+   - Generate + execute person → creates dim_person table
+   - Generate + execute account → reads dim_person, GROUP BY + aggregate
+   - Use IbisExecutor directly, pass entity= for account execution
+
+4. Follow existing E2E patterns in TestE2EIdentityGraphPerson
+"""

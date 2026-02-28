@@ -1,0 +1,92 @@
+# Story: E2E test for DerivedSource identity graph on DuckDB
+
+id = "M005-E003-S004"
+parent = "M005-E003"
+title = "E2E test: person-style entity with 2+ sources executes identity graph on DuckDB"
+status = "complete"
+depends_on = ["M005-E003-S003"]
+
+[outcome]
+description = """
+An end-to-end test defines two source entities (e.g. hubspot_person and
+stripe_person) with overlapping records on an email match key, plus a
+DerivedSource person entity with IdentityGraphConfig. The full pipeline
+executes: source entities generate + execute first (creating dim tables),
+then the derived person entity generates + executes the identity graph
+join. The test verifies: FULL OUTER JOIN produces correct row count
+(union minus overlap), PriorityCoalesce resolves shared fields by
+priority, source flags are correct Booleans, and source IDs are preserved.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Two source entities (3 rows and 2 rows, 1 overlapping email) produce person entity with 4 rows (3 + 2 - 1 overlap)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "PriorityCoalesce resolves shared 'name' field using primary source value for the overlapping record"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "is_hubspot and is_stripe Boolean flags are correct (overlapping record has both True)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "hubspot_id and stripe_id columns preserve original source IDs (NULL when not from that source)"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Output table has all expected columns: match_key + coalesced fields + source flags + source IDs"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "All existing E2E tests still pass — no regressions"
+
+[context]
+relevant_paths = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/core/source.py",
+]
+
+[handoff]
+implementation_hints = """
+1. Test data design:
+   Source 1: hubspot_person (3 rows)
+   | person_id | email            | full_name | signup_date |
+   |-----------|------------------|-----------|-------------|
+   | h1        | alice@ex.com     | Alice H   | 2024-01-01  |
+   | h2        | bob@ex.com       | Bob H     | 2024-02-01  |
+   | h3        | carol@ex.com     | Carol H   | 2024-03-01  |
+
+   Source 2: stripe_person (2 rows)
+   | customer_id | contact_email    | name      | created_at  |
+   |-------------|------------------|-----------|-------------|
+   | s1          | bob@ex.com       | Bob S     | 2024-01-15  |
+   | s2          | dave@ex.com      | Dave S    | 2024-04-01  |
+
+   Overlap: bob@ex.com appears in both sources.
+   Expected person output: 4 rows (alice, bob, carol, dave)
+   Bob's name should be "Bob H" (hubspot is primary).
+
+2. Entity definitions:
+   - hubspot_person: TableSource entity reading hubspot parquet
+   - stripe_person: TableSource entity reading stripe parquet
+   - person: DerivedSource with IdentityGraphConfig:
+     - match_key: "email"
+     - sources: [hubspot(email=email, name=full_name), stripe(email=contact_email, name=name)]
+     - priority: ["hubspot", "stripe"]
+
+3. Execution flow:
+   - Generate + execute hubspot_person → creates dim_hubspot_person table
+   - Generate + execute stripe_person → creates dim_stripe_person table
+   - Generate + execute person → reads dim tables, runs identity graph join
+
+4. Use IbisExecutor directly (not runner) for control over execution order.
+   Execute source entities first, then the derived entity.
+"""

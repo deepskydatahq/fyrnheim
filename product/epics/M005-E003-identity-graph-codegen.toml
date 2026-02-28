@@ -3,7 +3,7 @@
 id = "M005-E003"
 parent = "M005"
 title = "DerivedSource identity graph codegen with cascading FULL OUTER JOIN and PriorityCoalesce"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

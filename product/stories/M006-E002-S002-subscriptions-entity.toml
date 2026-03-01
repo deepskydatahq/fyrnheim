@@ -1,0 +1,52 @@
+# Story: Define subscriptions entity with TableSource + SourceMapping
+
+id = "M006-E002-S002"
+parent = "M006-E002"
+title = "Define subscriptions entity with TableSource and SourceMapping field_mappings"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/subscriptions.py defining an Entity with required_fields for the entity
+schema and a SourceMapping that maps entity field names to Lemonsqueezy source columns
+(e.g. subscription_id -> id). The entity has 4 required fields (subscription_id, user_email,
+status, created_at) and 10 optional fields. PrepLayer for staging and DimensionLayer with
+computed columns including customer_email_hash via hash_email and lifecycle flags (is_active,
+is_churned). The dim table retains user_email for the person identity graph match key.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/subscriptions.py exists and defines entity = Entity(...) with name='subscriptions'",
+    "Entity uses required_fields with 4 required fields: subscription_id (STRING), user_email (STRING), status (STRING), created_at (TIMESTAMP)",
+    "Entity has optional_fields for store_id, product_id, variant_id, user_name, renews_at, ends_at, cancelled, billing_anchor, card_brand, updated_at",
+    "Entity has a TableSource with project/dataset/table pointing to Lemonsqueezy subscription data",
+    "TableSource has duckdb_path for local parquet testing",
+    "SourceMapping field_mappings maps subscription_id->id",
+    "Entity has PrepLayer with model_name='prep_subscriptions'",
+    "Entity has DimensionLayer with model_name='dim_subscriptions'",
+    "DimensionLayer has customer_email_hash computed column using hash_email(user_email)",
+    "DimensionLayer has is_active and is_churned lifecycle computed columns",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: metadata/entities/subscriptions.py and entities/entities/subscriptions.py",
+    "Key field_mapping: {'subscription_id': 'id'} — most other fields map 1:1",
+    "SourceMapping direction: {entity_field_name: source_column_name}",
+    "Source: deepskydata.timodata_sources.subscriptions, duckdb_path: subscriptions/*.parquet",
+    "user_email must be in dim table for person identity graph",
+    "is_active: t.status.isin(['active', 'on_trial'])",
+    "is_churned: t.status.isin(['cancelled', 'expired', 'unpaid'])",
+    "Use fyrnheim.primitives.hash_email for customer_email_hash on user_email column",
+]
+
+key_files = [
+    "entities/subscriptions.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "entities/transactions.py",
+    "entities/ghost_person.py",
+]

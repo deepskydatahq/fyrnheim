@@ -3,7 +3,7 @@
 id = "M006-E002"
 parent = "M006"
 title = "Define transactions and subscriptions entities with TableSource + SourceMapping"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

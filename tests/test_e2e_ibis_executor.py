@@ -1083,3 +1083,409 @@ entity = Entity(
         assert all(e.status == "success" for e in result.entities)
         total_rows = sum(e.row_count for e in result.entities)
         assert total_rows == ghost_count + ml_count
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for M006-E002: SourceMapping entities (transactions + subscriptions)
+# ---------------------------------------------------------------------------
+
+
+class TestE2ESourceMappingEntities:
+    """E2E test: transactions and subscriptions with SourceMapping field_mappings on DuckDB."""
+
+    @pytest.fixture()
+    def sourcemapping_data(self, tmp_path):
+        """Create sample parquet files with Lemonsqueezy source column names."""
+        # --- Transactions parquet (source column names: id, subtotal) ---
+        txn_df = pd.DataFrame({
+            "id": ["t1", "t2", "t3", "t4"],
+            "store_id": [1, 1, 1, 1],
+            "identifier": ["ORD-001", "ORD-002", "ORD-003", "ORD-004"],
+            "order_number": [1001, 1002, 1003, 1004],
+            "status": ["paid", "paid", "refunded", "paid"],
+            "customer_id": [10, 20, 10, 30],
+            "customer_name": ["Alice", "Bob", "Alice", "Carol"],
+            "customer_email": [
+                "alice@example.com", "bob@test.org",
+                "alice@example.com", "carol@startup.co",
+            ],
+            "total": [2000, 5000, 1500, 3000],
+            "subtotal": [1800, 4500, 1300, 2700],
+            "currency": ["USD", "USD", "USD", "EUR"],
+            "refunded": [False, False, True, False],
+            "created_at": pd.to_datetime([
+                "2024-01-15", "2024-02-20", "2024-03-05", "2024-04-10",
+            ]),
+            "updated_at": pd.to_datetime([
+                "2024-01-15", "2024-02-20", "2024-03-06", "2024-04-10",
+            ]),
+        })
+        txn_dir = tmp_path / "data" / "transactions"
+        txn_dir.mkdir(parents=True)
+        txn_df.to_parquet(txn_dir / "transactions.parquet", index=False)
+
+        # --- Subscriptions parquet (source column names: id) ---
+        sub_df = pd.DataFrame({
+            "id": ["s1", "s2", "s3"],
+            "store_id": [1, 1, 1],
+            "product_id": [100, 200, 100],
+            "variant_id": [1000, 2000, 1000],
+            "status": ["active", "cancelled", "on_trial"],
+            "user_email": [
+                "alice@example.com", "bob@test.org", "dave@corp.io",
+            ],
+            "user_name": ["Alice", "Bob", "Dave"],
+            "renews_at": pd.to_datetime([
+                "2024-07-15", "2024-06-20", "2024-08-01",
+            ]),
+            "ends_at": pd.array([None, "2024-06-20", None], dtype="datetime64[ns]"),
+            "cancelled": [False, True, False],
+            "billing_anchor": [15, 20, 1],
+            "card_brand": ["visa", "mastercard", None],
+            "created_at": pd.to_datetime([
+                "2024-01-15", "2024-02-20", "2024-07-01",
+            ]),
+            "updated_at": pd.to_datetime([
+                "2024-06-15", "2024-06-20", "2024-07-01",
+            ]),
+        })
+        sub_dir = tmp_path / "data" / "subscriptions"
+        sub_dir.mkdir(parents=True)
+        sub_df.to_parquet(sub_dir / "subscriptions.parquet", index=False)
+
+        return tmp_path, len(txn_df), len(sub_df)
+
+    @pytest.fixture()
+    def executed_sourcemapping_entities(self, sourcemapping_data):
+        """Generate and execute both SourceMapping entities on DuckDB."""
+        from fyrnheim.primitives import hash_email
+
+        base_dir, txn_count, sub_count = sourcemapping_data
+        data_dir = base_dir / "data"
+        generated_dir = base_dir / "generated"
+
+        # --- Transactions entity ---
+        txn_entity = Entity(
+            name="transactions",
+            description="E2E transactions with SourceMapping",
+            required_fields=[
+                Field(name="transaction_id", type="STRING"),
+                Field(name="customer_email", type="STRING"),
+                Field(name="amount_cents", type="INT64"),
+                Field(name="currency", type="STRING"),
+                Field(name="status", type="STRING"),
+                Field(name="created_at", type="TIMESTAMP"),
+            ],
+            optional_fields=[
+                Field(name="store_id", type="INT64"),
+                Field(name="customer_id", type="INT64"),
+                Field(name="customer_name", type="STRING"),
+                Field(name="total", type="INT64"),
+                Field(name="refunded", type="BOOLEAN"),
+                Field(name="updated_at", type="TIMESTAMP"),
+            ],
+            core_computed=[
+                ComputedColumn(
+                    name="customer_email_hash",
+                    expression=hash_email("customer_email"),
+                ),
+            ],
+            source=TableSource(
+                project="test", dataset="test", table="transactions",
+                duckdb_path=str(data_dir / "transactions" / "*.parquet"),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_transactions"),
+                dimension=DimensionLayer(model_name="dim_transactions"),
+            ),
+        )
+        txn_sm = SourceMapping(
+            entity=txn_entity,
+            source=txn_entity.source,
+            field_mappings={
+                "transaction_id": "id",
+                "customer_email": "customer_email",
+                "amount_cents": "subtotal",
+                "currency": "currency",
+                "status": "status",
+                "created_at": "created_at",
+                "store_id": "store_id",
+                "customer_id": "customer_id",
+                "customer_name": "customer_name",
+                "total": "total",
+                "refunded": "refunded",
+                "updated_at": "updated_at",
+            },
+        )
+
+        # --- Subscriptions entity ---
+        sub_entity = Entity(
+            name="subscriptions",
+            description="E2E subscriptions with SourceMapping",
+            required_fields=[
+                Field(name="subscription_id", type="STRING"),
+                Field(name="user_email", type="STRING"),
+                Field(name="status", type="STRING"),
+                Field(name="created_at", type="TIMESTAMP"),
+            ],
+            optional_fields=[
+                Field(name="store_id", type="INT64"),
+                Field(name="product_id", type="INT64"),
+                Field(name="user_name", type="STRING"),
+                Field(name="cancelled", type="BOOLEAN"),
+                Field(name="billing_anchor", type="INT64"),
+                Field(name="card_brand", type="STRING"),
+                Field(name="updated_at", type="TIMESTAMP"),
+            ],
+            core_computed=[
+                ComputedColumn(
+                    name="customer_email_hash",
+                    expression=hash_email("user_email"),
+                ),
+                ComputedColumn(
+                    name="is_active",
+                    expression="t.status.isin(['active', 'on_trial'])",
+                ),
+                ComputedColumn(
+                    name="is_churned",
+                    expression="t.status.isin(['cancelled', 'expired', 'unpaid'])",
+                ),
+            ],
+            source=TableSource(
+                project="test", dataset="test", table="subscriptions",
+                duckdb_path=str(data_dir / "subscriptions" / "*.parquet"),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_subscriptions"),
+                dimension=DimensionLayer(model_name="dim_subscriptions"),
+            ),
+        )
+        sub_sm = SourceMapping(
+            entity=sub_entity,
+            source=sub_entity.source,
+            field_mappings={
+                "subscription_id": "id",
+                "user_email": "user_email",
+                "status": "status",
+                "created_at": "created_at",
+                "store_id": "store_id",
+                "product_id": "product_id",
+                "user_name": "user_name",
+                "cancelled": "cancelled",
+                "billing_anchor": "billing_anchor",
+                "card_brand": "card_brand",
+                "updated_at": "updated_at",
+            },
+        )
+
+        # Generate and execute
+        generate(txn_entity, output_dir=generated_dir, source_mapping=txn_sm)
+        generate(sub_entity, output_dir=generated_dir, source_mapping=sub_sm)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            txn_result = executor.execute("transactions")
+            sub_result = executor.execute("subscriptions")
+            txn_df = executor.connection.table("dim_transactions").to_pandas()
+            sub_df = executor.connection.table("dim_subscriptions").to_pandas()
+
+        return txn_result, sub_result, txn_df, sub_df, txn_count, sub_count
+
+    def test_transactions_row_count(self, executed_sourcemapping_entities):
+        """transactions dim table has correct row count."""
+        txn_result, _, txn_df, _, txn_count, _ = executed_sourcemapping_entities
+        assert txn_result.row_count == txn_count
+        assert len(txn_df) == txn_count
+
+    def test_subscriptions_row_count(self, executed_sourcemapping_entities):
+        """subscriptions dim table has correct row count."""
+        _, sub_result, _, sub_df, _, sub_count = executed_sourcemapping_entities
+        assert sub_result.row_count == sub_count
+        assert len(sub_df) == sub_count
+
+    def test_transactions_has_entity_field_names(self, executed_sourcemapping_entities):
+        """Output has entity field names (transaction_id, amount_cents), not source names."""
+        _, _, txn_df, _, _, _ = executed_sourcemapping_entities
+        assert "transaction_id" in txn_df.columns
+        assert "amount_cents" in txn_df.columns
+
+    def test_transactions_source_names_renamed(self, executed_sourcemapping_entities):
+        """Source column names (id, subtotal) are renamed to entity names."""
+        _, _, txn_df, _, _, _ = executed_sourcemapping_entities
+        # 'id' should be renamed to 'transaction_id', 'subtotal' to 'amount_cents'
+        # The renamed columns should not appear under their original names
+        # (unless they also map 1:1 like 'status'->'status')
+        assert "transaction_id" in txn_df.columns
+        assert "amount_cents" in txn_df.columns
+
+    def test_subscriptions_has_entity_field_names(self, executed_sourcemapping_entities):
+        """Output has entity field names (subscription_id), not source names."""
+        _, _, _, sub_df, _, _ = executed_sourcemapping_entities
+        assert "subscription_id" in sub_df.columns
+
+    def test_transactions_has_customer_email(self, executed_sourcemapping_entities):
+        """dim_transactions contains customer_email for identity graph."""
+        _, _, txn_df, _, _, _ = executed_sourcemapping_entities
+        assert "customer_email" in txn_df.columns
+
+    def test_subscriptions_has_user_email(self, executed_sourcemapping_entities):
+        """dim_subscriptions contains user_email for identity graph."""
+        _, _, _, sub_df, _, _ = executed_sourcemapping_entities
+        assert "user_email" in sub_df.columns
+
+    def test_transactions_has_email_hash(self, executed_sourcemapping_entities):
+        """dim_transactions has customer_email_hash computed column."""
+        _, _, txn_df, _, _, _ = executed_sourcemapping_entities
+        assert "customer_email_hash" in txn_df.columns
+        assert txn_df["customer_email_hash"].notna().all()
+
+    def test_subscriptions_has_email_hash(self, executed_sourcemapping_entities):
+        """dim_subscriptions has customer_email_hash computed column."""
+        _, _, _, sub_df, _, _ = executed_sourcemapping_entities
+        assert "customer_email_hash" in sub_df.columns
+        assert sub_df["customer_email_hash"].notna().all()
+
+    def test_subscriptions_lifecycle_flags(self, executed_sourcemapping_entities):
+        """dim_subscriptions has is_active and is_churned computed columns."""
+        _, _, _, sub_df, _, _ = executed_sourcemapping_entities
+        assert "is_active" in sub_df.columns
+        assert "is_churned" in sub_df.columns
+
+        # active status -> is_active=True
+        active_row = sub_df[sub_df["subscription_id"] == "s1"].iloc[0]
+        assert bool(active_row["is_active"]) is True
+        assert bool(active_row["is_churned"]) is False
+
+        # cancelled status -> is_churned=True
+        cancelled_row = sub_df[sub_df["subscription_id"] == "s2"].iloc[0]
+        assert bool(cancelled_row["is_active"]) is False
+        assert bool(cancelled_row["is_churned"]) is True
+
+        # on_trial status -> is_active=True
+        trial_row = sub_df[sub_df["subscription_id"] == "s3"].iloc[0]
+        assert bool(trial_row["is_active"]) is True
+        assert bool(trial_row["is_churned"]) is False
+
+    def test_transactions_field_values_preserved(self, executed_sourcemapping_entities):
+        """Renamed field values are preserved correctly."""
+        _, _, txn_df, _, _, _ = executed_sourcemapping_entities
+        row = txn_df[txn_df["transaction_id"] == "t1"].iloc[0]
+        assert row["amount_cents"] == 1800
+        assert row["customer_email"] == "alice@example.com"
+
+    def test_both_execute_successfully(self, executed_sourcemapping_entities):
+        """Both entities report success."""
+        txn_result, sub_result, _, _, _, _ = executed_sourcemapping_entities
+        assert txn_result.success is True
+        assert sub_result.success is True
+
+    def test_runner_with_sourcemapping(self, sourcemapping_data):
+        """runner.run() discovers source_mapping from entity modules and applies it."""
+        from fyrnheim.engine.runner import run
+        from fyrnheim.primitives import hash_email
+
+        base_dir, txn_count, sub_count = sourcemapping_data
+        data_dir = base_dir / "data"
+        entities_dir = base_dir / "entities"
+        entities_dir.mkdir()
+        generated_dir = base_dir / "generated"
+
+        txn_code = f'''\
+from fyrnheim import (
+    ComputedColumn, DimensionLayer, Entity, Field,
+    LayersConfig, PrepLayer, SourceMapping, TableSource,
+)
+from fyrnheim.primitives import hash_email
+
+entity = Entity(
+    name="transactions",
+    description="Transactions with SourceMapping",
+    required_fields=[
+        Field(name="transaction_id", type="STRING"),
+        Field(name="customer_email", type="STRING"),
+        Field(name="amount_cents", type="INT64"),
+        Field(name="currency", type="STRING"),
+        Field(name="status", type="STRING"),
+        Field(name="created_at", type="TIMESTAMP"),
+    ],
+    core_computed=[
+        ComputedColumn(name="customer_email_hash", expression=hash_email("customer_email")),
+    ],
+    source=TableSource(
+        project="test", dataset="test", table="transactions",
+        duckdb_path="{data_dir / "transactions" / "*.parquet"}",
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_transactions"),
+        dimension=DimensionLayer(model_name="dim_transactions"),
+    ),
+)
+
+source_mapping = SourceMapping(
+    entity=entity,
+    source=entity.source,
+    field_mappings={{
+        "transaction_id": "id",
+        "customer_email": "customer_email",
+        "amount_cents": "subtotal",
+        "currency": "currency",
+        "status": "status",
+        "created_at": "created_at",
+    }},
+)
+'''
+        sub_code = f'''\
+from fyrnheim import (
+    ComputedColumn, DimensionLayer, Entity, Field,
+    LayersConfig, PrepLayer, SourceMapping, TableSource,
+)
+from fyrnheim.primitives import hash_email
+
+entity = Entity(
+    name="subscriptions",
+    description="Subscriptions with SourceMapping",
+    required_fields=[
+        Field(name="subscription_id", type="STRING"),
+        Field(name="user_email", type="STRING"),
+        Field(name="status", type="STRING"),
+        Field(name="created_at", type="TIMESTAMP"),
+    ],
+    core_computed=[
+        ComputedColumn(name="customer_email_hash", expression=hash_email("user_email")),
+        ComputedColumn(name="is_active", expression="t.status.isin(['active', 'on_trial'])"),
+        ComputedColumn(name="is_churned", expression="t.status.isin(['cancelled', 'expired', 'unpaid'])"),
+    ],
+    source=TableSource(
+        project="test", dataset="test", table="subscriptions",
+        duckdb_path="{data_dir / "subscriptions" / "*.parquet"}",
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_subscriptions"),
+        dimension=DimensionLayer(model_name="dim_subscriptions"),
+    ),
+)
+
+source_mapping = SourceMapping(
+    entity=entity,
+    source=entity.source,
+    field_mappings={{
+        "subscription_id": "id",
+        "user_email": "user_email",
+        "status": "status",
+        "created_at": "created_at",
+    }},
+)
+'''
+        (entities_dir / "transactions.py").write_text(txn_code)
+        (entities_dir / "subscriptions.py").write_text(sub_code)
+
+        result = run(entities_dir, data_dir, backend="duckdb", generated_dir=generated_dir)
+        assert result.ok is True
+        assert len(result.entities) == 2
+        assert all(e.status == "success" for e in result.entities)
+
+        # Verify entity field names in output (not source names)
+        txn_result = next(e for e in result.entities if e.entity_name == "transactions")
+        sub_result = next(e for e in result.entities if e.entity_name == "subscriptions")
+        assert txn_result.row_count == txn_count
+        assert sub_result.row_count == sub_count

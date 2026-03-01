@@ -1,0 +1,51 @@
+# Story: Define transactions entity with TableSource + SourceMapping
+
+id = "M006-E002-S001"
+parent = "M006-E002"
+title = "Define transactions entity with TableSource and SourceMapping field_mappings"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/transactions.py defining an Entity with required_fields for the entity
+schema and a SourceMapping that maps entity field names to Lemonsqueezy source columns
+(e.g. transaction_id -> id, amount_cents -> subtotal). The entity has 6 required fields
+(transaction_id, customer_email, amount_cents, currency, status, created_at) and 8
+optional fields. PrepLayer for staging and DimensionLayer with computed columns including
+customer_email_hash via hash_email. The dim table retains customer_email for the person
+identity graph match key.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/transactions.py exists and defines entity = Entity(...) with name='transactions'",
+    "Entity uses required_fields with 6 required fields: transaction_id (STRING), customer_email (STRING), amount_cents (INT64), currency (STRING), status (STRING), created_at (TIMESTAMP)",
+    "Entity has optional_fields for store_id, identifier, order_number, customer_id, customer_name, total, refunded, updated_at",
+    "Entity has a TableSource with project/dataset/table pointing to Lemonsqueezy transaction data",
+    "TableSource has duckdb_path for local parquet testing",
+    "SourceMapping field_mappings maps transaction_id->id and amount_cents->subtotal",
+    "Entity has PrepLayer with model_name='prep_transactions'",
+    "Entity has DimensionLayer with model_name='dim_transactions'",
+    "DimensionLayer has customer_email_hash computed column using hash_email primitive",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: metadata/entities/transactions.py and entities/entities/transactions.py",
+    "Key field_mappings: {'transaction_id': 'id', 'amount_cents': 'subtotal'} — most other fields map 1:1",
+    "SourceMapping direction: {entity_field_name: source_column_name}",
+    "Source: deepskydata.timodata_sources.transactions, duckdb_path: transactions/*.parquet",
+    "customer_email must be in dim table for person identity graph",
+    "Use fyrnheim.primitives.hash_email for customer_email_hash",
+    "Follow existing SourceMapping E2E pattern in test_e2e_ibis_executor.py",
+]
+
+key_files = [
+    "entities/transactions.py",
+    "src/fyrnheim/core/source_mapping.py",
+    "examples/entities/customers.py",
+    "entities/ghost_person.py",
+]

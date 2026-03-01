@@ -16,6 +16,7 @@ from fyrnheim.engine.resolution import _extract_dependencies, resolve_execution_
 
 if TYPE_CHECKING:
     from fyrnheim.core.entity import Entity
+    from fyrnheim.core.source_mapping import SourceMapping
     from fyrnheim.quality.results import CheckResult
 
 log = logging.getLogger("fyrnheim.engine")
@@ -126,6 +127,7 @@ def run_entity(
     auto_generate: bool = True,
     quality_checks: bool = True,
     _executor: IbisExecutor | None = None,
+    source_mapping: SourceMapping | None = None,
 ) -> EntityRunResult:
     """Execute a single entity through the pipeline.
 
@@ -152,7 +154,7 @@ def run_entity(
             from fyrnheim._generate import generate
 
             log.debug("Generating: %s_transforms.py", entity.name)
-            generate(entity, output_dir=gen_dir)
+            generate(entity, output_dir=gen_dir, source_mapping=source_mapping)
         except Exception as e:
             return EntityRunResult(
                 entity_name=entity.name,
@@ -327,6 +329,7 @@ def run(
                     auto_generate=auto_generate,
                     quality_checks=quality_checks,
                     _executor=executor,
+                    source_mapping=entity_info.source_mapping,
                 )
             except Exception as exc:
                 result = EntityRunResult(

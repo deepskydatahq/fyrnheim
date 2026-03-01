@@ -1,0 +1,51 @@
+# Story: E2E validation of transactions and subscriptions on DuckDB
+
+id = "M006-E002-S003"
+parent = "M006-E002"
+title = "E2E test both SourceMapping entities execute via fyr run on DuckDB"
+status = "complete"
+
+[outcome]
+description = """
+An E2E test creates sample parquet files with Lemonsqueezy source column names (id instead
+of transaction_id, subtotal instead of amount_cents), defines both entities with SourceMapping
+field_mappings, generates code, and executes on DuckDB. Verifies: dim tables have entity field
+names (not source column names), email columns present for identity graph, computed columns
+(email_hash, lifecycle flags) work, correct row counts, and runner.run() discovers and
+executes both entities.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "E2E test creates sample transactions parquet with source column names (id, subtotal, etc.)",
+    "E2E test creates sample subscriptions parquet with source column names (id, user_email, etc.)",
+    "Transactions output has entity field names (transaction_id, amount_cents) not source names (id, subtotal)",
+    "Subscriptions output has entity field names (subscription_id) not source names (id)",
+    "dim_transactions contains customer_email column for identity graph",
+    "dim_subscriptions contains user_email column for identity graph",
+    "dim_transactions has customer_email_hash computed column",
+    "dim_subscriptions has customer_email_hash and is_active/is_churned computed columns",
+    "Both entities have correct row counts matching input parquet",
+    "runner.run() discovers and executes both entities from directory",
+    "All existing E2E tests still pass — no regressions",
+]
+
+depends_on = ["M006-E002-S001", "M006-E002-S002"]
+
+[implementation]
+hints = [
+    "Follow existing TestE2ESourceMappingFieldMappings pattern in test_e2e_ibis_executor.py",
+    "Source parquet must use Lemonsqueezy column names (id, subtotal) to test rename",
+    "Verify both entity field names present AND source column names absent",
+    "Test lifecycle computed columns: is_active should be true for 'active'/'on_trial' status",
+    "Use runner.run() for the full pipeline test (discover + generate + execute)",
+    "Sample data: 3-5 rows each with realistic Lemonsqueezy data",
+]
+
+key_files = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "entities/transactions.py",
+    "entities/subscriptions.py",
+]

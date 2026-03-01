@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from fyrnheim.core.entity import Entity
+from fyrnheim.core.source_mapping import SourceMapping
 
 
 class EntityInfo(BaseModel):
@@ -21,6 +22,7 @@ class EntityInfo(BaseModel):
     entity: Entity
     path: Path
     layers: list[str]
+    source_mapping: SourceMapping | None = None
 
 
 class EntityRegistry:
@@ -81,11 +83,17 @@ class EntityRegistry:
             layer_names = ["prep", "dimension", "snapshot", "activity", "analytics"]
             layers = [ln for ln in layer_names if entity_obj.has_layer(ln)]
 
+            # Discover optional source_mapping from the module
+            sm = getattr(module, "source_mapping", None)
+            if sm is not None and not isinstance(sm, SourceMapping):
+                sm = None
+
             self._entities[name] = EntityInfo(
                 name=name,
                 entity=entity_obj,
                 path=entity_file,
                 layers=layers,
+                source_mapping=sm,
             )
 
     def get(self, name: str) -> EntityInfo | None:

@@ -242,3 +242,16 @@ uv run pytest --cov=fyrnheim            # With coverage
 **Work is not complete until pushed**
 - Always push to remote before ending a session
 - Create PRs for all feature branches
+
+---
+
+## Huginn Memory (Project-Scoped)
+
+This project is registered in Huginn Memory as `project="fyrnheim"`.
+
+When using MCP tools (`mcp__huginn-memory__*`), **always pass `project="fyrnheim"`** on these scoped tools:
+- **Memory:** remember, recall, decide, forget, summarize
+- **Tasks:** create_task, update_task, list_tasks, get_task, dismiss_task, surface_daily_candidates
+- **Agents:** get_agent_profile, update_agent_profile, log_agent_execution, get_agent_metrics, log_feedback, get_feedback_summary, get_content_calendar, update_content_calendar
+
+Global tools (daily entries, cashflow, time tracking, brainstorm, web distillation) do **not** take a project parameter.

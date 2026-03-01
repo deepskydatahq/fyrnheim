@@ -27,3 +27,6 @@ htmlcov/
 # Activity logs (automation scripts)
 logs/
 !logs/.gitkeep
+
+# User entity workspace (created by fyr init)
+entities/

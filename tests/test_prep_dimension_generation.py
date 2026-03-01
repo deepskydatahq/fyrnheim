@@ -38,7 +38,7 @@ def _make_entity(
         name=name,
         description=f"Test entity {name}",
         layers=LayersConfig(**layers_kwargs),
-        source=source or TableSource(project="p", dataset="d", table="t"),
+        source=source or TableSource(project="p", dataset="d", table="t", duckdb_path="data/t/*.parquet"),
         core_computed=core_computed,
     )
 
@@ -364,6 +364,7 @@ class TestFullModule:
                 project="p",
                 dataset="d",
                 table="users",
+                duckdb_path="data/users/*.parquet",
                 transforms=SourceTransforms(
                     renames=[Rename(from_name="id", to_name="user_id")],
                     type_casts=[TypeCast(field="created_at", target_type="timestamp")],

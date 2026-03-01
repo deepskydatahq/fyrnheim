@@ -32,7 +32,7 @@ def _make_snapshot_entity(
         name=name,
         description=f"Test entity {name}",
         layers=LayersConfig(**layers_kwargs),
-        source=TableSource(project="p", dataset="d", table=name),
+        source=TableSource(project="p", dataset="d", table=name, duckdb_path=f"data/{name}/*.parquet"),
     )
 
 

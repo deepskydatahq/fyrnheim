@@ -286,7 +286,7 @@ class TestRunEntity:
             name="x",
             description="test",
             layers=LayersConfig(prep=PrepLayer(model_name="prep_x")),
-            source=TableSource(project="p", dataset="d", table="x"),
+            source=TableSource(project="p", dataset="d", table="x", duckdb_path="data/x/*.parquet"),
         )
         result = run_entity(entity, tmp_path, backend="postgres")
         assert result.status == "error"

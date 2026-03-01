@@ -36,7 +36,7 @@ def simple_entity():
             project="warehouse",
             dataset="stripe",
             table="charges",
-            duckdb_path="~/timo-data/stripe/charges/*.parquet",
+            duckdb_path="data/charges/*.parquet",
         ),
     )
 
@@ -54,13 +54,13 @@ def union_entity():
                     project="warehouse",
                     dataset="hubspot",
                     table="contacts",
-                    duckdb_path="~/timo-data/hubspot/contacts/*.parquet",
+                    duckdb_path="data/contacts/*.parquet",
                 ),
                 TableSource(
                     project="warehouse",
                     dataset="stripe",
                     table="customers",
-                    duckdb_path="~/timo-data/stripe/customers/*.parquet",
+                    duckdb_path="data/customers/*.parquet",
                 ),
             ]
         ),
@@ -290,7 +290,7 @@ class TestSingleSourceGeneration:
     def test_uses_duckdb_path(self, simple_entity):
         gen = IbisCodeGenerator(simple_entity)
         code = gen._generate_source_functions()
-        assert "stripe/charges" in code
+        assert "data/charges" in code
 
 
 class TestUnionSourceGeneration:

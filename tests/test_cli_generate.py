@@ -11,7 +11,7 @@ from fyrnheim import Entity, LayersConfig, PrepLayer, TableSource
 entity = Entity(
     name="{name}",
     description="Test entity",
-    source=TableSource(project="p", dataset="d", table="t"),
+    source=TableSource(project="p", dataset="d", table="t", duckdb_path="data/t/*.parquet"),
     layers=LayersConfig(prep=PrepLayer(model_name="prep_{name}")),
 )
 """

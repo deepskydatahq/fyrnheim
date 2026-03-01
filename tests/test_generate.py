@@ -38,7 +38,7 @@ def sample_entity():
             project="warehouse",
             dataset="app",
             table="users",
-            duckdb_path="~/timo-data/users/*.parquet",
+            duckdb_path="data/users/*.parquet",
         ),
     )
 
@@ -50,7 +50,7 @@ def minimal_entity():
         name="events",
         description="Raw events",
         layers=LayersConfig(prep=PrepLayer(model_name="prep_events")),
-        source=TableSource(project="p", dataset="d", table="events"),
+        source=TableSource(project="p", dataset="d", table="events", duckdb_path="data/events/*.parquet"),
     )
 
 

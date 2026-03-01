@@ -106,10 +106,11 @@ import ibis
         rename = self._build_rename_suffix()
 
         # Build DuckDB path
-        if source.duckdb_path:
-            duckdb_path = source.duckdb_path
-        else:
-            duckdb_path = f"~/timo-data/{source.table}/**/*.parquet"
+        if not source.duckdb_path:
+            raise ValueError(
+                f"TableSource '{source.table}' requires duckdb_path for code generation"
+            )
+        duckdb_path = source.duckdb_path
 
         func = f'''
 def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
@@ -159,10 +160,11 @@ def source_{name}(source_{source.source_entity}: ibis.Table) -> ibis.Table:
             sub_name = f"source_{name}_{src_label}"
             sub_names.append(sub_name)
 
-            if sub_source.duckdb_path:
-                duckdb_path = sub_source.duckdb_path
-            else:
-                duckdb_path = f"~/timo-data/{sub_source.table}/**/*.parquet"
+            if not sub_source.duckdb_path:
+                raise ValueError(
+                    f"TableSource '{sub_source.table}' requires duckdb_path for code generation"
+                )
+            duckdb_path = sub_source.duckdb_path
 
             # Build per-source normalization suffix
             suffix = ""

@@ -3,7 +3,7 @@
 
 id = "M006"
 title = "Write timo-data-stack entity definitions and validate with fyr run on DuckDB"
-status = "draft"
+status = "complete"
 created = 2026-02-28
 depends_on = ["M005"]
 

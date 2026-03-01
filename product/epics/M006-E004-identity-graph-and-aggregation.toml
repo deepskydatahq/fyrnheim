@@ -3,7 +3,7 @@
 id = "M006-E004"
 parent = "M006"
 title = "Define person entity (identity graph) and account entity (aggregation from person)"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

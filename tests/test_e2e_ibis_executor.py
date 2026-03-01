@@ -2172,3 +2172,641 @@ entity = Entity(
         assert product_r.row_count == 3  # 2 youtube + 1 linkedin
         assert signals_r.row_count == 4  # 2 walker + 1 shortio + 1 ghost
         assert anon_r.row_count == 2  # 2 walker events
+
+
+# ---------------------------------------------------------------------------
+# M006-E004: Person identity graph (4 sources) + Account aggregation
+# ---------------------------------------------------------------------------
+
+
+class TestE2EPersonIdentityGraph4Sources:
+    """E2E tests for person entity with 4-source IdentityGraphConfig."""
+
+    @pytest.fixture()
+    def person_output(self, tmp_path):
+        """Full 4-source identity graph pipeline."""
+        from fyrnheim.core.source import (
+            DerivedSource,
+            IdentityGraphConfig,
+            IdentityGraphSource,
+        )
+
+        # --- Create parquet files for 4 source entities ---
+
+        # Ghost members (3 rows)
+        ghost_df = pd.DataFrame({
+            "id": ["g1", "g2", "g3"],
+            "email": ["alice@acme.com", "bob@acme.com", "carol@gmail.com"],
+            "status": ["paid", "free", "free"],
+            "name": ["Alice Ghost", "Bob Ghost", "Carol Ghost"],
+            "created_at": pd.to_datetime(["2024-01-01", "2024-02-01", "2024-03-01"]),
+            "email_disabled": [False, False, True],
+        })
+        ghost_path = tmp_path / "ghost_members.parquet"
+        ghost_df.to_parquet(ghost_path, index=False)
+
+        # MailerLite subscribers (2 rows)
+        mailerlite_df = pd.DataFrame({
+            "id": ["m1", "m2"],
+            "email": ["alice@acme.com", "dave@bigcorp.com"],
+            "status": ["active", "active"],
+            "subscribed_at": pd.to_datetime(["2024-01-15", "2024-04-01"]),
+            "source": ["website", "api"],
+        })
+        mailerlite_path = tmp_path / "mailerlite_subscribers.parquet"
+        mailerlite_df.to_parquet(mailerlite_path, index=False)
+
+        # Transactions (2 rows) — source columns (before SourceMapping rename)
+        txn_df = pd.DataFrame({
+            "id": ["t1", "t2"],
+            "customer_email": ["alice@acme.com", "eve@bigcorp.com"],
+            "subtotal": [9900, 4900],
+            "currency": ["USD", "USD"],
+            "status": ["paid", "paid"],
+            "created_at": pd.to_datetime(["2024-01-10", "2024-05-01"]),
+            "customer_name": ["Alice Txn", "Eve Txn"],
+        })
+        txn_path = tmp_path / "transactions.parquet"
+        txn_df.to_parquet(txn_path, index=False)
+
+        # Subscriptions (2 rows) — source columns (before SourceMapping rename)
+        sub_df = pd.DataFrame({
+            "id": ["s1", "s2"],
+            "user_email": ["bob@acme.com", "eve@bigcorp.com"],
+            "status": ["active", "cancelled"],
+            "created_at": pd.to_datetime(["2024-02-15", "2024-04-15"]),
+            "user_name": ["Bob Sub", "Eve Sub"],
+        })
+        sub_path = tmp_path / "subscriptions.parquet"
+        sub_df.to_parquet(sub_path, index=False)
+
+        # --- Define all 4 source entities ---
+        from fyrnheim.primitives import hash_email
+
+        ghost_entity = Entity(
+            name="ghost_person",
+            description="Ghost members",
+            source=TableSource(
+                project="test", dataset="test", table="ghost_members",
+                duckdb_path=str(ghost_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_ghost_person"),
+                dimension=DimensionLayer(
+                    model_name="dim_ghost_person",
+                    computed_columns=[
+                        ComputedColumn(name="email_hash", expression=hash_email("email")),
+                    ],
+                ),
+            ),
+        )
+
+        mailerlite_entity = Entity(
+            name="mailerlite_person",
+            description="MailerLite subscribers",
+            source=TableSource(
+                project="test", dataset="test", table="mailerlite_subscribers",
+                duckdb_path=str(mailerlite_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_mailerlite_person"),
+                dimension=DimensionLayer(
+                    model_name="dim_mailerlite_person",
+                    computed_columns=[
+                        ComputedColumn(name="email_hash", expression=hash_email("email")),
+                        ComputedColumn(name="created_at", expression="t.subscribed_at"),
+                    ],
+                ),
+            ),
+        )
+
+        txn_entity = Entity(
+            name="transactions",
+            description="Transactions",
+            required_fields=[
+                Field(name="transaction_id", type="STRING"),
+                Field(name="customer_email", type="STRING"),
+                Field(name="amount_cents", type="INT64"),
+                Field(name="currency", type="STRING"),
+                Field(name="status", type="STRING"),
+                Field(name="created_at", type="TIMESTAMP"),
+            ],
+            optional_fields=[
+                Field(name="customer_name", type="STRING"),
+            ],
+            core_computed=[
+                ComputedColumn(name="customer_email_hash", expression=hash_email("customer_email")),
+            ],
+            source=TableSource(
+                project="test", dataset="test", table="transactions",
+                duckdb_path=str(txn_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_transactions"),
+                dimension=DimensionLayer(model_name="dim_transactions"),
+            ),
+        )
+        txn_mapping = SourceMapping(
+            entity=txn_entity, source=txn_entity.source,
+            field_mappings={
+                "transaction_id": "id", "customer_email": "customer_email",
+                "amount_cents": "subtotal", "currency": "currency",
+                "status": "status", "created_at": "created_at",
+                "customer_name": "customer_name",
+            },
+        )
+
+        sub_entity = Entity(
+            name="subscriptions",
+            description="Subscriptions",
+            required_fields=[
+                Field(name="subscription_id", type="STRING"),
+                Field(name="user_email", type="STRING"),
+                Field(name="status", type="STRING"),
+                Field(name="created_at", type="TIMESTAMP"),
+            ],
+            optional_fields=[
+                Field(name="user_name", type="STRING"),
+            ],
+            core_computed=[
+                ComputedColumn(name="customer_email_hash", expression=hash_email("user_email")),
+            ],
+            source=TableSource(
+                project="test", dataset="test", table="subscriptions",
+                duckdb_path=str(sub_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_subscriptions"),
+                dimension=DimensionLayer(model_name="dim_subscriptions"),
+            ),
+        )
+        sub_mapping = SourceMapping(
+            entity=sub_entity, source=sub_entity.source,
+            field_mappings={
+                "subscription_id": "id", "user_email": "user_email",
+                "status": "status", "created_at": "created_at",
+                "user_name": "user_name",
+            },
+        )
+
+        # --- Person entity (identity graph) ---
+        _personal = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"]
+        _pl = repr(_personal)
+
+        person_entity = Entity(
+            name="person",
+            description="Unified person",
+            source=DerivedSource(
+                identity_graph="person_graph",
+                identity_graph_config=IdentityGraphConfig(
+                    match_key="email_hash",
+                    sources=[
+                        IdentityGraphSource(
+                            name="ghost_person", entity="ghost_person",
+                            match_key_field="email_hash",
+                            fields={"email": "email", "name": "name"},
+                            id_field="id", date_field="created_at",
+                        ),
+                        IdentityGraphSource(
+                            name="mailerlite_person", entity="mailerlite_person",
+                            match_key_field="email_hash",
+                            fields={"email": "email"},
+                            id_field="id", date_field="created_at",
+                        ),
+                        IdentityGraphSource(
+                            name="transactions", entity="transactions",
+                            match_key_field="customer_email_hash",
+                            fields={"email": "customer_email", "name": "customer_name"},
+                            id_field="transaction_id", date_field="created_at",
+                        ),
+                        IdentityGraphSource(
+                            name="subscriptions", entity="subscriptions",
+                            match_key_field="customer_email_hash",
+                            fields={"email": "user_email", "name": "user_name"},
+                            id_field="subscription_id", date_field="created_at",
+                        ),
+                    ],
+                    priority=["transactions", "subscriptions", "ghost_person", "mailerlite_person"],
+                ),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_person"),
+                dimension=DimensionLayer(
+                    model_name="dim_person",
+                    computed_columns=[
+                        ComputedColumn(name="person_id", expression="t.email_hash"),
+                        ComputedColumn(name="email_domain", expression='t.email.split("@")[1]'),
+                        ComputedColumn(
+                            name="is_personal_email",
+                            expression=f't.email.split("@")[1].isin({_pl})',
+                        ),
+                        ComputedColumn(
+                            name="account_id",
+                            expression=(
+                                f'ibis.ifelse(t.email.split("@")[1].isin({_pl}), '
+                                f'ibis.literal(None).cast("string"), '
+                                f't.email.split("@")[1].hash().cast("string"))'
+                            ),
+                        ),
+                        ComputedColumn(
+                            name="created_at",
+                            expression=(
+                                "ibis.coalesce("
+                                "t.first_seen_transactions, "
+                                "t.first_seen_subscriptions, "
+                                "t.first_seen_ghost_person, "
+                                "t.first_seen_mailerlite_person)"
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+        # --- Generate and execute ---
+        generated_dir = tmp_path / "generated"
+        generate(ghost_entity, output_dir=generated_dir)
+        generate(mailerlite_entity, output_dir=generated_dir)
+        generate(txn_entity, output_dir=generated_dir, source_mapping=txn_mapping)
+        generate(sub_entity, output_dir=generated_dir, source_mapping=sub_mapping)
+        generate(person_entity, output_dir=generated_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("ghost_person")
+            executor.execute("mailerlite_person")
+            executor.execute("transactions")
+            executor.execute("subscriptions")
+            result = executor.execute("person", entity=person_entity)
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        return result, df
+
+    def test_person_row_count(self, person_output):
+        """5 unique persons from 4 sources with overlaps."""
+        result, df = person_output
+        # alice@acme.com: ghost + mailerlite + transactions (3 sources, 1 person)
+        # bob@acme.com: ghost + subscriptions (2 sources, 1 person)
+        # carol@gmail.com: ghost only (1 source, 1 person)
+        # dave@bigcorp.com: mailerlite only (1 source, 1 person)
+        # eve@bigcorp.com: transactions + subscriptions (2 sources, 1 person)
+        assert result.row_count == 5
+
+    def test_person_source_flags(self, person_output):
+        """Source flags are correct for each person."""
+        _, df = person_output
+
+        alice = df[df["email"] == "alice@acme.com"].iloc[0]
+        assert bool(alice["is_ghost_person"]) is True
+        assert bool(alice["is_mailerlite_person"]) is True
+        assert bool(alice["is_transactions"]) is True
+        assert bool(alice["is_subscriptions"]) is False
+
+        bob = df[df["email"] == "bob@acme.com"].iloc[0]
+        assert bool(bob["is_ghost_person"]) is True
+        assert bool(bob["is_subscriptions"]) is True
+        assert bool(bob["is_transactions"]) is False
+
+        eve = df[df["email"] == "eve@bigcorp.com"].iloc[0]
+        assert bool(eve["is_transactions"]) is True
+        assert bool(eve["is_subscriptions"]) is True
+        assert bool(eve["is_ghost_person"]) is False
+
+        carol = df[df["email"] == "carol@gmail.com"].iloc[0]
+        assert bool(carol["is_ghost_person"]) is True
+        assert bool(carol["is_mailerlite_person"]) is False
+
+    def test_person_priority_coalesce(self, person_output):
+        """Shared fields resolved from highest-priority source."""
+        _, df = person_output
+
+        # alice: in transactions (priority 1) + ghost + mailerlite
+        # name should come from transactions (highest priority)
+        alice = df[df["email"] == "alice@acme.com"].iloc[0]
+        assert alice["name"] == "Alice Txn"
+
+        # bob: in subscriptions (priority 2) + ghost
+        # name should come from subscriptions
+        bob = df[df["email"] == "bob@acme.com"].iloc[0]
+        assert bob["name"] == "Bob Sub"
+
+        # carol: only in ghost
+        carol = df[df["email"] == "carol@gmail.com"].iloc[0]
+        assert carol["name"] == "Carol Ghost"
+
+    def test_person_source_ids(self, person_output):
+        """Source IDs preserved, NULL when not from that source."""
+        _, df = person_output
+
+        alice = df[df["email"] == "alice@acme.com"].iloc[0]
+        assert alice["ghost_person_id"] == "g1"
+        assert alice["transactions_id"] == "t1"
+        assert pd.isna(alice["subscriptions_id"])
+
+        eve = df[df["email"] == "eve@bigcorp.com"].iloc[0]
+        assert eve["transactions_id"] == "t2"
+        assert eve["subscriptions_id"] == "s2"
+        assert pd.isna(eve["ghost_person_id"])
+
+    def test_person_computed_columns(self, person_output):
+        """person_id, email_domain, is_personal_email, account_id computed correctly."""
+        _, df = person_output
+
+        assert "person_id" in df.columns
+        assert "email_domain" in df.columns
+        assert "is_personal_email" in df.columns
+        assert "account_id" in df.columns
+        assert "created_at" in df.columns
+
+        # carol@gmail.com → personal, account_id should be null
+        carol = df[df["email"] == "carol@gmail.com"].iloc[0]
+        assert carol["email_domain"] == "gmail.com"
+        assert bool(carol["is_personal_email"]) is True
+        assert pd.isna(carol["account_id"])
+
+        # alice@acme.com → business, account_id should be non-null hash
+        alice = df[df["email"] == "alice@acme.com"].iloc[0]
+        assert alice["email_domain"] == "acme.com"
+        assert bool(alice["is_personal_email"]) is False
+        assert alice["account_id"] is not None and not pd.isna(alice["account_id"])
+
+        # bob and alice share acme.com → same account_id
+        bob = df[df["email"] == "bob@acme.com"].iloc[0]
+        assert alice["account_id"] == bob["account_id"]
+
+
+class TestE2EAccountAggregationFromPerson:
+    """E2E test: account entity aggregating from 4-source person identity graph."""
+
+    @pytest.fixture()
+    def account_output(self, tmp_path):
+        """Full 3-tier chain: 4 leaf entities → person → account."""
+        from fyrnheim.core.source import (
+            DerivedSource,
+            IdentityGraphConfig,
+            IdentityGraphSource,
+        )
+        from fyrnheim.primitives import hash_email
+
+        # --- Same parquet data as person test ---
+        ghost_df = pd.DataFrame({
+            "id": ["g1", "g2"],
+            "email": ["alice@acme.com", "bob@acme.com"],
+            "status": ["paid", "free"],
+            "name": ["Alice G", "Bob G"],
+            "created_at": pd.to_datetime(["2024-01-01", "2024-02-01"]),
+            "email_disabled": [False, False],
+        })
+        ghost_path = tmp_path / "ghost.parquet"
+        ghost_df.to_parquet(ghost_path, index=False)
+
+        mailerlite_df = pd.DataFrame({
+            "id": ["m1"],
+            "email": ["carol@bigcorp.com"],
+            "status": ["active"],
+            "subscribed_at": pd.to_datetime(["2024-03-01"]),
+            "source": ["website"],
+        })
+        ml_path = tmp_path / "mailerlite.parquet"
+        mailerlite_df.to_parquet(ml_path, index=False)
+
+        txn_df = pd.DataFrame({
+            "id": ["t1"],
+            "customer_email": ["alice@acme.com"],
+            "subtotal": [9900],
+            "currency": ["USD"],
+            "status": ["paid"],
+            "created_at": pd.to_datetime(["2024-01-10"]),
+            "customer_name": ["Alice T"],
+        })
+        txn_path = tmp_path / "txn.parquet"
+        txn_df.to_parquet(txn_path, index=False)
+
+        sub_df = pd.DataFrame({
+            "id": ["s1"],
+            "user_email": ["carol@bigcorp.com"],
+            "status": ["active"],
+            "created_at": pd.to_datetime(["2024-03-15"]),
+            "user_name": ["Carol S"],
+        })
+        sub_path = tmp_path / "sub.parquet"
+        sub_df.to_parquet(sub_path, index=False)
+
+        # --- Define entities ---
+        ghost_entity = Entity(
+            name="ghost_person", description="Ghost",
+            source=TableSource(project="t", dataset="t", table="ghost",
+                               duckdb_path=str(ghost_path)),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_ghost_person"),
+                dimension=DimensionLayer(model_name="dim_ghost_person",
+                    computed_columns=[
+                        ComputedColumn(name="email_hash", expression=hash_email("email")),
+                    ]),
+            ),
+        )
+
+        ml_entity = Entity(
+            name="mailerlite_person", description="MailerLite",
+            source=TableSource(project="t", dataset="t", table="mailerlite",
+                               duckdb_path=str(ml_path)),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_mailerlite_person"),
+                dimension=DimensionLayer(model_name="dim_mailerlite_person",
+                    computed_columns=[
+                        ComputedColumn(name="email_hash", expression=hash_email("email")),
+                        ComputedColumn(name="created_at", expression="t.subscribed_at"),
+                    ]),
+            ),
+        )
+
+        txn_entity = Entity(
+            name="transactions", description="Txn",
+            required_fields=[
+                Field(name="transaction_id", type="STRING"),
+                Field(name="customer_email", type="STRING"),
+                Field(name="amount_cents", type="INT64"),
+                Field(name="currency", type="STRING"),
+                Field(name="status", type="STRING"),
+                Field(name="created_at", type="TIMESTAMP"),
+            ],
+            optional_fields=[Field(name="customer_name", type="STRING")],
+            core_computed=[
+                ComputedColumn(name="customer_email_hash", expression=hash_email("customer_email")),
+            ],
+            source=TableSource(project="t", dataset="t", table="txn",
+                               duckdb_path=str(txn_path)),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_transactions"),
+                dimension=DimensionLayer(model_name="dim_transactions"),
+            ),
+        )
+        txn_mapping = SourceMapping(
+            entity=txn_entity, source=txn_entity.source,
+            field_mappings={
+                "transaction_id": "id", "customer_email": "customer_email",
+                "amount_cents": "subtotal", "currency": "currency",
+                "status": "status", "created_at": "created_at",
+                "customer_name": "customer_name",
+            },
+        )
+
+        sub_entity = Entity(
+            name="subscriptions", description="Sub",
+            required_fields=[
+                Field(name="subscription_id", type="STRING"),
+                Field(name="user_email", type="STRING"),
+                Field(name="status", type="STRING"),
+                Field(name="created_at", type="TIMESTAMP"),
+            ],
+            optional_fields=[Field(name="user_name", type="STRING")],
+            core_computed=[
+                ComputedColumn(name="customer_email_hash", expression=hash_email("user_email")),
+            ],
+            source=TableSource(project="t", dataset="t", table="sub",
+                               duckdb_path=str(sub_path)),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_subscriptions"),
+                dimension=DimensionLayer(model_name="dim_subscriptions"),
+            ),
+        )
+        sub_mapping = SourceMapping(
+            entity=sub_entity, source=sub_entity.source,
+            field_mappings={
+                "subscription_id": "id", "user_email": "user_email",
+                "status": "status", "created_at": "created_at",
+                "user_name": "user_name",
+            },
+        )
+
+        # --- Person + Account entities ---
+        person_entity = Entity(
+            name="person", description="Person",
+            source=DerivedSource(
+                identity_graph="person_graph",
+                identity_graph_config=IdentityGraphConfig(
+                    match_key="email_hash",
+                    sources=[
+                        IdentityGraphSource(name="ghost_person", entity="ghost_person",
+                            match_key_field="email_hash",
+                            fields={"email": "email", "name": "name"},
+                            id_field="id", date_field="created_at"),
+                        IdentityGraphSource(name="mailerlite_person", entity="mailerlite_person",
+                            match_key_field="email_hash",
+                            fields={"email": "email"},
+                            id_field="id", date_field="created_at"),
+                        IdentityGraphSource(name="transactions", entity="transactions",
+                            match_key_field="customer_email_hash",
+                            fields={"email": "customer_email", "name": "customer_name"},
+                            id_field="transaction_id", date_field="created_at"),
+                        IdentityGraphSource(name="subscriptions", entity="subscriptions",
+                            match_key_field="customer_email_hash",
+                            fields={"email": "user_email", "name": "user_name"},
+                            id_field="subscription_id", date_field="created_at"),
+                    ],
+                    priority=["transactions", "subscriptions", "ghost_person", "mailerlite_person"],
+                ),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_person"),
+                dimension=DimensionLayer(model_name="dim_person",
+                    computed_columns=[
+                        ComputedColumn(name="person_id", expression="t.email_hash"),
+                        ComputedColumn(name="email_domain", expression='t.email.split("@")[1]'),
+                        ComputedColumn(name="is_personal_email",
+                            expression='t.email.split("@")[1].isin(["gmail.com"])'),
+                        ComputedColumn(name="account_id",
+                            expression=(
+                                'ibis.ifelse(t.email.split("@")[1].isin(["gmail.com"]), '
+                                'ibis.literal(None).cast("string"), '
+                                't.email.split("@")[1].hash().cast("string"))'
+                            )),
+                        ComputedColumn(name="created_at",
+                            expression=(
+                                "ibis.coalesce(t.first_seen_transactions, "
+                                "t.first_seen_subscriptions, t.first_seen_ghost_person, "
+                                "t.first_seen_mailerlite_person)"
+                            )),
+                    ]),
+            ),
+        )
+
+        from fyrnheim.components.computed_column import ComputedColumn as CC
+
+        account_entity = Entity(
+            name="account", description="Account",
+            source=AggregationSource(
+                source_entity="person",
+                group_by_column="account_id",
+                filter_expression="t.account_id.notnull()",
+                aggregations=[
+                    CC(name="email_domain", expression="t.email_domain.arbitrary()"),
+                    CC(name="num_persons", expression="t.person_id.nunique()"),
+                    CC(name="has_ghost_person", expression="t.is_ghost_person.any()"),
+                    CC(name="has_transactions", expression="t.is_transactions.any()"),
+                    CC(name="first_seen_date", expression="t.created_at.min()"),
+                ],
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_account"),
+                dimension=DimensionLayer(model_name="dim_account"),
+            ),
+        )
+
+        # --- Generate and execute full chain ---
+        generated_dir = tmp_path / "generated"
+        generate(ghost_entity, output_dir=generated_dir)
+        generate(ml_entity, output_dir=generated_dir)
+        generate(txn_entity, output_dir=generated_dir, source_mapping=txn_mapping)
+        generate(sub_entity, output_dir=generated_dir, source_mapping=sub_mapping)
+        generate(person_entity, output_dir=generated_dir)
+        generate(account_entity, output_dir=generated_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("ghost_person")
+            executor.execute("mailerlite_person")
+            executor.execute("transactions")
+            executor.execute("subscriptions")
+            executor.execute("person", entity=person_entity)
+            result = executor.execute("account", entity=account_entity)
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        return result, df
+
+    def test_account_row_count(self, account_output):
+        """2 business accounts: acme.com (alice + bob) and bigcorp.com (carol)."""
+        result, df = account_output
+        # alice@acme.com, bob@acme.com → 1 acme account
+        # carol@bigcorp.com → 1 bigcorp account
+        # No gmail.com persons (none in this test data)
+        assert result.row_count == 2
+
+    def test_account_num_persons(self, account_output):
+        """Person count per account is correct."""
+        _, df = account_output
+
+        # Find account rows by email_domain
+        acme = df[df["email_domain"] == "acme.com"].iloc[0]
+        assert acme["num_persons"] == 2  # alice + bob
+
+        bigcorp = df[df["email_domain"] == "bigcorp.com"].iloc[0]
+        assert bigcorp["num_persons"] == 1  # carol
+
+    def test_account_source_flags(self, account_output):
+        """has_* source presence flags correct."""
+        _, df = account_output
+
+        acme = df[df["email_domain"] == "acme.com"].iloc[0]
+        assert bool(acme["has_ghost_person"]) is True  # alice + bob are ghost members
+        assert bool(acme["has_transactions"]) is True  # alice has a transaction
+
+        bigcorp = df[df["email_domain"] == "bigcorp.com"].iloc[0]
+        assert bool(bigcorp["has_ghost_person"]) is False  # carol not in ghost
+
+    def test_account_columns(self, account_output):
+        """Output has expected columns."""
+        _, df = account_output
+        expected = {"account_id", "email_domain", "num_persons", "has_ghost_person",
+                    "has_transactions", "first_seen_date"}
+        assert expected.issubset(set(df.columns))

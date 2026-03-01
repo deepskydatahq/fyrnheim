@@ -1,0 +1,55 @@
+# Story: Define account entity with AggregationSource from person
+
+id = "M006-E004-S002"
+parent = "M006-E004"
+title = "Define account entity with AggregationSource grouping dim_person by account_id"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/account.py defining an Entity with AggregationSource from the person
+entity, GROUP BY account_id. Filters out NULL account_ids (personal email domains).
+Aggregations use Ibis expressions: num_persons (count distinct person_id),
+email_domain (any_value), has_{source} flags (boolean OR via any()), first_seen_date
+(min created_at), last_activity_date (max). DimensionLayer is passthrough — the
+aggregation itself produces the final schema. Runner resolves the dependency chain:
+leaf entities → person → account.
+"""
+
+depends_on = ["M006-E004-S001"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/account.py exists and defines entity = Entity(...) with name='account'",
+    "Entity uses AggregationSource with source_entity='person'",
+    "AggregationSource has group_by_column='account_id'",
+    "AggregationSource has filter_expression filtering out NULL account_ids",
+    "Aggregations include num_persons (count distinct person_id)",
+    "Aggregations include email_domain (any_value/arbitrary)",
+    "Aggregations include has_ghost_person / has_transactions etc. (boolean any)",
+    "Aggregations include first_seen_date (min of created_at)",
+    "Entity has PrepLayer and DimensionLayer",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: entities/entities/account.py",
+    "AggregationSource(source_entity='person', group_by_column='account_id')",
+    "filter_expression: 't.account_id.notnull()' to exclude personal emails",
+    "num_persons: t.person_id.nunique()",
+    "email_domain: t.email_domain.arbitrary()",
+    "has_ghost_person: t.is_ghost_person.any() — uses source flags from person dim",
+    "has_transactions: t.is_transactions.any()",
+    "first_seen_date: t.created_at.min()",
+    "Use Ibis expressions, NOT raw SQL strings",
+    "No activity or analytics layer — dim only for M006",
+]
+
+key_files = [
+    "entities/account.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]

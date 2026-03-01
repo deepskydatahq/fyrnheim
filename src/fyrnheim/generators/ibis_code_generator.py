@@ -338,6 +338,11 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
 
             lines.append(",\n".join(select_items) + ",")
             lines.append(f"    )")
+
+            # Cache intermediate results to break Ibis expression chain
+            # (avoids IntegrityError on cascading joins with 3+ sources)
+            if i < len(ig_sources) - 1:
+                lines.append(f"    result = result.cache()")
         lines.append("")
 
         # PriorityCoalesce

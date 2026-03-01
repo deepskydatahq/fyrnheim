@@ -1,0 +1,59 @@
+# Story: E2E validation of person identity graph + account aggregation on DuckDB
+
+id = "M006-E004-S003"
+parent = "M006-E004"
+title = "E2E test person identity graph (4 sources) and account aggregation on DuckDB with sample parquet data"
+status = "complete"
+
+[outcome]
+description = """
+An E2E test creates sample parquet files for all 4 person sources (ghost_members,
+mailerlite_subscribers, transactions, subscriptions) with overlapping emails.
+Person identity graph: FULL OUTER JOIN merges 4 sources on email_hash, deduplicates
+to unique persons, PriorityCoalesce resolves name, source flags are correct.
+Account aggregation: groups by account_id (business email domain hash), correct
+person count per account, source presence flags aggregated correctly.
+Runner.run() discovers all entities and executes the full 3-tier dependency chain:
+leaf entities → person → account.
+"""
+
+depends_on = ["M006-E004-S001", "M006-E004-S002"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "E2E test creates sample parquets for ghost_members, mailerlite_subscribers, transactions, subscriptions",
+    "Test data has overlapping emails across sources (at least 2 persons appear in multiple sources)",
+    "Test data has at least one person unique to a single source",
+    "person dim table row count equals unique email count across all 4 sources",
+    "person dim table has is_ghost_person, is_mailerlite_person, is_transactions, is_subscriptions flags",
+    "Source flags are correct: True when person appears in that source, False otherwise",
+    "person dim table has person_id, email_domain, account_id computed columns",
+    "PriorityCoalesce resolves shared fields (name) from highest-priority source",
+    "account dim table row count equals unique business email domains",
+    "account aggregation has num_persons with correct count per account",
+    "runner.run() discovers and executes all entities in correct dependency order",
+    "Full 3-tier chain works: leaf → person → account without errors",
+    "All existing E2E tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Follow existing E2E test patterns in test_e2e_ibis_executor.py",
+    "Ghost parquet: id, email, status, name, created_at, email_disabled",
+    "MailerLite parquet: id, email, status, subscribed_at, source",
+    "Transactions parquet: id, customer_email, subtotal, currency, status, created_at",
+    "Subscriptions parquet: id, user_email, status, created_at",
+    "Overlap: alice@acme.com in ghost + transactions (tests dedup + priority coalesce)",
+    "Unique: carol@personal.gmail.com only in mailerlite (tests NULL account_id)",
+    "Business emails: acme.com (tests account_id hash + account aggregation)",
+    "Runner test writes entity files as strings (like TestE2ESourceMappingEntities pattern)",
+]
+
+key_files = [
+    "tests/test_e2e_ibis_executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "entities/person.py",
+    "entities/account.py",
+]

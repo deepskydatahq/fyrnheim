@@ -1,0 +1,57 @@
+# Story: Define person entity with IdentityGraphConfig (4 sources)
+
+id = "M006-E004-S001"
+parent = "M006-E004"
+title = "Define person entity with DerivedSource merging ghost_person, mailerlite_person, transactions, subscriptions"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/person.py defining an Entity with DerivedSource and IdentityGraphConfig
+that merges 4 source entities via cascading FULL OUTER JOIN on email_hash. Each source
+maps its email hash column (email_hash for ghost/mailerlite, customer_email_hash for
+transactions/subscriptions) to the unified match key. Shared fields (email, name) are
+resolved by PriorityCoalesce with transactions > subscriptions > ghost > mailerlite.
+Auto-generated columns: is_{source} flags, {source}_id, first_seen_{source} dates.
+DimensionLayer has computed columns for person_id (alias for email_hash), email_domain,
+is_personal_email, and account_id (hash of domain for business emails, NULL for personal).
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/person.py exists and defines entity = Entity(...) with name='person'",
+    "Entity uses DerivedSource with identity_graph_config containing 4 IdentityGraphSource entries",
+    "Match key is 'email_hash' — ghost_person/mailerlite_person use match_key_field='email_hash'",
+    "Transactions/subscriptions use match_key_field='customer_email_hash'",
+    "Priority order: transactions > subscriptions > ghost_person > mailerlite_person (or similar reasonable order)",
+    "Shared fields include 'email' mapped from each source's email column",
+    "Shared fields include 'name' mapped from sources that have it",
+    "Each source has id_field and date_field configured for auto-columns",
+    "DimensionLayer has person_id computed column (alias for email_hash)",
+    "DimensionLayer has email_domain computed column (extract domain from email)",
+    "DimensionLayer has account_id computed column (NULL for personal emails, hash of domain for business)",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: entities/identity_graphs/person_identity_graph.py",
+    "ghost_person: match_key_field='email_hash', fields={'email': 'email', 'name': 'name'}, id_field='id', date_field='created_at'",
+    "mailerlite_person: match_key_field='email_hash', fields={'email': 'email'}, id_field='id', date_field='created_at'",
+    "transactions: match_key_field='customer_email_hash', fields={'email': 'customer_email'}, id_field='transaction_id', date_field='created_at'",
+    "subscriptions: match_key_field='customer_email_hash', fields={'email': 'user_email'}, id_field='subscription_id', date_field='created_at'",
+    "person_id = t.email_hash (simple alias)",
+    "email_domain = use extract_email_domain primitive on 'email' field",
+    "is_personal_email = use is_personal_email_domain primitive",
+    "account_id = use account_id_from_domain primitive",
+    "No activity or analytics layer — dim only for M006",
+]
+
+key_files = [
+    "entities/person.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/primitives/strings.py",
+]

@@ -1,0 +1,51 @@
+# Story: Define anon entity with TableSource (Walker sessions)
+
+id = "M006-E003-S003"
+parent = "M006-E003"
+title = "Define anon entity with TableSource for Walker anonymous visitor sessions"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/anon.py defining an Entity with TableSource (NOT UnionSource — the actual
+timo-data-stack implementation uses a single Walker source). The entity tracks anonymous
+visitor sessions with computed columns for anon_id (hash), source literal, channel_source,
+and channel_category (categorize_contains on referrer for seo/ai/social/newsletter/direct).
+Analytics layer is out of scope for M006 — only prep + dim layers.
+
+NOTE: The epic originally described anon as UnionSource, but the timo-data-stack source code
+shows it's a single Walker source. This story follows the actual implementation.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/anon.py exists and defines entity = Entity(...) with name='anon'",
+    "Entity uses TableSource pointing to Walker events parquet data",
+    "TableSource has duckdb_path for local parquet testing",
+    "Entity has PrepLayer with model_name='prep_anon'",
+    "Entity has DimensionLayer with model_name='dim_anon'",
+    "DimensionLayer has anon_id computed column (hash of source + session_id)",
+    "DimensionLayer has source computed column with literal 'walker'",
+    "DimensionLayer has channel_category computed column using categorize_contains on referrer",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: entities/entities/anon.py",
+    "Single source: Walker events from walker_timodechau_com.events",
+    "Key fields: session_id, timestamp, referrer, event_name, page_path",
+    "anon_id: ('walker' + t.session_id).hash().cast('string')",
+    "source: ibis.literal('walker')",
+    "channel_category: use fyrnheim.primitives.categorize_contains on referrer field",
+    "Channel categories: social_linkedin, social_youtube, newsletter, seo, ai, direct",
+    "Analytics layer is OUT OF SCOPE for M006",
+]
+
+key_files = [
+    "entities/anon.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/primitives/categorization.py",
+]

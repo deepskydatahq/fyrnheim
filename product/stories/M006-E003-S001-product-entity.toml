@@ -1,0 +1,47 @@
+# Story: Define product entity with UnionSource (YouTube + LinkedIn)
+
+id = "M006-E003-S001"
+parent = "M006-E003"
+title = "Define product entity with UnionSource unioning YouTube videos and LinkedIn posts"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/product.py defining an Entity with UnionSource combining YouTube videos
+and LinkedIn (AuthoredUp) posts into a unified product table. Each sub-source has
+field_mappings to normalize different column names to a common schema (e.g. video_id->product_id,
+impressions->view_count, text->title) and literal_columns to tag product_type ('video'/'post')
+and source_platform ('youtube'/'linkedin'). PrepLayer for staging and DimensionLayer for
+the unified product dimension. Row count should equal sum of both sub-sources.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/product.py exists and defines entity = Entity(...) with name='product'",
+    "Entity uses UnionSource with 2 TableSource sub-sources (youtube, linkedin)",
+    "YouTube sub-source has field_mappings normalizing video_id->product_id, view_count, like_count, comment_count to common schema",
+    "LinkedIn sub-source has field_mappings normalizing post_id->product_id, text->title, impressions->view_count, reactions->like_count, comments->comment_count, shares->share_count",
+    "YouTube sub-source has literal_columns: product_type='video', source_platform='youtube'",
+    "LinkedIn sub-source has literal_columns: product_type='post', source_platform='linkedin'",
+    "Entity has PrepLayer with model_name='prep_product'",
+    "Entity has DimensionLayer with model_name='dim_product'",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: entities/entities/product.py and metadata/entities/product.py",
+    "YouTube fields: video_id, title, published_at, view_count, like_count, comment_count",
+    "LinkedIn fields: post_id, text (->title), published_at, impressions (->view_count), reactions (->like_count), comments (->comment_count), shares (->share_count)",
+    "UnionSource field_mappings direction for sub-sources: {source_col: unified_col}",
+    "literal_columns inject constant values: product_type and source_platform",
+    "duckdb_path: youtube_videos/*.parquet, authoredup_posts/*.parquet",
+]
+
+key_files = [
+    "entities/product.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]

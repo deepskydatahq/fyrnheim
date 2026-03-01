@@ -19,7 +19,7 @@ class TestHashing:
 
         result = concat_hash("col1", "col2")
         assert isinstance(result, str)
-        assert "ibis.concat" in result
+        assert "+" in result
         assert "hash()" in result
 
     def test_hash_md5_importable_and_returns_string(self):

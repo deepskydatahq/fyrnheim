@@ -1,0 +1,50 @@
+# Story: Define signals entity with UnionSource (walker + shortio + ghost)
+
+id = "M006-E003-S002"
+parent = "M006-E003"
+title = "Define signals entity with UnionSource unioning walker, shortio, and ghost events"
+status = "complete"
+
+[outcome]
+description = """
+Create entities/signals.py defining an Entity with UnionSource combining three engagement
+signal sources into a unified signals table. Each sub-source normalizes different timestamp
+columns to signal_timestamp and injects source/signal_type tags via literal_columns. Walker
+uses event_name as signal_type, shortio injects 'link_clicked', ghost injects
+'newsletter_subscribed'. DimensionLayer has computed columns for person_id (email hash)
+and signal_id (composite hash). Activity and analytics layers are out of scope for M006.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "entities/signals.py exists and defines entity = Entity(...) with name='signals'",
+    "Entity uses UnionSource with 3 TableSource sub-sources (walker, shortio, ghost)",
+    "Walker sub-source maps timestamp->signal_timestamp via field_mappings",
+    "Shortio sub-source maps clicked_at->signal_timestamp and UTM params to channel fields",
+    "Ghost sub-source maps created_at->signal_timestamp and has email field",
+    "Each sub-source has literal_columns for source tag ('walker'/'shortio'/'ghost')",
+    "Shortio and ghost sub-sources have literal_columns for signal_type ('link_clicked'/'newsletter_subscribed')",
+    "DimensionLayer has person_id computed column using hash_email",
+    "DimensionLayer has signal_id computed column (composite hash)",
+    "Entity has PrepLayer and DimensionLayer",
+    "Entity imports resolve correctly",
+    "All existing tests still pass — no regressions",
+]
+
+[implementation]
+hints = [
+    "Reference timo-data-stack: entities/entities/signals.py",
+    "Walker: event_name is signal_type (not literal), timestamp->signal_timestamp, metadata: session_id, page_path, event_data",
+    "Shortio: clicked_at->signal_timestamp, utm_source->channel_source, utm_medium->channel_medium, utm_campaign->campaign, literal signal_type='link_clicked'",
+    "Ghost: created_at->signal_timestamp, has email column, literal signal_type='newsletter_subscribed'",
+    "person_id: hash_email('email') — will be null for anonymous walker/shortio signals",
+    "signal_id: composite hash of email/session_id + timestamp + type + source",
+    "Activity and analytics layers are OUT OF SCOPE for M006",
+]
+
+key_files = [
+    "entities/signals.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]

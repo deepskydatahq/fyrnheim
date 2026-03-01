@@ -191,7 +191,7 @@ def {sub_name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
 '''
             parts.append(func)
 
-        # Generate union aggregator
+        # Generate union aggregator with schema normalization
         call_lines = ",\n        ".join(f"{sn}(conn, backend)" for sn in sub_names)
         union_func = f'''
 def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
@@ -199,7 +199,19 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
     parts = [
         {call_lines},
     ]
-    return ibis.union(*parts)
+    # Normalize schemas: add typed null columns for any missing fields before union
+    all_columns: dict[str, object] = {{}}
+    for p in parts:
+        for col in p.columns:
+            if col not in all_columns:
+                all_columns[col] = p[col].type()
+    normalized = []
+    for p in parts:
+        missing = set(all_columns) - set(p.columns)
+        if missing:
+            p = p.mutate(**{{col: ibis.literal(None).cast(all_columns[col]) for col in sorted(missing)}})
+        normalized.append(p.select(*sorted(all_columns)))
+    return ibis.union(*normalized)
 '''
         parts.append(union_func)
 

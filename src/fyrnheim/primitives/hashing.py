@@ -79,7 +79,8 @@ def concat_hash(*cols: str) -> str:
     """Generate Ibis code for hash of concatenated columns.
 
     All columns are cast to string before concatenation to ensure
-    consistent hashing across different data types.
+    consistent hashing across different data types. Uses fill_null('')
+    to handle null columns gracefully (e.g. email is null for anonymous events).
 
     Args:
         *cols: Column names to concatenate and hash
@@ -89,12 +90,12 @@ def concat_hash(*cols: str) -> str:
 
     Example:
         >>> concat_hash("person_id", "timestamp", "event_type")
-        'ibis.concat(t.person_id.cast("string"), t.timestamp.cast("string"), t.event_type.cast("string")).hash().cast("string")'
+        '(t.person_id.cast("string").fill_null("") + t.timestamp.cast("string").fill_null("") + t.event_type.cast("string").fill_null("")).hash().cast("string")'
     """
     col_exprs = []
     for col in cols:
         if not col.startswith(("t.", "ibis.")):
             col = f"t.{col}"
-        col_exprs.append(f'{col}.cast("string")')
+        col_exprs.append(f'{col}.cast("string").fill_null("")')
 
-    return f'ibis.concat({", ".join(col_exprs)}).hash().cast("string")'
+    return f'({" + ".join(col_exprs)}).hash().cast("string")'

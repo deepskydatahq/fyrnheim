@@ -1489,3 +1489,686 @@ source_mapping = SourceMapping(
         sub_result = next(e for e in result.entities if e.entity_name == "subscriptions")
         assert txn_result.row_count == txn_count
         assert sub_result.row_count == sub_count
+
+
+# ---------------------------------------------------------------------------
+# M006-E003: UnionSource entities (product, signals, anon)
+# ---------------------------------------------------------------------------
+
+
+class TestE2EProductEntity:
+    """E2E tests for product entity: UnionSource (YouTube + LinkedIn)."""
+
+    @pytest.fixture()
+    def product_data(self, tmp_path):
+        """Create sample YouTube and LinkedIn parquet files."""
+        data_dir = tmp_path / "data"
+
+        # YouTube videos (3 rows)
+        yt_dir = data_dir / "youtube_videos"
+        yt_dir.mkdir(parents=True)
+        yt_df = pd.DataFrame({
+            "video_id": ["v1", "v2", "v3"],
+            "title": ["Video A", "Video B", "Video C"],
+            "published_at": pd.to_datetime(["2024-01-01", "2024-02-01", "2024-03-01"]),
+            "view_count": [1000, 2000, 3000],
+            "like_count": [100, 200, 300],
+            "comment_count": [10, 20, 30],
+        })
+        yt_df.to_parquet(yt_dir / "data.parquet", index=False)
+
+        # LinkedIn posts (2 rows) — different column names
+        li_dir = data_dir / "authoredup_posts"
+        li_dir.mkdir(parents=True)
+        li_df = pd.DataFrame({
+            "post_id": ["p1", "p2"],
+            "text": ["Post Alpha", "Post Beta"],
+            "published_at": pd.to_datetime(["2024-04-01", "2024-05-01"]),
+            "impressions": [500, 600],
+            "reactions": [50, 60],
+            "comments": [5, 6],
+            "shares": [2, 3],
+        })
+        li_df.to_parquet(li_dir / "data.parquet", index=False)
+
+        return data_dir, 3, 2  # yt_count, li_count
+
+    def _make_entity(self, data_dir):
+        return Entity(
+            name="product",
+            description="Unified product dimension",
+            source=UnionSource(
+                sources=[
+                    TableSource(
+                        project="test", dataset="test", table="youtube_videos",
+                        duckdb_path=str(data_dir / "youtube_videos" / "*.parquet"),
+                        field_mappings={"video_id": "product_id"},
+                        literal_columns={"product_type": "video", "source_platform": "youtube"},
+                    ),
+                    TableSource(
+                        project="test", dataset="test", table="authoredup_posts",
+                        duckdb_path=str(data_dir / "authoredup_posts" / "*.parquet"),
+                        field_mappings={
+                            "post_id": "product_id", "text": "title",
+                            "impressions": "view_count", "reactions": "like_count",
+                            "comments": "comment_count", "shares": "share_count",
+                        },
+                        literal_columns={"product_type": "post", "source_platform": "linkedin"},
+                    ),
+                ]
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_product"),
+                dimension=DimensionLayer(model_name="dim_product"),
+            ),
+        )
+
+    def test_product_unified_columns(self, tmp_path, product_data):
+        """Product dim table has unified columns and product_type/source_platform."""
+        data_dir, yt_count, li_count = product_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("product")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "product_id" in df.columns
+        assert "title" in df.columns
+        assert "view_count" in df.columns
+        assert "product_type" in df.columns
+        assert "source_platform" in df.columns
+
+    def test_product_row_count(self, tmp_path, product_data):
+        """Product row count equals youtube rows + linkedin rows."""
+        data_dir, yt_count, li_count = product_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("product")
+
+        assert result.row_count == yt_count + li_count
+
+    def test_product_literal_columns_correct(self, tmp_path, product_data):
+        """product_type and source_platform have correct values per source."""
+        data_dir, yt_count, li_count = product_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("product")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        videos = df[df["product_type"] == "video"]
+        posts = df[df["product_type"] == "post"]
+        assert len(videos) == yt_count
+        assert len(posts) == li_count
+        assert set(videos["source_platform"]) == {"youtube"}
+        assert set(posts["source_platform"]) == {"linkedin"}
+
+
+class TestE2ESignalsEntity:
+    """E2E tests for signals entity: UnionSource (walker + shortio + ghost)."""
+
+    @pytest.fixture()
+    def signals_data(self, tmp_path):
+        """Create sample parquets for walker, shortio, ghost."""
+        data_dir = tmp_path / "data"
+
+        # Walker events (3 rows)
+        walker_dir = data_dir / "walker_events"
+        walker_dir.mkdir(parents=True)
+        walker_df = pd.DataFrame({
+            "session_id": ["s1", "s2", "s3"],
+            "timestamp": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"]),
+            "referrer": ["google.com", "linkedin.com", ""],
+            "event_name": ["page_view", "click", "page_view"],
+            "page_path": ["/home", "/about", "/pricing"],
+        })
+        walker_df.to_parquet(walker_dir / "data.parquet", index=False)
+
+        # Shortio clicks (2 rows)
+        shortio_dir = data_dir / "shortio_clicks"
+        shortio_dir.mkdir(parents=True)
+        shortio_df = pd.DataFrame({
+            "clicked_at": pd.to_datetime(["2024-02-01", "2024-02-02"]),
+            "utm_source": ["linkedin", "newsletter"],
+            "utm_medium": ["social", "email"],
+            "utm_campaign": ["spring-promo", "weekly-digest"],
+            "short_path": ["/abc", "/def"],
+            "original_url": ["https://example.com/a", "https://example.com/b"],
+        })
+        shortio_df.to_parquet(shortio_dir / "data.parquet", index=False)
+
+        # Ghost members (2 rows)
+        ghost_dir = data_dir / "ghost_members"
+        ghost_dir.mkdir(parents=True)
+        ghost_df = pd.DataFrame({
+            "email": ["alice@example.com", "bob@example.com"],
+            "created_at": pd.to_datetime(["2024-03-01", "2024-03-15"]),
+            "name": ["Alice", "Bob"],
+        })
+        ghost_df.to_parquet(ghost_dir / "data.parquet", index=False)
+
+        return data_dir, 3, 2, 2  # walker, shortio, ghost counts
+
+    def _make_entity(self, data_dir):
+        from fyrnheim.primitives import concat_hash, hash_email
+
+        return Entity(
+            name="signals",
+            description="Unified engagement signals",
+            source=UnionSource(
+                sources=[
+                    TableSource(
+                        project="test", dataset="test", table="walker_events",
+                        duckdb_path=str(data_dir / "walker_events" / "*.parquet"),
+                        field_mappings={"timestamp": "signal_timestamp"},
+                        literal_columns={"source": "walker"},
+                    ),
+                    TableSource(
+                        project="test", dataset="test", table="shortio_clicks",
+                        duckdb_path=str(data_dir / "shortio_clicks" / "*.parquet"),
+                        field_mappings={
+                            "clicked_at": "signal_timestamp",
+                            "utm_source": "channel_source",
+                            "utm_medium": "channel_medium",
+                            "utm_campaign": "campaign",
+                        },
+                        literal_columns={"source": "shortio", "signal_type": "link_clicked"},
+                    ),
+                    TableSource(
+                        project="test", dataset="test", table="ghost_members",
+                        duckdb_path=str(data_dir / "ghost_members" / "*.parquet"),
+                        field_mappings={"created_at": "signal_timestamp"},
+                        literal_columns={"source": "ghost", "signal_type": "newsletter_subscribed"},
+                    ),
+                ]
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_signals"),
+                dimension=DimensionLayer(
+                    model_name="dim_signals",
+                    computed_columns=[
+                        ComputedColumn(
+                            name="person_id",
+                            expression=hash_email("email"),
+                        ),
+                        ComputedColumn(
+                            name="signal_id",
+                            expression=concat_hash(
+                                "email", "session_id", "signal_timestamp",
+                                "signal_type", "source",
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+    def test_signals_unified_timestamp(self, tmp_path, signals_data):
+        """Signals dim table has signal_timestamp column from all sources."""
+        data_dir, *_ = signals_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("signals")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "signal_timestamp" in df.columns
+        assert "source" in df.columns
+        assert "signal_type" in df.columns
+
+    def test_signals_row_count(self, tmp_path, signals_data):
+        """Signals row count equals walker + shortio + ghost rows."""
+        data_dir, walker_count, shortio_count, ghost_count = signals_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("signals")
+
+        assert result.row_count == walker_count + shortio_count + ghost_count
+
+    def test_signals_source_tags(self, tmp_path, signals_data):
+        """Each sub-source has correct source and signal_type tags."""
+        data_dir, walker_count, shortio_count, ghost_count = signals_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("signals")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        walker_rows = df[df["source"] == "walker"]
+        shortio_rows = df[df["source"] == "shortio"]
+        ghost_rows = df[df["source"] == "ghost"]
+
+        assert len(walker_rows) == walker_count
+        assert len(shortio_rows) == shortio_count
+        assert len(ghost_rows) == ghost_count
+
+        # Shortio and ghost have literal signal_type
+        assert set(shortio_rows["signal_type"]) == {"link_clicked"}
+        assert set(ghost_rows["signal_type"]) == {"newsletter_subscribed"}
+
+    def test_signals_computed_columns(self, tmp_path, signals_data):
+        """Signals dim has person_id and signal_id computed columns."""
+        data_dir, *_ = signals_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("signals")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "person_id" in df.columns
+        assert "signal_id" in df.columns
+
+        # Ghost rows should have person_id (email-based hash)
+        ghost_rows = df[df["source"] == "ghost"]
+        assert ghost_rows["person_id"].notna().all()
+
+
+class TestE2EAnonEntity:
+    """E2E tests for anon entity: single TableSource (Walker sessions)."""
+
+    @pytest.fixture()
+    def anon_data(self, tmp_path):
+        """Create sample Walker events parquet."""
+        data_dir = tmp_path / "data"
+        walker_dir = data_dir / "walker_events"
+        walker_dir.mkdir(parents=True)
+
+        walker_df = pd.DataFrame({
+            "session_id": ["s1", "s2", "s3", "s4"],
+            "timestamp": pd.to_datetime([
+                "2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04",
+            ]),
+            "referrer": [
+                "https://google.com/search?q=test",
+                "https://linkedin.com/feed",
+                "https://chatgpt.com/c/123",
+                "",  # direct
+            ],
+            "event_name": ["page_view", "page_view", "page_view", "click"],
+            "page_path": ["/home", "/about", "/pricing", "/signup"],
+        })
+        walker_df.to_parquet(walker_dir / "data.parquet", index=False)
+
+        return data_dir, 4
+
+    def _make_entity(self, data_dir):
+        from fyrnheim.primitives import categorize_contains
+
+        return Entity(
+            name="anon",
+            description="Anonymous visitor sessions",
+            source=TableSource(
+                project="test", dataset="test", table="walker_events",
+                duckdb_path=str(data_dir / "walker_events" / "*.parquet"),
+                fields=[
+                    Field(name="session_id", type="STRING"),
+                    Field(name="timestamp", type="TIMESTAMP"),
+                    Field(name="referrer", type="STRING"),
+                    Field(name="event_name", type="STRING"),
+                    Field(name="page_path", type="STRING"),
+                ],
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_anon"),
+                dimension=DimensionLayer(
+                    model_name="dim_anon",
+                    computed_columns=[
+                        ComputedColumn(
+                            name="anon_id",
+                            expression='(ibis.literal("walker") + t.session_id).hash().cast("string")',
+                        ),
+                        ComputedColumn(
+                            name="source",
+                            expression='ibis.literal("walker")',
+                        ),
+                        ComputedColumn(
+                            name="channel_category",
+                            expression=categorize_contains(
+                                "referrer",
+                                {
+                                    "social_linkedin": ["linkedin.com", "lnkd.in"],
+                                    "social_youtube": ["youtube.com"],
+                                    "newsletter": ["mail.google", "ghost.io", "substack.com",
+                                                    "mailerlite.com", "convertkit.com", "beehiiv.com"],
+                                    "seo": ["google.com", "bing.com", "duckduckgo.com", "ecosia.org"],
+                                    "ai": ["chatgpt.com", "perplexity.ai", "claude.ai"],
+                                },
+                                default="direct",
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        )
+
+    def test_anon_computed_columns(self, tmp_path, anon_data):
+        """Anon dim has anon_id, source, and channel_category computed columns."""
+        data_dir, row_count = anon_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("anon")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "anon_id" in df.columns
+        assert "source" in df.columns
+        assert "channel_category" in df.columns
+        assert result.row_count == row_count
+
+    def test_anon_source_literal(self, tmp_path, anon_data):
+        """All anon rows have source='walker'."""
+        data_dir, row_count = anon_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("anon")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert set(df["source"]) == {"walker"}
+
+    def test_anon_channel_categorization(self, tmp_path, anon_data):
+        """channel_category correctly classifies referrer URLs."""
+        data_dir, _ = anon_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("anon")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        # google.com → seo, linkedin.com → social_linkedin, chatgpt.com → ai, empty → direct
+        categories = dict(zip(df["session_id"], df["channel_category"]))
+        assert categories["s1"] == "seo"
+        assert categories["s2"] == "social_linkedin"
+        assert categories["s3"] == "ai"
+        assert categories["s4"] == "direct"
+
+    def test_anon_id_is_unique(self, tmp_path, anon_data):
+        """Each session gets a unique anon_id hash."""
+        data_dir, row_count = anon_data
+        entity = self._make_entity(data_dir)
+
+        output_dir = tmp_path / "generated"
+        generate(entity, output_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=output_dir) as executor:
+            result = executor.execute("anon")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert df["anon_id"].nunique() == row_count
+
+
+class TestE2ERunnerUnionEntities:
+    """runner.run() discovers and executes all three E003 entities."""
+
+    @pytest.fixture()
+    def runner_data(self, tmp_path):
+        """Create data and entity files for product, signals, anon."""
+        base_dir = tmp_path
+        data_dir = base_dir / "data"
+
+        # YouTube videos (2 rows)
+        yt_dir = data_dir / "youtube_videos"
+        yt_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "video_id": ["v1", "v2"],
+            "title": ["Video A", "Video B"],
+            "published_at": pd.to_datetime(["2024-01-01", "2024-02-01"]),
+            "view_count": [100, 200],
+            "like_count": [10, 20],
+            "comment_count": [1, 2],
+        }).to_parquet(yt_dir / "data.parquet", index=False)
+
+        # LinkedIn posts (1 row)
+        li_dir = data_dir / "authoredup_posts"
+        li_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "post_id": ["p1"],
+            "text": ["Post Alpha"],
+            "published_at": pd.to_datetime(["2024-03-01"]),
+            "impressions": [500],
+            "reactions": [50],
+            "comments": [5],
+            "shares": [2],
+        }).to_parquet(li_dir / "data.parquet", index=False)
+
+        # Walker events (2 rows)
+        walker_dir = data_dir / "walker_events"
+        walker_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "session_id": ["s1", "s2"],
+            "timestamp": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "referrer": ["google.com", ""],
+            "event_name": ["page_view", "click"],
+            "page_path": ["/home", "/about"],
+        }).to_parquet(walker_dir / "data.parquet", index=False)
+
+        # Shortio clicks (1 row)
+        shortio_dir = data_dir / "shortio_clicks"
+        shortio_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "clicked_at": pd.to_datetime(["2024-02-01"]),
+            "utm_source": ["linkedin"],
+            "utm_medium": ["social"],
+            "utm_campaign": ["promo"],
+            "short_path": ["/abc"],
+            "original_url": ["https://example.com/a"],
+        }).to_parquet(shortio_dir / "data.parquet", index=False)
+
+        # Ghost members (1 row)
+        ghost_dir = data_dir / "ghost_members"
+        ghost_dir.mkdir(parents=True)
+        pd.DataFrame({
+            "email": ["alice@example.com"],
+            "created_at": pd.to_datetime(["2024-03-01"]),
+            "name": ["Alice"],
+        }).to_parquet(ghost_dir / "data.parquet", index=False)
+
+        return base_dir, data_dir
+
+    def test_runner_discovers_all_three_entities(self, runner_data):
+        """runner.run() discovers and executes product, signals, anon."""
+        from fyrnheim.engine.runner import run
+        from fyrnheim.primitives import categorize_contains, concat_hash, hash_email
+
+        base_dir, data_dir = runner_data
+        entities_dir = base_dir / "entities"
+        entities_dir.mkdir()
+        generated_dir = base_dir / "generated"
+
+        # Write product entity
+        product_code = f'''\
+from fyrnheim import (
+    DimensionLayer, Entity, LayersConfig, PrepLayer, TableSource, UnionSource,
+)
+
+entity = Entity(
+    name="product",
+    description="Unified product",
+    source=UnionSource(
+        sources=[
+            TableSource(
+                project="test", dataset="test", table="youtube_videos",
+                duckdb_path="{data_dir / "youtube_videos" / "*.parquet"}",
+                field_mappings={{"video_id": "product_id"}},
+                literal_columns={{"product_type": "video", "source_platform": "youtube"}},
+            ),
+            TableSource(
+                project="test", dataset="test", table="authoredup_posts",
+                duckdb_path="{data_dir / "authoredup_posts" / "*.parquet"}",
+                field_mappings={{
+                    "post_id": "product_id", "text": "title",
+                    "impressions": "view_count", "reactions": "like_count",
+                    "comments": "comment_count", "shares": "share_count",
+                }},
+                literal_columns={{"product_type": "post", "source_platform": "linkedin"}},
+            ),
+        ]
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_product"),
+        dimension=DimensionLayer(model_name="dim_product"),
+    ),
+)
+'''
+        (entities_dir / "product.py").write_text(product_code)
+
+        # Write signals entity
+        signals_code = f'''\
+from fyrnheim import (
+    ComputedColumn, DimensionLayer, Entity, LayersConfig, PrepLayer, TableSource, UnionSource,
+)
+from fyrnheim.primitives import concat_hash, hash_email
+
+entity = Entity(
+    name="signals",
+    description="Unified signals",
+    source=UnionSource(
+        sources=[
+            TableSource(
+                project="test", dataset="test", table="walker_events",
+                duckdb_path="{data_dir / "walker_events" / "*.parquet"}",
+                field_mappings={{"timestamp": "signal_timestamp"}},
+                literal_columns={{"source": "walker"}},
+            ),
+            TableSource(
+                project="test", dataset="test", table="shortio_clicks",
+                duckdb_path="{data_dir / "shortio_clicks" / "*.parquet"}",
+                field_mappings={{
+                    "clicked_at": "signal_timestamp",
+                    "utm_source": "channel_source",
+                    "utm_medium": "channel_medium",
+                    "utm_campaign": "campaign",
+                }},
+                literal_columns={{"source": "shortio", "signal_type": "link_clicked"}},
+            ),
+            TableSource(
+                project="test", dataset="test", table="ghost_members",
+                duckdb_path="{data_dir / "ghost_members" / "*.parquet"}",
+                field_mappings={{"created_at": "signal_timestamp"}},
+                literal_columns={{"source": "ghost", "signal_type": "newsletter_subscribed"}},
+            ),
+        ]
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_signals"),
+        dimension=DimensionLayer(
+            model_name="dim_signals",
+            computed_columns=[
+                ComputedColumn(name="person_id", expression=hash_email("email")),
+                ComputedColumn(name="signal_id", expression=concat_hash(
+                    "email", "session_id", "signal_timestamp", "signal_type", "source",
+                )),
+            ],
+        ),
+    ),
+)
+'''
+        (entities_dir / "signals.py").write_text(signals_code)
+
+        # Write anon entity
+        anon_code = f'''\
+from fyrnheim import (
+    ComputedColumn, DimensionLayer, Entity, Field, LayersConfig, PrepLayer, TableSource,
+)
+from fyrnheim.primitives import categorize_contains
+
+entity = Entity(
+    name="anon",
+    description="Anonymous visitor sessions",
+    source=TableSource(
+        project="test", dataset="test", table="walker_events",
+        duckdb_path="{data_dir / "walker_events" / "*.parquet"}",
+        fields=[
+            Field(name="session_id", type="STRING"),
+            Field(name="timestamp", type="TIMESTAMP"),
+            Field(name="referrer", type="STRING"),
+            Field(name="event_name", type="STRING"),
+            Field(name="page_path", type="STRING"),
+        ],
+    ),
+    layers=LayersConfig(
+        prep=PrepLayer(model_name="prep_anon"),
+        dimension=DimensionLayer(
+            model_name="dim_anon",
+            computed_columns=[
+                ComputedColumn(
+                    name="anon_id",
+                    expression='(ibis.literal("walker") + t.session_id).hash().cast("string")',
+                ),
+                ComputedColumn(
+                    name="source",
+                    expression='ibis.literal("walker")',
+                ),
+                ComputedColumn(
+                    name="channel_category",
+                    expression=categorize_contains(
+                        "referrer",
+                        {{
+                            "seo": ["google.com", "bing.com"],
+                            "social_linkedin": ["linkedin.com"],
+                        }},
+                        default="direct",
+                    ),
+                ),
+            ],
+        ),
+    ),
+)
+'''
+        (entities_dir / "anon.py").write_text(anon_code)
+
+        result = run(entities_dir, data_dir, backend="duckdb", generated_dir=generated_dir)
+        assert result.ok is True
+        assert len(result.entities) == 3
+        assert all(e.status == "success" for e in result.entities)
+
+        product_r = next(e for e in result.entities if e.entity_name == "product")
+        signals_r = next(e for e in result.entities if e.entity_name == "signals")
+        anon_r = next(e for e in result.entities if e.entity_name == "anon")
+
+        assert product_r.row_count == 3  # 2 youtube + 1 linkedin
+        assert signals_r.row_count == 4  # 2 walker + 1 shortio + 1 ghost
+        assert anon_r.row_count == 2  # 2 walker events

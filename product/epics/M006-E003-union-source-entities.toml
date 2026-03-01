@@ -3,7 +3,7 @@
 id = "M006-E003"
 parent = "M006"
 title = "Define product, signals, and anon entities with UnionSource field normalization"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

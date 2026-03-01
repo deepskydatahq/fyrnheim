@@ -685,8 +685,12 @@ class TestUnionSourceFieldMappingsCodegen:
         ])
         gen = IbisCodeGenerator(entity)
         code = gen._generate_source_functions()
-        # Should not have per-source rename or mutate (only existing _build_rename_suffix may appear)
-        assert ".mutate(" not in code
+        # Per-source functions should not have rename or mutate
+        # (the union aggregator has schema normalization mutate which is expected)
+        for line in code.split("\n"):
+            if "return conn.read_parquet" in line or "return conn.table" in line:
+                assert ".rename(" not in line
+                assert ".mutate(" not in line
 
     def test_multiple_sources_different_mappings(self):
         entity = self._make_union_entity([
@@ -740,7 +744,7 @@ class TestUnionSourceFieldMappingsCodegen:
         gen = IbisCodeGenerator(entity)
         code = gen._generate_source_functions()
         assert "def source_signals(" in code
-        assert "ibis.union(*parts)" in code
+        assert "ibis.union(*normalized)" in code
 
 
 # ---------------------------------------------------------------------------

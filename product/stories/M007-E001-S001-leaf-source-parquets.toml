@@ -1,0 +1,60 @@
+id = "M007-E001-S001"
+parent = "M007-E001"
+title = "Generate parquet files for leaf TableSource entities"
+status = "complete"
+created = 2026-03-02
+
+[outcome]
+description = """
+Parquet files exist for the 4 simple TableSource entities: ghost_members, mailerlite_subscribers,
+transactions, subscriptions. Each has 15-30 rows with correct column names, types, and
+realistic values. Shared emails appear across sources so the person identity graph
+can match records later. At least 2 distinct email domains exist (one personal like
+gmail.com, one business like acme.com) so account aggregation is meaningful.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/ghost_members/ contains a parquet file with columns: id, email, status, name, created_at, email_disabled"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/mailerlite_subscribers/ contains a parquet file with columns: id, email, status, subscribed_at, source"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/transactions/ contains a parquet file with columns: id, store_id, identifier, order_number, status, customer_id, customer_name, customer_email, total, subtotal, currency, refunded, created_at, updated_at"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/subscriptions/ contains a parquet file with columns: id, store_id, product_id, variant_id, status, user_email, user_name, renews_at, ends_at, cancelled, billing_anchor, card_brand, created_at, updated_at"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "At least 5 email addresses appear in 2+ source files (e.g., same email in ghost_members and transactions) to test identity graph matching"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "At least 2 distinct email domains exist: one personal (gmail.com) and one business (acme.com) for account aggregation testing"
+
+[context]
+relevant_paths = [
+    "examples/timo-data-stack/entities/ghost_person.py",
+    "examples/timo-data-stack/entities/mailerlite_person.py",
+    "examples/timo-data-stack/entities/transactions.py",
+    "examples/timo-data-stack/entities/subscriptions.py",
+]
+depends_on = []
+
+[handoff]
+implementation_hints = """
+- Create a Python script at examples/timo-data-stack/data/generate_sample_data.py
+- Use pandas to create DataFrames and write to parquet
+- Each source file goes in its own subdirectory (e.g., data/ghost_members/sample.parquet) to match the glob pattern in duckdb_path
+- Use realistic but fake data (no real PII)
+- Ensure timestamp columns are datetime64 type, not strings
+- Include a mix of statuses (active, cancelled, etc.) to exercise filter expressions
+"""

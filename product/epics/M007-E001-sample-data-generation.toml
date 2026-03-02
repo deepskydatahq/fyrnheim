@@ -1,0 +1,40 @@
+# Epic: Generate sample parquet data for local pipeline testing
+
+id = "M007-E001"
+parent = "M007"
+title = "Generate sample parquet data files matching timo-data-stack source schemas"
+status = "active"
+
+[outcome]
+description = """
+Small but representative parquet files exist in examples/timo-data-stack/data/ for
+every source table referenced by the 9 entities. Each file has 10-50 rows with
+realistic column names and types matching the real timo-data-stack data. The data
+exercises all code paths: field_mappings, literal_columns, identity graph matching
+(shared emails across sources), and aggregation grouping. Without this data,
+nothing else in M007 can run.
+"""
+
+job_story = "When I clone fyrnheim and cd into examples/timo-data-stack I want sample data to be ready so I can run fyr run immediately without needing real production data"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "examples/timo-data-stack/data/ contains parquet files for all source tables referenced by entity duckdb_path values",
+    "ghost_members parquet: columns match ghost_person entity expectations (email, name, created_at, etc.)",
+    "mailerlite_subscribers parquet: columns match mailerlite_person entity expectations",
+    "transactions parquet: columns match transactions entity expectations (id, customer_email, subtotal, etc.)",
+    "subscriptions parquet: columns match subscriptions entity expectations (id, user_email, status, etc.)",
+    "youtube_videos and authoredup_posts parquets: columns match product entity union sources",
+    "walker_events, shortio_clicks, ghost_members parquets: columns match signals entity union sources",
+    "Shared emails exist across sources so person identity graph can match records",
+    "At least 2 distinct account_id values so account aggregation produces meaningful output",
+    "A data generation script exists to recreate the sample data if needed",
+]
+
+validator_context = [
+    "examples/timo-data-stack/data/",
+    "examples/timo-data-stack/entities/",
+]
+
+depends_on = []

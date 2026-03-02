@@ -1,0 +1,100 @@
+# Mission: End-to-end local pipeline with persistent results
+# Make fyr run produce usable reporting tables from timo-data-stack entities
+
+id = "M007"
+title = "End-to-end local pipeline: fyr run produces persistent reporting tables"
+status = "active"
+created = 2026-03-02
+depends_on = ["M006"]
+
+[outcome]
+description = """
+Running `fyr run` on the timo-data-stack entities produces persistent DuckDB tables
+(and optionally parquet exports) that a BI tool like Evidence can query directly.
+The full pipeline — from parquet source files through all 9 entities to queryable
+reporting tables — works end-to-end with a single command. This is the last mile
+that turns fyrnheim from "entities compute correctly" to "fyrnheim replaces
+timo-data-stack's custom Python pipeline."
+"""
+
+user_progress = "From 'fyr run computes but results vanish' to 'fyr run produces a DuckDB file with all reporting tables I can query in Evidence'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyrnheim.yaml in examples/timo-data-stack/ configures backend=duckdb with db_path for persistent storage",
+    "Example entities have duckdb_path set for local development with parquet source files",
+    "fyr run in examples/timo-data-stack/ executes all 9 entities and persists results to DuckDB file",
+    "Persisted DuckDB file contains dim/snapshot/activity/analytics tables for all entities",
+    "Tables are queryable after fyr run exits (results survive process termination)",
+    "fyr run prints clear summary: entity names, row counts, output location",
+    "Pipeline runs end-to-end in under 30 seconds on local parquet data",
+    "All existing 828+ tests still pass — no regressions",
+]
+
+validator_context = [
+    "examples/timo-data-stack/",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/connection.py",
+    "src/fyrnheim/cli.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+    "product/missions/M006-timo-data-stack-entity-migration.toml",
+]
+relevant_paths = [
+    "examples/timo-data-stack/entities/",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/connection.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+]
+
+[scope]
+in_scope = [
+    "Add duckdb_path to all 9 example entities for local parquet development",
+    "Create fyrnheim.yaml in examples/timo-data-stack/ with db_path config for persistent DuckDB",
+    "Create sample parquet data files for local testing (small representative subsets)",
+    "Verify fyr run executes all 9 entities end-to-end with persistent results",
+    "Ensure DuckDB file contains all expected tables after fyr run completes",
+    "Fix any gaps in CLI/runner/executor that prevent end-to-end persistence",
+    "Add parquet export capability if DuckDB persistence alone is insufficient",
+]
+out_of_scope = [
+    "BigQuery production execution (M008 — separate mission)",
+    "Incremental / high-water-mark processing (future)",
+    "CI/CD pipeline or orchestration integration",
+    "Schema management or migration tooling",
+    "New entity definitions — use the 9 from M006",
+    "Dashboard or BI tool integration (just produce the queryable tables)",
+]
+acceptable_breakage = [
+    "examples/timo-data-stack/ will grow with fyrnheim.yaml, data/ directory, and updated entity files",
+    "Running fyr run creates a DuckDB file in the project directory",
+]
+
+[notes]
+considerations = """
+KEY INSIGHT: The framework already supports persistent DuckDB via backend_config.db_path.
+The executor calls conn.create_table() which persists to whatever DuckDB connection it has.
+The gap is NOT in the engine — it's in the example wiring:
+
+1. Example entities have no duckdb_path (can't read local parquet files)
+2. No fyrnheim.yaml configures db_path (so DuckDB uses :memory: and results vanish)
+3. No sample data files exist for local testing
+
+This mission may be smaller than it looks — mostly wiring and validation, not new engine code.
+
+RISK: The main risk is discovering that some entity transformations fail on real data
+due to type mismatches or expression edge cases. Mitigation: fix issues as they arise.
+
+DATA STRATEGY: Need small but representative parquet files. Options:
+- Generate synthetic data matching the real schema
+- Use anonymized subsets of real data
+- Create minimal fixtures (10-50 rows per source) that exercise all code paths
+"""

@@ -1,0 +1,37 @@
+# Epic: Wire fyrnheim.yaml and persistent DuckDB for timo-data-stack example
+
+id = "M007-E002"
+parent = "M007"
+title = "Create fyrnheim.yaml with persistent DuckDB config for examples/timo-data-stack"
+status = "active"
+
+[outcome]
+description = """
+A fyrnheim.yaml exists in examples/timo-data-stack/ that configures the project for
+persistent DuckDB execution. Running `fyr run` from that directory uses the config
+to connect to a DuckDB file (not :memory:), so results survive after the process
+exits. The generated/ directory receives transform code. All paths resolve correctly
+relative to the project root.
+"""
+
+job_story = "When I run fyr run in examples/timo-data-stack I want results persisted to a DuckDB file so I can query reporting tables after the pipeline finishes"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "examples/timo-data-stack/fyrnheim.yaml exists with entities_dir, data_dir, output_dir, backend, and backend_config",
+    "backend_config includes db_path pointing to a DuckDB file (e.g., timo.duckdb)",
+    "fyr run from examples/timo-data-stack/ discovers fyrnheim.yaml and uses its config",
+    "DuckDB connection uses db_path from config (not :memory:)",
+    "Generated transform code lands in examples/timo-data-stack/generated/",
+    "DuckDB file is created and persists after fyr run exits",
+    ".gitignore in examples/timo-data-stack/ excludes generated/ and *.duckdb",
+]
+
+validator_context = [
+    "examples/timo-data-stack/fyrnheim.yaml",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/connection.py",
+]
+
+depends_on = []

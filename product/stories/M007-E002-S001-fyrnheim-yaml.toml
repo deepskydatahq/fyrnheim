@@ -1,0 +1,46 @@
+id = "M007-E002-S001"
+parent = "M007-E002"
+title = "Create fyrnheim.yaml and .gitignore for timo-data-stack example"
+status = "complete"
+created = 2026-03-02
+
+[outcome]
+description = """
+A fyrnheim.yaml at examples/timo-data-stack/ configures persistent DuckDB execution.
+A .gitignore excludes generated artifacts. Running fyr run from that directory uses
+the config to create a persistent DuckDB file instead of :memory:.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/fyrnheim.yaml exists with: entities_dir: entities, data_dir: data, output_dir: generated, backend: duckdb"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "fyrnheim.yaml includes backend_config with db_path pointing to a .duckdb file (e.g., timo.duckdb)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/.gitignore exists excluding generated/, *.duckdb, and __pycache__/"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "resolve_config() from examples/timo-data-stack/ correctly reads backend_config.db_path"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/connection.py",
+]
+depends_on = []
+
+[handoff]
+implementation_hints = """
+- The config system already supports backend_config as a dict from YAML
+- create_connection() already reads db_path from kwargs for DuckDB
+- This is a pure wiring story — no framework code changes expected
+- Verify by running: cd examples/timo-data-stack && uv run fyr run --help
+"""

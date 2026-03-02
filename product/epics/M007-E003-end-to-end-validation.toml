@@ -1,0 +1,42 @@
+# Epic: Validate full pipeline end-to-end with all 9 entities
+
+id = "M007-E003"
+parent = "M007"
+title = "Run fyr run end-to-end on all 9 timo entities and validate persistent results"
+status = "active"
+
+[outcome]
+description = """
+Running `fyr run` from examples/timo-data-stack/ executes all 9 entities in
+dependency order, persists results to a DuckDB file, and all tables are queryable
+after the process exits. Any bugs or gaps discovered during validation are fixed.
+The DuckDB file contains dim tables for all leaf entities, the person identity
+graph result, and the account aggregation result. This proves fyrnheim can replace
+timo-data-stack's custom Python pipeline end-to-end.
+"""
+
+job_story = "When I run fyr run once I want all 9 timo-data-stack entities to execute successfully and produce queryable reporting tables so I can retire the custom Python pipeline"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr run from examples/timo-data-stack/ completes with 0 errors for all 9 entities",
+    "Execution order respects dependencies: leaf entities → person → account",
+    "DuckDB file contains tables: dim_ghost_person, dim_mailerlite_person, dim_transactions, dim_subscriptions, dim_product, dim_signals, dim_anon, dim_person, dim_account",
+    "Each table has non-zero row counts",
+    "Person table correctly merges records from 4 source entities via email match key",
+    "Account table correctly aggregates from person with GROUP BY account_id",
+    "Tables are queryable with DuckDB CLI or Python after fyr run exits",
+    "Pipeline completes in under 30 seconds on sample data",
+    "All existing 828+ framework tests still pass",
+    "Any framework bugs discovered during validation are fixed with tests",
+]
+
+validator_context = [
+    "examples/timo-data-stack/",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/cli.py",
+]
+
+depends_on = ["M007-E001", "M007-E002"]

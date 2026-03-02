@@ -1,0 +1,57 @@
+id = "M007-E001-S002"
+parent = "M007-E001"
+title = "Generate parquet files for UnionSource and anon entities"
+status = "in-progress"
+created = 2026-03-02
+
+[outcome]
+description = """
+Parquet files exist for the remaining source tables: youtube_videos, authoredup_posts
+(for product union), walker_events, shortio_clicks (for signals union + anon entity).
+Note ghost_members is already created in S001 and is reused by the signals union source.
+Each file has correct columns matching the field_mappings defined in the entity sources.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/youtube_videos/ contains a parquet file with columns: video_id, title, view_count, like_count, comment_count, share_count (plus any other fields the entity references)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/authoredup_posts/ contains a parquet file with columns: post_id, text, impressions, reactions, comments, shares"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/walker_events/ contains a parquet file with columns: session_id, timestamp, referrer, event_name, page_path, email"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "examples/timo-data-stack/data/shortio_clicks/ contains a parquet file with columns: clicked_at, utm_source, utm_medium, utm_campaign, email"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "walker_events includes referrer values from multiple categories (google.com for seo, linkedin.com for social, direct/empty) to test categorize_contains"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "walker_events and shortio_clicks include some of the same emails used in S001 leaf sources for cross-source identity matching"
+
+[context]
+relevant_paths = [
+    "examples/timo-data-stack/entities/product.py",
+    "examples/timo-data-stack/entities/signals.py",
+    "examples/timo-data-stack/entities/anon.py",
+]
+depends_on = ["M007-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- Extend the generate_sample_data.py script from S001
+- walker_events is used by BOTH signals and anon entities — one parquet file serves both
+- ghost_members is also reused by signals (already created in S001)
+- Include varied referrer URLs for anon channel_category testing
+- shortio_clicks needs email column even though it's not in the entity field_mappings (used for person matching via signals)
+"""

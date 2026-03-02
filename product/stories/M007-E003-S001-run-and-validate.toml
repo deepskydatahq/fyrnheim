@@ -1,0 +1,82 @@
+id = "M007-E003-S001"
+parent = "M007-E003"
+title = "Run fyr run end-to-end and fix any issues"
+status = "in-progress"
+created = 2026-03-02
+
+[outcome]
+description = """
+Running `cd examples/timo-data-stack && fyr run` executes all 9 entities without errors.
+Any framework bugs discovered during this run are fixed with tests. The DuckDB file
+contains all expected dim tables with non-zero row counts.
+"""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "fyr run from examples/timo-data-stack/ exits with code 0 (no errors)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "CLI output shows 9 entities executed successfully with row counts"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Execution order respects dependencies: 7 leaf entities before person, person before account"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "timo.duckdb file exists after fyr run completes"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "DuckDB file contains tables for all entities: dim_ghost_person, dim_mailerlite_person, dim_transactions, dim_subscriptions, dim_product, dim_signals, dim_anon, dim_person, dim_account"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Each table has non-zero row counts when queried with: python -c \"import duckdb; print(duckdb.connect('timo.duckdb').sql('SELECT count(*) FROM dim_person').fetchall())\""
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "dim_person contains merged records with is_ghost_person, is_transactions, etc. boolean flags"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "dim_account contains aggregated records with num_persons, has_ghost_person, etc."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Pipeline completes in under 30 seconds on sample data"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing 828+ framework tests still pass (uv run pytest)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Any framework bugs fixed during this story have corresponding test coverage"
+
+[context]
+relevant_paths = [
+    "examples/timo-data-stack/",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+depends_on = ["M007-E001-S001", "M007-E001-S002", "M007-E002-S001"]
+
+[handoff]
+implementation_hints = """
+- This is the integration story — run fyr run and fix whatever breaks
+- Common issues to watch for:
+  - Type mismatches between parquet columns and entity expectations
+  - Missing columns in sample data
+  - Glob pattern issues (duckdb_path resolution)
+  - Computed column expressions failing on real data types
+  - Identity graph join issues with DuckDB
+- Fix bugs in framework code, not by working around them in data
+- Each fix should have a test in the framework test suite
+"""

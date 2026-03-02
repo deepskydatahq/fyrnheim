@@ -1,0 +1,6 @@
+entities_dir: entities
+data_dir: data
+output_dir: generated
+backend: duckdb
+backend_config:
+  db_path: timo.duckdb

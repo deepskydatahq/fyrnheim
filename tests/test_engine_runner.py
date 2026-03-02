@@ -1,6 +1,7 @@
 """Tests for run() and run_entity() pipeline orchestration."""
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -11,9 +12,11 @@ from fyrnheim import (
     PrepLayer,
     TableSource,
 )
+from fyrnheim.core.source import UnionSource
 from fyrnheim.engine.runner import (
     EntityRunResult,
     RunResult,
+    _register_entity_source,
     _resolve_generated_dir,
     run,
     run_entity,
@@ -320,3 +323,149 @@ class TestLazyImports:
         import fyrnheim
 
         assert fyrnheim.IbisExecutor is not None
+
+
+# ---------------------------------------------------------------------------
+# _register_entity_source tests
+# ---------------------------------------------------------------------------
+
+
+class TestRegisterEntitySource:
+    """Tests for _register_entity_source handling various source types."""
+
+    def test_union_source_registers_sub_sources(self, tmp_path):
+        """UnionSource sub-sources are registered with naming convention."""
+        data_dir = tmp_path / "data"
+        _create_parquet(data_dir / "youtube_videos", "sample")
+        _create_parquet(data_dir / "linkedin_posts", "sample")
+
+        entity = Entity(
+            name="product",
+            description="Test union entity",
+            source=UnionSource(
+                sources=[
+                    TableSource(
+                        project="p", dataset="d", table="youtube_videos",
+                        duckdb_path="youtube_videos/*.parquet",
+                    ),
+                    TableSource(
+                        project="p", dataset="d", table="linkedin_posts",
+                        duckdb_path="linkedin_posts/*.parquet",
+                    ),
+                ],
+            ),
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_product")),
+        )
+
+        executor = MagicMock()
+        _register_entity_source(executor, entity, data_dir)
+
+        # Should register both sub-sources with correct naming
+        calls = executor.register_parquet.call_args_list
+        registered_names = {call[0][0] for call in calls}
+        assert "source_product_youtube_videos" in registered_names
+        assert "source_product_linkedin_posts" in registered_names
+
+    def test_single_source_registers_normally(self, tmp_path):
+        """Single TableSource is registered as source_{entity_name}."""
+        data_dir = tmp_path / "data"
+        _create_parquet(data_dir / "orders", "sample")
+
+        entity = Entity(
+            name="orders",
+            description="Test entity",
+            source=TableSource(
+                project="p", dataset="d", table="orders",
+                duckdb_path="orders/*.parquet",
+            ),
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_orders")),
+        )
+
+        executor = MagicMock()
+        _register_entity_source(executor, entity, data_dir)
+
+        calls = executor.register_parquet.call_args_list
+        assert len(calls) == 1
+        assert calls[0][0][0] == "source_orders"
+
+
+class TestSourceMappingNotBypassed:
+    """Test that SourceMapping renames are applied when running through runner."""
+
+    def test_source_mapping_renames_applied(self, tmp_path):
+        """SourceMapping renames are preserved when source is registered with runner."""
+        from fyrnheim import DimensionLayer, Field, SourceMapping
+
+        # Create parquet with source column names
+        data_dir = tmp_path / "data" / "transactions"
+        data_dir.mkdir(parents=True)
+        df = pd.DataFrame({
+            "id": ["tx-001", "tx-002"],
+            "subtotal": [9900, 4900],
+            "currency": ["USD", "USD"],
+        })
+        df.to_parquet(data_dir / "sample.parquet", index=False)
+
+        entity = Entity(
+            name="transactions",
+            description="Test entity with source mapping",
+            required_fields=[
+                Field(name="transaction_id", type="STRING"),
+                Field(name="amount_cents", type="INT64"),
+                Field(name="currency", type="STRING"),
+            ],
+            source=TableSource(
+                project="p", dataset="d", table="transactions",
+                duckdb_path="transactions/*.parquet",
+                fields=[
+                    Field(name="id", type="STRING"),
+                    Field(name="subtotal", type="INT64"),
+                    Field(name="currency", type="STRING"),
+                ],
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_transactions"),
+                dimension=DimensionLayer(model_name="dim_transactions"),
+            ),
+        )
+
+        source_mapping = SourceMapping(
+            entity=entity,
+            source=entity.source,
+            field_mappings={
+                "transaction_id": "id",
+                "amount_cents": "subtotal",
+                "currency": "currency",
+            },
+        )
+
+        result = run_entity(
+            entity,
+            tmp_path / "data",
+            source_mapping=source_mapping,
+        )
+
+        assert result.status == "success"
+        assert result.row_count == 2
+
+        # Verify the dim table has renamed columns
+        import duckdb
+        conn = duckdb.connect()
+        # Re-run to get a persistent connection we can query
+        from fyrnheim.engine.connection import create_connection
+        from fyrnheim.engine.executor import IbisExecutor
+        from fyrnheim._generate import generate
+
+        gen_dir = tmp_path / "generated"
+        generate(entity, output_dir=gen_dir, source_mapping=source_mapping)
+
+        ibis_conn = create_connection("duckdb")
+        with IbisExecutor(conn=ibis_conn, backend="duckdb", generated_dir=gen_dir) as executor:
+            executor.register_parquet("source_transactions", tmp_path / "data" / "transactions" / "*.parquet")
+            exec_result = executor.execute("transactions", entity=entity)
+            dim_table = ibis_conn.table("dim_transactions")
+            columns = list(dim_table.columns)
+
+        assert "transaction_id" in columns
+        assert "amount_cents" in columns
+        assert "id" not in columns  # original column name should be renamed

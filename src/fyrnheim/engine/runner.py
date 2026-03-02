@@ -94,11 +94,15 @@ def _register_entity_source(
     """Register an entity's source parquet data with the executor.
 
     Resolves ``duckdb_path`` from the entity source relative to ``data_dir``.
+    Handles both single TableSource and UnionSource (registers each sub-source).
     """
+    from fyrnheim.core.source import UnionSource
+
     source = entity.source
     if source is None:
         return
 
+    # Register single TableSource
     duckdb_path = getattr(source, "duckdb_path", None)
     if duckdb_path:
         resolved = data_dir / duckdb_path
@@ -110,6 +114,21 @@ def _register_entity_source(
                 f"Data file not found: {duckdb_path} "
                 f"(entity: {entity.name}, data_dir: {data_dir})"
             ) from None
+
+    # Register UnionSource sub-sources
+    if isinstance(source, UnionSource):
+        for sub_source in source.sources:
+            if sub_source.duckdb_path:
+                resolved = data_dir / sub_source.duckdb_path
+                sub_name = f"source_{entity.name}_{sub_source.table}"
+                try:
+                    executor.register_parquet(sub_name, resolved)
+                except SourceNotFoundError:
+                    raise SourceNotFoundError(
+                        f"Data file not found: {sub_source.duckdb_path} "
+                        f"(entity: {entity.name}, source: {sub_source.table}, "
+                        f"data_dir: {data_dir})"
+                    ) from None
 
 
 # ---------------------------------------------------------------------------

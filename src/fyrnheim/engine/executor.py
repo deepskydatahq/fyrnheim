@@ -197,11 +197,8 @@ class IbisExecutor:
         activity_row_count: int | None = None
         analytics_row_count: int | None = None
 
-        # Prefer registered source (has correct resolved path from runner)
-        source_name = f"source_{entity_name}"
-        if source_name in self._registered_sources:
-            t = conn.table(source_name)
-        elif entity is not None and isinstance(entity.source, DerivedSource) and entity.source.identity_graph_config is not None:
+        # Resolve source data for the entity
+        if entity is not None and isinstance(entity.source, DerivedSource) and entity.source.identity_graph_config is not None:
             # DerivedSource path: build sources_dict from catalog
             source_fn = getattr(module, f"source_{entity_name}", None)
             if source_fn is None:
@@ -228,10 +225,14 @@ class IbisExecutor:
                 )
             t = source_fn(dep_table)
         else:
-            # Fall back to source function in generated code
+            # Call the generated source function — it handles registered tables
+            # (via conn.table) and fallback to read_parquet internally
             source_fn = getattr(module, f"source_{entity_name}", None)
+            source_name = f"source_{entity_name}"
             if source_fn is not None:
                 t = source_fn(conn, backend)
+            elif source_name in self._registered_sources:
+                t = conn.table(source_name)
             else:
                 raise ExecutionError(
                     f"No source function or registered source for {entity_name}"

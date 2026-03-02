@@ -134,7 +134,7 @@ class TestRenameGeneration:
         )
         gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
         code = gen._generate_source_functions()
-        assert "conn.read_parquet(parquet_path).rename(" in code
+        assert "return raw.rename(" in code
 
     def test_single_rename_in_bigquery_branch(self, simple_entity):
         sm = SourceMapping(

@@ -116,8 +116,12 @@ import ibis
 def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
     """Read {name} from configured source."""
     if backend == "duckdb":
-        parquet_path = os.path.expanduser("{duckdb_path}")
-        return conn.read_parquet(parquet_path){rename}
+        try:
+            raw = conn.table("source_{name}")
+        except Exception:
+            parquet_path = os.path.expanduser("{duckdb_path}")
+            raw = conn.read_parquet(parquet_path)
+        return raw{rename}
     elif backend == "bigquery":
         return conn.table("{source.table}", database=("{source.project}", "{source.dataset}")){rename}
     else:
@@ -184,8 +188,12 @@ def source_{name}(source_{source.source_entity}: ibis.Table) -> ibis.Table:
 def {sub_name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
     """Read {src_label} for {name} union."""
     if backend == "duckdb":
-        parquet_path = os.path.expanduser("{duckdb_path}")
-        return conn.read_parquet(parquet_path){suffix}
+        try:
+            raw = conn.table("{sub_name}")
+        except Exception:
+            parquet_path = os.path.expanduser("{duckdb_path}")
+            raw = conn.read_parquet(parquet_path)
+        return raw{suffix}
     elif backend == "bigquery":
         return conn.table("{sub_source.table}", database=("{sub_source.project}", "{sub_source.dataset}")){suffix}
     else:

@@ -281,8 +281,8 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
 
             lines.append(f"    result = {left}.outer_join(")
             lines.append(f"        {right}, {left}.{match_key} == {right}.{match_key},")
-            lines.append(f'        lname="", rname="_right",')
-            lines.append(f"    ).select(")
+            lines.append('        lname="", rname="_right",')
+            lines.append("    ).select(")
 
             # Build the select list
             select_items: list[str] = []
@@ -339,12 +339,12 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
                     select_items.append(f"        {date_col}={ref}.{date_col}")
 
             lines.append(",\n".join(select_items) + ",")
-            lines.append(f"    )")
+            lines.append("    )")
 
             # Cache intermediate results to break Ibis expression chain
             # (avoids IntegrityError on cascading joins with 3+ sources)
             if i < len(ig_sources) - 1:
-                lines.append(f"    result = result.cache()")
+                lines.append("    result = result.cache()")
         lines.append("")
 
         # PriorityCoalesce
@@ -365,9 +365,9 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
                     chain += f".fillna(result.{field_name}_{s})"
                 coalesce_parts.append(f"        {field_name}={chain}")
         if coalesce_parts:
-            lines.append(f"    result = result.mutate(")
+            lines.append("    result = result.mutate(")
             lines.append(",\n".join(coalesce_parts) + ",")
-            lines.append(f"    )")
+            lines.append("    )")
         lines.append("")
 
         # Source flags
@@ -375,9 +375,9 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
             f"        is_{src.name}=result._{src.name}_match_key.notnull()"
             for src in ig_sources
         ]
-        lines.append(f"    result = result.mutate(")
+        lines.append("    result = result.mutate(")
         lines.append(",\n".join(flag_parts) + ",")
-        lines.append(f"    )")
+        lines.append("    )")
         lines.append("")
 
         # Drop intermediate columns
@@ -390,7 +390,7 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
             drop_list.append(f'"_{src.name}_match_key"')
         lines.append(f"    result = result.drop({', '.join(drop_list)})")
         lines.append("")
-        lines.append(f"    return result")
+        lines.append("    return result")
 
         return "\n".join(lines)
 

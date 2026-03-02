@@ -25,8 +25,8 @@ from fyrnheim import (
     TableSource,
     UnionSource,
 )
-from fyrnheim.core.source import IdentityGraphConfig, IdentityGraphSource
 from fyrnheim._generate import generate
+from fyrnheim.core.source import IdentityGraphConfig, IdentityGraphSource
 from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.executor import IbisExecutor
 
@@ -997,7 +997,6 @@ class TestE2ESimpleTableSourceEntities:
     def test_runner_discovers_and_executes_both(self, ghost_and_mailerlite_data):
         """runner.run() discovers both entities from directory and executes them."""
         from fyrnheim.engine.runner import run
-        from fyrnheim.primitives import hash_email
 
         base_dir, ghost_count, ml_count = ghost_and_mailerlite_data
         data_dir = base_dir / "data"
@@ -1382,7 +1381,6 @@ class TestE2ESourceMappingEntities:
     def test_runner_with_sourcemapping(self, sourcemapping_data):
         """runner.run() discovers source_mapping from entity modules and applies it."""
         from fyrnheim.engine.runner import run
-        from fyrnheim.primitives import hash_email
 
         base_dir, txn_count, sub_count = sourcemapping_data
         data_dir = base_dir / "data"
@@ -2011,7 +2009,6 @@ class TestE2ERunnerUnionEntities:
     def test_runner_discovers_all_three_entities(self, runner_data):
         """runner.run() discovers and executes product, signals, anon."""
         from fyrnheim.engine.runner import run
-        from fyrnheim.primitives import categorize_contains, concat_hash, hash_email
 
         base_dir, data_dir = runner_data
         entities_dir = base_dir / "entities"

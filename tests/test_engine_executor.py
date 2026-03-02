@@ -6,7 +6,7 @@ import ibis
 import pandas as pd
 import pytest
 
-from fyrnheim import Entity, LayersConfig, PrepLayer, DerivedSource
+from fyrnheim import DerivedSource, Entity, LayersConfig, PrepLayer
 from fyrnheim.core.source import IdentityGraphConfig, IdentityGraphSource
 from fyrnheim.engine import (
     ExecutionError,

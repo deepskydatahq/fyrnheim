@@ -3,7 +3,7 @@
 id = "M007-E003"
 parent = "M007"
 title = "Run fyr run end-to-end on all 9 timo entities and validate persistent results"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

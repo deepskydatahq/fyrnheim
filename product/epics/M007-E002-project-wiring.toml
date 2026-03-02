@@ -3,7 +3,7 @@
 id = "M007-E002"
 parent = "M007"
 title = "Create fyrnheim.yaml with persistent DuckDB config for examples/timo-data-stack"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

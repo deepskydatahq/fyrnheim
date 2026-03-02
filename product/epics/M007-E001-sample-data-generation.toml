@@ -3,7 +3,7 @@
 id = "M007-E001"
 parent = "M007"
 title = "Generate sample parquet data files matching timo-data-stack source schemas"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

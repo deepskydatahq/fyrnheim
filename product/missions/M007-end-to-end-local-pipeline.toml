@@ -3,7 +3,7 @@
 
 id = "M007"
 title = "End-to-end local pipeline: fyr run produces persistent reporting tables"
-status = "active"
+status = "complete"
 created = 2026-03-02
 depends_on = ["M006"]
 

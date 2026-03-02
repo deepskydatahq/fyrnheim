@@ -811,13 +811,13 @@ class TestDerivedSourceCodeGeneration:
         code = gen._generate_source_functions()
         assert ".outer_join(" in code
 
-    def test_fillna_chain_in_priority_order(self):
+    def test_fill_null_chain_in_priority_order(self):
         entity = self._make_entity()
         gen = IbisCodeGenerator(entity)
         code = gen._generate_source_functions()
         assert "name_hubspot" in code
         assert "name_stripe" in code
-        assert ".fillna(" in code
+        assert ".fill_null(" in code
 
     def test_source_flags(self):
         entity = self._make_entity()

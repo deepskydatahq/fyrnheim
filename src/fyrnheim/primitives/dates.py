@@ -98,15 +98,15 @@ def earliest_date(*date_cols: str) -> str:
 
     Example:
         >>> earliest_date("date1", "date2", "date3")
-        'ibis.least(t.date1.fillna(...), t.date2.fillna(...), t.date3.fillna(...))'
+        'ibis.least(t.date1.fill_null(...), t.date2.fill_null(...), t.date3.fill_null(...))'
     """
-    # Add t. prefix if not already present and handle fillna for nulls
+    # Add t. prefix if not already present and handle fill_null for nulls
     processed_cols = []
     for col in date_cols:
         if not col.startswith(("t.", "ibis.")):
             col = f"t.{col}"
         # Fill nulls with far future date to exclude from LEAST
-        processed_cols.append(f'{col}.fillna(ibis.date("9999-12-31"))')
+        processed_cols.append(f'{col}.fill_null(ibis.date("9999-12-31"))')
 
     return f'ibis.least({", ".join(processed_cols)})'
 
@@ -122,14 +122,14 @@ def latest_date(*date_cols: str) -> str:
 
     Example:
         >>> latest_date("date1", "date2", "date3")
-        'ibis.greatest(t.date1.fillna(...), t.date2.fillna(...), t.date3.fillna(...))'
+        'ibis.greatest(t.date1.fill_null(...), t.date2.fill_null(...), t.date3.fill_null(...))'
     """
-    # Add t. prefix if not already present and handle fillna for nulls
+    # Add t. prefix if not already present and handle fill_null for nulls
     processed_cols = []
     for col in date_cols:
         if not col.startswith(("t.", "ibis.")):
             col = f"t.{col}"
         # Fill nulls with far past date to exclude from GREATEST
-        processed_cols.append(f'{col}.fillna(ibis.date("1970-01-01"))')
+        processed_cols.append(f'{col}.fill_null(ibis.date("1970-01-01"))')
 
     return f'ibis.greatest({", ".join(processed_cols)})'

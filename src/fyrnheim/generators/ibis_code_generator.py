@@ -362,7 +362,7 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
             if len(sources_with_field) >= 2:
                 chain = f"result.{field_name}_{sources_with_field[0]}"
                 for s in sources_with_field[1:]:
-                    chain += f".fillna(result.{field_name}_{s})"
+                    chain += f".fill_null(result.{field_name}_{s})"
                 coalesce_parts.append(f"        {field_name}={chain}")
         if coalesce_parts:
             lines.append("    result = result.mutate(")

@@ -111,6 +111,71 @@ def generate_subscriptions() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 5. youtube_videos (product union source)
+# ---------------------------------------------------------------------------
+
+def generate_youtube_videos() -> None:
+    df = pd.DataFrame([
+        {"video_id": "yt-001", "title": "Getting Started with Data Modeling", "view_count": 1200, "like_count": 85, "comment_count": 12, "share_count": 8},
+        {"video_id": "yt-002", "title": "Advanced Entity Design", "view_count": 890, "like_count": 62, "comment_count": 7, "share_count": 5},
+        {"video_id": "yt-003", "title": "Building Data Pipelines", "view_count": 2300, "like_count": 150, "comment_count": 23, "share_count": 18},
+        {"video_id": "yt-004", "title": "DuckDB for Analytics", "view_count": 3100, "like_count": 210, "comment_count": 31, "share_count": 25},
+        {"video_id": "yt-005", "title": "Python vs SQL for Transforms", "view_count": 1800, "like_count": 120, "comment_count": 45, "share_count": 15},
+    ])
+    _write(df, "youtube_videos")
+
+
+# ---------------------------------------------------------------------------
+# 6. authoredup_posts (product union source)
+# ---------------------------------------------------------------------------
+
+def generate_authoredup_posts() -> None:
+    df = pd.DataFrame([
+        {"post_id": "li-001", "text": "Why data modeling matters more than tools", "impressions": 5400, "reactions": 120, "comments": 18, "shares": 12},
+        {"post_id": "li-002", "text": "Stop building dashboards nobody uses", "impressions": 8200, "reactions": 340, "comments": 52, "shares": 45},
+        {"post_id": "li-003", "text": "The future of analytics engineering", "impressions": 3100, "reactions": 95, "comments": 8, "shares": 6},
+        {"post_id": "li-004", "text": "Lessons from migrating off dbt", "impressions": 12000, "reactions": 580, "comments": 87, "shares": 72},
+    ])
+    _write(df, "authoredup_posts")
+
+
+# ---------------------------------------------------------------------------
+# 7. walker_events (signals union source + anon entity)
+# ---------------------------------------------------------------------------
+
+def generate_walker_events() -> None:
+    df = pd.DataFrame([
+        {"session_id": "ws-001", "timestamp": pd.Timestamp("2024-03-01 10:15:00"), "referrer": "https://google.com/search?q=data+modeling", "event_name": "page_view", "page_path": "/blog/data-modeling", "email": "alice@acme.com"},
+        {"session_id": "ws-002", "timestamp": pd.Timestamp("2024-03-02 14:30:00"), "referrer": "https://linkedin.com/feed", "event_name": "page_view", "page_path": "/", "email": "bob@acme.com"},
+        {"session_id": "ws-003", "timestamp": pd.Timestamp("2024-03-03 09:00:00"), "referrer": "", "event_name": "page_view", "page_path": "/pricing", "email": ""},
+        {"session_id": "ws-004", "timestamp": pd.Timestamp("2024-03-04 16:45:00"), "referrer": "https://google.com/search?q=fyrnheim", "event_name": "page_view", "page_path": "/docs", "email": "carol@gmail.com"},
+        {"session_id": "ws-005", "timestamp": pd.Timestamp("2024-03-05 11:20:00"), "referrer": "https://youtube.com/watch?v=abc", "event_name": "page_view", "page_path": "/blog/pipelines", "email": ""},
+        {"session_id": "ws-006", "timestamp": pd.Timestamp("2024-03-06 08:00:00"), "referrer": "https://mail.google.com", "event_name": "signup", "page_path": "/signup", "email": "eve@gmail.com"},
+        {"session_id": "ws-007", "timestamp": pd.Timestamp("2024-03-07 13:10:00"), "referrer": "https://linkedin.com/feed", "event_name": "page_view", "page_path": "/about", "email": "frank@acme.com"},
+        {"session_id": "ws-008", "timestamp": pd.Timestamp("2024-03-08 15:30:00"), "referrer": "", "event_name": "page_view", "page_path": "/blog/duckdb", "email": ""},
+        {"session_id": "ws-009", "timestamp": pd.Timestamp("2024-03-09 10:00:00"), "referrer": "https://bing.com/search", "event_name": "page_view", "page_path": "/", "email": ""},
+        {"session_id": "ws-010", "timestamp": pd.Timestamp("2024-03-10 12:00:00"), "referrer": "https://chatgpt.com", "event_name": "page_view", "page_path": "/docs/quickstart", "email": "hank@bigcorp.io"},
+    ])
+    _write(df, "walker_events")
+
+
+# ---------------------------------------------------------------------------
+# 8. shortio_clicks (signals union source)
+# ---------------------------------------------------------------------------
+
+def generate_shortio_clicks() -> None:
+    df = pd.DataFrame([
+        {"clicked_at": pd.Timestamp("2024-03-01 12:00:00"), "utm_source": "linkedin", "utm_medium": "social", "utm_campaign": "launch-week", "email": "alice@acme.com"},
+        {"clicked_at": pd.Timestamp("2024-03-02 09:30:00"), "utm_source": "newsletter", "utm_medium": "email", "utm_campaign": "weekly-digest", "email": "bob@acme.com"},
+        {"clicked_at": pd.Timestamp("2024-03-03 14:15:00"), "utm_source": "linkedin", "utm_medium": "social", "utm_campaign": "launch-week", "email": "dave@example.org"},
+        {"clicked_at": pd.Timestamp("2024-03-04 10:45:00"), "utm_source": "twitter", "utm_medium": "social", "utm_campaign": "product-update", "email": "eve@gmail.com"},
+        {"clicked_at": pd.Timestamp("2024-03-05 16:00:00"), "utm_source": "newsletter", "utm_medium": "email", "utm_campaign": "weekly-digest", "email": "grace@gmail.com"},
+        {"clicked_at": pd.Timestamp("2024-03-06 11:30:00"), "utm_source": "linkedin", "utm_medium": "social", "utm_campaign": "blog-post", "email": "hank@bigcorp.io"},
+    ])
+    _write(df, "shortio_clicks")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -120,4 +185,8 @@ if __name__ == "__main__":
     generate_mailerlite_subscribers()
     generate_transactions()
     generate_subscriptions()
+    generate_youtube_videos()
+    generate_authoredup_posts()
+    generate_walker_events()
+    generate_shortio_clicks()
     print("Done.")

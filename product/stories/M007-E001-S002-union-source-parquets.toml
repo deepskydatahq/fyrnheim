@@ -1,7 +1,7 @@
 id = "M007-E001-S002"
 parent = "M007-E001"
 title = "Generate parquet files for UnionSource and anon entities"
-status = "in-progress"
+status = "complete"
 created = 2026-03-02
 
 [outcome]

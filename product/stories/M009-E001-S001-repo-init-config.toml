@@ -1,0 +1,39 @@
+# Story: Initialize timo-data repo with fyrnheim config and dependencies
+
+id = "M009-E001-S001"
+epic = "M009-E001"
+title = "Initialize timo-data repo with fyrnheim.yaml, pyproject.toml, and project structure"
+status = "ready"
+
+[outcome]
+description = """
+A new timo-data git repository with: fyrnheim.yaml configured for DuckDB backend
+with ClickHouse output, pyproject.toml with fyrnheim[clickhouse] and dlt dependencies,
+.gitignore for generated files and secrets, directory structure (entities/, data/,
+generated/), and a README documenting the architecture.
+"""
+
+job_story = "When I clone timo-data I want a ready-to-use project structure with all config in place so I just need to add entities and data"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "timo-data repo created with git init in a sibling directory to fyrnheim",
+    "fyrnheim.yaml has entities_dir: entities, data_dir: data, output_dir: generated",
+    "fyrnheim.yaml has backend: duckdb with backend_config.db_path: timo.duckdb",
+    "fyrnheim.yaml has output_backend: clickhouse with output_config (host, port, database, user, password)",
+    "pyproject.toml has fyrnheim[clickhouse] as dependency",
+    "pyproject.toml has dlt with relevant source extras as dependencies",
+    ".gitignore includes generated/, *.duckdb, .dlt/, __pycache__/, data/",
+    "Empty directories created: entities/, data/, generated/",
+    "README.md documents: purpose, architecture (DLT → parquet → fyr run → ClickHouse), how to run",
+]
+
+validator_context = [
+    "timo-data/fyrnheim.yaml",
+    "timo-data/pyproject.toml",
+    "timo-data/.gitignore",
+    "timo-data/README.md",
+]
+
+depends_on = []

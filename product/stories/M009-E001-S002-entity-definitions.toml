@@ -1,0 +1,38 @@
+# Story: Add all 9 entity definitions and verify fyr generate
+
+id = "M009-E001-S002"
+epic = "M009-E001"
+title = "Add all 9 entity definitions from timo-data-stack and verify fyr generate"
+status = "ready"
+
+[outcome]
+description = """
+All 9 entity definitions from examples/timo-data-stack are present in entities/.
+Entity duckdb_path values already point to data/{source}/*.parquet which matches
+DLT output conventions. fyr generate produces valid Python modules for all entities.
+"""
+
+job_story = "When I run fyr generate in timo-data I want valid code for all 9 entities so the pipeline is ready once data arrives"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ghost_person.py present in entities/ with duckdb_path ghost_members/*.parquet",
+    "mailerlite_person.py present with duckdb_path mailerlite_subscribers/*.parquet",
+    "transactions.py present with duckdb_path transactions/*.parquet",
+    "subscriptions.py present with duckdb_path subscriptions/*.parquet",
+    "product.py present with UnionSource (youtube_videos + authoredup_posts)",
+    "signals.py present with UnionSource (walker_events + shortio_clicks + ghost_members)",
+    "anon.py present with duckdb_path walker_events/*.parquet",
+    "person.py present with DerivedSource + IdentityGraphConfig",
+    "account.py present with AggregationSource from person",
+    "fyr generate produces valid Python modules for all 9 entities without errors",
+    "All entity imports resolve (fyrnheim package available in environment)",
+]
+
+validator_context = [
+    "timo-data/entities/",
+    "timo-data/generated/",
+]
+
+depends_on = ["M009-E001-S001"]

@@ -3,7 +3,7 @@
 id = "M004-E003-S001"
 parent = "M004-E003"
 title = "Add --backend CLI option to fyr run command"
-status = "in-progress"
+status = "complete"
 depends_on = ["M004-E002-S003"]
 
 [outcome]

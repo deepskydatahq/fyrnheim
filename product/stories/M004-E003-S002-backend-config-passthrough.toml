@@ -3,7 +3,7 @@
 id = "M004-E003-S002"
 parent = "M004-E003"
 title = "Wire backend_config from resolved config through CLI to runner"
-status = "in-progress"
+status = "complete"
 depends_on = ["M004-E003-S001"]
 
 [outcome]

@@ -3,7 +3,7 @@
 id = "M004-E003"
 parent = "M004"
 title = "Add --backend CLI flag to fyr run"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

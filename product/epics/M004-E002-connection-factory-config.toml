@@ -3,7 +3,7 @@
 id = "M004-E002"
 parent = "M004"
 title = "Connection factory and BigQuery config support"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

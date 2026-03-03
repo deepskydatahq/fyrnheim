@@ -3,7 +3,7 @@
 
 id = "M004"
 title = "Production backend: generic Ibis executor with BigQuery support"
-status = "active"
+status = "complete"
 created = 2026-02-24
 depends_on = ["M001", "M002", "M003"]
 

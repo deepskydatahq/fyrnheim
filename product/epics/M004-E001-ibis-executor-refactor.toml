@@ -3,7 +3,7 @@
 id = "M004-E001"
 parent = "M004"
 title = "Refactor DuckDBExecutor into generic IbisExecutor"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

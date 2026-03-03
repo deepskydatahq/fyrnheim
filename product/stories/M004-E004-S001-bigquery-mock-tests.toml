@@ -3,7 +3,7 @@
 id = "M004-E004-S001"
 parent = "M004-E004"
 title = "Add mock-based tests for BigQuery executor path"
-status = "in-progress"
+status = "complete"
 depends_on = ["M004-E003-S002"]
 
 [outcome]

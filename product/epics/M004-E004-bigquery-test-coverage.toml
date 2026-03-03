@@ -3,7 +3,7 @@
 id = "M004-E004"
 parent = "M004"
 title = "BigQuery mock tests and E2E regression validation"
-status = "draft"
+status = "complete"
 
 [outcome]
 description = """

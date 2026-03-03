@@ -1,0 +1,36 @@
+# Epic: End-to-end validation with sample data and ClickHouse
+
+id = "M009-E003"
+parent = "M009"
+title = "Validate end-to-end pipeline: sample data to DuckDB to ClickHouse"
+status = "draft"
+
+[outcome]
+description = """
+The full pipeline is validated end-to-end: sample parquet data in data/ is
+transformed by fyr run on DuckDB, then dim/analytics/activity tables are pushed
+to a ClickHouse instance. The ClickHouse tables have correct schemas and row
+counts. This proves the pipeline works before connecting real DLT sources.
+"""
+
+job_story = "When I run fyr run with sample data I want to see tables appear in ClickHouse so I know the full pipeline works before going live"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Sample parquet data present in data/ for all sources (can reuse from examples/timo-data-stack)",
+    "fyr run executes all 9 entities without errors",
+    "fyr run pushes dim_* tables to ClickHouse",
+    "ClickHouse tables have expected columns matching entity field definitions",
+    "Row counts in ClickHouse match DuckDB source data",
+    "Person identity graph resolves correctly (dim_person joins 4 sources)",
+    "Account aggregation produces correct business account rollups",
+    "Push output in CLI shows all tables with row counts and ok status",
+]
+
+validator_context = [
+    "timo-data/fyrnheim.yaml",
+    "timo-data/data/",
+]
+
+depends_on = ["M009-E001"]

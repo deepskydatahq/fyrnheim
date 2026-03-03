@@ -1,0 +1,42 @@
+# Epic: DLT pipeline setup for all 7 data sources
+
+id = "M009-E002"
+parent = "M009"
+title = "Configure DLT pipelines for 7 data sources extracting to parquet"
+status = "draft"
+
+[outcome]
+description = """
+DLT pipelines extract data from 7 sources (Ghost, MailerLite, Lemonsqueezy,
+YouTube, AuthoredUp, Walker, Short.io) and write parquet files to the data/
+directory. Each source has its own pipeline script. DLT credentials are managed
+via .dlt/secrets.toml (gitignored). Running the extraction populates data/ with
+parquet files matching the paths expected by fyrnheim entity definitions.
+"""
+
+job_story = "When I run the DLT extraction I want parquet files in data/ for all 7 sources so fyr run can transform them"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "DLT pipeline scripts exist for all 7 sources",
+    "Ghost pipeline extracts members to data/ghost_members/*.parquet",
+    "MailerLite pipeline extracts subscribers to data/mailerlite_subscribers/*.parquet",
+    "Lemonsqueezy pipeline extracts transactions to data/transactions/*.parquet",
+    "Lemonsqueezy pipeline extracts subscriptions to data/subscriptions/*.parquet",
+    "YouTube pipeline extracts videos to data/youtube_videos/*.parquet",
+    "AuthoredUp pipeline extracts posts to data/authoredup_posts/*.parquet",
+    "Walker pipeline extracts events to data/walker_events/*.parquet",
+    "Short.io pipeline extracts clicks to data/shortio_clicks/*.parquet",
+    ".dlt/secrets.toml template exists with placeholder API keys",
+    ".dlt/ directory is in .gitignore",
+    "Each pipeline can run independently",
+]
+
+validator_context = [
+    "timo-data/dlt_pipelines/",
+    "timo-data/.dlt/",
+    "timo-data/.gitignore",
+]
+
+depends_on = ["M009-E001"]

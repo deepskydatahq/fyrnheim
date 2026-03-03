@@ -1,0 +1,37 @@
+# Epic: Production deployment on Hetzner with automated pipeline
+
+id = "M009-E004"
+parent = "M009"
+title = "Deploy pipeline on Hetzner with automated DLT extraction and fyr run"
+status = "draft"
+
+[outcome]
+description = """
+The timo-data pipeline runs on Hetzner with a deployment script that orchestrates:
+DLT extract (all 7 sources) → fyr run (DuckDB transform + ClickHouse push).
+A cron job or systemd timer runs the pipeline on a schedule. Entity duckdb_path
+values point to the production data directory on the Hetzner server. Real API
+credentials are configured in .dlt/secrets.toml on the server.
+"""
+
+job_story = "When the cron fires I want the full pipeline to run automatically so ClickHouse always has fresh analytics data"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "run.sh script orchestrates: DLT extract then fyr run",
+    "Script handles errors gracefully (one source failing doesn't block others)",
+    "Entity duckdb_path values work with production data paths on Hetzner",
+    "Cron job or systemd timer configured to run pipeline on schedule",
+    "Real DLT extraction succeeds for all 7 sources with production API keys",
+    "fyr run transforms real production data without errors",
+    "ClickHouse contains production data after full pipeline run",
+    "README documents deployment setup and credential management",
+]
+
+validator_context = [
+    "timo-data/run.sh",
+    "timo-data/README.md",
+]
+
+depends_on = ["M009-E002", "M009-E003"]

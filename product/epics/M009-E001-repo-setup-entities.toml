@@ -1,0 +1,38 @@
+# Epic: Repository setup with fyrnheim config and entity definitions
+
+id = "M009-E001"
+parent = "M009"
+title = "Create timo-data repo with fyrnheim config and all 9 entity definitions"
+status = "draft"
+
+[outcome]
+description = """
+A new timo-data git repository contains fyrnheim.yaml configured with DuckDB
+backend and ClickHouse output, plus all 9 entity definitions adapted from
+examples/timo-data-stack. Entity duckdb_path values point to a data/ directory
+structure matching DLT output conventions. fyr generate succeeds for all entities.
+"""
+
+job_story = "When I clone timo-data and run fyr generate I want valid Python modules for all 9 entities so the pipeline is ready for data"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "timo-data repo initialized with git init",
+    "fyrnheim.yaml has backend: duckdb with db_path config",
+    "fyrnheim.yaml has output_backend: clickhouse with host, port, database, user, password",
+    "fyrnheim.yaml has entities_dir, data_dir, output_dir configured",
+    "All 9 entity files present in entities/",
+    "Entity duckdb_path values point to data/{source}/*.parquet (DLT output pattern)",
+    "fyr generate produces valid Python modules for all 9 entities",
+    "pyproject.toml or requirements.txt includes fyrnheim[clickhouse] and dlt dependencies",
+    "README.md documents the repo structure and purpose",
+]
+
+validator_context = [
+    "timo-data/fyrnheim.yaml",
+    "timo-data/entities/",
+    "timo-data/README.md",
+]
+
+depends_on = []

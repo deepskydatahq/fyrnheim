@@ -3,7 +3,7 @@
 id = "M009-E001-S002"
 epic = "M009-E001"
 title = "Add all 9 entity definitions from timo-data-stack and verify fyr generate"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

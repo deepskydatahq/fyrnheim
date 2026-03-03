@@ -3,7 +3,7 @@
 id = "M009-E001"
 parent = "M009"
 title = "Create timo-data repo with fyrnheim config and all 9 entity definitions"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

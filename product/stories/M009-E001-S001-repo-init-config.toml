@@ -3,7 +3,7 @@
 id = "M009-E001-S001"
 epic = "M009-E001"
 title = "Initialize timo-data repo with fyrnheim.yaml, pyproject.toml, and project structure"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

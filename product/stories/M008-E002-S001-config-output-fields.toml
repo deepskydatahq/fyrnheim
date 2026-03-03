@@ -1,0 +1,41 @@
+# Story: Add output_backend and output_config to config system
+
+id = "M008-E002-S001"
+epic = "M008-E002"
+title = "Add output_backend and output_config fields to ProjectConfig, ResolvedConfig, and load/resolve"
+status = "ready"
+
+[outcome]
+description = """
+ProjectConfig and ResolvedConfig gain output_backend (str | None) and
+output_config (dict[str, str] | None) fields, both defaulting to None.
+load_config() reads them from fyrnheim.yaml. resolve_config() merges
+them with CLI overrides. Fully backward compatible — existing YAML
+without these fields works unchanged.
+"""
+
+job_story = "When I add output_backend: clickhouse to fyrnheim.yaml I want the config system to parse and carry it through to resolve_config()"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ProjectConfig has output_backend: str | None = None field",
+    "ProjectConfig has output_config: dict[str, str] | None = None field",
+    "ResolvedConfig has the same two new fields",
+    "load_config() reads output_backend from YAML (defaults to None if absent)",
+    "load_config() reads output_config dict from YAML (defaults to None if absent)",
+    "resolve_config() accepts output_backend and output_config parameters",
+    "resolve_config() merges: CLI override > YAML > None default",
+    "Unit test: YAML with output_backend parses to correct value",
+    "Unit test: YAML with output_config dict parses correctly",
+    "Unit test: YAML without output_backend returns None (backward compat)",
+    "Unit test: resolve_config() CLI override takes precedence over YAML",
+    "All existing tests pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/config.py",
+    "tests/test_config.py",
+]
+
+depends_on = []

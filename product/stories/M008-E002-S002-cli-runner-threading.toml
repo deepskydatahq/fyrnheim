@@ -1,0 +1,36 @@
+# Story: Thread output config through CLI and runner
+
+id = "M008-E002-S002"
+epic = "M008-E002"
+title = "Thread output_backend and output_config from CLI run command through to runner"
+status = "ready"
+
+[outcome]
+description = """
+The CLI run command reads output_backend/output_config from resolved config
+and passes them to engine_run() and engine_run_entity(). Runner signatures
+accept but do not yet use these parameters (push phase is M008-E003).
+"""
+
+job_story = "When fyr run loads config with output_backend I want it passed to the runner so the push phase can use it"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "run() in runner.py accepts output_backend: str | None = None parameter",
+    "run() in runner.py accepts output_config: dict[str, str] | None = None parameter",
+    "run_entity() in runner.py accepts the same two parameters",
+    "CLI run command passes cfg.output_backend and cfg.output_config to engine_run()",
+    "Unit test: run() accepts output_backend kwarg without error",
+    "Unit test: run_entity() accepts output_backend kwarg without error",
+    "All existing tests pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "tests/test_cli_run.py",
+    "tests/test_engine_runner.py",
+]
+
+depends_on = ["M008-E002-S001"]

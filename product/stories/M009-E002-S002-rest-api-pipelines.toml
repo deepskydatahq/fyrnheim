@@ -3,7 +3,7 @@
 id = "M009-E002-S002"
 epic = "M009-E002"
 title = "Create DLT pipelines for Ghost, MailerLite, Lemonsqueezy, and Short.io"
-status = "brainstorm"
+status = "complete"
 
 [outcome]
 description = """

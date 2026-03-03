@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import ibis
+
 from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.errors import SourceNotFoundError
 from fyrnheim.engine.executor import IbisExecutor
@@ -42,12 +44,23 @@ class EntityRunResult:
 
 
 @dataclass(frozen=True)
+class PushedTable:
+    """Result of pushing a single table to the output backend."""
+
+    table_name: str
+    row_count: int = 0
+    status: Literal["ok", "error"] = "ok"
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class RunResult:
     """Result of running the full pipeline."""
 
     entities: list[EntityRunResult] = field(default_factory=list)
     total_duration_seconds: float = 0.0
     backend: str = "duckdb"
+    pushed_tables: list[PushedTable] = field(default_factory=list)
 
     @property
     def success_count(self) -> int:
@@ -129,6 +142,46 @@ def _register_entity_source(
                         f"(entity: {entity.name}, source: {sub_source.table}, "
                         f"data_dir: {data_dir})"
                     ) from None
+
+
+_OUTPUT_TABLE_PREFIXES = ("dim_", "analytics_", "activity_")
+
+
+def _push_tables(
+    source_conn: ibis.BaseBackend,
+    output_backend: str,
+    output_config: dict[str, str] | None,
+) -> list[PushedTable]:
+    """Push output tables from source connection to output backend.
+
+    Filters tables to dim_*, analytics_*, activity_* prefixes and copies
+    each to the output backend with overwrite=True.
+    """
+    output_conn = create_connection(output_backend, **(output_config or {}))
+    pushed: list[PushedTable] = []
+
+    try:
+        all_tables = source_conn.list_tables()
+        output_tables = [t for t in all_tables if t.startswith(_OUTPUT_TABLE_PREFIXES)]
+        log.info("Push phase: %d tables to push to %s", len(output_tables), output_backend)
+
+        for table_name in sorted(output_tables):
+            try:
+                table = source_conn.table(table_name)
+                row_count = table.count().execute()
+                output_conn.create_table(table_name, table, overwrite=True)
+                pushed.append(PushedTable(table_name=table_name, row_count=row_count, status="ok"))
+                log.info("Pushed %s (%d rows)", table_name, row_count)
+            except Exception as exc:
+                pushed.append(PushedTable(table_name=table_name, status="error", error=str(exc)))
+                log.error("Failed to push %s: %s", table_name, exc)
+    finally:
+        try:
+            output_conn.disconnect()
+        except Exception:
+            pass
+
+    return pushed
 
 
 # ---------------------------------------------------------------------------
@@ -378,11 +431,17 @@ def run(
                         )
                     break
 
+        # Phase 4: Push to output backend (inside with block — conn still open)
+        pushed_tables: list[PushedTable] = []
+        if output_backend is not None:
+            pushed_tables = _push_tables(conn, output_backend, output_config)
+
     total_duration = time.monotonic() - pipeline_start
     run_result = RunResult(
         entities=results,
         total_duration_seconds=total_duration,
         backend=backend,
+        pushed_tables=pushed_tables,
     )
     log.info(
         "Pipeline complete: %d success, %d errors, %d skipped (%.1fs)",

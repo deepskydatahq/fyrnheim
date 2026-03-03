@@ -1,7 +1,7 @@
 """Tests for run() and run_entity() pipeline orchestration."""
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -13,9 +13,12 @@ from fyrnheim import (
     TableSource,
 )
 from fyrnheim.core.source import UnionSource
+from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.runner import (
     EntityRunResult,
+    PushedTable,
     RunResult,
+    _push_tables,
     _register_entity_source,
     _resolve_generated_dir,
     run,
@@ -469,3 +472,116 @@ class TestSourceMappingNotBypassed:
         assert "transaction_id" in columns
         assert "amount_cents" in columns
         assert "id" not in columns  # original column name should be renamed
+
+
+# ---------------------------------------------------------------------------
+# Push phase tests
+# ---------------------------------------------------------------------------
+
+
+class TestPushTables:
+    """Test _push_tables() helper and push phase integration."""
+
+    def test_filters_to_output_prefixes(self, tmp_path):
+        """Only dim_*, analytics_*, activity_* tables are pushed."""
+        conn = create_connection("duckdb")
+        # Create tables with various prefixes
+        for name in ["source_raw", "dim_users", "analytics_daily", "activity_clicks", "snapshot_old"]:
+            df = pd.DataFrame({"id": [1, 2]})
+            conn.create_table(name, df, overwrite=True)
+
+        mock_output = MagicMock()
+        with patch("fyrnheim.engine.runner.create_connection", return_value=mock_output):
+            pushed = _push_tables(conn, "clickhouse", {"host": "localhost"})
+
+        pushed_names = [p.table_name for p in pushed]
+        assert "dim_users" in pushed_names
+        assert "analytics_daily" in pushed_names
+        assert "activity_clicks" in pushed_names
+        assert "source_raw" not in pushed_names
+        assert "snapshot_old" not in pushed_names
+        conn.disconnect()
+
+    def test_creates_tables_with_overwrite(self, tmp_path):
+        """Each pushed table calls create_table on the output connection."""
+        conn = create_connection("duckdb")
+        conn.create_table("dim_products", pd.DataFrame({"id": [1, 2, 3]}), overwrite=True)
+
+        mock_output = MagicMock()
+        with patch("fyrnheim.engine.runner.create_connection", return_value=mock_output):
+            pushed = _push_tables(conn, "clickhouse", None)
+
+        assert len(pushed) == 1
+        assert pushed[0].table_name == "dim_products"
+        assert pushed[0].row_count == 3
+        assert pushed[0].status == "ok"
+        mock_output.create_table.assert_called_once()
+        call_kwargs = mock_output.create_table.call_args
+        assert call_kwargs[0][0] == "dim_products"
+        assert call_kwargs[1]["overwrite"] is True
+        conn.disconnect()
+
+    def test_push_error_captured_per_table(self, tmp_path):
+        """One table failing doesn't prevent others from pushing."""
+        conn = create_connection("duckdb")
+        conn.create_table("dim_ok", pd.DataFrame({"id": [1]}), overwrite=True)
+        conn.create_table("dim_fail", pd.DataFrame({"id": [2]}), overwrite=True)
+        conn.create_table("dim_also_ok", pd.DataFrame({"id": [3]}), overwrite=True)
+
+        mock_output = MagicMock()
+        call_count = 0
+
+        def side_effect(name, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if name == "dim_fail":
+                raise RuntimeError("connection lost")
+
+        mock_output.create_table.side_effect = side_effect
+
+        with patch("fyrnheim.engine.runner.create_connection", return_value=mock_output):
+            pushed = _push_tables(conn, "clickhouse", None)
+
+        assert len(pushed) == 3
+        statuses = {p.table_name: p.status for p in pushed}
+        assert statuses["dim_ok"] == "ok"
+        assert statuses["dim_fail"] == "error"
+        assert statuses["dim_also_ok"] == "ok"
+
+        failed = [p for p in pushed if p.status == "error"][0]
+        assert "connection lost" in failed.error
+        conn.disconnect()
+
+    def test_no_output_backend_no_push(self, tmp_path):
+        """run() without output_backend returns empty pushed_tables."""
+        entities_dir, data_dir, gen_dir = _setup_single_entity(tmp_path)
+        result = run(entities_dir, data_dir, generated_dir=gen_dir)
+        assert result.pushed_tables == []
+
+    def test_run_with_output_backend_pushes(self, tmp_path):
+        """run() with output_backend calls _push_tables."""
+        entities_dir, data_dir, gen_dir = _setup_single_entity(tmp_path)
+
+        mock_output = MagicMock()
+        with patch("fyrnheim.engine.runner.create_connection") as mock_create:
+            # First call is the compute backend (duckdb), let it through
+            # Second call is the output backend, return mock
+            real_create = create_connection
+            calls = []
+
+            def smart_create(backend, **kwargs):
+                calls.append(backend)
+                if backend == "clickhouse":
+                    return mock_output
+                return real_create(backend, **kwargs)
+
+            mock_create.side_effect = smart_create
+            result = run(
+                entities_dir, data_dir, generated_dir=gen_dir,
+                output_backend="clickhouse", output_config={"host": "localhost"},
+            )
+
+        assert "clickhouse" in calls
+        # dim_orders should be pushed
+        pushed_names = [p.table_name for p in result.pushed_tables]
+        assert "dim_orders" in pushed_names

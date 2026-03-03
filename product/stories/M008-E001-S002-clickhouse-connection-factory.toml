@@ -1,0 +1,38 @@
+# Story: Add ClickHouse to connection factory
+
+id = "M008-E001-S002"
+epic = "M008-E001"
+title = "Add ClickHouse backend to create_connection() with mocked unit tests"
+status = "ready"
+
+[outcome]
+description = """
+create_connection('clickhouse', host=..., database=...) returns an ibis.clickhouse
+connection. 'clickhouse' is added to SUPPORTED_BACKENDS. Missing extras raises
+ImportError with install hint. Unit tests follow the BigQuery mock pattern.
+"""
+
+job_story = "When I call create_connection('clickhouse', host='ch.example.com', database='analytics') I want an Ibis ClickHouse connection returned"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "'clickhouse' added to SUPPORTED_BACKENDS list",
+    "create_connection('clickhouse', host='x', database='y') calls ibis.clickhouse.connect(host='x', database='y')",
+    "create_connection('clickhouse') without kwargs uses sensible defaults (host='localhost', database='default')",
+    "Accepts host, port, database, user, password kwargs and passes them to ibis.clickhouse.connect()",
+    "Missing clickhouse extras raises ImportError with message containing 'pip install'",
+    "ImportError message mentions 'ibis-framework[clickhouse]'",
+    "Unit test class TestCreateConnectionClickHouse with mocked ibis.clickhouse.connect",
+    "Unit test for missing extras (same pattern as TestCreateConnectionBigQuery.test_missing_extras_raises_import_error)",
+    "Unit test for default parameters when no kwargs provided",
+    "SUPPORTED_BACKENDS list includes 'clickhouse'",
+    "All existing tests pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/connection.py",
+    "tests/test_engine_connection.py",
+]
+
+depends_on = ["M008-E001-S001"]

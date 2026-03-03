@@ -1,0 +1,30 @@
+# Story: Add ClickHouse extras to pyproject.toml
+
+id = "M008-E001-S001"
+epic = "M008-E001"
+title = "Add [clickhouse] optional dependency group to pyproject.toml"
+status = "ready"
+
+[outcome]
+description = """
+pyproject.toml has a [clickhouse] extras group following the same pattern as
+[duckdb] and [bigquery]. Installing with pip install fyrnheim[clickhouse] pulls
+in ibis-framework[clickhouse].
+"""
+
+job_story = "When I pip install fyrnheim[clickhouse] I want the ClickHouse Ibis backend installed so I can use it as an output sink"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pyproject.toml [project.optional-dependencies] has a 'clickhouse' group",
+    "clickhouse group includes 'ibis-framework[clickhouse]>=11.0.0'",
+    "Pattern matches existing duckdb and bigquery extras groups",
+    "uv sync --all-extras succeeds without errors",
+]
+
+validator_context = [
+    "pyproject.toml",
+]
+
+depends_on = []

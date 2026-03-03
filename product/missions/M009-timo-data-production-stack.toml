@@ -1,0 +1,104 @@
+# Mission: Production timo-data stack
+# Replace all custom Python with DLT + fyrnheim CLI for the full timo analytics pipeline
+
+id = "M009"
+title = "Production timo-data stack with DLT extraction and ClickHouse output"
+status = "draft"
+created = "2026-03-03"
+depends_on = ["M006", "M008"]
+
+[outcome]
+description = """
+A standalone timo-data repository contains DLT pipelines for 7 data sources
+(Ghost, MailerLite, Lemonsqueezy, YouTube, AuthoredUp, Walker, Short.io),
+9 fyrnheim entity definitions, and a fyrnheim.yaml that runs the full pipeline:
+DLT extracts → parquet on Hetzner → fyr run (DuckDB) → push dim/analytics/activity
+tables to ClickHouse on Hetzner. Zero custom Python — only config, entity
+definitions, and CLI invocations.
+"""
+
+user_progress = "From 'custom Python scripts for each data transformation' to 'fyr run does everything'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "timo-data repo exists as a separate git repository",
+    "DLT pipelines configured for all 7 sources: Ghost, MailerLite, Lemonsqueezy, YouTube, AuthoredUp, Walker, Short.io",
+    "DLT pipelines extract to parquet files in a structured data/ directory",
+    "All 9 entity definitions present: ghost_person, mailerlite_person, transactions, subscriptions, product, signals, anon, person, account",
+    "fyrnheim.yaml configures DuckDB backend with ClickHouse output",
+    "fyr generate produces valid Python modules for all 9 entities",
+    "fyr run executes all entities successfully on DuckDB",
+    "fyr run pushes dim_*/analytics_*/activity_* tables to ClickHouse",
+    "ClickHouse contains correct tables with expected schemas after push",
+    "No custom Python transformation code — only entity definitions and config",
+    "Deployment script or cron runs the full pipeline (DLT extract + fyr run)",
+    "README documents the architecture and how to run the pipeline",
+]
+
+validator_context = [
+    "timo-data/fyrnheim.yaml",
+    "timo-data/entities/",
+    "timo-data/dlt_pipelines/",
+    "timo-data/README.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "examples/timo-data-stack/entities/",
+    "examples/timo-data-stack/fyrnheim.yaml",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/config.py",
+]
+
+[scope]
+in_scope = [
+    "Create timo-data git repository",
+    "DLT pipelines for 7 data sources extracting to parquet",
+    "9 entity definitions adapted from examples/timo-data-stack",
+    "fyrnheim.yaml with DuckDB backend and ClickHouse output config",
+    "Deployment script for running the full pipeline on Hetzner",
+    "README documenting the architecture",
+]
+out_of_scope = [
+    "Fyrnheim framework changes (M008 covers ClickHouse support)",
+    "ClickHouse server provisioning (already running on Hetzner)",
+    "Monitoring, alerting, or observability",
+    "Historical data backfill beyond current DLT state",
+    "CI/CD pipeline (simple cron is sufficient)",
+]
+acceptable_breakage = [
+    "timo-data-stack example in fyrnheim repo may become stale — it was a stepping stone",
+]
+
+[notes]
+considerations = """
+Data sources and DLT verified sources:
+- Ghost: REST API (members endpoint)
+- MailerLite: REST API (subscribers)
+- Lemonsqueezy: REST API (transactions, subscriptions)
+- YouTube: YouTube Data API v3 (videos/channel)
+- AuthoredUp: Likely CSV/JSON export from LinkedIn
+- Walker: JavaScript tracker → webhook/API
+- Short.io: REST API (click analytics)
+
+Entity definitions from examples/timo-data-stack can be copied nearly verbatim.
+Main change is duckdb_path values pointing to DLT output directory structure
+instead of sample data/ paths.
+
+Entity dependency order:
+  1. ghost_person, mailerlite_person, transactions, subscriptions, anon (independent)
+  2. product, signals (independent, but UnionSource)
+  3. person (depends on ghost_person, mailerlite_person, transactions, subscriptions)
+  4. account (depends on person)
+
+Recommended epic breakdown:
+  E001: Repository setup + fyrnheim config + entity definitions
+  E002: DLT pipeline setup for all 7 sources
+  E003: End-to-end validation (sample data → DuckDB → ClickHouse)
+  E004: Production deployment on Hetzner (cron, real data paths)
+"""

@@ -3,7 +3,7 @@
 id = "M009-E003-S001"
 epic = "M009-E003"
 title = "Copy sample data and validate fyr run on DuckDB"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

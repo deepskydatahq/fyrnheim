@@ -3,7 +3,7 @@
 id = "M009-E002"
 parent = "M009"
 title = "Configure DLT pipelines for 7 data sources extracting to parquet"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

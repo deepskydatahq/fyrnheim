@@ -3,7 +3,7 @@
 id = "M009-E002-S003"
 epic = "M009-E002"
 title = "Create DLT pipelines for YouTube, AuthoredUp, and Walker"
-status = "brainstorm"
+status = "complete"
 
 [outcome]
 description = """
@@ -21,9 +21,9 @@ criteria = [
     "YouTube pipeline uses YouTube Data API v3 with API key or OAuth",
     "YouTube pipeline captures: video_id, title, view_count, like_count, comment_count, share_count",
     "AuthoredUp pipeline loads posts to data/authoredup_posts/*.parquet",
-    "AuthoredUp pipeline handles CSV or JSON export format",
+    "AuthoredUp pipeline uses REST API (api.authoredup.com) with bearer token auth",
     "AuthoredUp pipeline captures: post_id, text, impressions, reactions, comments, shares",
-    "Walker pipeline loads events to data/walker_events/*.parquet",
+    "Walker pipeline extracts events from BigQuery to data/walker_events/*.parquet",
     "Walker pipeline captures: session_id, timestamp, referrer, event_name, page_path, email",
     "Each pipeline can run independently",
     "Output parquet column names match what entity definitions expect",

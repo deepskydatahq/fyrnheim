@@ -1,0 +1,46 @@
+# Epic: Implement push phase in runner
+
+id = "M008-E003"
+parent = "M008"
+title = "Implement push phase: copy output tables from DuckDB to ClickHouse after entity execution"
+status = "draft"
+
+[outcome]
+description = """
+After all entities execute in run(), a push phase copies dim_*, analytics_*, and
+activity_* tables from the DuckDB catalog to the output backend (ClickHouse). The
+push opens a second Ibis connection via create_connection(output_backend, **output_config),
+reads each table from DuckDB, and creates it in ClickHouse with overwrite=True.
+MergeTree ORDER BY is handled with empty tuple default. RunResult is extended with
+push metadata. The push phase only runs when output_backend is configured.
+"""
+
+job_story = "When fyr run finishes computing all entities on DuckDB I want dim and analytics tables automatically pushed to ClickHouse so I don't need a separate export step"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "run() has a push phase after the IbisExecutor context manager closes",
+    "Push phase only runs when output_backend is not None",
+    "Push phase opens a second connection via create_connection(output_backend, **output_config)",
+    "Push phase lists tables from DuckDB catalog and filters to dim_*, analytics_*, activity_* prefixes",
+    "Push phase skips source_* tables and any other non-output tables",
+    "Each filtered table is read from DuckDB and created in output backend with overwrite=True",
+    "ClickHouse MergeTree ORDER BY handled (empty tuple or sensible default)",
+    "RunResult gains pushed_tables: list[PushedTable] field (table name, row count, success/error)",
+    "Push errors are logged but do not change entity result statuses",
+    "Without output_backend, run() returns RunResult identical to current behavior",
+    "Unit tests: mock output connection, verify correct tables pushed with correct names",
+    "Unit tests: table filtering (dim_* yes, source_* no, snapshot_* no)",
+    "Unit tests: push error handling (one table fails, others still push)",
+    "Unit tests: no output_backend means no push phase",
+    "All existing tests pass",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/connection.py",
+    "tests/test_engine_runner.py",
+]
+
+depends_on = ["M008-E001", "M008-E002"]

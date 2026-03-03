@@ -1,0 +1,38 @@
+# Epic: CLI push output and timo-data-stack example config
+
+id = "M008-E004"
+parent = "M008"
+title = "CLI push progress display and timo-data-stack example output config"
+status = "draft"
+
+[outcome]
+description = """
+fyr run displays push phase progress in the terminal: table names, row counts,
+and timing. The timo-data-stack example fyrnheim.yaml includes a commented-out
+output_config section showing ClickHouse configuration. The full pipeline flow
+is demonstrated end-to-end.
+"""
+
+job_story = "When fyr run pushes tables to ClickHouse I want to see progress in the terminal so I know which tables were pushed and how many rows each has"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "CLI output after entity results shows push phase header (e.g., 'Pushing to clickhouse')",
+    "Each pushed table shows: table name, row count, status (ok/error)",
+    "Push summary shows total tables pushed and duration",
+    "When no output_backend, no push section appears in output (backward compat)",
+    "examples/timo-data-stack/fyrnheim.yaml has commented-out output_backend and output_config section",
+    "Comment explains the ClickHouse config fields (host, port, database, user, password)",
+    "Unit tests: CLI output contains push progress when output_backend configured",
+    "Unit tests: CLI output unchanged when no output_backend",
+    "All existing tests pass",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "examples/timo-data-stack/fyrnheim.yaml",
+    "tests/test_cli_run.py",
+]
+
+depends_on = ["M008-E003"]

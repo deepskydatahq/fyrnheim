@@ -1,0 +1,43 @@
+# Epic: Add output_backend and output_config to project configuration
+
+id = "M008-E002"
+parent = "M008"
+title = "Add output_backend and output_config to fyrnheim.yaml and config system"
+status = "draft"
+
+[outcome]
+description = """
+fyrnheim.yaml supports two new optional fields: output_backend (str) and
+output_config (dict). ProjectConfig and ResolvedConfig carry these fields.
+resolve_config() merges them with CLI overrides. When absent, both default
+to None — fully backward compatible. The CLI run command passes output config
+through to the runner.
+"""
+
+job_story = "When I add output_backend: clickhouse to fyrnheim.yaml I want the config system to parse it so fyr run knows where to push tables"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ProjectConfig has output_backend: str | None = None and output_config: dict[str, str] | None = None fields",
+    "ResolvedConfig has the same two new fields",
+    "load_config() reads output_backend and output_config from fyrnheim.yaml",
+    "resolve_config() merges output_backend/output_config with CLI overrides",
+    "Without output_backend in YAML, both fields default to None",
+    "CLI run command accepts output config and passes to engine_run()",
+    "run() and run_entity() signatures accept output_backend and output_config parameters",
+    "Unit tests: YAML with output_backend parses correctly",
+    "Unit tests: YAML without output_backend returns None (backward compat)",
+    "Unit tests: CLI override for output config",
+    "All existing tests pass",
+]
+
+validator_context = [
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "tests/test_config.py",
+    "tests/test_cli_run.py",
+]
+
+depends_on = []

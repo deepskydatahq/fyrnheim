@@ -1,0 +1,38 @@
+# Epic: Add ClickHouse to connection factory
+
+id = "M008-E001"
+parent = "M008"
+title = "Add ClickHouse backend to connection factory and pyproject extras"
+status = "draft"
+
+[outcome]
+description = """
+create_connection('clickhouse', host=..., database=...) returns an ibis.clickhouse
+connection. pyproject.toml has a [clickhouse] extras group. The same mock-testing
+pattern used for BigQuery is applied. This is the foundation that everything else
+depends on — pure wiring, no changes to runner or executor.
+"""
+
+job_story = "When I call create_connection('clickhouse', host='ch.example.com', database='analytics') I want an Ibis ClickHouse connection so the push phase can write tables to ClickHouse"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "'clickhouse' added to SUPPORTED_BACKENDS list in connection.py",
+    "create_connection('clickhouse', host=..., database=...) returns ibis.clickhouse connection",
+    "create_connection('clickhouse') without host uses sensible defaults (localhost, default database)",
+    "Missing clickhouse extras raises ImportError with install hint",
+    "Connection accepts host, port, database, user, password kwargs",
+    "pyproject.toml has [clickhouse] optional dependency group with ibis-framework[clickhouse]",
+    "Unit tests: mocked clickhouse connect (same pattern as TestCreateConnectionBigQuery)",
+    "Unit tests: missing extras, parameter defaults, unsupported backend still works",
+    "All existing 831+ tests pass",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/connection.py",
+    "pyproject.toml",
+    "tests/test_engine_connection.py",
+]
+
+depends_on = []

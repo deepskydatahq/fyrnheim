@@ -1,0 +1,147 @@
+# Mission: ClickHouse output sink
+# Push dim and analytics tables from DuckDB to ClickHouse after fyr run
+
+id = "M008"
+title = "ClickHouse output sink: push dim and analytics tables after DuckDB compute"
+status = "draft"
+created = 2026-03-03
+depends_on = ["M004", "M007"]
+
+[outcome]
+description = """
+Running `fyr run` with `output_backend: clickhouse` in fyrnheim.yaml computes all
+entity transformations on DuckDB (reading from local parquet files), then pushes the
+resulting dim_*, analytics_*, and activity_* tables to a ClickHouse server. This
+enables the architecture: DLT extracts to parquet on Hetzner, fyr run transforms
+locally via DuckDB, results land in ClickHouse for querying. Without output_backend
+configured, fyr run behaves exactly as today.
+"""
+
+user_progress = "From 'fyr run produces a local DuckDB file' to 'fyr run produces queryable tables in ClickHouse'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ClickHouse added to connection factory: create_connection('clickhouse', host=..., database=...) returns ibis.clickhouse connection",
+    "pyproject.toml has [clickhouse] extras with ibis-framework[clickhouse]",
+    "ProjectConfig and ResolvedConfig have output_backend (str|None) and output_config (dict|None) fields",
+    "fyrnheim.yaml parsing reads output_backend and output_config sections",
+    "run() in runner.py has a push phase after all entities execute: iterates DuckDB catalog, pushes dim_*/analytics_*/activity_* tables to output backend",
+    "Push phase creates tables in ClickHouse with overwrite=True and handles MergeTree ORDER BY requirement",
+    "Push phase skips source_* and intermediate tables — only pushes final output tables",
+    "CLI output shows push progress: table name, row count for each pushed table",
+    "RunResult includes push status (tables pushed, any push errors)",
+    "Without output_backend in config, fyr run behaves identically to before (no push phase)",
+    "Unit tests for ClickHouse connection factory (mocked, same pattern as BigQuery)",
+    "Unit tests for push phase: mock output connection, verify correct tables pushed",
+    "Unit test for config: output_backend and output_config parsed from YAML",
+    "All existing 831+ tests pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/connection.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "pyproject.toml",
+    "tests/test_engine_connection.py",
+    "tests/test_engine_runner.py",
+    "tests/test_config.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+    "product/missions/M004-production-backend-bigquery.toml",
+    "product/missions/M007-end-to-end-local-pipeline.toml",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/connection.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "pyproject.toml",
+    "examples/timo-data-stack/fyrnheim.yaml",
+]
+
+[scope]
+in_scope = [
+    "Add ClickHouse to connection factory (create_connection('clickhouse', host, port, database, user, password))",
+    "Add clickhouse extras to pyproject.toml (ibis-framework[clickhouse], clickhouse-connect)",
+    "Add output_backend and output_config fields to ProjectConfig and ResolvedConfig",
+    "Parse output_backend and output_config from fyrnheim.yaml",
+    "Add push phase to run() in runner.py after all entities complete",
+    "Push dim_*, analytics_*, activity_* tables from DuckDB to ClickHouse output backend",
+    "Handle ClickHouse MergeTree ORDER BY requirement with sensible defaults",
+    "CLI output shows push phase progress (table names, row counts)",
+    "RunResult extended with push status",
+    "Unit tests for ClickHouse connection (mocked), push phase, and config parsing",
+    "Update examples/timo-data-stack/fyrnheim.yaml with output_config example (commented out)",
+]
+out_of_scope = [
+    "ClickHouse as compute backend (transforms always run on DuckDB or BigQuery)",
+    "DLT pipeline migration or extraction logic",
+    "Hetzner server deployment, cron, or orchestration",
+    "Per-entity output configuration (all entities push to same output backend)",
+    "Generic output sink abstraction beyond ClickHouse",
+    "Cross-entity analytics_daily post-processing",
+    "Parquet file export as alternative output format",
+    "Live ClickHouse integration tests in CI (mock-based testing only)",
+    "snapshot_* table push (snapshots are DuckDB-local concern for now)",
+]
+acceptable_breakage = [
+    "fyrnheim.yaml gains optional output_backend and output_config fields — fully backward compatible",
+    "RunResult dataclass gains new optional fields for push status",
+    "pyproject.toml gains [clickhouse] optional dependency group",
+]
+
+[notes]
+considerations = """
+ARCHITECTURE: DuckDB remains the compute engine. The push phase is a separate step
+that runs after all entities have been computed and persisted in DuckDB. This is
+critical because downstream entities (person, account) reference upstream dim tables
+via conn.table('dim_transactions') during compute. The push copies final tables to
+ClickHouse for serving/querying.
+
+PUSH PHASE DESIGN: After the IbisExecutor context manager closes in run(), open a
+second connection to the output backend. List tables in the DuckDB catalog, filter
+to dim_*/analytics_*/activity_* prefixes, and for each table: read from DuckDB as
+Arrow, create_table in ClickHouse with overwrite=True.
+
+CLICKHOUSE SPECIFICS: MergeTree engine requires ORDER BY clause. Options:
+1. Default to order_by=() (empty tuple — ClickHouse allows this)
+2. Use ReplacingMergeTree for dim tables (natural for dimension tables)
+3. Let users specify order_by in output_config (future enhancement)
+Start with option 1 (simplest), can enhance later.
+
+TABLE FILTERING: The DuckDB catalog after fyr run contains source_*, dim_*,
+activity_*, analytics_*, and snapshot_* tables. Push phase should only push
+dim_*, analytics_*, and activity_* tables. Source tables are raw data (already
+in parquet). Snapshot tables are a future concern.
+
+TESTING: Follow the BigQuery mock pattern from test_engine_connection.py.
+Mock ibis.clickhouse.connect() and verify create_table calls. For push phase,
+create a DuckDB with sample tables and mock the output connection.
+
+CONFIG EXAMPLE (fyrnheim.yaml):
+  backend: duckdb
+  backend_config:
+    db_path: timo.duckdb
+  output_backend: clickhouse
+  output_config:
+    host: clickhouse.example.com
+    port: 8123
+    database: timo_analytics
+    user: default
+    password: ""
+
+SEQUENCING for epic breakdown:
+1. ClickHouse connection factory + extras (small, isolated)
+2. Config: output_backend + output_config parsing (small, isolated)
+3. Push phase in runner.py (core logic, depends on 1+2)
+4. CLI output + RunResult updates (depends on 3)
+5. Tests across all layers
+"""

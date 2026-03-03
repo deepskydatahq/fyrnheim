@@ -3,7 +3,7 @@
 id = "M009-E003"
 parent = "M009"
 title = "Validate end-to-end pipeline: sample data to DuckDB to ClickHouse"
-status = "draft"
+status = "active"
 
 [outcome]
 description = """

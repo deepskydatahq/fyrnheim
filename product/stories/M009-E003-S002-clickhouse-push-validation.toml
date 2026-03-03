@@ -1,0 +1,32 @@
+# Story: ClickHouse push validation
+
+id = "M009-E003-S002"
+epic = "M009-E003"
+title = "Validate fyr run pushes tables to ClickHouse with correct schemas"
+status = "ready"
+
+[outcome]
+description = """
+fyr run with output_backend=clickhouse pushes all dim_* tables to ClickHouse.
+Tables have correct columns matching entity field definitions and row counts
+match the DuckDB source. The CLI output shows all tables with row counts
+and ok status.
+"""
+
+job_story = "When I run fyr run I want dim_* tables to appear in ClickHouse so I know the push pipeline works"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr run pushes dim_* tables to ClickHouse without errors",
+    "ClickHouse tables have expected columns matching entity field definitions",
+    "Row counts in ClickHouse match DuckDB source data",
+    "Push output in CLI shows all tables with row counts and ok status",
+    "At minimum dim_person, dim_account, dim_product, dim_signals tables exist",
+]
+
+validator_context = [
+    "timo-data/fyrnheim.yaml",
+]
+
+depends_on = ["M009-E003-S001"]

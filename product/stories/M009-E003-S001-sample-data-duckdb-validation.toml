@@ -1,0 +1,37 @@
+# Story: Sample data and DuckDB validation
+
+id = "M009-E003-S001"
+epic = "M009-E003"
+title = "Copy sample data and validate fyr run on DuckDB"
+status = "ready"
+
+[outcome]
+description = """
+Sample parquet files are copied to timo-data/data/ and fyr run executes all
+9 entities successfully on DuckDB. The identity graph (person) and account
+aggregation produce correct output. This validates the entity definitions
+and generated code work end-to-end before involving ClickHouse.
+"""
+
+job_story = "When I run fyr run with sample data I want all 9 entities to execute without errors on DuckDB"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Sample parquet files exist in timo-data/data/ for all 8 source tables",
+    "fyr generate produces valid Python modules for all 9 entities",
+    "fyr run executes all 9 entities without errors on DuckDB",
+    "DuckDB contains dim_* tables for all 9 entities after fyr run",
+    "Person identity graph resolves correctly — dim_person has rows from 4 sources",
+    "Account aggregation produces dim_account with business account rollups",
+    "Product union combines youtube_videos and authoredup_posts",
+    "Signals union combines walker_events, shortio_clicks, and ghost_members",
+]
+
+validator_context = [
+    "timo-data/data/",
+    "timo-data/entities/",
+    "timo-data/generated/",
+]
+
+depends_on = ["M009-E002"]

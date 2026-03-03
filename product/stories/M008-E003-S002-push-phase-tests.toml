@@ -1,0 +1,36 @@
+# Story: Unit tests for push phase
+
+id = "M008-E003-S002"
+epic = "M008-E003"
+title = "Unit tests for push phase: table filtering, mock push, error handling"
+status = "ready"
+
+[outcome]
+description = """
+Comprehensive unit tests for the push phase using mocked output connections.
+Tests verify table filtering (dim_* yes, source_* no), correct create_table
+calls, error handling (one table fails, others continue), and backward
+compatibility (no output_backend means no push).
+"""
+
+job_story = "When push phase code changes I want tests to catch regressions in table filtering and error handling"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Test: run() with output_backend calls create_connection for output",
+    "Test: only dim_*, analytics_*, activity_* tables are pushed (source_*, snapshot_* skipped)",
+    "Test: each pushed table calls output_conn.create_table(name, table, overwrite=True)",
+    "Test: push error on one table does not prevent other tables from pushing",
+    "Test: push error is captured in PushedTable with status='error'",
+    "Test: no output_backend means pushed_tables is empty list",
+    "Test: RunResult.pushed_tables contains correct table names and row counts",
+    "All existing tests pass — no regressions",
+]
+
+validator_context = [
+    "tests/test_engine_runner.py",
+    "src/fyrnheim/engine/runner.py",
+]
+
+depends_on = ["M008-E003-S001"]

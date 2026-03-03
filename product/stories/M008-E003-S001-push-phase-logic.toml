@@ -1,0 +1,41 @@
+# Story: Implement push phase in run()
+
+id = "M008-E003-S001"
+epic = "M008-E003"
+title = "Add push phase to run(): filter DuckDB tables and push to output backend"
+status = "ready"
+
+[outcome]
+description = """
+After the IbisExecutor context manager closes in run(), a push phase runs when
+output_backend is configured. It opens a second connection via create_connection(),
+lists DuckDB tables, filters to dim_*/analytics_*/activity_* prefixes, and creates
+each in the output backend with overwrite=True. PushedTable dataclass tracks results.
+RunResult gains pushed_tables field. Push errors are logged but don't affect entity
+results.
+"""
+
+job_story = "When all entities finish computing I want dim/analytics/activity tables automatically pushed to the output backend"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "PushedTable dataclass with table_name: str, row_count: int, status: Literal['ok', 'error'], error: str | None",
+    "RunResult gains pushed_tables: list[PushedTable] = field(default_factory=list)",
+    "run() has push phase after executor context manager closes (line ~381)",
+    "Push phase only runs when output_backend is not None",
+    "Push phase calls create_connection(output_backend, **(output_config or {}))",
+    "Push phase lists tables from DuckDB connection and filters to dim_*, analytics_*, activity_* prefixes",
+    "Push phase skips source_*, snapshot_*, and any other non-output tables",
+    "Each filtered table: read from DuckDB via conn.table(name), create in output via output_conn.create_table(name, table, overwrite=True)",
+    "Push errors are caught per-table and logged, other tables still push",
+    "PushedTable results collected and set on RunResult.pushed_tables",
+    "Without output_backend, RunResult.pushed_tables is empty list (backward compat)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/connection.py",
+]
+
+depends_on = []

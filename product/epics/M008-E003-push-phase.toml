@@ -3,7 +3,7 @@
 id = "M008-E003"
 parent = "M008"
 title = "Implement push phase: copy output tables from DuckDB to ClickHouse after entity execution"
-status = "draft"
+status = "active"
 
 [outcome]
 description = """

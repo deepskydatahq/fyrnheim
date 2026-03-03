@@ -3,7 +3,7 @@
 id = "M008-E001-S001"
 epic = "M008-E001"
 title = "Add [clickhouse] optional dependency group to pyproject.toml"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

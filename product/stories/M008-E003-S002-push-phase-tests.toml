@@ -3,7 +3,7 @@
 id = "M008-E003-S002"
 epic = "M008-E003"
 title = "Unit tests for push phase: table filtering, mock push, error handling"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

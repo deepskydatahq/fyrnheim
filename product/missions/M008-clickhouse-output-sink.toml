@@ -3,7 +3,7 @@
 
 id = "M008"
 title = "ClickHouse output sink: push dim and analytics tables after DuckDB compute"
-status = "draft"
+status = "complete"
 created = 2026-03-03
 depends_on = ["M004", "M007"]
 

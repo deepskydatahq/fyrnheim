@@ -3,7 +3,7 @@
 id = "M008-E001"
 parent = "M008"
 title = "Add ClickHouse backend to connection factory and pyproject extras"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

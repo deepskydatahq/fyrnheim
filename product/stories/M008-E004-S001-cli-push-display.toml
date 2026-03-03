@@ -3,7 +3,7 @@
 id = "M008-E004-S001"
 epic = "M008-E004"
 title = "Display push phase progress in CLI run output"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

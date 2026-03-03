@@ -3,7 +3,7 @@
 id = "M008-E003-S001"
 epic = "M008-E003"
 title = "Add push phase to run(): filter DuckDB tables and push to output backend"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

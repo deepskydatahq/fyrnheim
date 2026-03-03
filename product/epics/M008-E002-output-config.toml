@@ -3,7 +3,7 @@
 id = "M008-E002"
 parent = "M008"
 title = "Add output_backend and output_config to fyrnheim.yaml and config system"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

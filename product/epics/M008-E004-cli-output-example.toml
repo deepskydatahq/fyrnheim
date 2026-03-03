@@ -3,7 +3,7 @@
 id = "M008-E004"
 parent = "M008"
 title = "CLI push progress display and timo-data-stack example output config"
-status = "active"
+status = "complete"
 
 [outcome]
 description = """

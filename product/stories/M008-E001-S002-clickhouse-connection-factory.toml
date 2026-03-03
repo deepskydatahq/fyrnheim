@@ -3,7 +3,7 @@
 id = "M008-E001-S002"
 epic = "M008-E001"
 title = "Add ClickHouse backend to create_connection() with mocked unit tests"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

@@ -3,7 +3,7 @@
 id = "M008-E004-S002"
 epic = "M008-E004"
 title = "Add commented-out output_backend and output_config to timo-data-stack example"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

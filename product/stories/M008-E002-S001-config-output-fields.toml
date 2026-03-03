@@ -3,7 +3,7 @@
 id = "M008-E002-S001"
 epic = "M008-E002"
 title = "Add output_backend and output_config fields to ProjectConfig, ResolvedConfig, and load/resolve"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

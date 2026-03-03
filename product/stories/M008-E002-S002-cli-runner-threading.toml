@@ -3,7 +3,7 @@
 id = "M008-E002-S002"
 epic = "M008-E002"
 title = "Thread output_backend and output_config from CLI run command through to runner"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

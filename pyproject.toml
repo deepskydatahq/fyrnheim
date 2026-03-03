@@ -39,6 +39,9 @@ bigquery = [
     "ibis-framework[bigquery]>=11.0.0",
     "google-cloud-bigquery>=3.35.0",
 ]
+clickhouse = [
+    "ibis-framework[clickhouse]>=11.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",

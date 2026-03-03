@@ -7,17 +7,18 @@ from typing import Any
 
 import ibis
 
-SUPPORTED_BACKENDS = ["duckdb", "bigquery"]
+SUPPORTED_BACKENDS = ["duckdb", "bigquery", "clickhouse"]
 
 
 def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
     """Create an Ibis backend connection by name.
 
     Args:
-        backend: Backend name ("duckdb", "bigquery").
+        backend: Backend name ("duckdb", "bigquery", "clickhouse").
         **kwargs: Backend-specific connection arguments.
             DuckDB: db_path (default ":memory:")
             BigQuery: project_id, dataset_id
+            ClickHouse: host, port, database, user, password
 
     Returns:
         An Ibis backend connection.
@@ -45,6 +46,23 @@ def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
                 "BigQuery backend requires 'project_id' and 'dataset_id' in backend_config."
             )
         return ibis.bigquery.connect(project_id=project_id, dataset_id=dataset_id)
+
+    if backend == "clickhouse":
+        try:
+            importlib.import_module("ibis.backends.clickhouse")
+        except ImportError:
+            raise ImportError(
+                "ClickHouse backend requires extra dependencies. "
+                "Install with: pip install 'ibis-framework[clickhouse]'"
+            ) from None
+        host = kwargs.get("host", "localhost")
+        port = kwargs.get("port", 8123)
+        database = kwargs.get("database", "default")
+        user = kwargs.get("user", "default")
+        password = kwargs.get("password", "")
+        return ibis.clickhouse.connect(
+            host=host, port=port, database=database, user=user, password=password
+        )
 
     raise ValueError(
         f"Unsupported backend: {backend!r}. Supported backends: {SUPPORTED_BACKENDS}"

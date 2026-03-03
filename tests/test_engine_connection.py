@@ -69,6 +69,58 @@ class TestCreateConnectionBigQueryValidation:
                 create_connection("bigquery")
 
 
+class TestCreateConnectionClickHouse:
+    """Test create_connection for ClickHouse backend (mocked)."""
+
+    @pytest.fixture(autouse=True)
+    def mock_clickhouse_backend(self):
+        """Mock ibis.clickhouse to avoid needing clickhouse extras installed."""
+        mock_ch = MagicMock()
+        ibis.clickhouse = mock_ch
+        yield mock_ch
+        delattr(ibis, "clickhouse")
+
+    def test_calls_ibis_clickhouse_connect(self, mock_clickhouse_backend):
+        mock_conn = MagicMock(spec=ibis.BaseBackend)
+        mock_clickhouse_backend.connect.return_value = mock_conn
+        with patch.dict("sys.modules", {"ibis.backends.clickhouse": MagicMock()}):
+            conn = create_connection("clickhouse", host="ch.example.com", database="analytics")
+            mock_clickhouse_backend.connect.assert_called_once_with(
+                host="ch.example.com", port=8123, database="analytics", user="default", password=""
+            )
+            assert conn is mock_conn
+
+    def test_default_parameters(self, mock_clickhouse_backend):
+        mock_conn = MagicMock(spec=ibis.BaseBackend)
+        mock_clickhouse_backend.connect.return_value = mock_conn
+        with patch.dict("sys.modules", {"ibis.backends.clickhouse": MagicMock()}):
+            create_connection("clickhouse")
+            mock_clickhouse_backend.connect.assert_called_once_with(
+                host="localhost", port=8123, database="default", user="default", password=""
+            )
+
+    def test_all_kwargs_passed(self, mock_clickhouse_backend):
+        mock_conn = MagicMock(spec=ibis.BaseBackend)
+        mock_clickhouse_backend.connect.return_value = mock_conn
+        with patch.dict("sys.modules", {"ibis.backends.clickhouse": MagicMock()}):
+            create_connection(
+                "clickhouse", host="ch.local", port=9000, database="mydb", user="admin", password="secret"
+            )
+            mock_clickhouse_backend.connect.assert_called_once_with(
+                host="ch.local", port=9000, database="mydb", user="admin", password="secret"
+            )
+
+    def test_missing_extras_raises_import_error(self):
+        with patch.dict("sys.modules", {"ibis.backends.clickhouse": None}):
+            with pytest.raises(ImportError, match="ClickHouse backend requires extra dependencies"):
+                create_connection("clickhouse")
+
+    def test_import_error_includes_install_hint(self):
+        with patch.dict("sys.modules", {"ibis.backends.clickhouse": None}):
+            with pytest.raises(ImportError, match="pip install"):
+                create_connection("clickhouse")
+
+
 class TestCreateConnectionUnsupported:
     """Test create_connection with unsupported backends."""
 
@@ -93,6 +145,9 @@ class TestSupportedBackends:
 
     def test_contains_bigquery(self):
         assert "bigquery" in SUPPORTED_BACKENDS
+
+    def test_contains_clickhouse(self):
+        assert "clickhouse" in SUPPORTED_BACKENDS
 
     def test_is_list(self):
         assert isinstance(SUPPORTED_BACKENDS, list)

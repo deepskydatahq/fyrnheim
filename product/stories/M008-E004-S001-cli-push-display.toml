@@ -1,0 +1,32 @@
+# Story: CLI push progress display
+
+id = "M008-E004-S001"
+epic = "M008-E004"
+title = "Display push phase progress in CLI run output"
+status = "ready"
+
+[outcome]
+description = """
+After entity results, fyr run shows push progress: header line with output
+backend name, each table with name/rows/status, and a summary. When no
+output_backend configured, no push section appears.
+"""
+
+job_story = "When fyr run pushes tables I want to see which tables were pushed and how many rows each has"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "After entity results, push header shows 'Pushing to {output_backend}...'",
+    "Each pushed table shows: table name, row count, status (ok/error)",
+    "Push summary shows total tables pushed",
+    "When no output_backend, no push section in CLI output (backward compat)",
+    "All existing tests pass — no regressions",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "tests/test_cli_run.py",
+]
+
+depends_on = []

@@ -1,0 +1,29 @@
+# Story: Add output config example to timo-data-stack
+
+id = "M008-E004-S002"
+epic = "M008-E004"
+title = "Add commented-out output_backend and output_config to timo-data-stack example"
+status = "ready"
+
+[outcome]
+description = """
+examples/timo-data-stack/fyrnheim.yaml includes a commented-out section showing
+how to configure ClickHouse as output backend, with comments explaining each field.
+"""
+
+job_story = "When I look at the timo-data-stack example I want to see how to configure ClickHouse output"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "examples/timo-data-stack/fyrnheim.yaml has commented-out output_backend: clickhouse",
+    "Commented-out output_config section shows host, port, database, user, password fields",
+    "Comments explain the purpose of each field",
+    "Existing uncommented config unchanged — example still runs correctly",
+]
+
+validator_context = [
+    "examples/timo-data-stack/fyrnheim.yaml",
+]
+
+depends_on = []

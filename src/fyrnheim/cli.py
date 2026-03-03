@@ -370,6 +370,19 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
     for er in result.entities:
         _print_entity_result(er, registry)
 
+    if result.pushed_tables:
+        click.echo()
+        click.echo(f"Pushing to {cfg.output_backend}...")
+        for pt in result.pushed_tables:
+            status = "ok" if pt.status == "ok" else f"ERROR: {pt.error}"
+            click.echo(f"  {pt.table_name:<30s} {pt.row_count:>6d} rows  {status}")
+        ok_count = sum(1 for pt in result.pushed_tables if pt.status == "ok")
+        err_count = sum(1 for pt in result.pushed_tables if pt.status == "error")
+        parts = [f"{ok_count} pushed"]
+        if err_count:
+            parts.append(f"{err_count} failed")
+        click.echo(f"Push: {', '.join(parts)}")
+
     click.echo()
     _print_run_summary(result)
 

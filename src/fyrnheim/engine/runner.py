@@ -147,6 +147,8 @@ def run_entity(
     quality_checks: bool = True,
     _executor: IbisExecutor | None = None,
     source_mapping: SourceMapping | None = None,
+    output_backend: str | None = None,
+    output_config: dict[str, str] | None = None,
 ) -> EntityRunResult:
     """Execute a single entity through the pipeline.
 
@@ -265,6 +267,8 @@ def run(
     auto_generate: bool = True,
     quality_checks: bool = True,
     on_error: Literal["skip", "stop"] = "skip",
+    output_backend: str | None = None,
+    output_config: dict[str, str] | None = None,
 ) -> RunResult:
     """Run the full fyrnheim pipeline: discover, generate, execute, verify.
 

@@ -213,3 +213,73 @@ class TestBackendConfig:
         monkeypatch.chdir(tmp_path)
         cfg = resolve_config(backend_config=None)
         assert cfg.backend_config == {"project_id": "yaml-proj"}
+
+
+class TestOutputConfig:
+    def test_output_backend_parsed(self, tmp_path):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "backend: duckdb\n"
+            "output_backend: clickhouse\n"
+        )
+        cfg = load_config(tmp_path)
+        assert cfg.output_backend == "clickhouse"
+
+    def test_output_config_parsed(self, tmp_path):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "backend: duckdb\n"
+            "output_backend: clickhouse\n"
+            "output_config:\n"
+            "  host: ch.example.com\n"
+            "  port: '8123'\n"
+            "  database: analytics\n"
+        )
+        cfg = load_config(tmp_path)
+        assert cfg.output_config == {"host": "ch.example.com", "port": "8123", "database": "analytics"}
+
+    def test_output_backend_none_when_absent(self, tmp_path):
+        (tmp_path / "fyrnheim.yaml").write_text("backend: duckdb\n")
+        cfg = load_config(tmp_path)
+        assert cfg.output_backend is None
+        assert cfg.output_config is None
+
+    def test_output_config_flows_to_resolved(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "output_backend: clickhouse\n"
+            "output_config:\n"
+            "  host: ch.local\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.output_backend == "clickhouse"
+        assert cfg.output_config == {"host": "ch.local"}
+
+    def test_output_backend_cli_override(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text("output_backend: clickhouse\n")
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(output_backend="bigquery")
+        assert cfg.output_backend == "bigquery"
+
+    def test_output_config_cli_override(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "output_config:\n"
+            "  host: yaml-host\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(output_config={"host": "cli-host"})
+        assert cfg.output_config == {"host": "cli-host"}
+
+    def test_output_config_cli_none_uses_yaml(self, tmp_path, monkeypatch):
+        (tmp_path / "fyrnheim.yaml").write_text(
+            "output_backend: clickhouse\n"
+            "output_config:\n"
+            "  host: yaml-host\n"
+        )
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config(output_config=None)
+        assert cfg.output_config == {"host": "yaml-host"}
+
+    def test_no_config_defaults_to_none(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        cfg = resolve_config()
+        assert cfg.output_backend is None
+        assert cfg.output_config is None

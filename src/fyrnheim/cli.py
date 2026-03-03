@@ -350,7 +350,7 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
         click.echo(f"Running {entity_name} on {cfg.backend}")
         click.echo()
 
-        er = engine_run_entity(info.entity, cfg.data_dir, backend=cfg.backend, backend_config=cfg.backend_config, generated_dir=cfg.output_dir)
+        er = engine_run_entity(info.entity, cfg.data_dir, backend=cfg.backend, backend_config=cfg.backend_config, generated_dir=cfg.output_dir, output_backend=cfg.output_backend, output_config=cfg.output_config)
         _print_entity_result(er, registry)
 
         click.echo()
@@ -365,7 +365,7 @@ def run(entity_name: str | None, entities_dir: str | None, data_dir: str | None,
     click.echo(f"Running on {cfg.backend}")
     click.echo()
 
-    result = engine_run(cfg.entities_dir, cfg.data_dir, backend=cfg.backend, backend_config=cfg.backend_config, generated_dir=cfg.output_dir)
+    result = engine_run(cfg.entities_dir, cfg.data_dir, backend=cfg.backend, backend_config=cfg.backend_config, generated_dir=cfg.output_dir, output_backend=cfg.output_backend, output_config=cfg.output_config)
 
     for er in result.entities:
         _print_entity_result(er, registry)

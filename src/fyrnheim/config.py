@@ -24,6 +24,8 @@ class ProjectConfig:
     output_dir: Path
     backend: str
     backend_config: dict[str, str] | None = None
+    output_backend: str | None = None
+    output_config: dict[str, str] | None = None
 
 
 def find_config(start_dir: Path) -> Path | None:
@@ -69,6 +71,9 @@ def load_config(start_dir: Path) -> ProjectConfig | None:
     raw_backend_config = raw.get("backend_config")
     backend_config = dict(raw_backend_config) if isinstance(raw_backend_config, dict) else None
 
+    raw_output_config = raw.get("output_config")
+    output_config = dict(raw_output_config) if isinstance(raw_output_config, dict) else None
+
     return ProjectConfig(
         project_root=project_root,
         entities_dir=_resolve_dir(project_root, raw.get("entities_dir", "entities")),
@@ -76,6 +81,8 @@ def load_config(start_dir: Path) -> ProjectConfig | None:
         output_dir=_resolve_dir(project_root, raw.get("output_dir", "generated")),
         backend=raw.get("backend", "duckdb"),
         backend_config=backend_config,
+        output_backend=raw.get("output_backend"),
+        output_config=output_config,
     )
 
 
@@ -89,6 +96,8 @@ class ResolvedConfig:
     backend: str
     project_root: Path
     backend_config: dict[str, str] | None = None
+    output_backend: str | None = None
+    output_config: dict[str, str] | None = None
 
 
 def resolve_config(
@@ -98,6 +107,8 @@ def resolve_config(
     output_dir: str | None = None,
     backend: str | None = None,
     backend_config: dict[str, str] | None = None,
+    output_backend: str | None = None,
+    output_config: dict[str, str] | None = None,
 ) -> ResolvedConfig:
     """Load project config and merge CLI overrides.
 
@@ -113,4 +124,6 @@ def resolve_config(
         backend=backend if backend else (config.backend if config else "duckdb"),
         project_root=config.project_root if config else Path("."),
         backend_config=backend_config if backend_config is not None else (config.backend_config if config else None),
+        output_backend=output_backend if output_backend is not None else (config.output_backend if config else None),
+        output_config=output_config if output_config is not None else (config.output_config if config else None),
     )

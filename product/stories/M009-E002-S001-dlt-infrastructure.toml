@@ -1,0 +1,36 @@
+# Story: DLT infrastructure setup
+
+id = "M009-E002-S001"
+epic = "M009-E002"
+title = "Set up DLT infrastructure: filesystem destination, secrets template, orchestrator"
+status = "ready"
+
+[outcome]
+description = """
+DLT is configured to write parquet files to data/ via the filesystem destination.
+A secrets template provides placeholder API keys. An extract_all.py script runs
+all pipelines in sequence. pyproject.toml updated with dlt[filesystem,parquet].
+"""
+
+job_story = "When I set up credentials and run the extraction I want a single command that populates data/ with parquet files for all sources"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    ".dlt/config.toml configures filesystem destination to write to data/ directory",
+    ".dlt/config.toml sets loader_file_format to parquet",
+    ".dlt/secrets.toml.example exists with placeholder API keys for all 7 sources",
+    ".dlt/ is in .gitignore (already done in E001)",
+    "extract_all.py script exists that runs all pipelines in sequence",
+    "pyproject.toml dependencies updated to include dlt[filesystem,parquet]>=1.0.0",
+    "Directory structure: dlt_pipelines/ for pipeline scripts",
+]
+
+validator_context = [
+    "timo-data/.dlt/",
+    "timo-data/extract_all.py",
+    "timo-data/dlt_pipelines/",
+    "timo-data/pyproject.toml",
+]
+
+depends_on = []

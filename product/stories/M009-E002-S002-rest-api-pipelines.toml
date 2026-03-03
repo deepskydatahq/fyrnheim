@@ -1,0 +1,43 @@
+# Story: REST API source pipelines (Ghost, MailerLite, Lemonsqueezy, Short.io)
+
+id = "M009-E002-S002"
+epic = "M009-E002"
+title = "Create DLT pipelines for Ghost, MailerLite, Lemonsqueezy, and Short.io"
+status = "brainstorm"
+
+[outcome]
+description = """
+Four DLT pipeline scripts using the rest_api source extract data from Ghost
+(members), MailerLite (subscribers), Lemonsqueezy (transactions + subscriptions),
+and Short.io (clicks). Each writes parquet files to data/{table_name}/ matching
+the paths expected by fyrnheim entity definitions.
+"""
+
+job_story = "When I run the REST API pipelines I want parquet files for ghost_members, mailerlite_subscribers, transactions, subscriptions, and shortio_clicks"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Ghost pipeline extracts members to data/ghost_members/*.parquet",
+    "Ghost pipeline uses Content API with API key auth",
+    "MailerLite pipeline extracts subscribers to data/mailerlite_subscribers/*.parquet",
+    "MailerLite pipeline uses API token auth",
+    "Lemonsqueezy pipeline extracts transactions to data/transactions/*.parquet",
+    "Lemonsqueezy pipeline extracts subscriptions to data/subscriptions/*.parquet",
+    "Lemonsqueezy pipeline uses API key auth",
+    "Short.io pipeline extracts clicks to data/shortio_clicks/*.parquet",
+    "Short.io pipeline uses API key auth",
+    "All pipelines use rest_api source with RESTAPIConfig",
+    "All pipelines handle pagination correctly",
+    "Each pipeline can run independently",
+    "Output parquet column names match what entity definitions expect",
+]
+
+validator_context = [
+    "timo-data/dlt_pipelines/ghost_pipeline.py",
+    "timo-data/dlt_pipelines/mailerlite_pipeline.py",
+    "timo-data/dlt_pipelines/lemonsqueezy_pipeline.py",
+    "timo-data/dlt_pipelines/shortio_pipeline.py",
+]
+
+depends_on = ["M009-E002-S001"]

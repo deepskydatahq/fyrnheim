@@ -1,0 +1,38 @@
+# Story: Content and analytics pipelines (YouTube, AuthoredUp, Walker)
+
+id = "M009-E002-S003"
+epic = "M009-E002"
+title = "Create DLT pipelines for YouTube, AuthoredUp, and Walker"
+status = "brainstorm"
+
+[outcome]
+description = """
+Three DLT pipelines extract data from YouTube (videos via Data API v3),
+AuthoredUp (LinkedIn posts — likely CSV export), and Walker (web analytics
+events). Each writes parquet files matching fyrnheim entity expectations.
+"""
+
+job_story = "When I run the content and analytics pipelines I want parquet files for youtube_videos, authoredup_posts, and walker_events"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "YouTube pipeline extracts videos to data/youtube_videos/*.parquet",
+    "YouTube pipeline uses YouTube Data API v3 with API key or OAuth",
+    "YouTube pipeline captures: video_id, title, view_count, like_count, comment_count, share_count",
+    "AuthoredUp pipeline loads posts to data/authoredup_posts/*.parquet",
+    "AuthoredUp pipeline handles CSV or JSON export format",
+    "AuthoredUp pipeline captures: post_id, text, impressions, reactions, comments, shares",
+    "Walker pipeline loads events to data/walker_events/*.parquet",
+    "Walker pipeline captures: session_id, timestamp, referrer, event_name, page_path, email",
+    "Each pipeline can run independently",
+    "Output parquet column names match what entity definitions expect",
+]
+
+validator_context = [
+    "timo-data/dlt_pipelines/youtube_pipeline.py",
+    "timo-data/dlt_pipelines/authoredup_pipeline.py",
+    "timo-data/dlt_pipelines/walker_pipeline.py",
+]
+
+depends_on = ["M009-E002-S001"]

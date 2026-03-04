@@ -9,6 +9,7 @@ import shutil
 import sys
 import traceback
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -64,11 +65,11 @@ def _find_hint(exc: Exception) -> str | None:
     return "Use --verbose for the full traceback."
 
 
-def handle_errors(f):
+def handle_errors(f: Any) -> Any:
     """Decorator that catches exceptions and prints actionable messages."""
 
     @functools.wraps(f)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return f(*args, **kwargs)
         except SystemExit:
@@ -165,7 +166,7 @@ def _has_quality_failures(entities: list) -> bool:
     return False
 
 
-def _print_entity_result(er, registry) -> None:
+def _print_entity_result(er: Any, registry: Any) -> None:
     info = registry.get(er.entity_name)
     layers = _format_layers(info.layers) if info else ""
     rows = str(er.row_count) if er.row_count is not None else "-"
@@ -183,7 +184,7 @@ def _print_entity_result(er, registry) -> None:
                     click.echo(f"      {qr.check_name:<42s} FAIL ({qr.failure_count} failures)")
 
 
-def _print_run_summary(result) -> None:
+def _print_run_summary(result: Any) -> None:
     parts = [f"{result.success_count} success"]
     if result.error_count > 0:
         parts.append(f"{result.error_count} {'error' if result.error_count == 1 else 'errors'}")

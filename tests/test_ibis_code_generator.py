@@ -757,9 +757,9 @@ class TestDerivedSourceCodeGeneration:
 
     def _make_config(self, **kwargs):
         """Helper to create a minimal IdentityGraphConfig."""
-        defaults = dict(
-            match_key="email",
-            sources=[
+        defaults = {
+            "match_key": "email",
+            "sources": [
                 IdentityGraphSource(
                     name="hubspot",
                     entity="hubspot_person",
@@ -775,8 +775,8 @@ class TestDerivedSourceCodeGeneration:
                     id_field="customer_id",
                 ),
             ],
-            priority=["hubspot", "stripe"],
-        )
+            "priority": ["hubspot", "stripe"],
+        }
         defaults.update(kwargs)
         return IdentityGraphConfig(**defaults)
 

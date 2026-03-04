@@ -1,5 +1,7 @@
 """fyrnheim -- Define typed Python entities, generate transformations, run anywhere."""
 
+from typing import Any
+
 from fyrnheim.components import (
     ComputedColumn as ComputedColumn,
     DataQualityChecks as DataQualityChecks,
@@ -130,7 +132,7 @@ _LAZY_IMPORTS = {
 }
 
 
-def __getattr__(name: str):  # noqa: N807
+def __getattr__(name: str) -> Any:  # noqa: N807
     if name in _LAZY_IMPORTS:
         module_path = _LAZY_IMPORTS[name]
         import importlib

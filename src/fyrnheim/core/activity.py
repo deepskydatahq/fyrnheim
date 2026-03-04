@@ -1,6 +1,6 @@
 """Activity layer configuration for entities."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -31,7 +31,7 @@ class ActivityConfig(BaseModel):
             raise ValueError("ActivityConfig requires at least one activity type")
         return v
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context: Any) -> None:
         if self.person_id_field is None and self.anon_id_field is None:
             raise ValueError("ActivityConfig requires person_id_field or anon_id_field")
 

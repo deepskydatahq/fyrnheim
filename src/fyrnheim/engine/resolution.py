@@ -59,4 +59,9 @@ def resolve_execution_order(registry: EntityRegistry) -> list[EntityInfo]:
 
     # Filter to entities that exist in the registry (deps may reference
     # entities not in this registry).
-    return [registry.get(name) for name in order if registry.get(name) is not None]
+    result: list[EntityInfo] = []
+    for name in order:
+        entry = registry.get(name)
+        if entry is not None:
+            result.append(entry)
+    return result

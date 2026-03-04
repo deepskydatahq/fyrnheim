@@ -32,7 +32,7 @@ def parse_iso8601_duration(col: str) -> str:
     pattern = r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"
 
     # Helper to convert extracted group to int, handling empty strings from failed regex matches
-    def safe_extract(group_num):
+    def safe_extract(group_num: int) -> str:
         extracted = f"{col}.re_extract(r'{pattern}', {group_num})"
         return f"ibis.ifelse({extracted} == '', ibis.literal(0), {extracted}.cast('int64'))"
 

@@ -230,6 +230,7 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
     def _generate_derived_source_function(self, source: DerivedSource) -> str:
         """Generate multi-input source function for identity graph join."""
         config = source.identity_graph_config
+        assert config is not None, "DerivedSource requires identity_graph_config"
         name = self.entity_name
         ig_sources = config.sources
         priority = config.priority
@@ -545,6 +546,7 @@ def dim_{self.entity_name}({input_name}: ibis.Table) -> ibis.Table:
     def _generate_snapshot_function(self) -> str:
         """Generate snapshot layer function that delegates to apply_snapshot()."""
         snapshot = self.entity.layers.snapshot
+        assert snapshot is not None, "Entity must have a snapshot layer"
         date_col = snapshot.date_column
 
         # Parse deduplication ordering

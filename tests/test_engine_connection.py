@@ -86,7 +86,8 @@ class TestCreateConnectionClickHouse:
         with patch.dict("sys.modules", {"ibis.backends.clickhouse": MagicMock()}):
             conn = create_connection("clickhouse", host="ch.example.com", database="analytics")
             mock_clickhouse_backend.connect.assert_called_once_with(
-                host="ch.example.com", port=8123, database="analytics", user="default", password=""
+                host="ch.example.com", port=8123, database="analytics", user="default", password="",
+                secure=False,
             )
             assert conn is mock_conn
 
@@ -96,7 +97,8 @@ class TestCreateConnectionClickHouse:
         with patch.dict("sys.modules", {"ibis.backends.clickhouse": MagicMock()}):
             create_connection("clickhouse")
             mock_clickhouse_backend.connect.assert_called_once_with(
-                host="localhost", port=8123, database="default", user="default", password=""
+                host="localhost", port=8123, database="default", user="default", password="",
+                secure=False,
             )
 
     def test_all_kwargs_passed(self, mock_clickhouse_backend):
@@ -107,7 +109,8 @@ class TestCreateConnectionClickHouse:
                 "clickhouse", host="ch.local", port=9000, database="mydb", user="admin", password="secret"
             )
             mock_clickhouse_backend.connect.assert_called_once_with(
-                host="ch.local", port=9000, database="mydb", user="admin", password="secret"
+                host="ch.local", port=9000, database="mydb", user="admin", password="secret",
+                secure=False,
             )
 
     def test_missing_extras_raises_import_error(self):

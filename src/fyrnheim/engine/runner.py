@@ -169,7 +169,8 @@ def _push_tables(
             try:
                 table = source_conn.table(table_name)
                 row_count = table.count().execute()
-                output_conn.create_table(table_name, table, overwrite=True)
+                df = table.execute()
+                output_conn.create_table(table_name, df, overwrite=True)
                 pushed.append(PushedTable(table_name=table_name, row_count=row_count, status="ok"))
                 log.info("Pushed %s (%d rows)", table_name, row_count)
             except Exception as exc:

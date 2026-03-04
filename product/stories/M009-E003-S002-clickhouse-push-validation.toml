@@ -3,7 +3,7 @@
 id = "M009-E003-S002"
 epic = "M009-E003"
 title = "Validate fyr run pushes tables to ClickHouse with correct schemas"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

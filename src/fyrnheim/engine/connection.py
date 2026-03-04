@@ -60,8 +60,10 @@ def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
         database = kwargs.get("database", "default")
         user = kwargs.get("user", "default")
         password = kwargs.get("password", "")
+        secure = str(kwargs.get("secure", "false")).lower() in ("true", "1", "yes")
         return ibis.clickhouse.connect(
-            host=host, port=port, database=database, user=user, password=password
+            host=host, port=port, database=database, user=user, password=password,
+            secure=secure,
         )
 
     raise ValueError(

@@ -61,6 +61,14 @@ Issues = "https://github.com/timo-ai/fyrnheim/issues"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+include = [
+    "src/fyrnheim/**/*.py",
+    "src/fyrnheim/py.typed",
+    "src/fyrnheim/_scaffold/customers.parquet",
+    "src/fyrnheim/_scaffold/fyrnheim.yaml",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/fyrnheim"]
 

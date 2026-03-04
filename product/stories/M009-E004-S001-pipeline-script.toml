@@ -3,7 +3,7 @@
 id = "M009-E004-S001"
 epic = "M009-E004"
 title = "Create run.sh script orchestrating DLT extraction + fyr run"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

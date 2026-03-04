@@ -1,0 +1,48 @@
+id = "M011-E002-S001"
+parent = "M011-E002"
+title = "Update VALUES.md level statuses and references"
+status = "complete"
+created = "2026-03-04"
+
+[outcome]
+description = """VALUES.md Level 3 and Level 5 updated to shipped status with correct
+mission references. Date and next-to-build updated."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Level 3 (Production Backend) status is shipped"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Level 3 references M004, M008, M009"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Level 5 (Multi-Entity Projects) status is shipped"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Level 5 references M005, M006, M007"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Next level to build says Level 4 (Publishable Package)"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Last Updated date is 2026-03-04"
+
+[context]
+relevant_paths = ["VALUES.md"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Update status fields, add mission references, update date.
+Level 3 shipped via M004 (BigQuery), M008 (ClickHouse output), M009 (production stack).
+Level 5 shipped via M005 (source types), M006 (9 entity definitions), M007 (persistent pipeline).
+Keep existing level descriptions mostly intact — just update status and add missions."""
+reference_files = []

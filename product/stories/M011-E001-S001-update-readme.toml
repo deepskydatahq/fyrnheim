@@ -1,0 +1,53 @@
+id = "M011-E001-S001"
+parent = "M011-E001"
+title = "Update README.md with shipped features from M001-M010"
+status = "complete"
+created = "2026-03-04"
+
+[outcome]
+description = """README.md documents all shipped features including BigQuery, ClickHouse,
+advanced source types, multi-entity projects, and production deployment."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Status section lists DuckDB, BigQuery, and ClickHouse as supported backends"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Advanced source types section documents UnionSource, DerivedSource, AggregationSource, SourceMapping"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Multi-entity dependency resolution documented"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Production deployment pattern mentioned (fyrnheim.yaml output_backend config)"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "All 5 layers mentioned: prep, dimension, snapshot, activity, analytics"
+
+[context]
+relevant_paths = [
+    "README.md",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/config.py",
+    "examples/timo-data-stack/entities/",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Read source.py for actual source type APIs (TableSource, UnionSource,
+DerivedSource, AggregationSource, SourceMapping). Read config.py for fyrnheim.yaml structure.
+Read example entities for real-world usage patterns. Keep the README concise and practical —
+show code examples, not implementation details."""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/config.py",
+]

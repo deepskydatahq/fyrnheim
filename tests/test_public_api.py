@@ -61,6 +61,34 @@ class TestFlatImports:
 
         assert SourceMapping is not None
 
+    def test_engine_errors(self):
+        from fyrnheim import (
+            CircularDependencyError,
+            ExecutionError,
+            FyrnheimEngineError,
+            SourceNotFoundError,
+            TransformModuleError,
+        )
+        from fyrnheim.engine.errors import ExecutionError as NestedExecutionError
+        from fyrnheim.engine.errors import FyrnheimEngineError as NestedFyrnheimEngineError
+        from fyrnheim.engine.errors import SourceNotFoundError as NestedSourceNotFoundError
+        from fyrnheim.engine.errors import TransformModuleError as NestedTransformModuleError
+        from fyrnheim.engine.resolution import CircularDependencyError as NestedCircularDependencyError
+
+        assert FyrnheimEngineError is NestedFyrnheimEngineError
+        assert ExecutionError is NestedExecutionError
+        assert SourceNotFoundError is NestedSourceNotFoundError
+        assert TransformModuleError is NestedTransformModuleError
+        assert CircularDependencyError is NestedCircularDependencyError
+
+    def test_engine_registry(self):
+        from fyrnheim import EntityInfo, EntityRegistry
+        from fyrnheim.engine.registry import EntityInfo as NestedEntityInfo
+        from fyrnheim.engine.registry import EntityRegistry as NestedEntityRegistry
+
+        assert EntityRegistry is NestedEntityRegistry
+        assert EntityInfo is NestedEntityInfo
+
 
 class TestNestedImports:
     """Verify nested imports work and return same objects as flat imports."""

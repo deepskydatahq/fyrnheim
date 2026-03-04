@@ -1916,7 +1916,7 @@ class TestE2EAnonEntity:
             df = executor.connection.table(result.target_name).to_pandas()
 
         # google.com → seo, linkedin.com → social_linkedin, chatgpt.com → ai, empty → direct
-        categories = dict(zip(df["session_id"], df["channel_category"]))
+        categories = dict(zip(df["session_id"], df["channel_category"], strict=False))
         assert categories["s1"] == "seo"
         assert categories["s2"] == "social_linkedin"
         assert categories["s3"] == "ai"

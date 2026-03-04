@@ -16,7 +16,6 @@ from fyrnheim.core.source import UnionSource
 from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.runner import (
     EntityRunResult,
-    PushedTable,
     RunResult,
     _push_tables,
     _register_entity_source,
@@ -452,12 +451,10 @@ class TestSourceMappingNotBypassed:
         assert result.row_count == 2
 
         # Verify the dim table has renamed columns
-        import duckdb
-        conn = duckdb.connect()
         # Re-run to get a persistent connection we can query
+        from fyrnheim._generate import generate
         from fyrnheim.engine.connection import create_connection
         from fyrnheim.engine.executor import IbisExecutor
-        from fyrnheim._generate import generate
 
         gen_dir = tmp_path / "generated"
         generate(entity, output_dir=gen_dir, source_mapping=source_mapping)
@@ -465,7 +462,7 @@ class TestSourceMappingNotBypassed:
         ibis_conn = create_connection("duckdb")
         with IbisExecutor(conn=ibis_conn, backend="duckdb", generated_dir=gen_dir) as executor:
             executor.register_parquet("source_transactions", tmp_path / "data" / "transactions" / "*.parquet")
-            exec_result = executor.execute("transactions", entity=entity)
+            executor.execute("transactions", entity=entity)
             dim_table = ibis_conn.table("dim_transactions")
             columns = list(dim_table.columns)
 

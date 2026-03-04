@@ -217,12 +217,12 @@ class IbisExecutor:
             dep_table_name = f"dim_{entity.source.source_entity}"
             try:
                 dep_table = self._conn.table(dep_table_name)
-            except Exception:
+            except Exception as err:
                 raise ExecutionError(
                     f"Dependency table '{dep_table_name}' not found for "
                     f"AggregationSource entity '{entity_name}'. "
                     f"Ensure '{entity.source.source_entity}' executes before '{entity_name}'."
-                )
+                ) from err
             t = source_fn(dep_table)
         else:
             # Call the generated source function — it handles registered tables
@@ -291,12 +291,12 @@ class IbisExecutor:
             table_name = f"dim_{ig_source.entity}"
             try:
                 sources_dict[ig_source.name] = self._conn.table(table_name)
-            except Exception:
+            except Exception as err:
                 raise ExecutionError(
                     f"Dependency table '{table_name}' not found for "
                     f"DerivedSource entity '{entity.name}'. "
                     f"Ensure '{ig_source.entity}' executes before '{entity.name}'."
-                )
+                ) from err
         return sources_dict
 
     def close(self) -> None:

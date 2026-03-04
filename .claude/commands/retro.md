@@ -1,6 +1,6 @@
 ---
-description: Post-implementation retrospective - discover issues and create HTE tasks
-allowed-tools: Bash(git:*), Bash(hte tasks:*), Bash(npm run:*), Grep, Glob, Read, Edit
+description: Post-implementation retrospective - discover issues and create Beads tasks
+allowed-tools: Bash(git:*), Bash(bd:*), Bash(uv run:*), Grep, Glob, Read, Edit
 ---
 
 # Retrospective
@@ -25,11 +25,8 @@ git log --oneline -10 --name-only
 Run all checks and capture any failures:
 
 ```bash
-# Run your project's verification commands
-# Examples:
-# npm run lint && npm run test
-# pytest && ruff check .
-# dbt test
+uv run pytest
+uv run ruff check src/ tests/
 ```
 
 Capture all warnings and errors from these checks - they become findings.
@@ -39,7 +36,7 @@ Capture all warnings and errors from these checks - they become findings.
 **Check for tasks that failed (moved back to plan status with failure notes):**
 
 ```bash
-hte tasks list --status plan --json
+bd list --label plan --json
 ```
 
 Look for tasks with "## Implementation Failed" in their body.
@@ -136,10 +133,10 @@ Create all N tasks? (y/n)
 
 ### 8. If Confirmed, Create Tasks
 
-For each finding, create an HTE task:
+For each finding, create a Beads task:
 
 ```bash
-hte tasks create --title "<Task title>" --status <status> --data '{"body":"## Problem\n<description of issue>\n\n## Context\nDiscovered during retro after <recent work description>.\n\n## Solution\n<suggested fix if known>\n\n## Files\n- `<file path>`\n\n---\n*Priority: <priority> | Effort: <effort>*\n*Created via /retro*"}'
+bd create "<Task title>" --labels <status> -d "## Problem\n<description of issue>\n\n## Context\nDiscovered during retro after <recent work description>.\n\n## Solution\n<suggested fix if known>\n\n## Files\n- \`<file path>\`\n\n---\n*Priority: <priority> | Effort: <effort>*\n*Created via /retro*"
 ```
 
 ### 9. Summarize

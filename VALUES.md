@@ -2,7 +2,7 @@
 
 **Vision:** We help data teams become confident owners of their transformation logic by letting them define entities once in Python and run them anywhere.
 
-**Last Updated:** 2026-02-24
+**Last Updated:** 2026-03-04
 
 ---
 
@@ -12,12 +12,12 @@
 |-------|-------|--------|
 | 1 | Define & Run Locally | shipped |
 | 2 | 5-Minute Onboarding | shipped |
-| 3 | Production Backend | planned |
+| 3 | Production Backend | shipped |
 | 4 | Publishable Package | planned |
-| 5 | Multi-Entity Projects | future |
+| 5 | Multi-Entity Projects | shipped |
 | 6 | Orchestration Ready | future |
 
-**Next level to build:** Level 3 — Production Backend
+**Next level to build:** Level 4 — Publishable Package
 
 ---
 
@@ -58,20 +58,17 @@ A data engineer installs fyrnheim, scaffolds a project, defines an entity, and s
 
 ## Level 3: Production Backend
 
-**Status:** planned
+**Status:** shipped
 
-The same entity definition that runs locally on DuckDB also runs on BigQuery, Snowflake, or Postgres in production — with zero code changes. Switch backends by changing one config line.
+The same entity definition that runs locally on DuckDB also runs on BigQuery and ClickHouse in production — with zero code changes. Switch backends by changing one config line.
 
 **What the user gets:**
-- Backend portability: `fyrnheim.yaml` backend setting switches between DuckDB, BigQuery, Snowflake, Postgres
+- Backend portability: `fyrnheim.yaml` backend setting switches between DuckDB, BigQuery, and ClickHouse
 - Same entity, same tests, different target — no SQL dialect rewrites
-- Production-grade execution on cloud warehouses
+- Production-grade execution on BigQuery and ClickHouse output sinks
 - The core promise of "define once, run anywhere" fulfilled
 
-**Why this is next:**
-- Levels 1-2 prove the model works locally. Level 3 proves it works in production.
-- Without this, fyrnheim is a local dev tool. With it, it's a production data stack.
-- This is the "aha moment" for teams evaluating a dbt alternative.
+**Missions:** M004 (BigQuery backend), M008 (ClickHouse output sink), M009 (production timo-data stack)
 
 ---
 
@@ -95,15 +92,20 @@ The same entity definition that runs locally on DuckDB also runs on BigQuery, Sn
 
 ## Level 5: Multi-Entity Projects
 
-**Status:** future
+**Status:** shipped
 
-Define entity graphs with cross-entity references and dependency-ordered execution. A full project with customers, orders, and products entities runs in the correct order with shared dimensions.
+Define entity graphs with cross-entity references and dependency-ordered execution. A full project with 9 real-world entities runs in topologically sorted order, using UnionSource for multi-source merging, DerivedSource for identity graphs, and AggregationSource for rollups.
 
 **What the user gets:**
-- Entity dependency resolution: orders depends on customers, run in correct order
-- Cross-entity references: foreign keys validated across entities
-- Project-level execution: `fyr run` runs all entities in dependency order
-- Shared dimensions and metrics across entity boundaries
+- Entity dependency resolution via topological sort: entities run in correct order based on declared dependencies
+- UnionSource: merge multiple sources into a single entity with per-source field mappings and relabeling
+- DerivedSource: build derived entities like person identity graphs from upstream entities
+- AggregationSource: define rollup entities with grouped metrics
+- SourceMapping: declarative field mapping between raw sources and entity schemas
+- Project-level execution: `fyr run` runs all 9 entities in dependency order
+- Proven at scale with the timo-data-stack: contacts, companies, donations, subscriptions, transactions, products, signals, anon, and person entities
+
+**Missions:** M005 (source resolution), M006 (entity definitions), M007 (persistent pipeline)
 
 ---
 

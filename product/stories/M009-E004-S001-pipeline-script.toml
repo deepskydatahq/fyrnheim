@@ -1,0 +1,33 @@
+# Story: Pipeline orchestration script
+
+id = "M009-E004-S001"
+epic = "M009-E004"
+title = "Create run.sh script orchestrating DLT extraction + fyr run"
+status = "ready"
+
+[outcome]
+description = """
+A run.sh script orchestrates the full pipeline: DLT extract (all 7 sources)
+then fyr run (DuckDB transform + ClickHouse push). One source failing does
+not block others. The script logs output and exits non-zero if any step fails.
+"""
+
+job_story = "When I run ./run.sh I want the full pipeline to execute: extract all sources then transform and push to ClickHouse"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "run.sh exists and is executable",
+    "run.sh runs DLT extraction (extract_all.py) then fyr run in sequence",
+    "DLT extraction failures do not prevent fyr run from executing",
+    "Script exits non-zero if any step fails",
+    "Script logs timestamps and durations for each phase",
+    "README documents how to run the pipeline",
+]
+
+validator_context = [
+    "timo-data/run.sh",
+    "timo-data/README.md",
+]
+
+depends_on = ["M009-E003"]

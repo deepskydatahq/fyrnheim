@@ -3,7 +3,7 @@
 id = "M009-E004"
 parent = "M009"
 title = "Deploy pipeline on Hetzner with automated DLT extraction and fyr run"
-status = "draft"
+status = "active"
 
 [outcome]
 description = """

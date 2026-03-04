@@ -1,0 +1,35 @@
+# Story: Deploy to Hetzner with cron schedule
+
+id = "M009-E004-S002"
+epic = "M009-E004"
+title = "Deploy timo-data to Hetzner with cron-based pipeline execution"
+status = "ready"
+
+[outcome]
+description = """
+The timo-data repo is cloned on the Hetzner server (ch.propel.systems),
+dependencies installed, real API credentials configured in .dlt/secrets.toml,
+and a cron job runs the pipeline daily. ClickHouse contains production data
+after the first successful run.
+"""
+
+job_story = "When the daily cron fires on Hetzner I want fresh analytics data in ClickHouse without manual intervention"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "timo-data repo cloned on Hetzner server",
+    "uv and Python 3.11+ available on server",
+    "Real API credentials configured in .dlt/secrets.toml",
+    "run.sh executes successfully with real data",
+    "Cron job or systemd timer configured to run pipeline daily",
+    "ClickHouse contains production data after pipeline run",
+    "fyrnheim.yaml output_config points to localhost ClickHouse on Hetzner",
+]
+
+validator_context = [
+    "timo-data/run.sh",
+    "timo-data/fyrnheim.yaml",
+]
+
+depends_on = ["M009-E004-S001"]

@@ -1,0 +1,87 @@
+# Mission: Remove timo-specific leakage from framework
+# Make fyrnheim fully generic by removing hardcoded timo-data paths and moving timo entities to examples
+
+id = "M010"
+title = "Remove timo-specific leakage from fyrnheim framework"
+status = "complete"
+created = "2026-03-04"
+depends_on = ["M006", "M009"]
+
+[outcome]
+description = """
+The fyrnheim framework contains zero timo-specific references. The hardcoded
+~/timo-data/ fallback in the code generator is replaced with a ValueError
+requiring explicit duckdb_path. The 9 timo entity definitions are moved from
+the root entities/ directory to examples/timo-data-stack/entities/ as a
+real-world reference. The root entities/ directory is gitignored as user
+workspace. All tests pass with generic fixture paths.
+"""
+
+user_progress = "From 'framework leaks timo-specific paths' to 'fully generic framework with timo as an example'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "No occurrence of '~/timo-data/' in src/ or tests/ directories",
+    "Code generator raises ValueError when duckdb_path is missing instead of falling back to ~/timo-data/",
+    "All test fixtures use generic paths like data/charges/*.parquet instead of ~/timo-data/",
+    "9 timo entity files exist in examples/timo-data-stack/entities/",
+    "Root entities/ directory is listed in .gitignore",
+    "examples/timo-data-stack/README.md exists with brief description",
+    "All tests pass (uv run pytest)",
+]
+
+validator_context = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_generate.py",
+    "examples/timo-data-stack/entities/",
+    ".gitignore",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_generate.py",
+    "entities/",
+    "examples/timo-data-stack/",
+    ".gitignore",
+]
+
+[scope]
+in_scope = [
+    "Remove ~/timo-data/ fallback from code generator (2 locations)",
+    "Update test fixtures to use generic paths",
+    "Move 9 entity files from entities/ to examples/timo-data-stack/entities/",
+    "Add examples/timo-data-stack/README.md",
+    "Add entities/ to .gitignore",
+]
+out_of_scope = [
+    "Changing entity definitions themselves",
+    "README.md updates (separate mission)",
+    "PyPI publishing (separate mission)",
+    "VALUES.md updates (separate mission)",
+]
+acceptable_breakage = [
+    "entities/ directory no longer tracked — it's user workspace created by fyr init",
+]
+
+[notes]
+considerations = """
+Detailed implementation plan already exists at .claude/plans/compiled-painting-peach.md.
+All changes are mechanical — no design decisions needed.
+
+Key facts from the plan:
+- Code generator has ~/timo-data/ fallback at lines ~109 and ~162 in ibis_code_generator.py
+- BaseTableSource.read_table() already raises ValueError for missing duckdb_path — codegen should match
+- 4 test fixtures reference ~/timo-data/ paths
+- No tests import from entities/ — all use inline definitions — so the move is safe
+- ~828 tests should all pass after changes
+
+This is a single-epic mission — all changes are small and interdependent.
+"""

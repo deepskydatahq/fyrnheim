@@ -1,0 +1,45 @@
+id = "M010-E001"
+parent = "M010"
+title = "Move timo entities to examples and clean up"
+status = "complete"
+created = "2026-03-04"
+depends_on = []
+
+[outcome]
+description = """
+The 9 timo entity files are moved from root entities/ to examples/timo-data-stack/entities/
+with a brief README. The root entities/ directory is empty (gitignored user workspace).
+"""
+
+[job_story]
+description = """When a new user clones fyrnheim, I want them to see a clean repo with no
+timo-specific files in the workspace, so that the framework feels generic and the timo
+entities serve as an example reference."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "9 entity files exist in examples/timo-data-stack/entities/",
+    "Root entities/ directory contains no tracked Python files",
+    "examples/timo-data-stack/README.md exists",
+    "All tests pass (uv run pytest)",
+]
+validator_context = [
+    "examples/timo-data-stack/entities/",
+    "entities/",
+]
+
+[context]
+relevant_paths = [
+    "entities/",
+    "examples/",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Simple file move. No tests import from entities/ — all use inline definitions.
+The .gitignore already has entities/ listed.
+"""
+
+estimated_stories = 2

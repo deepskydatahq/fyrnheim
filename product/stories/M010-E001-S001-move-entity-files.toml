@@ -1,0 +1,35 @@
+id = "M010-E001-S001"
+parent = "M010-E001"
+title = "Move 9 timo entity files to examples/timo-data-stack/entities/"
+status = "complete"
+created = "2026-03-04"
+
+[outcome]
+description = """Move ghost_person.py, mailerlite_person.py, transactions.py, subscriptions.py,
+product.py, signals.py, anon.py, person.py, account.py from entities/ to
+examples/timo-data-stack/entities/ using git mv."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "All 9 entity files exist in examples/timo-data-stack/entities/"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Root entities/ directory has no tracked Python files"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests pass (uv run pytest)"
+
+[context]
+relevant_paths = ["entities/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Use git mv for each file. Create examples/timo-data-stack/entities/ first.
+Keep entities/.gitkeep if needed (though .gitignore already covers it)."""
+reference_files = []

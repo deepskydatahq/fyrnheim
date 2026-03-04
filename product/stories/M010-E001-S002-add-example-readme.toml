@@ -1,0 +1,30 @@
+id = "M010-E001-S002"
+parent = "M010-E001"
+title = "Add README for timo-data-stack example"
+status = "complete"
+created = "2026-03-04"
+
+[outcome]
+description = """Create a brief README.md in examples/timo-data-stack/ explaining this is a
+real-world migration example showing 9 entity definitions for a personal analytics stack."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "examples/timo-data-stack/README.md exists and is under 10 lines"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "README mentions the 9 entities and their purpose"
+
+[context]
+relevant_paths = ["examples/timo-data-stack/"]
+input_fixtures = []
+depends_on = ["M010-E001-S001"]
+
+[handoff]
+implementation_hints = """Keep it brief — 5-10 lines. Explain this is a real-world example
+of entity definitions for a personal analytics stack with DLT extraction and ClickHouse output."""
+reference_files = []

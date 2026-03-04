@@ -117,6 +117,16 @@ _LAZY_IMPORTS = {
     "IbisExecutor": "fyrnheim.engine.executor",
     "ExecutionResult": "fyrnheim.engine.executor",
     "create_connection": "fyrnheim.engine.connection",
+    # Engine: Errors
+    "ExecutionError": "fyrnheim.engine.errors",
+    "SourceNotFoundError": "fyrnheim.engine.errors",
+    "TransformModuleError": "fyrnheim.engine.errors",
+    "FyrnheimEngineError": "fyrnheim.engine.errors",
+    # Engine: Resolution
+    "CircularDependencyError": "fyrnheim.engine.resolution",
+    # Engine: Registry
+    "EntityRegistry": "fyrnheim.engine.registry",
+    "EntityInfo": "fyrnheim.engine.registry",
 }
 
 
@@ -249,4 +259,13 @@ __all__ = [
     "IbisExecutor",
     "ExecutionResult",
     "create_connection",
+    # Engine: Errors (lazy imports)
+    "ExecutionError",
+    "SourceNotFoundError",
+    "TransformModuleError",
+    "FyrnheimEngineError",
+    "CircularDependencyError",
+    # Engine: Registry (lazy imports)
+    "EntityRegistry",
+    "EntityInfo",
 ]

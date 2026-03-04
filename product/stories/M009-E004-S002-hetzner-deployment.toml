@@ -3,7 +3,7 @@
 id = "M009-E004-S002"
 epic = "M009-E004"
 title = "Deploy timo-data to Hetzner with cron-based pipeline execution"
-status = "ready"
+status = "complete"
 
 [outcome]
 description = """

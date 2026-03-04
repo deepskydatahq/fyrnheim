@@ -3,7 +3,7 @@
 
 id = "M009"
 title = "Production timo-data stack with DLT extraction and ClickHouse output"
-status = "active"
+status = "complete"
 created = "2026-03-03"
 depends_on = ["M006", "M008"]
 

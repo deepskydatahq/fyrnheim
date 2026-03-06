@@ -54,9 +54,9 @@ dev = [
 fyr = "fyrnheim.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/timo-ai/fyrnheim"
-Repository = "https://github.com/timo-ai/fyrnheim"
-Issues = "https://github.com/timo-ai/fyrnheim/issues"
+Homepage = "https://github.com/deepskydatahq/fyrnheim"
+Repository = "https://github.com/deepskydatahq/fyrnheim"
+Issues = "https://github.com/deepskydatahq/fyrnheim/issues"
 
 [build-system]
 requires = ["hatchling"]

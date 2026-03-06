@@ -1,0 +1,40 @@
+id = "M013-E002-S002"
+parent = "M013-E002"
+title = "Create Configuration, API Reference pages and configure sidebar"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Create Configuration page, placeholder API Reference page listing all
+public exports, and configure Starlight sidebar navigation."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/src/content/docs/configuration.md exists with YAML config + CLI flags + production deployment"
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/src/content/docs/api-reference.md exists listing public exports grouped by category"
+
+[[acceptance_criteria.criteria]]
+test = "config"
+description = "astro.config.mjs sidebar has: Getting Started, Core Concepts (collapsed group), Configuration, API Reference"
+
+[[acceptance_criteria.criteria]]
+test = "build"
+description = "npm run build succeeds with sidebar navigation working"
+
+[context]
+relevant_paths = ["README.md", "src/fyrnheim/__init__.py", "website/astro.config.mjs"]
+input_fixtures = []
+depends_on = ["M013-E002-S001"]
+
+[handoff]
+implementation_hints = """Configuration page from README Project Configuration + Production Deployment.
+API Reference: read src/fyrnheim/__init__.py __all__ list, group by category (Core, Sources,
+Layers, Quality, Primitives, Engine), one-line description per export.
+Sidebar config goes in astro.config.mjs starlight({ sidebar: [...] })."""
+reference_files = ["README.md", "src/fyrnheim/__init__.py"]

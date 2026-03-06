@@ -1,0 +1,39 @@
+id = "M013-E003-S001"
+parent = "M013-E003"
+title = "Customize Starlight dark theme to match landing page"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Starlight docs use custom dark theme with colors matching the landing page.
+Consistent amber accents, dark backgrounds, and code block styling."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "Custom CSS file exists overriding Starlight color tokens (--sl-color-accent, --sl-color-bg-*)"
+
+[[acceptance_criteria.criteria]]
+test = "config"
+description = "astro.config.mjs references the custom CSS file"
+
+[[acceptance_criteria.criteria]]
+test = "visual"
+description = "Docs pages have dark background matching landing page (#0a0a0a) with amber accents (#f59e0b)"
+
+[[acceptance_criteria.criteria]]
+test = "build"
+description = "npm run build succeeds"
+
+[context]
+relevant_paths = ["website/astro.config.mjs", "website/src/pages/index.astro"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create website/src/styles/custom.css. Override Starlight CSS properties:
+--sl-color-accent-low, --sl-color-accent, --sl-color-accent-high for amber.
+--sl-color-bg for dark backgrounds. Reference in astro.config.mjs: customCss: ['./src/styles/custom.css']"""
+reference_files = []

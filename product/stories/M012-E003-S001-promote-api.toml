@@ -1,0 +1,57 @@
+id = "M012-E003-S001"
+parent = "M012-E003"
+title = "Promote engine exceptions and EntityRegistry to top-level"
+status = "ready"
+created = "2026-03-04"
+
+[outcome]
+description = """ExecutionError, SourceNotFoundError, TransformModuleError,
+FyrnheimEngineError, CircularDependencyError, EntityRegistry, and EntityInfo
+importable from fyrnheim top-level. Tests updated."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim import ExecutionError succeeds"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim import EntityRegistry succeeds"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim import CircularDependencyError succeeds"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All 7 new names appear in fyrnheim.__all__"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_public_api.py includes assertions for new exports"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/engine/__init__.py",
+    "src/fyrnheim/engine/errors.py",
+    "src/fyrnheim/engine/registry.py",
+    "tests/test_public_api.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Add to _LAZY_IMPORTS in __init__.py:
+  'ExecutionError': 'fyrnheim.engine.errors',
+  'SourceNotFoundError': 'fyrnheim.engine.errors',
+  'TransformModuleError': 'fyrnheim.engine.errors',
+  'FyrnheimEngineError': 'fyrnheim.engine.errors',
+  'CircularDependencyError': 'fyrnheim.engine.resolution',
+  'EntityRegistry': 'fyrnheim.engine.registry',
+  'EntityInfo': 'fyrnheim.engine.registry',
+Add all 7 to __all__ under a new '# Engine (lazy imports)' section.
+Update test_public_api.py to verify imports."""
+reference_files = ["src/fyrnheim/engine/errors.py", "src/fyrnheim/engine/registry.py"]

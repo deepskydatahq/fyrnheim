@@ -1,0 +1,35 @@
+id = "M013-E003-S002"
+parent = "M013-E003"
+title = "Add favicon and document deployment config"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Add a favicon, ensure clean build, and document Cloudflare Pages
+deployment configuration."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/public/favicon.svg exists"
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/README.md documents Cloudflare Pages config: build command, output dir, environment variables"
+
+[[acceptance_criteria.criteria]]
+test = "build"
+description = "npm run build succeeds with zero warnings"
+
+[context]
+relevant_paths = ["website/"]
+input_fixtures = []
+depends_on = ["M013-E003-S001"]
+
+[handoff]
+implementation_hints = """Favicon: simple SVG with fire/forge motif or just the letter F in amber.
+Deployment docs: build command 'npm run build', output dir 'dist', node version 20.
+Keep the README short and practical."""
+reference_files = []

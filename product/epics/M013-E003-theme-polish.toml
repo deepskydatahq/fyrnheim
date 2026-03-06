@@ -1,0 +1,57 @@
+# Epic: Theme + Polish
+
+id = "M013-E003"
+parent = "M013"
+title = "Dark theme customization and final polish"
+status = "active"
+created = "2026-03-06"
+depends_on = ["M013-E001", "M013-E002"]
+
+[outcome]
+description = """
+Starlight docs site uses a custom dark theme matching the landing page aesthetic.
+Colors, fonts, and code block styling are consistent between landing page and docs.
+Favicon is set. Build is clean and deployment-ready for Cloudflare Pages.
+"""
+
+[job_story]
+description = """When a user navigates from the landing page into the docs, I want
+a visually consistent experience with the same dark theme and amber accents, so that
+the site feels like a cohesive product."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Starlight theme uses dark mode with colors matching landing page (#0a0a0a bg, #f59e0b accent)",
+    "Custom CSS overrides applied for Starlight color tokens",
+    "Code blocks in docs use consistent dark styling",
+    "Favicon is set in website/public/",
+    "npm run build succeeds without warnings",
+    "website/README.md documents Cloudflare Pages build config (build command, output dir)",
+]
+
+validator_context = [
+    "website/astro.config.mjs",
+    "website/src/",
+    "website/public/",
+]
+
+[context]
+relevant_paths = [
+    "website/",
+    "docs/plans/2026-03-06-website-design.md",
+]
+dependencies = ["M013-E001", "M013-E002"]
+
+[notes]
+considerations = """
+Starlight supports custom CSS via a custom CSS file referenced in astro.config.mjs.
+Override Starlight CSS custom properties for colors:
+--sl-color-accent-low, --sl-color-accent, --sl-color-accent-high
+--sl-color-bg-nav, --sl-color-bg-sidebar, etc.
+
+Font configuration via Starlight's head config or custom CSS @import.
+Keep it simple — override tokens, don't rebuild the theme.
+"""
+
+estimated_stories = 2

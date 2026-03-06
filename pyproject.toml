@@ -42,6 +42,9 @@ bigquery = [
 clickhouse = [
     "ibis-framework[clickhouse]>=11.0.0",
 ]
+postgres = [
+    "ibis-framework[postgres]>=11.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",

@@ -1,0 +1,131 @@
+# Mission: PyPI Publishing + CI Pipeline
+# Make fyrnheim installable via `pip install fyrnheim` with CI, proper packaging, and clean public API
+
+id = "M012"
+title = "PyPI publishing with CI pipeline and public API review"
+status = "complete"
+created = "2026-03-04"
+depends_on = ["M011"]
+
+[outcome]
+description = """
+`pip install fyrnheim[duckdb]` works from PyPI. GitHub Actions CI runs tests, lint,
+and type checks on every push/PR. The public API promotes exception classes and
+EntityRegistry to the top-level namespace. LICENSE file, CHANGELOG.md, and proper
+wheel packaging (including _scaffold/ data files) are all in place. Lint and type
+errors are fixed so CI passes green.
+"""
+
+user_progress = "From 'git clone only, no CI, missing license' to 'pip install fyrnheim from PyPI with green CI'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pip install fyrnheim[duckdb] installs successfully from a built wheel",
+    "fyr init works after pip install (scaffold data files included in wheel)",
+    "LICENSE file exists at repo root with MIT license text",
+    "CHANGELOG.md exists with v0.1.0 entry",
+    ".github/workflows/ci.yml runs pytest, ruff, and mypy on push/PR",
+    ".github/workflows/publish.yml builds and publishes to PyPI on tag push",
+    "uv run ruff check src/ tests/ passes with zero errors",
+    "uv run mypy src/ passes with zero errors",
+    "Exception classes (ExecutionError, SourceNotFoundError, etc.) importable from fyrnheim top-level",
+    "EntityRegistry importable from fyrnheim top-level",
+    "pyproject.toml includes _scaffold/*.parquet and _scaffold/*.yaml in wheel build config",
+]
+
+validator_context = [
+    "pyproject.toml",
+    "src/fyrnheim/__init__.py",
+    ".github/workflows/",
+    "LICENSE",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "pyproject.toml",
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/engine/__init__.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/primitives/time.py",
+    "src/fyrnheim/_scaffold/",
+    "tests/test_engine_runner.py",
+    "tests/test_e2e_ibis_executor.py",
+    "tests/test_ibis_code_generator.py",
+]
+
+[scope]
+in_scope = [
+    "Create LICENSE file with MIT license text",
+    "Create CHANGELOG.md with v0.1.0 entry",
+    "Fix pyproject.toml to include _scaffold/ data files in wheel",
+    "Fix 8 ruff lint errors (2 in src/, 6 in tests/)",
+    "Fix 16 mypy type errors across 7 files",
+    "Add types-PyYAML to dev dependencies",
+    "Create .github/workflows/ci.yml (test + lint + typecheck, Python 3.11-3.13)",
+    "Create .github/workflows/publish.yml (build + publish on tag)",
+    "Promote exception classes to fyrnheim top-level __all__",
+    "Promote EntityRegistry and EntityInfo to fyrnheim top-level __all__",
+    "Verify wheel builds correctly and fyr init works post-install",
+]
+out_of_scope = [
+    "API reference documentation (separate mission)",
+    "Tutorial or migration guide from dbt",
+    "Dynamic versioning (hatch-vcs or similar)",
+    "New feature development",
+    "Test markers for slow/integration tests",
+    "conftest.py refactoring",
+    "Actual PyPI account setup (done manually outside code)",
+]
+acceptable_breakage = [
+    "None — packaging and CI changes only, no logic changes except lint/type fixes",
+]
+
+[notes]
+considerations = """
+Exploration findings (2026-03-04):
+
+Packaging blockers:
+- No LICENSE file exists despite pyproject.toml declaring MIT
+- _scaffold/customers.parquet and _scaffold/fyrnheim.yaml not declared for wheel
+  inclusion — fyr init would crash post-install via importlib.resources
+- Fix: add [tool.hatch.build] include rules for non-Python scaffold files
+
+Lint issues (8 ruff errors):
+- executor.py lines 221, 295: B904 — raise without from err (production code)
+- test_e2e_ibis_executor.py line 1919: B905 — zip() without strict=
+- test_engine_runner.py: F401 unused import, F841 unused vars, I001 unsorted imports
+- test_ibis_code_generator.py line 760: C408 unnecessary dict() call
+
+Type issues (16 mypy errors):
+- ibis_code_generator.py: 7 union-attr errors (accessing attrs on Optional without guard)
+- resolution.py: List[EntityInfo | None] vs List[EntityInfo] return type
+- cli.py: 4 missing type annotations on Click callbacks
+- config.py: missing types-PyYAML stubs
+- __init__.py, primitives/time.py, core/activity.py: missing return type annotations
+
+Public API gaps:
+- 5 exception classes in engine.__all__ but not fyrnheim.__all__
+- EntityRegistry and EntityInfo not promoted to top-level
+- PushedTable not exported (appears in RunResult.pushed_tables)
+
+CI matrix: Python 3.11, 3.12, 3.13 (skip 3.14 until stable)
+All 850 tests are local — zero external services needed.
+
+Epic sequencing:
+- E001: Packaging fixes (LICENSE, CHANGELOG, wheel config) — no deps
+- E002: Lint + type error fixes — no deps
+- E003: Public API promotion — no deps
+- E004: GitHub Actions CI + publish workflows — depends on E001-E003 passing
+All first three epics are independent and can run in parallel.
+"""

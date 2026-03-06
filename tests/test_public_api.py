@@ -69,11 +69,15 @@ class TestFlatImports:
             SourceNotFoundError,
             TransformModuleError,
         )
-        from fyrnheim.engine.errors import ExecutionError as NestedExecutionError
-        from fyrnheim.engine.errors import FyrnheimEngineError as NestedFyrnheimEngineError
-        from fyrnheim.engine.errors import SourceNotFoundError as NestedSourceNotFoundError
-        from fyrnheim.engine.errors import TransformModuleError as NestedTransformModuleError
-        from fyrnheim.engine.resolution import CircularDependencyError as NestedCircularDependencyError
+        from fyrnheim.engine.errors import (
+            ExecutionError as NestedExecutionError,
+            FyrnheimEngineError as NestedFyrnheimEngineError,
+            SourceNotFoundError as NestedSourceNotFoundError,
+            TransformModuleError as NestedTransformModuleError,
+        )
+        from fyrnheim.engine.resolution import (
+            CircularDependencyError as NestedCircularDependencyError,
+        )
 
         assert FyrnheimEngineError is NestedFyrnheimEngineError
         assert ExecutionError is NestedExecutionError
@@ -83,8 +87,10 @@ class TestFlatImports:
 
     def test_engine_registry(self):
         from fyrnheim import EntityInfo, EntityRegistry
-        from fyrnheim.engine.registry import EntityInfo as NestedEntityInfo
-        from fyrnheim.engine.registry import EntityRegistry as NestedEntityRegistry
+        from fyrnheim.engine.registry import (
+            EntityInfo as NestedEntityInfo,
+            EntityRegistry as NestedEntityRegistry,
+        )
 
         assert EntityRegistry is NestedEntityRegistry
         assert EntityInfo is NestedEntityInfo

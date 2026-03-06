@@ -180,7 +180,7 @@ class TestRun:
         )
         (entities_dir / "test.py").write_text(entity_code)
         with pytest.raises(ValueError, match="Unsupported backend"):
-            run(entities_dir, tmp_path / "data", backend="postgres")
+            run(entities_dir, tmp_path / "data", backend="mysql")
 
     def test_empty_directory(self, tmp_path):
         entities_dir = tmp_path / "entities"
@@ -293,7 +293,7 @@ class TestRunEntity:
             layers=LayersConfig(prep=PrepLayer(model_name="prep_x")),
             source=TableSource(project="p", dataset="d", table="x", duckdb_path="data/x/*.parquet"),
         )
-        result = run_entity(entity, tmp_path, backend="postgres")
+        result = run_entity(entity, tmp_path, backend="mysql")
         assert result.status == "error"
         assert "Unsupported backend" in result.error
 

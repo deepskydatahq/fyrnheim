@@ -7,18 +7,19 @@ from typing import Any
 
 import ibis
 
-SUPPORTED_BACKENDS = ["duckdb", "bigquery", "clickhouse"]
+SUPPORTED_BACKENDS = ["duckdb", "bigquery", "clickhouse", "postgres"]
 
 
 def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
     """Create an Ibis backend connection by name.
 
     Args:
-        backend: Backend name ("duckdb", "bigquery", "clickhouse").
+        backend: Backend name ("duckdb", "bigquery", "clickhouse", "postgres").
         **kwargs: Backend-specific connection arguments.
             DuckDB: db_path (default ":memory:")
             BigQuery: project_id, dataset_id
             ClickHouse: host, port, database, user, password
+            Postgres: host, port, database, user, password
 
     Returns:
         An Ibis backend connection.
@@ -64,6 +65,23 @@ def create_connection(backend: str, **kwargs: Any) -> ibis.BaseBackend:
         return ibis.clickhouse.connect(
             host=host, port=port, database=database, user=user, password=password,
             secure=secure,
+        )
+
+    if backend == "postgres":
+        try:
+            importlib.import_module("ibis.backends.postgres")
+        except ImportError:
+            raise ImportError(
+                "Postgres backend requires extra dependencies. "
+                "Install with: pip install 'ibis-framework[postgres]'"
+            ) from None
+        host = kwargs.get("host", "localhost")
+        port = kwargs.get("port", 5432)
+        database = kwargs.get("database", "postgres")
+        user = kwargs.get("user", "postgres")
+        password = kwargs.get("password", "")
+        return ibis.postgres.connect(
+            host=host, port=port, database=database, user=user, password=password,
         )
 
     raise ValueError(

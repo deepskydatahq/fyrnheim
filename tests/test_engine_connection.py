@@ -124,12 +124,64 @@ class TestCreateConnectionClickHouse:
                 create_connection("clickhouse")
 
 
+class TestCreateConnectionPostgres:
+    """Test create_connection for Postgres backend (mocked)."""
+
+    @pytest.fixture(autouse=True)
+    def mock_postgres_backend(self):
+        """Mock ibis.postgres to avoid needing postgres extras installed."""
+        mock_pg = MagicMock()
+        ibis.postgres = mock_pg
+        yield mock_pg
+        delattr(ibis, "postgres")
+
+    def test_calls_ibis_postgres_connect(self, mock_postgres_backend):
+        mock_conn = MagicMock(spec=ibis.BaseBackend)
+        mock_postgres_backend.connect.return_value = mock_conn
+        with patch.dict("sys.modules", {"ibis.backends.postgres": MagicMock()}):
+            conn = create_connection("postgres", host="pg.example.com", database="analytics")
+            mock_postgres_backend.connect.assert_called_once_with(
+                host="pg.example.com", port=5432, database="analytics", user="postgres", password="",
+            )
+            assert conn is mock_conn
+
+    def test_default_parameters(self, mock_postgres_backend):
+        mock_conn = MagicMock(spec=ibis.BaseBackend)
+        mock_postgres_backend.connect.return_value = mock_conn
+        with patch.dict("sys.modules", {"ibis.backends.postgres": MagicMock()}):
+            create_connection("postgres")
+            mock_postgres_backend.connect.assert_called_once_with(
+                host="localhost", port=5432, database="postgres", user="postgres", password="",
+            )
+
+    def test_all_kwargs_passed(self, mock_postgres_backend):
+        mock_conn = MagicMock(spec=ibis.BaseBackend)
+        mock_postgres_backend.connect.return_value = mock_conn
+        with patch.dict("sys.modules", {"ibis.backends.postgres": MagicMock()}):
+            create_connection(
+                "postgres", host="pg.local", port=5433, database="mydb", user="admin", password="secret"
+            )
+            mock_postgres_backend.connect.assert_called_once_with(
+                host="pg.local", port=5433, database="mydb", user="admin", password="secret",
+            )
+
+    def test_missing_extras_raises_import_error(self):
+        with patch.dict("sys.modules", {"ibis.backends.postgres": None}):
+            with pytest.raises(ImportError, match="Postgres backend requires extra dependencies"):
+                create_connection("postgres")
+
+    def test_import_error_includes_install_hint(self):
+        with patch.dict("sys.modules", {"ibis.backends.postgres": None}):
+            with pytest.raises(ImportError, match="pip install"):
+                create_connection("postgres")
+
+
 class TestCreateConnectionUnsupported:
     """Test create_connection with unsupported backends."""
 
     def test_unknown_backend_raises_value_error(self):
         with pytest.raises(ValueError, match="Unsupported backend"):
-            create_connection("postgres")
+            create_connection("mysql")
 
     def test_error_lists_supported_backends(self):
         with pytest.raises(ValueError, match="duckdb"):
@@ -151,6 +203,9 @@ class TestSupportedBackends:
 
     def test_contains_clickhouse(self):
         assert "clickhouse" in SUPPORTED_BACKENDS
+
+    def test_contains_postgres(self):
+        assert "postgres" in SUPPORTED_BACKENDS
 
     def test_is_list(self):
         assert isinstance(SUPPORTED_BACKENDS, list)

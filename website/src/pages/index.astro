@@ -75,6 +75,179 @@
       </div>
     </div>
   </section>
+
+  <!-- Code Walkthrough -->
+  <section class="walkthrough">
+    <div class="container">
+      <h2 class="section-title">Four steps from raw data to insights</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <h3>Initialize a project</h3>
+          </div>
+          <div class="code-block">
+            <div class="code-bar"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-label">terminal</span></div>
+            <pre><code>$ fyr init myproject && cd myproject
+
+Created myproject/
+  created  entities/
+  created  data/
+  created  generated/
+  created  fyrnheim.yaml
+  created  entities/customers.py
+  created  data/customers.parquet</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <h3>Define an entity</h3>
+          </div>
+          <div class="code-block">
+            <div class="code-bar"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-label">entities/customers.py</span></div>
+            <pre><code>entity = Entity(
+    name="customers",
+    source=TableSource(..., duckdb_path="customers.parquet"),
+    layers=LayersConfig(
+        prep=PrepLayer(
+            model_name="prep_customers",
+            computed_columns=[
+                ComputedColumn(name="email_hash",
+                    expression=hash_email("email")),
+                ComputedColumn(name="amount_dollars",
+                    expression="t.amount_cents / 100.0"),
+            ],
+        ),
+        dimension=DimensionLayer(
+            model_name="dim_customers",
+            computed_columns=[
+                ComputedColumn(name="is_paying",
+                    expression="t.plan != 'free'"),
+            ],
+        ),
+    ),
+    quality=QualityConfig(
+        checks=[NotNull("email"), Unique("email_hash")]
+    ),
+)</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header">
+            <span class="step-number">3</span>
+            <h3>Generate transformation code</h3>
+          </div>
+          <div class="code-block">
+            <div class="code-bar"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-label">terminal</span></div>
+            <pre><code>$ fyr generate
+
+Generating transforms from entities
+  customers  generated/customers_transforms.py  written
+
+Generated: 1 written, 0 unchanged</code></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-header">
+            <span class="step-number">4</span>
+            <h3>Run the pipeline</h3>
+          </div>
+          <div class="code-block">
+            <div class="code-bar"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-label">terminal</span></div>
+            <pre><code>$ fyr run
+
+Discovering entities... 1 found
+Running on duckdb
+
+  customers  prep -> dim  12 rows  0.1s  ok
+
+Done: 1 success, 0 errors (0.2s)</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section class="comparison">
+    <div class="container">
+      <h2 class="section-title">Why Fyrnheim over dbt?</h2>
+      <div class="table-wrapper">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>dbt</th>
+              <th class="highlight-col">Fyrnheim</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-label">Language</td>
+              <td>SQL + Jinja</td>
+              <td class="highlight-col">Python</td>
+            </tr>
+            <tr>
+              <td class="row-label">Type safety</td>
+              <td>Runtime errors</td>
+              <td class="highlight-col">Pydantic validation at definition time</td>
+            </tr>
+            <tr>
+              <td class="row-label">Local dev</td>
+              <td>Requires warehouse connection</td>
+              <td class="highlight-col">DuckDB on local parquet files</td>
+            </tr>
+            <tr>
+              <td class="row-label">Backend portability</td>
+              <td>Dialect-specific SQL</td>
+              <td class="highlight-col">Ibis compiles to 15+ backends</td>
+            </tr>
+            <tr>
+              <td class="row-label">Testing</td>
+              <td>Custom schema tests</td>
+              <td class="highlight-col">pytest + quality checks</td>
+            </tr>
+            <tr>
+              <td class="row-label">Boilerplate</td>
+              <td>Jinja macros, YAML configs</td>
+              <td class="highlight-col">Python functions, Pydantic models</td>
+            </tr>
+            <tr>
+              <td class="row-label">Identity resolution</td>
+              <td>Manual SQL joins</td>
+              <td class="highlight-col">Built-in identity graph (DerivedSource)</td>
+            </tr>
+            <tr>
+              <td class="row-label">Multi-source union</td>
+              <td>Manual UNION ALL</td>
+              <td class="highlight-col">UnionSource with field mapping</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer CTA -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-cta">
+        <h2>Ready to forge your data entities?</h2>
+        <p>Get started with Fyrnheim in minutes. Define entities in Python, run locally on DuckDB, deploy anywhere.</p>
+        <div class="footer-actions">
+          <a href="/getting-started/introduction/" class="btn btn-primary">Get Started</a>
+          <a href="https://github.com/deepskydatahq/fyrnheim" class="btn btn-secondary" target="_blank" rel="noopener">GitHub Repository</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>Fyrnheim is open source under the MIT License.</p>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>
 
@@ -319,6 +492,184 @@
     line-height: 1.6;
   }
 
+  /* Walkthrough */
+  .walkthrough {
+    padding: 6rem 0;
+    background: #0f0f0f;
+  }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    font-weight: 700;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  .step-header h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+
+  .code-block {
+    background: #141414;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .code-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .code-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .code-label {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #737373;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .code-block pre {
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+  }
+
+  .code-block code {
+    font-size: 0.875rem;
+    line-height: 1.7;
+    color: #d4d4d4;
+  }
+
+  /* Comparison */
+  .comparison {
+    padding: 6rem 0;
+    background: #0a0a0a;
+  }
+
+  .table-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    overflow-x: auto;
+    padding: 0 2rem;
+  }
+
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 1rem 1.25rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .comparison-table thead th {
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .comparison-table .highlight-col {
+    background: rgba(245, 158, 11, 0.05);
+    color: #fde68a;
+  }
+
+  .comparison-table thead .highlight-col {
+    color: #f59e0b;
+  }
+
+  .comparison-table .row-label {
+    font-weight: 600;
+    color: #e5e5e5;
+    white-space: nowrap;
+  }
+
+  .comparison-table td:not(.row-label):not(.highlight-col) {
+    color: #a3a3a3;
+  }
+
+  /* Footer */
+  .footer {
+    padding: 6rem 0 2rem;
+    background: #0f0f0f;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .footer-cta {
+    text-align: center;
+    max-width: 600px;
+    margin: 0 auto 4rem;
+  }
+
+  .footer-cta h2 {
+    font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+    font-weight: 700;
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+  }
+
+  .footer-cta p {
+    color: #a3a3a3;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+    line-height: 1.7;
+  }
+
+  .footer-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .footer-bottom {
+    text-align: center;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .footer-bottom p {
+    color: #525252;
+    font-size: 0.875rem;
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .hero {
@@ -331,6 +682,15 @@
 
     .nav-links {
       gap: 1rem;
+    }
+
+    .comparison-table {
+      font-size: 0.85rem;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 0.75rem;
     }
   }
 </style>

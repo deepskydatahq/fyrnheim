@@ -1,0 +1,336 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fyrnheim — Define typed Python entities, generate transformations, run anywhere</title>
+  <meta name="description" content="A Python-native dbt alternative built on Pydantic + Ibis. Define typed entities, generate transformations, run on any backend." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">Fyrnheim</a>
+      <div class="nav-links">
+        <a href="/getting-started/introduction/">Docs</a>
+        <a href="https://github.com/deepskydatahq/fyrnheim" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1 class="hero-title">Create data entities<br />from raw sources</h1>
+      <p class="hero-subtitle">Forge typed entities from raw data. A Python-native dbt alternative built on Pydantic + Ibis. No SQL, no Jinja, no vendor lock-in.</p>
+      <div class="hero-install">
+        <code>pip install fyrnheim[duckdb]</code>
+      </div>
+      <div class="hero-actions">
+        <a href="/getting-started/introduction/" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/deepskydatahq/fyrnheim" class="btn btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features">
+    <div class="container">
+      <h2 class="section-title">Built for Python-first data teams</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <h3>Typed Entities</h3>
+          <p>Define business objects as Pydantic models. Type safety and validation at definition time, not runtime.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          </div>
+          <h3>Multi-Backend</h3>
+          <p>Same entity runs on DuckDB locally and deploys to BigQuery, ClickHouse, or Postgres with zero changes via Ibis.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </div>
+          <h3>Local Dev</h3>
+          <p>Run transformations on local parquet files with DuckDB. No warehouse connection needed for development.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+          </div>
+          <h3>No SQL / No Jinja</h3>
+          <p>Pure Python from entity definition to execution. Reusable functions replace SQL snippets and Jinja macros.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
+
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #f5f5f5;
+    line-height: 1.6;
+  }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  /* Navigation */
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.15);
+  }
+
+  .nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .nav-logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f59e0b;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+  }
+
+  .nav-links a {
+    color: #a3a3a3;
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover {
+    color: #f59e0b;
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 6rem 2rem 4rem;
+  }
+
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('/images/hero-bg.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(10, 10, 10, 0.7) 0%,
+      rgba(10, 10, 10, 0.85) 50%,
+      rgba(10, 10, 10, 0.95) 100%
+    );
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    max-width: 800px;
+  }
+
+  .hero-title {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #f5f5f5 0%, #d4d4d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subtitle {
+    font-size: clamp(1.1rem, 2vw, 1.35rem);
+    color: #a3a3a3;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+    line-height: 1.7;
+  }
+
+  .hero-install {
+    display: inline-block;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .hero-install code {
+    color: #f59e0b;
+    font-size: 1.05rem;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: #f59e0b;
+    color: #0a0a0a;
+  }
+
+  .btn-primary:hover {
+    background: #d97706;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 24px rgba(245, 158, 11, 0.3);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: #f5f5f5;
+    border: 1px solid rgba(245, 245, 245, 0.2);
+  }
+
+  .btn-secondary:hover {
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #f59e0b;
+  }
+
+  /* Features */
+  .features {
+    padding: 6rem 0;
+    background: #0a0a0a;
+  }
+
+  .section-title {
+    font-size: clamp(1.8rem, 4vw, 2.5rem);
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 3.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .feature-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: all 0.3s;
+  }
+
+  .feature-card:hover {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.03);
+    transform: translateY(-2px);
+  }
+
+  .feature-icon {
+    color: #f59e0b;
+    margin-bottom: 1rem;
+  }
+
+  .feature-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .feature-card p {
+    color: #a3a3a3;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .hero {
+      padding: 5rem 1.5rem 3rem;
+    }
+
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .nav-links {
+      gap: 1rem;
+    }
+  }
+</style>

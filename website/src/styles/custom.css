@@ -1,4 +1,39 @@
+/* Fyrnheim Dark Norse Theme — Starlight Overrides */
+
 :root {
+  /* Accent colors — amber */
+  --sl-color-accent-low: #451a03;
+  --sl-color-accent: #f59e0b;
+  --sl-color-accent-high: #fde68a;
+
+  /* Gray scale — matching landing page */
+  --sl-color-white: #f5f5f5;
+  --sl-color-gray-1: #e5e5e5;
+  --sl-color-gray-2: #a3a3a3;
+  --sl-color-gray-3: #737373;
+  --sl-color-gray-4: #404040;
+  --sl-color-gray-5: #262626;
+  --sl-color-gray-6: #171717;
+  --sl-color-black: #0a0a0a;
+
+  /* Background tokens */
+  --sl-color-bg: #0a0a0a;
+  --sl-color-bg-nav: #0a0a0a;
+  --sl-color-bg-sidebar: #111111;
+  --sl-color-bg-inline-code: rgba(245, 158, 11, 0.08);
+
+  /* Text */
+  --sl-color-text: #e5e5e5;
+  --sl-color-text-accent: #fde68a;
+
+  /* Hairline borders */
+  --sl-color-hairline-shade: rgba(245, 158, 11, 0.1);
+  --sl-color-hairline-light: rgba(255, 255, 255, 0.06);
+}
+
+/* Force dark mode for Starlight (disable light mode) */
+[data-theme='light'],
+:root[data-theme='light'] {
   --sl-color-accent-low: #451a03;
   --sl-color-accent: #f59e0b;
   --sl-color-accent-high: #fde68a;
@@ -10,4 +45,158 @@
   --sl-color-gray-5: #262626;
   --sl-color-gray-6: #171717;
   --sl-color-black: #0a0a0a;
+  --sl-color-bg: #0a0a0a;
+  --sl-color-bg-nav: #0a0a0a;
+  --sl-color-bg-sidebar: #111111;
+  --sl-color-bg-inline-code: rgba(245, 158, 11, 0.08);
+  --sl-color-text: #e5e5e5;
+  --sl-color-text-accent: #fde68a;
+  --sl-color-hairline-shade: rgba(245, 158, 11, 0.1);
+  --sl-color-hairline-light: rgba(255, 255, 255, 0.06);
+}
+
+/* Navigation bar */
+header.header {
+  background: rgba(10, 10, 10, 0.85) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+/* Site title in amber */
+.site-title {
+  color: #f59e0b !important;
+  font-weight: 700;
+}
+
+/* Sidebar styling */
+nav.sidebar {
+  background: #111111;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Sidebar links */
+.sidebar-content a {
+  color: #a3a3a3;
+  transition: color 0.2s;
+}
+
+.sidebar-content a:hover,
+.sidebar-content a[aria-current='page'] {
+  color: #f59e0b;
+}
+
+/* Code blocks — darker background */
+pre:not(.astro-code) {
+  background: #0f0f0f !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.expressive-code,
+.expressive-code .frame {
+  --ec-codeBg: #0f0f0f;
+  --ec-codeHlLineBg: rgba(245, 158, 11, 0.06);
+  --ec-codeBrdCol: rgba(255, 255, 255, 0.08);
+  --ec-frm-edActTabBg: #0f0f0f;
+  --ec-frm-edTabBarBg: #0a0a0a;
+  --ec-frm-edTabBrdBtmCol: rgba(245, 158, 11, 0.2);
+  --ec-frm-tooltipSuccessBg: #451a03;
+}
+
+/* Inline code */
+:not(pre) > code {
+  background: rgba(245, 158, 11, 0.08) !important;
+  color: #fde68a !important;
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+}
+
+/* Links */
+.sl-markdown-content a {
+  color: #f59e0b;
+  text-decoration-color: rgba(245, 158, 11, 0.3);
+}
+
+.sl-markdown-content a:hover {
+  color: #fde68a;
+  text-decoration-color: #fde68a;
+}
+
+/* Table of contents */
+starlight-toc a {
+  color: #737373;
+}
+
+starlight-toc a:hover,
+starlight-toc a[aria-current='true'] {
+  color: #f59e0b;
+}
+
+/* Headings */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.sl-markdown-content h4 {
+  color: #f5f5f5;
+}
+
+/* Blockquotes */
+.sl-markdown-content blockquote {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+}
+
+/* Tables in content */
+.sl-markdown-content table {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sl-markdown-content th {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sl-markdown-content td {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Pagination links */
+.pagination-links a {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pagination-links a:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+/* Search */
+button[data-open-modal] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+button[data-open-modal]:hover {
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #737373;
 }

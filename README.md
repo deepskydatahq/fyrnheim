@@ -311,7 +311,7 @@ output_config:
   password: ""
 ```
 
-All settings can be overridden via CLI flags. `fyr run --backend bigquery` runs on BigQuery regardless of what `fyrnheim.yaml` says.
+All settings can be overridden via CLI flags. `fyr run --backend bigquery` (or `--backend postgres`) runs on the specified backend regardless of what `fyrnheim.yaml` says.
 
 ## Production Deployment
 
@@ -355,6 +355,7 @@ Fyrnheim is not an orchestrator, not an extraction tool, and not a BI layer. It 
 - **DuckDB backend** -- fully supported
 - **BigQuery backend** -- supported
 - **ClickHouse output** -- supported as output sink
+- **Postgres backend** -- supported
 - **Python 3.11+** required
 
 ## License

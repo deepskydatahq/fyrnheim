@@ -2,9 +2,11 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  site: 'https://fyrnheim.dev',
   integrations: [
     starlight({
       title: 'Fyrnheim',
+      favicon: '/favicon.svg',
       customCss: ['./src/styles/custom.css'],
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/deepskydatahq/fyrnheim' },

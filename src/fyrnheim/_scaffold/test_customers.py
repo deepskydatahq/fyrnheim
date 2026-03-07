@@ -4,13 +4,14 @@ Run with: fyr test  (or: pytest tests/)
 """
 
 from entities.customers import entity as customers_entity
+
 from fyrnheim.testing import EntityTest
 
 
 class TestCustomers(EntityTest):
     entity = customers_entity
 
-    def test_basic_transform(self):
+    def test_basic_transform(self) -> None:
         """Verify that sample customer data flows through the pipeline."""
         result = (
             self.given(

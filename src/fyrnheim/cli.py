@@ -115,7 +115,7 @@ def _scaffold_project(target: Path, *, named: bool) -> None:
     else:
         click.echo("Initializing in current directory...")
 
-    for subdir in ("entities", "data", "generated"):
+    for subdir in ("entities", "data", "generated", "tests"):
         d = target / subdir
         if not d.exists():
             d.mkdir(parents=True)
@@ -125,6 +125,7 @@ def _scaffold_project(target: Path, *, named: bool) -> None:
     _copy_scaffold(scaffold, "fyrnheim.yaml", target / "fyrnheim.yaml")
     _copy_scaffold(scaffold, "customers_entity.py", target / "entities" / "customers.py")
     _copy_scaffold(scaffold, "customers.parquet", target / "data" / "customers.parquet")
+    _copy_scaffold(scaffold, "test_customers.py", target / "tests" / "test_customers.py")
 
     click.echo("")
     click.echo("Next steps:")

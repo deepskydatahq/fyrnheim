@@ -113,6 +113,56 @@ class TestInitOutputFormat:
             assert "Next steps:" in result.output
 
 
+class TestScaffoldTestFile:
+    def test_init_creates_test_customers(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["init"])
+            assert result.exit_code == 0
+            assert Path("tests/test_customers.py").is_file()
+
+    def test_scaffold_test_imports_entity_test(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            runner.invoke(main, ["init"])
+            content = Path("tests/test_customers.py").read_text()
+            assert "from fyrnheim.testing import EntityTest" in content
+
+    def test_scaffold_test_has_given_run_assert(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            runner.invoke(main, ["init"])
+            content = Path("tests/test_customers.py").read_text()
+            assert "def test_basic_transform" in content
+            assert ".given(" in content
+            assert ".run()" in content
+            assert "assert result.row_count" in content
+
+    def test_scaffold_test_uses_entity_test_base_class(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            runner.invoke(main, ["init"])
+            content = Path("tests/test_customers.py").read_text()
+            assert "class TestCustomers(EntityTest):" in content
+
+    def test_named_project_creates_test_file(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["init", "myproject"])
+            assert result.exit_code == 0
+            assert Path("myproject/tests/test_customers.py").is_file()
+
+    def test_pyproject_includes_scaffold_test(self):
+        """Verify pyproject.toml includes the scaffold test file in hatch build."""
+        import tomllib
+
+        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+        includes = data["tool"]["hatch"]["build"]["include"]
+        assert "src/fyrnheim/_scaffold/test_customers.py" in includes
+
+
 class TestScaffoldValidity:
     def test_sample_entity_importable(self):
         runner = CliRunner()

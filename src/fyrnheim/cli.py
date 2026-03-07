@@ -523,3 +523,46 @@ def list_cmd(entities_dir: str | None) -> None:
         click.echo(f"  {info.name:<20s} {layers_str:<30s} {info.path}")
 
     click.echo(f"\n{len(registry)} entities found")
+
+
+@main.command(name="test")
+@click.option("--entity", "entity_name", default=None, help="Only run tests for this entity.")
+@click.option("--tests-dir", type=click.Path(), default="tests", help="Directory containing test files.")
+@handle_errors
+def test_cmd(entity_name: str | None, tests_dir: str) -> None:
+    """Discover and run entity-level unit tests."""
+    from fyrnheim.testing.runner import discover_tests, run_tests
+
+    tests_path = Path(tests_dir)
+    if not tests_path.is_dir():
+        click.echo(f"Error: Tests directory not found: {tests_path}", err=True)
+        raise SystemExit(1)
+
+    tests = discover_tests(tests_path)
+    if not tests:
+        click.echo("No entity tests found.")
+        return
+
+    outcomes = run_tests(tests, entity_filter=entity_name)
+    if not outcomes:
+        click.echo("No matching tests found.")
+        return
+
+    passed = 0
+    failed = 0
+
+    for outcome in outcomes:
+        if outcome.passed:
+            click.echo(f"  {outcome.test_name:<50s} PASS  ({outcome.duration_seconds:.2f}s)")
+            passed += 1
+        else:
+            click.echo(f"  {outcome.test_name:<50s} FAIL  ({outcome.duration_seconds:.2f}s)")
+            if outcome.error:
+                click.echo(f"    {outcome.error}")
+            failed += 1
+
+    click.echo()
+    click.echo(f"Results: {passed} passed, {failed} failed")
+
+    if failed > 0:
+        raise SystemExit(1)

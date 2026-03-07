@@ -21,7 +21,7 @@ Usage::
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -69,7 +69,8 @@ class TestResult:
 
     def to_dicts(self) -> list[dict[str, Any]]:
         """Return all rows as a list of dicts for easy assertion."""
-        return self._df.to_dict(orient="records")
+        result: list[dict[str, Any]] = self._df.to_dict(orient="records")
+        return result
 
 
 class EntityTest:

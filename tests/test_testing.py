@@ -12,13 +12,11 @@ from fyrnheim import (
     ComputedColumn,
     DimensionLayer,
     Entity,
-    Field,
     LayersConfig,
     PrepLayer,
     TableSource,
 )
-from fyrnheim.testing import EntityTest, TestResult
-
+from fyrnheim.testing import EntityTest
 
 # ---------------------------------------------------------------------------
 # Minimal test entities (inline, simpler than scaffold)

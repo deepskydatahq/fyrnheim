@@ -77,7 +77,48 @@ Running on duckdb
 Done: 1 success, 0 errors (0.2s)
 ```
 
+**5. Test your entities:**
+
+```bash
+fyr test
+```
+
+```
+tests/test_customers.py .                                            [100%]
+1 passed
+```
+
 Add your own entities to `entities/` and data to `data/`. See `examples/` for more.
+
+## Testing
+
+Fyrnheim includes an entity testing framework. Write tests using `EntityTest` with a given/run/assert workflow. Each test spins up an ephemeral DuckDB, feeds in sample data, runs the entity pipeline, and lets you assert on the output.
+
+```python
+from entities.customers import entity as customers_entity
+from fyrnheim.testing import EntityTest
+
+
+class TestCustomers(EntityTest):
+    entity = customers_entity
+
+    def test_basic_transform(self):
+        result = (
+            self.given({
+                "source_customers": [
+                    {"id": 1, "name": "Alice", "email": "alice@example.com",
+                     "plan": "pro", "amount_cents": 4900, "created_at": "2024-01-15"},
+                ]
+            })
+            .run()
+        )
+
+        assert result.row_count == 1
+        assert "email_hash" in result.columns
+        assert "amount_dollars" in result.columns
+```
+
+`fyr init` scaffolds a working example in `tests/test_customers.py`. Run tests with `fyr test` or directly with `pytest tests/`.
 
 ## Core Concepts
 

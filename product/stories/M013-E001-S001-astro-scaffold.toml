@@ -1,0 +1,35 @@
+id = "M013-E001-S001"
+parent = "M013-E001"
+title = "Scaffold Astro Starlight project"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Create a working Astro Starlight project in website/ with package.json,
+astro.config.mjs, and basic configuration. Site builds and serves a default page."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "build"
+description = "npm install && npm run build in website/ succeeds"
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/package.json has astro and @astrojs/starlight as dependencies"
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/astro.config.mjs exists with Starlight integration configured"
+
+[context]
+relevant_paths = ["docs/plans/2026-03-06-website-design.md"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Use npm create astro@latest or manually set up. Starlight docs:
+https://starlight.astro.build/getting-started/. Configure for dark theme from the start.
+Set site title to 'Fyrnheim'. Add a placeholder docs page so the build works."""
+reference_files = []

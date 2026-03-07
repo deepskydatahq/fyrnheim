@@ -1,0 +1,29 @@
+id = "M012-E001"
+parent = "M012"
+title = "Packaging fixes: LICENSE, CHANGELOG, wheel data files"
+status = "active"
+created = "2026-03-04"
+depends_on = []
+
+[outcome]
+description = """LICENSE file, CHANGELOG.md, and proper wheel build config so that
+pip install fyrnheim[duckdb] works and fyr init succeeds post-install."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "LICENSE file exists with MIT text",
+    "CHANGELOG.md exists with v0.1.0 entry",
+    "pyproject.toml declares _scaffold/ data files for wheel inclusion",
+    "uv build produces a wheel that includes _scaffold/customers.parquet and _scaffold/fyrnheim.yaml",
+]
+validator_context = ["LICENSE", "CHANGELOG.md", "pyproject.toml"]
+
+[context]
+relevant_paths = ["pyproject.toml", "src/fyrnheim/_scaffold/", "LICENSE", "CHANGELOG.md"]
+
+[notes]
+considerations = """Three mechanical files to create/update. The wheel config is the
+subtle one: hatchling needs explicit include rules for non-Python data files in _scaffold/.
+Test by running uv build and inspecting the wheel contents."""
+estimated_stories = 1

@@ -1,0 +1,41 @@
+id = "M013-E001-S002"
+parent = "M013-E001"
+title = "Build landing page hero and features sections"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Create custom index.astro landing page with hero section (fire imagery
+background, headline, pip install snippet, CTA) and feature cards section."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/src/pages/index.astro exists"
+
+[[acceptance_criteria.criteria]]
+test = "visual"
+description = "Hero has background image, 'Create data entities from raw sources' headline, pip install fyrnheim snippet, amber Get Started CTA button"
+
+[[acceptance_criteria.criteria]]
+test = "visual"
+description = "Features section has 4 cards: typed entities, multi-backend, local dev, no SQL/Jinja"
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "Hero image copied to website/public/images/"
+
+[context]
+relevant_paths = ["docs/plans/2026-03-06-website-design.md", "README.md"]
+input_fixtures = []
+depends_on = ["M013-E001-S001"]
+
+[handoff]
+implementation_hints = """Copy Gemini_Generated_Image_4nahdb4nahdb4nah.png from
+~/Downloads/Download_1772794973234/ to website/public/images/hero-bg.png.
+Dark bg (#0a0a0a), amber accent (#f59e0b), white text (#f5f5f5).
+Use Astro components, inline styles or a <style> block. No Tailwind needed.
+Norse flavor in explanatory text, straightforward headline."""
+reference_files = []

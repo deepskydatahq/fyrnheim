@@ -5,7 +5,15 @@ export default defineConfig({
   site: 'https://fyrnheim.dev',
   integrations: [
     starlight({
-      title: 'Fyrnheim',
+      title: 'fyrnheim',
+      expressiveCode: {
+        themes: ['github-dark'],
+      },
+      head: [
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
+        { tag: 'link', attrs: { href: 'https://fonts.googleapis.com/css2?family=Skranji:wght@400;700&display=swap', rel: 'stylesheet' } },
+      ],
       favicon: '/favicon.svg',
       customCss: ['./src/styles/custom.css'],
       social: [

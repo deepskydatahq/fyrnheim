@@ -40,6 +40,8 @@ class TestResult:
     Provides convenience accessors over the underlying pandas DataFrame.
     """
 
+    __test__ = False  # Prevent pytest from trying to collect this as a test class
+
     _df: pd.DataFrame
 
     @property

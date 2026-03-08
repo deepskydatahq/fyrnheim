@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fyrnheim.core.source import (
@@ -159,7 +159,7 @@ def build_catalog(registry: EntityRegistry) -> dict[str, Any]:
     return {
         "entities": entities,
         "metadata": {
-            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+            "generated_at": datetime.now(tz=UTC).isoformat(),
             "entity_count": len(entities),
             "generator": "fyrnheim",
         },

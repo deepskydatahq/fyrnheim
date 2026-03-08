@@ -2,9 +2,6 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.components.measure import Measure
@@ -21,7 +18,6 @@ from fyrnheim.core.source import (
 from fyrnheim.docs.catalog import build_catalog
 from fyrnheim.engine.registry import EntityInfo, EntityRegistry
 from fyrnheim.quality import NotNull, QualityConfig, Unique
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 TEMPLATE_PATH = Path(__file__).parent.parent / "src" / "fyrnheim" / "docs" / "template.html"
 
 

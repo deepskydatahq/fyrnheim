@@ -15,7 +15,7 @@ from fyrnheim.core.source import (
     TableSource,
     UnionSource,
 )
-from fyrnheim.docs.catalog import build_catalog
+from fyrnheim.docs import build_catalog
 from fyrnheim.engine.registry import EntityInfo, EntityRegistry
 from fyrnheim.quality import NotNull, QualityConfig, Unique
 
@@ -384,7 +384,7 @@ class TestCatalogEdgeCases:
         result = build_catalog(reg)
         quality = result["entities"][0]["quality"]
         assert quality["checks"] == []
-        assert quality["primary_key"] == "id"
+        assert quality["primary_key"] is None
 
     def test_entity_with_no_computed_columns(self):
         entity = Entity(

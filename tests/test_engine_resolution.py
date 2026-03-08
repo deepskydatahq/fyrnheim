@@ -20,7 +20,7 @@ from fyrnheim.engine import (
     EntityRegistry,
     resolve_execution_order,
 )
-from fyrnheim.engine.resolution import _extract_dependencies
+from fyrnheim.engine.resolution import extract_dependencies
 
 
 def _write_entity_file(directory: Path, filename: str, entity_code: str) -> Path:
@@ -74,26 +74,26 @@ def _derived_entity(name: str, depends_on: list[str]) -> Entity:
 
 
 class TestExtractDependencies:
-    """Test _extract_dependencies helper."""
+    """Test extract_dependencies helper."""
 
     def test_table_source_no_deps(self):
         entity = _leaf_entity("orders")
-        assert _extract_dependencies(entity) == []
+        assert extract_dependencies(entity) == []
 
     def test_aggregation_source_has_source_entity(self):
         entity = _agg_entity("account", source_entity="person")
-        deps = _extract_dependencies(entity)
+        deps = extract_dependencies(entity)
         assert "person" in deps
 
     def test_aggregation_source_merges_depends_on(self):
         entity = _agg_entity("account", source_entity="person", depends_on=["extra"])
-        deps = _extract_dependencies(entity)
+        deps = extract_dependencies(entity)
         assert "person" in deps
         assert "extra" in deps
 
     def test_derived_source_uses_depends_on(self):
         entity = _derived_entity("person", depends_on=["txns", "subs"])
-        deps = _extract_dependencies(entity)
+        deps = extract_dependencies(entity)
         assert "txns" in deps
         assert "subs" in deps
 
@@ -104,7 +104,7 @@ class TestExtractDependencies:
             layers=LayersConfig(prep=PrepLayer(model_name="prep_x")),
             source=DerivedSource(identity_graph="ig"),
         )
-        assert _extract_dependencies(entity) == []
+        assert extract_dependencies(entity) == []
 
     def test_no_source(self):
         entity = Entity(
@@ -113,7 +113,7 @@ class TestExtractDependencies:
             layers=LayersConfig(prep=PrepLayer(model_name="prep_x")),
             required_fields=[],
         )
-        assert _extract_dependencies(entity) == []
+        assert extract_dependencies(entity) == []
 
     def test_derived_source_with_identity_graph_config_auto_depends(self):
         config = IdentityGraphConfig(
@@ -130,7 +130,7 @@ class TestExtractDependencies:
             layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
             source=DerivedSource(identity_graph="person_graph", identity_graph_config=config),
         )
-        deps = _extract_dependencies(entity)
+        deps = extract_dependencies(entity)
         assert "hubspot_person" in deps
         assert "stripe_customer" in deps
 

@@ -16,7 +16,7 @@ class CircularDependencyError(Exception):
     """Raised when entities form a circular dependency."""
 
 
-def _extract_dependencies(entity: Entity) -> list[str]:
+def extract_dependencies(entity: Entity) -> list[str]:
     """Return entity names this entity depends on.
 
     Dependency edges come from the entity's source type:
@@ -46,7 +46,7 @@ def resolve_execution_order(registry: EntityRegistry) -> list[EntityInfo]:
     graph: dict[str, set[str]] = {}
 
     for name, info in registry.items():
-        deps = _extract_dependencies(info.entity)
+        deps = extract_dependencies(info.entity)
         graph[name] = set(deps)
 
     ts = TopologicalSorter(graph)

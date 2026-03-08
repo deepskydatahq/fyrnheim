@@ -13,7 +13,7 @@ from fyrnheim.core.source import (
     UnionSource,
 )
 from fyrnheim.engine.registry import EntityRegistry
-from fyrnheim.engine.resolution import _extract_dependencies
+from fyrnheim.engine.resolution import extract_dependencies
 
 
 def _detect_source_type(source: Any) -> str:
@@ -79,7 +79,7 @@ def _serialize_measures(entity: Any) -> list[dict[str, Any]]:
 def _serialize_quality(entity: Any) -> dict[str, Any]:
     """Extract quality check information."""
     if entity.quality is None:
-        return {"checks": [], "primary_key": "id"}
+        return {"checks": [], "primary_key": None}
     qc = entity.quality
     checks = []
     for check in qc.checks:
@@ -129,7 +129,7 @@ def build_catalog(registry: EntityRegistry) -> dict[str, Any]:
     # Build dependency graph: entity_name -> list of dependency names
     dep_graph: dict[str, list[str]] = {}
     for name, info in registry.items():
-        dep_graph[name] = _extract_dependencies(info.entity)
+        dep_graph[name] = extract_dependencies(info.entity)
 
     # Compute dependents by inverting the dependency graph
     dependents_graph: dict[str, list[str]] = {name: [] for name in registry}

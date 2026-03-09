@@ -4,9 +4,9 @@ Tests the full generate -> execute pipeline with inline TableSource
 references in identity graphs.
 """
 
-import pytest
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from fyrnheim import (
     ComputedColumn,

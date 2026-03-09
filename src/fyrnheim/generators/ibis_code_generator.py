@@ -240,14 +240,14 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
                 f"'{src.name}' requires duckdb_path for code generation"
             )
 
-        lines.append(f"    if backend == \"duckdb\":")
+        lines.append("    if backend == \"duckdb\":")
         lines.append(f"        t_{src.name} = conn.read_parquet("
                       f"os.path.expanduser(\"{ts.duckdb_path}\"))")
-        lines.append(f"    elif backend == \"bigquery\":")
+        lines.append("    elif backend == \"bigquery\":")
         lines.append(f"        t_{src.name} = conn.table("
                       f"\"{ts.table}\", database=(\"{ts.project}\", \"{ts.dataset}\"))")
-        lines.append(f"    else:")
-        lines.append(f"        raise ValueError(f\"Unsupported backend: {{backend}}\")")
+        lines.append("    else:")
+        lines.append("        raise ValueError(f\"Unsupported backend: {backend}\")")
 
         # Apply prep_columns as .mutate() calls
         if src.prep_columns:

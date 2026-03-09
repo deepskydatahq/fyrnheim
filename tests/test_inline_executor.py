@@ -1,8 +1,8 @@
 """Tests for executor handling of inline identity graph sources."""
 
-import pytest
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from fyrnheim import (
     ComputedColumn,
@@ -104,11 +104,11 @@ class TestExecutorInlineSources:
         """Source flags correctly set for inline sources."""
         _, df = all_inline_result
         bob = df[df["email"] == "bob@ex.com"].iloc[0]
-        assert bob["is_leads"] == True
-        assert bob["is_contacts"] == True
+        assert bob["is_leads"]
+        assert bob["is_contacts"]
         alice = df[df["email"] == "alice@ex.com"].iloc[0]
-        assert alice["is_leads"] == True
-        assert alice["is_contacts"] == False
+        assert alice["is_leads"]
+        assert not alice["is_contacts"]
 
     @pytest.fixture()
     def mixed_result(self, tmp_path):
@@ -210,8 +210,8 @@ class TestExecutorInlineSources:
         """Source flags correctly set for mixed sources."""
         _, df = mixed_result
         bob = df[df["email"] == "bob@ex.com"].iloc[0]
-        assert bob["is_hubspot"] == True
-        assert bob["is_raw_leads"] == True
+        assert bob["is_hubspot"]
+        assert bob["is_raw_leads"]
 
     @pytest.fixture()
     def prep_columns_result(self, tmp_path):
@@ -288,8 +288,8 @@ class TestExecutorInlineSources:
         # bob@ex.com should match between leads (lowered) and contacts
         bob = df[df["email"] == "bob@ex.com"]
         assert len(bob) == 1
-        assert bob.iloc[0]["is_leads"] == True
-        assert bob.iloc[0]["is_contacts"] == True
+        assert bob.iloc[0]["is_leads"]
+        assert bob.iloc[0]["is_contacts"]
 
     def test_prep_columns_row_count(self, prep_columns_result):
         """Correct row count after prep_columns transform (3 = 2+2 minus 1 overlap)."""

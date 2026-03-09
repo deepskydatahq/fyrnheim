@@ -119,15 +119,40 @@ class DerivedEntitySource(BaseModel):
 
 
 class IdentityGraphSource(BaseModel):
-    """Configuration for one source in an identity graph."""
+    """Configuration for one source in an identity graph.
+
+    Exactly one of ``entity`` or ``source`` must be provided:
+    - ``entity``: reference to a named entity registered elsewhere.
+    - ``source``: an inline TableSource definition (avoids boilerplate entity files).
+
+    When using an inline ``source``, optional ``prep_columns`` allow lightweight
+    computed-column transforms before the identity-graph join.
+    """
     model_config = ConfigDict(frozen=True)
 
     name: str = PydanticField(min_length=1)
-    entity: str = PydanticField(min_length=1)
+    entity: str | None = PydanticField(default=None, min_length=1)
+    source: TableSource | None = None
     match_key_field: str = PydanticField(min_length=1)
     fields: dict[str, str] = PydanticField(default_factory=dict)
     id_field: str | None = None
     date_field: str | None = None
+    prep_columns: list[ComputedColumn] = PydanticField(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_entity_or_source(self) -> "IdentityGraphSource":
+        """Ensure exactly one of entity/source is set."""
+        has_entity = self.entity is not None
+        has_source = self.source is not None
+        if has_entity and has_source:
+            raise ValueError(
+                "IdentityGraphSource must have either 'entity' or 'source', not both"
+            )
+        if not has_entity and not has_source:
+            raise ValueError(
+                "IdentityGraphSource requires either 'entity' or 'source'"
+            )
+        return self
 
 
 class IdentityGraphConfig(BaseModel):
@@ -191,7 +216,10 @@ class DerivedSource(BaseModel):
     def _derive_depends_on(self) -> "DerivedSource":
         """Auto-populate depends_on from identity_graph_config sources."""
         if self.identity_graph_config is not None:
-            config_entities = [s.entity for s in self.identity_graph_config.sources]
+            config_entities = [
+                s.entity for s in self.identity_graph_config.sources
+                if s.entity is not None
+            ]
             merged = list(dict.fromkeys(list(self.depends_on) + config_entities))
             object.__setattr__(self, "depends_on", merged)
         return self

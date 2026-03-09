@@ -14,7 +14,7 @@ from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.errors import SourceNotFoundError
 from fyrnheim.engine.executor import IbisExecutor
 from fyrnheim.engine.registry import EntityRegistry
-from fyrnheim.engine.resolution import _extract_dependencies, resolve_execution_order
+from fyrnheim.engine.resolution import extract_dependencies, resolve_execution_order
 
 if TYPE_CHECKING:
     from fyrnheim.core.entity import Entity
@@ -380,7 +380,7 @@ def run(
 
             # Check dependency failures (skip mode)
             if on_error == "skip":
-                deps = _extract_dependencies(entity)
+                deps = extract_dependencies(entity)
                 failed_deps = [d for d in deps if d in failed_entities]
                 if failed_deps:
                     result = EntityRunResult(

@@ -526,6 +526,74 @@ def list_cmd(entities_dir: str | None) -> None:
     click.echo(f"\n{len(registry)} entities found")
 
 
+@main.group()
+def docs() -> None:
+    """Generate and serve entity documentation."""
+
+
+@docs.command(name="generate")
+@click.option("--entities-dir", type=click.Path(), default=None, help="Entity definitions directory.")
+@click.option("--output-dir", type=click.Path(), default="docs_site", help="Output directory for HTML docs.")
+@handle_errors
+def docs_generate(entities_dir: str | None, output_dir: str) -> None:
+    """Discover entities and generate a documentation site."""
+    from fyrnheim.config import resolve_config
+    from fyrnheim.docs import build_catalog, generate_docs
+    from fyrnheim.engine.registry import EntityRegistry
+
+    cfg = resolve_config(entities_dir=entities_dir)
+
+    if not cfg.entities_dir.exists():
+        click.echo(f"Error: Entities directory not found: {cfg.entities_dir}", err=True)
+        raise SystemExit(1)
+
+    registry = EntityRegistry()
+    registry.discover(cfg.entities_dir)
+
+    if len(registry) == 0:
+        click.echo(f"No entities found in {cfg.entities_dir}")
+        return
+
+    click.echo(f"Discovered {len(registry)} entities")
+    catalog = build_catalog(registry)
+    index_path = generate_docs(catalog, output_dir)
+    click.echo(f"Documentation written to {index_path}")
+
+
+@docs.command(name="serve")
+@click.option("--port", default=8080, type=int, help="Port for the local HTTP server.")
+@click.option("--output-dir", type=click.Path(), default="docs_site", help="Directory containing index.html.")
+@handle_errors
+def docs_serve(port: int, output_dir: str) -> None:
+    """Serve the documentation site locally and open the browser."""
+    import http.server
+    import threading
+    import webbrowser
+
+    serve_dir = Path(output_dir)
+    index_file = serve_dir / "index.html"
+
+    if not index_file.exists():
+        click.echo(f"Error: {index_file} not found. Run 'fyr docs generate' first.", err=True)
+        raise SystemExit(1)
+
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(serve_dir))
+
+    server = http.server.HTTPServer(("localhost", port), handler)
+    url = f"http://localhost:{port}"
+    click.echo(f"Serving docs at {url}")
+    click.echo("Press Ctrl+C to stop.")
+
+    # Open browser in background thread
+    threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        click.echo("\nStopped.")
+        server.server_close()
+
+
 @main.command(name="test")
 @click.option("--entity", "entity_name", default=None, help="Only run tests for this entity.")
 @click.option("--tests-dir", type=click.Path(), default="tests", help="Directory containing test files.")

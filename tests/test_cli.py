@@ -17,7 +17,7 @@ class TestCLIGroup:
 
     def test_help_lists_all_commands(self):
         result = CliRunner().invoke(main, ["--help"])
-        for cmd in ("init", "generate", "run", "check", "list", "test"):
+        for cmd in ("init", "generate", "run", "check", "list", "test", "docs"):
             assert cmd in result.output
 
     def test_version(self):

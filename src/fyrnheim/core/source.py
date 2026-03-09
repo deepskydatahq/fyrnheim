@@ -67,6 +67,7 @@ class BaseTableSource(BaseModel):
     @field_validator("project", "dataset", "table")
     @classmethod
     def validate_not_empty(cls, v: str) -> str:
+        """Reject empty strings for required location fields."""
         if not v:
             raise ValueError("project, dataset, and table are required")
         return v
@@ -166,6 +167,7 @@ class IdentityGraphConfig(BaseModel):
     @field_validator("priority")
     @classmethod
     def validate_priority_not_empty(cls, v: list[str]) -> list[str]:
+        """Ensure priority list is not empty."""
         if not v:
             raise ValueError("priority must not be empty")
         return v
@@ -173,6 +175,7 @@ class IdentityGraphConfig(BaseModel):
     @field_validator("sources")
     @classmethod
     def validate_unique_source_names(cls, v: list[IdentityGraphSource]) -> list[IdentityGraphSource]:
+        """Reject duplicate source names within an identity graph."""
         names = [s.name for s in v]
         if len(names) != len(set(names)):
             dupes = [n for n in names if names.count(n) > 1]
@@ -181,6 +184,7 @@ class IdentityGraphConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_priority_matches_sources(self) -> "IdentityGraphConfig":
+        """Ensure priority list contains exactly the same names as sources."""
         source_names = {s.name for s in self.sources}
         priority_names = set(self.priority)
         if source_names != priority_names:
@@ -208,6 +212,7 @@ class DerivedSource(BaseModel):
     @field_validator("identity_graph")
     @classmethod
     def validate_identity_graph(cls, v: str) -> str:
+        """Ensure identity_graph is a non-empty string."""
         if not isinstance(v, str) or not v:
             raise ValueError("identity_graph must be a non-empty string")
         return v
@@ -252,6 +257,7 @@ class EventAggregationSource(BaseTableSource):
     @field_validator("group_by_column")
     @classmethod
     def validate_group_by_column(cls, v: str) -> str:
+        """Ensure group_by_column is not empty."""
         if not v:
             raise ValueError("group_by_column is required")
         return v
@@ -268,6 +274,7 @@ class UnionSource(BaseModel):
     @field_validator("sources")
     @classmethod
     def validate_sources(cls, v: list) -> list:
+        """Ensure at least one source is provided for union."""
         if not v:
             raise ValueError("UnionSource requires at least one source")
         return v

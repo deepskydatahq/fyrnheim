@@ -67,6 +67,7 @@ class BaseTableSource(BaseModel):
     @field_validator("project", "dataset", "table")
     @classmethod
     def validate_not_empty(cls, v: str) -> str:
+        """Reject empty strings for required location fields."""
         if not v:
             raise ValueError("project, dataset, and table are required")
         return v
@@ -119,15 +120,40 @@ class DerivedEntitySource(BaseModel):
 
 
 class IdentityGraphSource(BaseModel):
-    """Configuration for one source in an identity graph."""
+    """Configuration for one source in an identity graph.
+
+    Exactly one of ``entity`` or ``source`` must be provided:
+    - ``entity``: reference to a named entity registered elsewhere.
+    - ``source``: an inline TableSource definition (avoids boilerplate entity files).
+
+    When using an inline ``source``, optional ``prep_columns`` allow lightweight
+    computed-column transforms before the identity-graph join.
+    """
     model_config = ConfigDict(frozen=True)
 
     name: str = PydanticField(min_length=1)
-    entity: str = PydanticField(min_length=1)
+    entity: str | None = PydanticField(default=None, min_length=1)
+    source: TableSource | None = None
     match_key_field: str = PydanticField(min_length=1)
     fields: dict[str, str] = PydanticField(default_factory=dict)
     id_field: str | None = None
     date_field: str | None = None
+    prep_columns: list[ComputedColumn] = PydanticField(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_entity_or_source(self) -> "IdentityGraphSource":
+        """Ensure exactly one of entity/source is set."""
+        has_entity = self.entity is not None
+        has_source = self.source is not None
+        if has_entity and has_source:
+            raise ValueError(
+                "IdentityGraphSource must have either 'entity' or 'source', not both"
+            )
+        if not has_entity and not has_source:
+            raise ValueError(
+                "IdentityGraphSource requires either 'entity' or 'source'"
+            )
+        return self
 
 
 class IdentityGraphConfig(BaseModel):
@@ -141,6 +167,7 @@ class IdentityGraphConfig(BaseModel):
     @field_validator("priority")
     @classmethod
     def validate_priority_not_empty(cls, v: list[str]) -> list[str]:
+        """Ensure priority list is not empty."""
         if not v:
             raise ValueError("priority must not be empty")
         return v
@@ -148,6 +175,7 @@ class IdentityGraphConfig(BaseModel):
     @field_validator("sources")
     @classmethod
     def validate_unique_source_names(cls, v: list[IdentityGraphSource]) -> list[IdentityGraphSource]:
+        """Reject duplicate source names within an identity graph."""
         names = [s.name for s in v]
         if len(names) != len(set(names)):
             dupes = [n for n in names if names.count(n) > 1]
@@ -156,6 +184,7 @@ class IdentityGraphConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_priority_matches_sources(self) -> "IdentityGraphConfig":
+        """Ensure priority list contains exactly the same names as sources."""
         source_names = {s.name for s in self.sources}
         priority_names = set(self.priority)
         if source_names != priority_names:
@@ -183,6 +212,7 @@ class DerivedSource(BaseModel):
     @field_validator("identity_graph")
     @classmethod
     def validate_identity_graph(cls, v: str) -> str:
+        """Ensure identity_graph is a non-empty string."""
         if not isinstance(v, str) or not v:
             raise ValueError("identity_graph must be a non-empty string")
         return v
@@ -191,7 +221,10 @@ class DerivedSource(BaseModel):
     def _derive_depends_on(self) -> "DerivedSource":
         """Auto-populate depends_on from identity_graph_config sources."""
         if self.identity_graph_config is not None:
-            config_entities = [s.entity for s in self.identity_graph_config.sources]
+            config_entities = [
+                s.entity for s in self.identity_graph_config.sources
+                if s.entity is not None
+            ]
             merged = list(dict.fromkeys(list(self.depends_on) + config_entities))
             object.__setattr__(self, "depends_on", merged)
         return self
@@ -224,6 +257,7 @@ class EventAggregationSource(BaseTableSource):
     @field_validator("group_by_column")
     @classmethod
     def validate_group_by_column(cls, v: str) -> str:
+        """Ensure group_by_column is not empty."""
         if not v:
             raise ValueError("group_by_column is required")
         return v
@@ -240,6 +274,7 @@ class UnionSource(BaseModel):
     @field_validator("sources")
     @classmethod
     def validate_sources(cls, v: list) -> list:
+        """Ensure at least one source is provided for union."""
         if not v:
             raise ValueError("UnionSource requires at least one source")
         return v

@@ -1,6 +1,7 @@
 """Reusable components that generate multiple related fields."""
 
 from .computed_column import CaseColumn, ComputedColumn
+from .expressions import contains_any, isin_literal
 from .lifecycle_flags import LifecycleFlags
 from .measure import Measure
 from .quality_checks import DataQualityChecks
@@ -13,4 +14,6 @@ __all__ = [
     "TimeBasedMetrics",
     "DataQualityChecks",
     "Measure",
+    "contains_any",
+    "isin_literal",
 ]

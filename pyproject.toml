@@ -72,6 +72,7 @@ include = [
     "src/fyrnheim/_scaffold/customers.parquet",
     "src/fyrnheim/_scaffold/fyrnheim.yaml",
     "src/fyrnheim/_scaffold/test_customers.py",
+    "src/fyrnheim/docs/template.html",
 ]
 
 [tool.hatch.build.targets.wheel]

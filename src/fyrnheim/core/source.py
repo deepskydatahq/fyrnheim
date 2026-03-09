@@ -206,10 +206,13 @@ class IdentityGraphConfig(BaseModel):
     @model_validator(mode="after")
     def _default_match_key_field(self) -> "IdentityGraphConfig":
         """Fill in match_key_field from self.match_key for sources that omit it."""
-        for src in self.sources:
-            if src.match_key_field is None:
-                # Bypass frozen model to set the default
-                object.__setattr__(src, "match_key_field", self.match_key)
+        normalized_sources = [
+            src
+            if src.match_key_field is not None
+            else src.model_copy(update={"match_key_field": self.match_key})
+            for src in self.sources
+        ]
+        object.__setattr__(self, "sources", normalized_sources)
         return self
 
     @model_validator(mode="after")

@@ -524,6 +524,32 @@ class TestIdentityGraphConfig:
         assert config.sources[0].match_key_field == "uid"
         assert config.sources[1].match_key_field == "user_id"
 
+    def test_shared_source_no_mutation_leak(self):
+        """Reusing one IdentityGraphSource across two configs must not leak defaults."""
+        shared_src_a = IdentityGraphSource(name="hubspot", entity="hubspot_person")
+        shared_src_b = IdentityGraphSource(name="stripe", entity="stripe_customer")
+
+        config1 = IdentityGraphConfig(
+            match_key="email",
+            sources=[shared_src_a, shared_src_b],
+            priority=["hubspot", "stripe"],
+        )
+        config2 = IdentityGraphConfig(
+            match_key="phone",
+            sources=[shared_src_a, shared_src_b],
+            priority=["hubspot", "stripe"],
+        )
+
+        # Each config should have its own match_key_field default
+        assert config1.sources[0].match_key_field == "email"
+        assert config1.sources[1].match_key_field == "email"
+        assert config2.sources[0].match_key_field == "phone"
+        assert config2.sources[1].match_key_field == "phone"
+
+        # Original shared instances must remain unmodified
+        assert shared_src_a.match_key_field is None
+        assert shared_src_b.match_key_field is None
+
 
 class TestAggregationSource:
     """Tests for AggregationSource model."""

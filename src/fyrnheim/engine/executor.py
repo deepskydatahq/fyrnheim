@@ -206,7 +206,15 @@ class IbisExecutor:
                     f"No source function for DerivedSource entity {entity_name}"
                 )
             sources_dict = self._build_sources_dict(entity)
-            t = source_fn(sources_dict)
+            # Check if any identity graph sources are inline (have .source set)
+            has_inline = any(
+                s.source is not None
+                for s in entity.source.identity_graph_config.sources
+            )
+            if has_inline:
+                t = source_fn(sources_dict, conn, backend)
+            else:
+                t = source_fn(sources_dict)
         elif entity is not None and isinstance(entity.source, AggregationSource):
             # AggregationSource path: resolve dependency table and pass to source fn
             source_fn = getattr(module, f"source_{entity_name}", None)
@@ -277,7 +285,11 @@ class IbisExecutor:
         return t, activity_row_count, analytics_row_count
 
     def _build_sources_dict(self, entity: Entity) -> dict[str, ibis.Table]:
-        """Build sources dict for DerivedSource from dependency tables in catalog."""
+        """Build sources dict for DerivedSource from dependency tables in catalog.
+
+        Only entity-reference sources are included; inline sources (with
+        ig_source.source set) are read directly by the generated code.
+        """
         source = entity.source
         assert isinstance(source, DerivedSource)
         config = source.identity_graph_config
@@ -288,6 +300,9 @@ class IbisExecutor:
 
         sources_dict: dict[str, ibis.Table] = {}
         for ig_source in config.sources:
+            if ig_source.source is not None:
+                # Inline source — generated code reads it directly via conn
+                continue
             table_name = f"dim_{ig_source.entity}"
             try:
                 sources_dict[ig_source.name] = self._conn.table(table_name)

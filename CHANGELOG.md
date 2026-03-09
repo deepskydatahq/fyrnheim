@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-09
+
+### Added
+
+- `fyr docs generate` command — generates a self-contained HTML documentation site with interactive entity lineage DAG (dagre-d3), entity detail pages, and sidebar navigation
+- `fyr docs serve` command — serves generated docs on a local HTTP server and opens the browser
+- JSON catalog builder (`fyrnheim.docs.catalog`) for extracting entity metadata
+- Inline identity graph sources — `IdentityGraphSource` now accepts an inline `TableSource` instead of requiring a named entity reference
+- Optional `prep_columns` on `IdentityGraphSource` for lightweight transforms before identity graph joins
+- Code generator and executor support for inline identity graph sources
+
+### Changed
+
+- `extract_dependencies` promoted from private to public API in `fyrnheim.engine.resolution`
+- `IdentityGraphSource.entity` is now optional (exactly one of `entity` or `source` must be set)
+
 ## [0.2.0] - 2026-03-07
 
 ### Added

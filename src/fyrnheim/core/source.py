@@ -128,17 +128,38 @@ class IdentityGraphSource(BaseModel):
 
     When using an inline ``source``, optional ``prep_columns`` allow lightweight
     computed-column transforms before the identity-graph join.
+
+    ``fields`` accepts either:
+    - ``dict[str, str]``: explicit mapping ``{output_name: source_column}``
+    - ``list[str]``: shorthand for passthrough fields, auto-expanded to
+      ``{name: name}`` for each entry.
     """
     model_config = ConfigDict(frozen=True)
 
     name: str = PydanticField(min_length=1)
     entity: str | None = PydanticField(default=None, min_length=1)
     source: TableSource | None = None
-    match_key_field: str = PydanticField(min_length=1)
+    match_key_field: str | None = None
     fields: dict[str, str] = PydanticField(default_factory=dict)
     id_field: str | None = None
     date_field: str | None = None
     prep_columns: list[ComputedColumn] = PydanticField(default_factory=list)
+
+    @field_validator("fields", mode="before")
+    @classmethod
+    def _normalize_fields(cls, v: dict[str, str] | list[str]) -> dict[str, str]:
+        """Accept list[str] shorthand and expand to {name: name} dict."""
+        if isinstance(v, list):
+            return {name: name for name in v}
+        return v
+
+    @field_validator("match_key_field")
+    @classmethod
+    def _validate_match_key_field(cls, v: str | None) -> str | None:
+        """Reject empty-string match_key_field (None is allowed as default)."""
+        if v is not None and not v:
+            raise ValueError("match_key_field must not be empty when provided")
+        return v
 
     @model_validator(mode="after")
     def _validate_entity_or_source(self) -> "IdentityGraphSource":
@@ -181,6 +202,15 @@ class IdentityGraphConfig(BaseModel):
             dupes = [n for n in names if names.count(n) > 1]
             raise ValueError(f"Duplicate source names: {set(dupes)}")
         return v
+
+    @model_validator(mode="after")
+    def _default_match_key_field(self) -> "IdentityGraphConfig":
+        """Fill in match_key_field from self.match_key for sources that omit it."""
+        for src in self.sources:
+            if src.match_key_field is None:
+                # Bypass frozen model to set the default
+                object.__setattr__(src, "match_key_field", self.match_key)
+        return self
 
     @model_validator(mode="after")
     def validate_priority_matches_sources(self) -> "IdentityGraphConfig":

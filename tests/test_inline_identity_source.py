@@ -11,14 +11,13 @@ from fyrnheim.core.source import (
     TableSource,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _table_source(**overrides):
     """Build a minimal TableSource with sensible defaults."""
-    defaults = dict(project="proj", dataset="ds", table="tbl")
+    defaults = {"project": "proj", "dataset": "ds", "table": "tbl"}
     defaults.update(overrides)
     return TableSource(**defaults)
 

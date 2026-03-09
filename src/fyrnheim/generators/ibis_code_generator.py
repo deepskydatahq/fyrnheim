@@ -13,6 +13,7 @@ from fyrnheim.core.source import (
     AggregationSource,
     DerivedSource,
     EventAggregationSource,
+    IdentityGraphSource,
     TableSource,
     UnionSource,
 )
@@ -227,6 +228,39 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
 
         return "\n".join(parts)
 
+    def _generate_inline_source_read(self, src: IdentityGraphSource) -> list[str]:
+        """Generate read code for an inline TableSource in an identity graph."""
+        assert src.source is not None
+        ts = src.source
+        lines: list[str] = []
+
+        if not ts.duckdb_path:
+            raise ValueError(
+                f"Inline TableSource '{ts.table}' for identity graph source "
+                f"'{src.name}' requires duckdb_path for code generation"
+            )
+
+        lines.append(f"    if backend == \"duckdb\":")
+        lines.append(f"        t_{src.name} = conn.read_parquet("
+                      f"os.path.expanduser(\"{ts.duckdb_path}\"))")
+        lines.append(f"    elif backend == \"bigquery\":")
+        lines.append(f"        t_{src.name} = conn.table("
+                      f"\"{ts.table}\", database=(\"{ts.project}\", \"{ts.dataset}\"))")
+        lines.append(f"    else:")
+        lines.append(f"        raise ValueError(f\"Unsupported backend: {{backend}}\")")
+
+        # Apply prep_columns as .mutate() calls
+        if src.prep_columns:
+            mutate_args: list[str] = []
+            for col in src.prep_columns:
+                expr = self._bind_expression(col.expression)
+                mutate_args.append(f"{col.name}={expr}")
+            # Use t_{src.name} as 't' for expression binding
+            lines.append(f"    t = t_{src.name}")
+            lines.append(f"    t_{src.name} = t.mutate({', '.join(mutate_args)})")
+
+        return lines
+
     def _generate_derived_source_function(self, source: DerivedSource) -> str:
         """Generate multi-input source function for identity graph join."""
         config = source.identity_graph_config
@@ -235,6 +269,9 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         ig_sources = config.sources
         priority = config.priority
         match_key = config.match_key
+
+        # Check if any sources are inline
+        has_inline = any(s.source is not None for s in ig_sources)
 
         # Identify shared fields (unified field name appears in 2+ sources)
         field_to_sources: dict[str, list[str]] = {}
@@ -251,12 +288,21 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
                     unique_fields[unified_name] = src.name
 
         lines: list[str] = []
-        lines.append(f"\ndef source_{name}(sources: dict) -> ibis.Table:")
+        # Signature includes conn/backend when inline sources exist
+        if has_inline:
+            lines.append(f"\ndef source_{name}(sources: dict, conn: ibis.BaseBackend, backend: str) -> ibis.Table:")
+        else:
+            lines.append(f"\ndef source_{name}(sources: dict) -> ibis.Table:")
         lines.append(f'    """Merge {name} from identity graph sources."""')
 
-        # Extract tables
+        # Extract tables — entity-reference from sources dict, inline from read
         for src in ig_sources:
-            lines.append(f'    t_{src.name} = sources["{src.name}"]')
+            if src.source is not None:
+                # Inline source: generate read code
+                lines.extend(self._generate_inline_source_read(src))
+            else:
+                # Entity reference: read from sources dict
+                lines.append(f'    t_{src.name} = sources["{src.name}"]')
         lines.append("")
 
         # Rename columns to unified names

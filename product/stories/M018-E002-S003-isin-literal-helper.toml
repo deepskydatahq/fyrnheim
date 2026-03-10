@@ -1,0 +1,41 @@
+id = "M018-E002-S003"
+parent = "M018-E002"
+title = "isin_literal() expression helper"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Create an isin_literal() helper that takes a Python list and generates correct ibis .isin() expression string."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "isin_literal('t.domain', ['gmail.com', 'yahoo.com', 'hotmail.com']) generates t.domain.isin(['gmail.com', 'yahoo.com', 'hotmail.com'])"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "isin_literal handles empty list correctly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Result string is usable inside ComputedColumn.expression"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Quoting is correct for strings with special characters"
+
+[context]
+relevant_paths = ["src/fyrnheim/components/computed_column.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Add to src/fyrnheim/components/expressions.py.
+isin_literal(column: str, values: list[str]) -> str returns:
+t.domain.isin(['gmail.com', 'yahoo.com', 'hotmail.com'])
+The key value is correct quoting — Python list repr handles this naturally.
+"""
+reference_files = []

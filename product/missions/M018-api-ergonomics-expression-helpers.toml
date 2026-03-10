@@ -1,0 +1,61 @@
+id = "M018"
+title = "API ergonomics & expression helpers"
+status = "planned"
+created = 2026-03-09
+
+[outcome]
+description = """
+Reduce boilerplate and string-encoding pain in entity definitions based on propel-data team feedback.
+
+Two areas:
+1. API ergonomics: allow list shorthand for identity-through fields, default match_key_field to the graph-level match_key.
+2. Expression helpers: provide first-class CaseColumn, contains_any(), and isin_literal() helpers so users don't have to write fragile string-encoded ibis expressions.
+"""
+
+[scope]
+in_scope = [
+    "IdentityGraphSource.fields accepts list[str] as passthrough shorthand (auto-expands to {name: name})",
+    "IdentityGraphSource.match_key_field defaults to parent IdentityGraphConfig.match_key when omitted",
+    "CaseColumn: a first-class computed column variant for ibis.cases() patterns",
+    "contains_any(column, values) expression helper for tag/group matching",
+    "isin_literal(column, values) expression helper that takes a Python list and generates correct ibis .isin()",
+    "Codegen and executor support for all new helpers",
+    "Tests for all changes",
+]
+out_of_scope = [
+    "Breaking changes to existing API (all changes are additive/backwards-compatible)",
+    "Changes to SQL generation or backend-specific code",
+    "New CLI commands",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+]
+origin = "propel-data team feedback (2026-03-09)"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fields=['email', 'status'] expands to fields={'email': 'email', 'status': 'status'}",
+    "match_key_field defaults to graph-level match_key when not specified",
+    "CaseColumn generates correct ibis.cases() code",
+    "contains_any() generates correct chained .contains().fill_null(False) | ... code",
+    "isin_literal() generates correct .isin([...]) code from Python list",
+    "All existing tests continue to pass (backwards compatibility)",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+Items 1-2 are pure model-layer changes in source.py with validator/default logic.
+Items 3-5 introduce new expression helpers that need codegen support to turn
+Python objects into ibis expressions in generated code. The key design question
+for items 3-5 is whether they are new ComputedColumn subclasses, standalone
+helper functions, or expression builder objects. Simplest approach: make them
+helper functions in a new expressions module, usable inside ComputedColumn.expression
+strings or as standalone computed column types.
+"""

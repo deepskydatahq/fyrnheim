@@ -1,0 +1,37 @@
+id = "M018-E001-S002"
+parent = "M018-E001"
+title = "Default match_key_field to graph match_key"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """IdentityGraphSource.match_key_field defaults to the parent IdentityGraphConfig.match_key when not explicitly set."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Omitting match_key_field auto-defaults to IdentityGraphConfig.match_key"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Explicitly setting match_key_field still overrides the default"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing identity graph tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py"]
+input_fixtures = []
+depends_on = ["M018-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Make match_key_field optional (str | None = None) on IdentityGraphSource.
+Add a model_validator on IdentityGraphConfig that fills in match_key_field
+from self.match_key for any source where it's None. This way the default
+cascades from the parent config.
+"""
+reference_files = []

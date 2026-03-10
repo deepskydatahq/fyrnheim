@@ -1,0 +1,35 @@
+id = "M018-E002"
+parent = "M018"
+title = "Expression helpers for computed columns"
+status = "active"
+created = 2026-03-09
+depends_on = []
+
+[outcome]
+description = """Provide first-class expression helpers — CaseColumn, contains_any(), isin_literal() — so users don't need fragile string-encoded ibis expressions for common patterns."""
+
+[job_story]
+description = """When I define computed columns with case/when logic, list membership checks, or multi-value contains patterns, I want first-class helpers instead of hand-written string expressions, so that my entity definitions are readable and less error-prone."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "CaseColumn generates correct ibis.cases() expressions",
+    "contains_any() generates chained .contains() | ... expressions",
+    "isin_literal() generates correct .isin([...]) expressions",
+    "Helpers work in ComputedColumn.expression strings and as standalone objects",
+    "Codegen correctly handles the new expression types",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+dependencies = []
+
+[notes]
+considerations = """These are helper functions in a new expressions module. They generate ibis expression strings that can be used inside ComputedColumn.expression. The codegen already handles arbitrary expressions — the helpers just make them easier to write. CaseColumn could be a ComputedColumn subclass for cleaner API."""
+
+estimated_stories = 3

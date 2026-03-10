@@ -1,0 +1,37 @@
+id = "M018-E002-S002"
+parent = "M018-E002"
+title = "contains_any() expression helper"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Create a contains_any() helper function that generates chained .contains() expressions for tag/group matching."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "contains_any('t.tags', ['masterdoc', 'cohort1', 'beta']) generates correct chained .contains().fill_null(False) | ... expression"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "contains_any with single value generates simple .contains().fill_null(False)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Result string is usable inside ComputedColumn.expression"
+
+[context]
+relevant_paths = ["src/fyrnheim/components/computed_column.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Create src/fyrnheim/components/expressions.py with helper functions.
+contains_any(column: str, values: list[str]) -> str returns a string like:
+(t.tags.contains('masterdoc').fill_null(False) | t.tags.contains('cohort1').fill_null(False) | ...)
+This string is used inside ComputedColumn(expression=contains_any(...)).
+"""
+reference_files = []

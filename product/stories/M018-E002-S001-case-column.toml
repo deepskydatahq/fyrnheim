@@ -1,0 +1,49 @@
+id = "M018-E002-S001"
+parent = "M018-E002"
+title = "CaseColumn computed column type"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Create a CaseColumn class that generates ibis.cases() expressions from structured when/then pairs."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CaseColumn(name='tier', cases=[('t.score >= 90', 'high'), ('t.score >= 50', 'medium')], default='low') generates correct ibis.cases() expression string"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CaseColumn works as a drop-in replacement for ComputedColumn in entity layers"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CaseColumn with no default omits the else clause"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Codegen correctly renders CaseColumn expressions in prep/dimension layers"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+CaseColumn should be a ComputedColumn subclass (or peer class) that auto-generates
+the expression string from structured data. It has:
+- cases: list of (condition, value) tuples
+- default: optional default value
+- It generates: ibis.cases((condition1, 'value1'), (condition2, 'value2'), ...).else_('default')
+
+Since ComputedColumn.expression is used by codegen already, CaseColumn just needs
+to compute expression from the structured cases data. A model_validator can
+set expression from cases + default.
+"""
+reference_files = []

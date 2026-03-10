@@ -1,13 +1,23 @@
 """Layer configuration classes for entity transformation pipelines."""
 
-from typing import Any
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, Field as PydanticField, model_validator
 
 from .types import IncrementalStrategy, MaterializationType
 
 
-def _validate_incremental_config(layer: Any) -> Any:
+class _HasIncrementalConfig(Protocol):
+    materialization: MaterializationType
+    incremental_strategy: IncrementalStrategy | None
+    unique_key: str | None
+    incremental_key: str | None
+
+
+_TInc = TypeVar("_TInc", bound=_HasIncrementalConfig)
+
+
+def _validate_incremental_config(layer: _TInc) -> _TInc:
     """Shared validation for incremental configuration on layers."""
     if layer.materialization == MaterializationType.INCREMENTAL:
         if layer.incremental_strategy is None:

@@ -8,21 +8,17 @@ still use full refresh (overwrite).
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from fyrnheim import (
     DimensionLayer,
     Entity,
-    Field,
     LayersConfig,
-    PrepLayer,
     TableSource,
 )
 from fyrnheim._generate import generate
 from fyrnheim.core.types import IncrementalStrategy, MaterializationType
 from fyrnheim.engine.connection import create_connection
 from fyrnheim.engine.executor import IbisExecutor
-
 
 # ---------------------------------------------------------------------------
 # APPEND strategy tests

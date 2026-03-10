@@ -1,0 +1,32 @@
+id = "M018-E001"
+parent = "M018"
+title = "Identity graph API ergonomics"
+status = "active"
+created = 2026-03-09
+depends_on = []
+
+[outcome]
+description = """Reduce boilerplate in IdentityGraphSource: allow list[str] shorthand for passthrough fields, and default match_key_field to the graph-level match_key."""
+
+[job_story]
+description = """When I define identity graph sources with fields that have the same name in source and target, I want to pass a simple list instead of a redundant dict, so that my entity definitions are less noisy."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fields=['email', 'status'] auto-expands to {'email': 'email', 'status': 'status'}",
+    "fields={'email': 'contact_email'} still works (backwards compatible)",
+    "match_key_field defaults to graph-level match_key when omitted",
+    "match_key_field can still be overridden explicitly",
+    "All existing identity graph tests pass unchanged",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py"]
+dependencies = []
+
+[notes]
+considerations = """Pure model-layer changes. fields needs a validator that accepts both list[str] and dict[str,str]. match_key_field default requires access to parent IdentityGraphConfig.match_key — can be done via model_validator on IdentityGraphConfig."""
+
+estimated_stories = 2

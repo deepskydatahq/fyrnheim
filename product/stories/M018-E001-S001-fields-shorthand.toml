@@ -1,0 +1,40 @@
+id = "M018-E001-S001"
+parent = "M018-E001"
+title = "List shorthand for passthrough fields"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """IdentityGraphSource.fields accepts list[str] as shorthand for passthrough fields, auto-expanding to {name: name} dict."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fields=['email', 'status', 'name'] auto-expands to {'email': 'email', 'status': 'status', 'name': 'name'}"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fields={'email': 'contact_email'} still works unchanged (backwards compatible)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fields={} (empty dict) still works"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Mixed usage not supported — must be all list or all dict"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Change IdentityGraphSource.fields type to dict[str, str] | list[str] with a
+field_validator that normalizes list[str] to dict. The validator runs before
+frozen model is constructed, so use mode='before'.
+"""
+reference_files = []

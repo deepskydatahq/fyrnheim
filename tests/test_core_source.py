@@ -378,6 +378,47 @@ class TestIdentityGraphSource:
         with pytest.raises(ValidationError):
             s.name = "other"
 
+    # --- Story M018-E001-S001: list shorthand for passthrough fields ---
+
+    def test_fields_list_shorthand_expands_to_dict(self):
+        """fields=['email', 'status', 'name'] auto-expands to {name: name} dict."""
+        s = IdentityGraphSource(
+            name="hubspot", entity="hubspot_person", match_key_field="email",
+            fields=["email", "status", "name"],
+        )
+        assert s.fields == {"email": "email", "status": "status", "name": "name"}
+
+    def test_fields_dict_still_works(self):
+        """fields={'email': 'contact_email'} still works unchanged."""
+        s = IdentityGraphSource(
+            name="hubspot", entity="hubspot_person", match_key_field="email",
+            fields={"email": "contact_email"},
+        )
+        assert s.fields == {"email": "contact_email"}
+
+    def test_fields_empty_dict_still_works(self):
+        """fields={} (empty dict) still works."""
+        s = IdentityGraphSource(
+            name="hubspot", entity="hubspot_person", match_key_field="email",
+            fields={},
+        )
+        assert s.fields == {}
+
+    def test_fields_empty_list_works(self):
+        """fields=[] expands to empty dict."""
+        s = IdentityGraphSource(
+            name="hubspot", entity="hubspot_person", match_key_field="email",
+            fields=[],
+        )
+        assert s.fields == {}
+
+    # --- Story M018-E001-S002: match_key_field defaults ---
+
+    def test_match_key_field_defaults_to_none(self):
+        """Omitting match_key_field results in None on standalone source."""
+        s = IdentityGraphSource(name="hubspot", entity="hubspot_person")
+        assert s.match_key_field is None
+
 
 class TestIdentityGraphConfig:
     """Tests for IdentityGraphConfig model."""
@@ -441,6 +482,73 @@ class TestIdentityGraphConfig:
         config = IdentityGraphConfig(match_key="email", sources=sources, priority=["hubspot", "stripe"])
         with pytest.raises(ValidationError):
             config.match_key = "other"
+
+    # --- Story M018-E001-S002: default match_key_field to graph match_key ---
+
+    def test_omitted_match_key_field_defaults_to_graph_match_key(self):
+        """Omitting match_key_field auto-defaults to IdentityGraphConfig.match_key."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        assert config.sources[0].match_key_field == "email"
+        assert config.sources[1].match_key_field == "email"
+
+    def test_explicit_match_key_field_overrides_default(self):
+        """Explicitly setting match_key_field still overrides the default."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(name="hubspot", entity="hubspot_person", match_key_field="contact_email"),
+                IdentityGraphSource(name="stripe", entity="stripe_customer"),
+            ],
+            priority=["hubspot", "stripe"],
+        )
+        assert config.sources[0].match_key_field == "contact_email"
+        assert config.sources[1].match_key_field == "email"
+
+    def test_mixed_default_and_explicit_match_key_field(self):
+        """Mix of omitted and explicit match_key_field works correctly."""
+        config = IdentityGraphConfig(
+            match_key="user_id",
+            sources=[
+                IdentityGraphSource(name="a", entity="entity_a", match_key_field="uid"),
+                IdentityGraphSource(name="b", entity="entity_b"),
+            ],
+            priority=["a", "b"],
+        )
+        assert config.sources[0].match_key_field == "uid"
+        assert config.sources[1].match_key_field == "user_id"
+
+    def test_shared_source_no_mutation_leak(self):
+        """Reusing one IdentityGraphSource across two configs must not leak defaults."""
+        shared_src_a = IdentityGraphSource(name="hubspot", entity="hubspot_person")
+        shared_src_b = IdentityGraphSource(name="stripe", entity="stripe_customer")
+
+        config1 = IdentityGraphConfig(
+            match_key="email",
+            sources=[shared_src_a, shared_src_b],
+            priority=["hubspot", "stripe"],
+        )
+        config2 = IdentityGraphConfig(
+            match_key="phone",
+            sources=[shared_src_a, shared_src_b],
+            priority=["hubspot", "stripe"],
+        )
+
+        # Each config should have its own match_key_field default
+        assert config1.sources[0].match_key_field == "email"
+        assert config1.sources[1].match_key_field == "email"
+        assert config2.sources[0].match_key_field == "phone"
+        assert config2.sources[1].match_key_field == "phone"
+
+        # Original shared instances must remain unmodified
+        assert shared_src_a.match_key_field is None
+        assert shared_src_b.match_key_field is None
 
 
 class TestAggregationSource:

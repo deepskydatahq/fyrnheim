@@ -308,6 +308,7 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         # Rename columns to unified names
         for src in ig_sources:
             rename_map: dict[str, str] = {}
+            assert src.match_key_field is not None  # guaranteed by IdentityGraphConfig validator
             if src.match_key_field != match_key:
                 rename_map[match_key] = src.match_key_field
             for unified, source_col in src.fields.items():

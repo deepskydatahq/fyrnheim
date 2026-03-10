@@ -1,7 +1,12 @@
 """Tests for expression helper functions."""
 
 from fyrnheim.components.computed_column import ComputedColumn
-from fyrnheim.components.expressions import CaseColumn, contains_any, isin_literal
+from fyrnheim.components.expressions import (
+    CaseColumn,
+    contains_any,
+    dedup_by,
+    isin_literal,
+)
 
 
 class TestContainsAny:
@@ -92,3 +97,30 @@ class TestIsinLiteral:
         result = isin_literal("t.name", ["O'Brien", 'say "hi"'])
         # Values should be properly quoted
         assert "O'Brien" in result or "O\\'Brien" in result
+
+
+class TestDedupBy:
+    """Tests for dedup_by() expression helper."""
+
+    def test_single_partition_column(self):
+        result = dedup_by("account_id", "timestamp")
+        assert result == (
+            "ibis.row_number().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+        )
+
+    def test_multiple_partition_columns(self):
+        result = dedup_by(["account_id", "signal_type"], "timestamp")
+        assert result == (
+            "ibis.row_number().over(ibis.window(group_by=['account_id', 'signal_type'], order_by='timestamp'))"
+        )
+
+    def test_descending_order(self):
+        result = dedup_by("account_id", "timestamp", descending=True)
+        assert result == (
+            "ibis.row_number().over(ibis.window(group_by='account_id', order_by=ibis.desc('timestamp')))"
+        )
+
+    def test_result_usable_in_computed_column(self):
+        expr = dedup_by("account_id", "timestamp")
+        col = ComputedColumn(name="row_num", expression=expr)
+        assert col.expression == expr

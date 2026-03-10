@@ -163,6 +163,16 @@ class TestPrepLayerIncremental:
                 incremental_strategy=IncrementalStrategy.APPEND,
             )
 
+    def test_valid_delete_insert_config(self):
+        layer = PrepLayer(
+            model_name="prep_events",
+            materialization=MaterializationType.INCREMENTAL,
+            incremental_strategy=IncrementalStrategy.DELETE_INSERT,
+            unique_key="event_id",
+        )
+        assert layer.incremental_strategy == IncrementalStrategy.DELETE_INSERT
+        assert layer.unique_key == "event_id"
+
     def test_table_materialization_ignores_incremental_fields(self):
         """Backward compat: TABLE materialization with no incremental fields is fine."""
         layer = PrepLayer(model_name="prep_events", materialization=MaterializationType.TABLE)
@@ -224,6 +234,16 @@ class TestDimensionLayerIncremental:
                 materialization=MaterializationType.INCREMENTAL,
                 incremental_strategy=IncrementalStrategy.APPEND,
             )
+
+    def test_valid_delete_insert_config(self):
+        layer = DimensionLayer(
+            model_name="dim_users",
+            materialization=MaterializationType.INCREMENTAL,
+            incremental_strategy=IncrementalStrategy.DELETE_INSERT,
+            unique_key="user_id",
+        )
+        assert layer.incremental_strategy == IncrementalStrategy.DELETE_INSERT
+        assert layer.unique_key == "user_id"
 
     def test_table_materialization_ignores_incremental_fields(self):
         layer = DimensionLayer(model_name="dim_users", materialization=MaterializationType.TABLE)

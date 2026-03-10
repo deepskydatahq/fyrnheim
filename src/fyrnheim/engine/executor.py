@@ -11,6 +11,7 @@ import ibis
 
 from fyrnheim.core.entity import Entity
 from fyrnheim.core.source import AggregationSource, DerivedSource
+from fyrnheim.core.types import IncrementalStrategy, MaterializationType
 from fyrnheim.engine._loader import load_transform_module
 from fyrnheim.engine.errors import ExecutionError, SourceNotFoundError
 
@@ -146,9 +147,12 @@ class IbisExecutor:
                 f"Transform execution failed for {entity_name}: {e}"
             ) from e
 
-        # Persist final result
+        # Persist final result (with incremental support)
+        strategy, unique_key, incremental_key = _get_incremental_config(entity)
         try:
-            self._conn.create_table(target_name, result_table, overwrite=True)
+            self._persist_result(
+                target_name, result_table, strategy, unique_key, incremental_key
+            )
         except Exception as e:
             raise ExecutionError(
                 f"Failed to persist {target_name}: {e}"
@@ -314,6 +318,85 @@ class IbisExecutor:
                 ) from err
         return sources_dict
 
+    def _persist_result(
+        self,
+        target_name: str,
+        result_table: ibis.Table,
+        strategy: IncrementalStrategy | None,
+        unique_key: str | None,
+        incremental_key: str | None,
+    ) -> None:
+        """Persist result table, applying incremental strategy if configured."""
+        if strategy is None:
+            # Full refresh — overwrite
+            self._conn.create_table(target_name, result_table, overwrite=True)
+            return
+
+        # Check if target table already exists
+        try:
+            existing = self._conn.table(target_name)
+            # Force evaluation to confirm the table really exists
+            existing.count().execute()
+        except Exception:
+            # First run — create table normally
+            self._conn.create_table(target_name, result_table, overwrite=True)
+            return
+
+        if strategy == IncrementalStrategy.APPEND:
+            self._persist_append(target_name, result_table, existing, incremental_key)
+        elif strategy == IncrementalStrategy.MERGE:
+            self._persist_merge(target_name, result_table, existing, unique_key)
+        else:
+            # Unknown strategy — fall back to full refresh
+            self._conn.create_table(target_name, result_table, overwrite=True)
+
+    def _persist_append(
+        self,
+        target_name: str,
+        result_table: ibis.Table,
+        existing: ibis.Table,
+        incremental_key: str | None,
+    ) -> None:
+        """APPEND strategy: insert only rows newer than max existing value."""
+        if incremental_key is None:
+            raise ExecutionError(
+                "incremental_key is required for APPEND strategy"
+            )
+
+        max_val = existing.select(incremental_key).aggregate(
+            max_val=existing[incremental_key].max()
+        ).execute()["max_val"].iloc[0]
+
+        # Filter to new rows only
+        new_rows = result_table.filter(result_table[incremental_key] > max_val)
+
+        # Insert new rows via temp table + raw SQL
+        temp_name = f"__temp_{target_name}"
+        self._conn.create_table(temp_name, new_rows, overwrite=True)
+        self._conn.raw_sql(
+            f"INSERT INTO {target_name} SELECT * FROM {temp_name}"
+        )
+        self._conn.drop_table(temp_name)
+
+    def _persist_merge(
+        self,
+        target_name: str,
+        result_table: ibis.Table,
+        existing: ibis.Table,
+        unique_key: str | None,
+    ) -> None:
+        """MERGE strategy: upsert via anti-join + union."""
+        if unique_key is None:
+            raise ExecutionError(
+                "unique_key is required for MERGE strategy"
+            )
+
+        # Keep existing rows that are NOT in the new result
+        kept = existing.anti_join(result_table, unique_key)
+        # Union: kept old rows + all new rows
+        merged = ibis.union(kept, result_table)
+        self._conn.create_table(target_name, merged, overwrite=True)
+
     def close(self) -> None:
         """Close the backend connection."""
         if self._conn is not None:
@@ -325,3 +408,19 @@ class IbisExecutor:
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+def _get_incremental_config(
+    entity: Entity | None,
+) -> tuple[IncrementalStrategy | None, str | None, str | None]:
+    """Extract incremental config from entity's layers.
+
+    Returns (strategy, unique_key, incremental_key) or (None, None, None).
+    Checks dimension layer first (it's the "final" layer), then prep.
+    """
+    if entity is None:
+        return None, None, None
+    for layer in [entity.layers.dimension, entity.layers.prep]:
+        if layer and layer.materialization == MaterializationType.INCREMENTAL:
+            return layer.incremental_strategy, layer.unique_key, layer.incremental_key
+    return None, None, None

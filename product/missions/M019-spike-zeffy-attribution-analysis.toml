@@ -1,0 +1,41 @@
+id = "M019-spike"
+title = "Zeffy attribution pipeline — spike analysis"
+status = "complete"
+created = 2026-03-10
+
+[outcome]
+description = """
+Investigate the Zeffy dbt attribution pipeline to identify what Fyrnheim needs to support
+similar marketing attribution workloads. Produce a gap analysis, Fyrnheim-native blueprint,
+and draft missions for follow-up implementation.
+"""
+
+[scope]
+in_scope = [
+    "Analyze Zeffy dbt project structure and techniques",
+    "Map each technique to Fyrnheim capabilities (covered, partial, gap)",
+    "Design Fyrnheim-native blueprint for the attribution pipeline",
+    "Draft follow-up mission TOMLs (M019, M020, M021)",
+]
+out_of_scope = [
+    "Implementation of any new features",
+    "Running code against Zeffy data",
+]
+
+[context]
+relevant_paths = [
+    "docs/plans/2026-03-10-zeffy-attribution-spike-design.md",
+]
+origin = "Learning from client-zeffy dbt project for Fyrnheim roadmap"
+
+[deliverables]
+design_doc = "docs/plans/2026-03-10-zeffy-attribution-spike-design.md"
+missions = ["M020", "M021", "M022"]
+
+[notes]
+considerations = """
+Key finding: Fyrnheim handles ~70% of the Zeffy pipeline natively (identity resolution,
+unions, channel classification, JSON extraction, aggregation, quality checks). Three gaps:
+incremental materialization (high), window function helpers (medium), and parameterized
+entity variants (high but workaround exists via separate entities).
+"""

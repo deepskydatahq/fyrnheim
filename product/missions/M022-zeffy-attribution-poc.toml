@@ -1,0 +1,58 @@
+id = "M022"
+title = "Zeffy attribution PoC"
+status = "planned"
+created = 2026-03-10
+
+[outcome]
+description = """
+Hands-on proof of concept: model the Zeffy marketing attribution pipeline using Fyrnheim.
+
+Uses the blueprint from the M019-spike design doc to build amplitude_event → account →
+acquisition_signal → attribution model entities against sample data on DuckDB.
+Validates the blueprint, surfaces gaps the spike analysis missed.
+"""
+
+[scope]
+in_scope = [
+    "Model amplitude_event entity (JSON extraction, page intent, channel classification)",
+    "Model account entity via IdentityGraphConfig (org + amplitude + merge sources)",
+    "Model acquisition_signal entity with signal selection and dedup",
+    "Model attribution_first_touch and attribution_paid_priority entities",
+    "Model account_attributed wide table joining all attribution models",
+    "Run against sample/synthetic Zeffy data on DuckDB",
+    "Document learnings and any new gaps discovered",
+]
+out_of_scope = [
+    "Production deployment or real Zeffy data",
+    "All 6 attribution models (first_touch + paid_priority representative subset)",
+    "Incremental materialization (depends on M020)",
+    "New Fyrnheim features (this mission uses existing capabilities only)",
+]
+
+[context]
+relevant_paths = [
+    "docs/plans/2026-03-10-zeffy-attribution-spike-design.md",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "examples/",
+]
+origin = "Zeffy attribution spike — blueprint (2026-03-10)"
+depends_on = ["M021"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All entities load and validate without errors",
+    "Pipeline runs end-to-end on DuckDB with sample data",
+    "account_attributed produces one row per account with attribution columns",
+    "Channel classification correctly applies priority rules",
+    "Identity resolution maps amplitude IDs to accounts",
+]
+validator_context = ["tests/", "examples/"]
+
+[notes]
+considerations = """
+M022 depends on M021 (window function helpers) for dedup patterns in acquisition_signal.
+M020 (incremental) is nice-to-have but not blocking — PoC can run full refreshes.
+If the PoC reveals gaps beyond M019/M020, new missions should be created.
+"""

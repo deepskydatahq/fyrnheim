@@ -1,0 +1,43 @@
+id = "M021"
+title = "Window function helpers"
+status = "planned"
+created = 2026-03-10
+
+[outcome]
+description = """
+Provide first-class helpers for common window function patterns: deduplication via
+ROW_NUMBER and ordered first/last value extraction without GROUP BY.
+
+These patterns appear in nearly every data pipeline (dedup event streams, pick first/last
+touchpoint per account) but currently require hand-written Ibis expression strings.
+"""
+
+[scope]
+in_scope = [
+    "dedup_by(partition, order_by) helper: generates ROW_NUMBER + filter=1 pattern",
+    "first_value_by(column, partition, order_by) helper: ordered first value without GROUP BY",
+    "last_value_by(column, partition, order_by) helper: ordered last value without GROUP BY",
+    "Tests for all helpers",
+]
+out_of_scope = [
+    "Generic window frame support (ROWS BETWEEN, RANGE)",
+    "Cumulative/running aggregations (cumulative_sum already exists as primitive)",
+    "Changes to codegen or executor",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/components/expressions.py",
+    "src/fyrnheim/primitives/aggregations.py",
+]
+origin = "Zeffy attribution spike — gap analysis (2026-03-10)"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "dedup_by generates correct ROW_NUMBER expression usable in computed columns",
+    "first_value_by/last_value_by generate correct ordered value expressions",
+    "All helpers return strings compatible with ComputedColumn.expression",
+    "Edge cases: single partition column, multiple order columns",
+]
+validator_context = ["tests/"]

@@ -1,0 +1,48 @@
+id = "M020"
+title = "Incremental materialization"
+status = "planned"
+created = 2026-03-10
+
+[outcome]
+description = """
+Enable incremental materialization so event pipelines don't reprocess all data daily.
+
+Fyrnheim already defines IncrementalStrategy (APPEND, MERGE, DELETE_INSERT) and SnapshotLayer
+uses incremental patterns, but codegen and executor don't implement general-purpose incremental
+loads for PrepLayer/DimensionLayer tables. This mission closes that gap.
+"""
+
+[scope]
+in_scope = [
+    "Codegen for APPEND strategy: generate date-filtered reads that only process new rows",
+    "Codegen for MERGE strategy: generate upsert logic on a unique key",
+    "Executor support: detect existing table, apply incremental strategy",
+    "Incremental configuration on PrepLayer and DimensionLayer (materialization=INCREMENTAL + strategy)",
+    "Tests for all incremental paths",
+]
+out_of_scope = [
+    "DELETE_INSERT strategy (defer to later mission)",
+    "Cross-backend incremental differences (start with DuckDB, extend later)",
+    "Airflow/orchestrator integration",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/types.py",
+    "src/fyrnheim/core/layer.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/snapshot.py",
+]
+origin = "Zeffy attribution spike — gap analysis (2026-03-10)"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "APPEND strategy only processes rows newer than max existing timestamp",
+    "MERGE strategy upserts rows matching a unique key",
+    "Executor detects whether target table exists and applies correct strategy",
+    "Existing non-incremental entities continue to work unchanged",
+    "E2E test: run incremental entity twice, verify no duplicates",
+]
+validator_context = ["tests/"]

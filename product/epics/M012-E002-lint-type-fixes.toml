@@ -1,0 +1,45 @@
+id = "M012-E002"
+parent = "M012"
+title = "Fix ruff lint errors and mypy type errors"
+status = "active"
+created = "2026-03-04"
+depends_on = []
+
+[outcome]
+description = """All 8 ruff lint errors and 16 mypy type errors fixed. types-PyYAML
+added to dev dependencies. uv run ruff check src/ tests/ and uv run mypy src/ both
+pass with zero errors."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "uv run ruff check src/ tests/ exits 0",
+    "uv run mypy src/ exits 0",
+    "types-PyYAML in dev dependencies",
+    "All 850 tests still pass",
+]
+validator_context = ["src/fyrnheim/engine/executor.py", "src/fyrnheim/generators/ibis_code_generator.py"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/primitives/time.py",
+    "tests/test_engine_runner.py",
+    "tests/test_e2e_ibis_executor.py",
+    "tests/test_ibis_code_generator.py",
+    "pyproject.toml",
+]
+
+[notes]
+considerations = """Ruff errors: B904 in executor.py (2x), B905 in test_e2e, F401/F841/I001
+in test_engine_runner, C408 in test_ibis_code_generator.
+Mypy errors: union-attr in ibis_code_generator (7x), misc in resolution.py,
+no-untyped-def in cli.py (4x), __init__.py, primitives/time.py, core/activity.py,
+import-untyped for PyYAML stubs."""
+estimated_stories = 2

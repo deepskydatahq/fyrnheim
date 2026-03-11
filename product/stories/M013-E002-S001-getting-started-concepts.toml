@@ -1,0 +1,43 @@
+id = "M013-E002-S001"
+parent = "M013-E002"
+title = "Create Getting Started and Core Concepts docs pages"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Create Getting Started page and all 7 Core Concepts pages (entities,
+layers, sources, source-mapping, primitives, components, quality) with content seeded
+from README."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "website/src/content/docs/getting-started.md exists with install + quick start"
+
+[[acceptance_criteria.criteria]]
+test = "file"
+description = "All 7 concept pages exist in website/src/content/docs/concepts/"
+
+[[acceptance_criteria.criteria]]
+test = "content"
+description = "Each page has Starlight frontmatter (title, description) and content from README"
+
+[[acceptance_criteria.criteria]]
+test = "build"
+description = "npm run build succeeds with all pages"
+
+[context]
+relevant_paths = ["README.md"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Seed from README sections. Each page needs frontmatter:
+---
+title: Page Title
+description: Brief description
+---
+Expand README content slightly where it makes sense but don't invent new content."""
+reference_files = ["README.md"]

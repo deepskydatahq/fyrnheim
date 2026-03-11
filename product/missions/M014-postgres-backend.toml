@@ -1,0 +1,88 @@
+# Mission: Postgres Backend Support
+# Add Postgres as a supported backend so the README promise of "BigQuery, ClickHouse, or Postgres" is real
+
+id = "M014"
+title = "Postgres backend support"
+status = "draft"
+created = "2026-03-06"
+depends_on = ["M012"]
+
+[outcome]
+description = """
+`fyr run --backend postgres` works end-to-end. Postgres is added to the connection
+factory, pyproject.toml extras, and documented in README. The same entity definitions
+that run on DuckDB and BigQuery also run on Postgres with zero changes.
+"""
+
+user_progress = "From 'README says Postgres but it does not work' to 'Postgres is a fully supported backend'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "create_connection('postgres', host=..., port=..., database=...) returns an Ibis Postgres backend",
+    "'postgres' is in SUPPORTED_BACKENDS list in connection.py",
+    "ImportError with helpful message when ibis postgres extras not installed",
+    "ValueError when required connection params (host, database) are missing",
+    "pyproject.toml has a [postgres] optional dependency group with ibis-framework[postgres]",
+    "Unit tests for the postgres branch in create_connection (mocked ibis.postgres.connect)",
+    "README Status section lists Postgres as supported",
+    "Website docs updated if M013 is merged",
+    "All existing tests still pass (no regressions)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/connection.py",
+    "pyproject.toml",
+    "README.md",
+    "tests/",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/connection.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/config.py",
+    "pyproject.toml",
+    "README.md",
+    "tests/test_engine_runner.py",
+]
+
+[scope]
+in_scope = [
+    "Add postgres branch to create_connection() in connection.py",
+    "Add 'postgres' to SUPPORTED_BACKENDS list",
+    "Add [postgres] extras group to pyproject.toml (ibis-framework[postgres])",
+    "Unit tests for postgres connection factory (mocked, no real Postgres needed)",
+    "Update README Status section to list Postgres as supported",
+    "Update website docs if M013 has been merged",
+]
+out_of_scope = [
+    "Postgres as an output sink (separate from transform backend -- future work if needed)",
+    "Integration tests requiring a real Postgres instance",
+    "Connection pooling or advanced Postgres features",
+    "Docker Compose or CI setup for Postgres",
+]
+acceptable_breakage = [
+    "None -- purely additive, no existing code is modified beyond adding a new branch",
+]
+
+[notes]
+considerations = """
+The connection factory pattern in connection.py is clean and well-established.
+Adding Postgres follows the exact same pattern as BigQuery and ClickHouse:
+
+1. Try importing ibis.backends.postgres
+2. Raise ImportError with install hint if missing
+3. Extract connection params from kwargs (host, port, database, user, password)
+4. Call ibis.postgres.connect(...)
+
+Ibis supports Postgres via the `ibis-framework[postgres]` extra which pulls in
+psycopg2 or similar. Check the exact Ibis API for postgres connect params.
+
+This is a single-epic mission -- all changes are small and interdependent.
+Estimated: ~30 minutes of implementation time.
+"""

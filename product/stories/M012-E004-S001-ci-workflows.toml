@@ -1,0 +1,46 @@
+id = "M012-E004-S001"
+parent = "M012-E004"
+title = "Create GitHub Actions CI and publish workflows"
+status = "ready"
+created = "2026-03-04"
+
+[outcome]
+description = """CI workflow runs test+lint+typecheck on push/PR across Python 3.11-3.13.
+Publish workflow builds and uploads to PyPI on version tag push."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = ".github/workflows/ci.yml is valid YAML with pytest, ruff, and mypy jobs"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "CI matrix includes python-version: [3.11, 3.12, 3.13]"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "CI uses astral-sh/setup-uv action"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = ".github/workflows/publish.yml triggers on push tags v*"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "Publish workflow runs uv build and uses pypa/gh-action-pypi-publish"
+
+[context]
+relevant_paths = [".github/workflows/", "pyproject.toml"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """CI workflow: use astral-sh/setup-uv@v5, uv sync --all-extras,
+then run uv run python -m pytest, uv run ruff check src/ tests/, uv run mypy src/.
+Matrix: os ubuntu-latest, python 3.11/3.12/3.13.
+Publish workflow: trigger on push tags 'v*', use uv build, then
+pypa/gh-action-pypi-publish with trusted publishing (no API token needed).
+No external services needed for tests."""
+reference_files = ["pyproject.toml"]

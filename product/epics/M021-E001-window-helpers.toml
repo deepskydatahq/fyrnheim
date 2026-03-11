@@ -1,0 +1,51 @@
+id = "M021-E001"
+parent = "M021"
+title = "Window function expression helpers"
+status = "active"
+created = 2026-03-10
+depends_on = []
+
+[outcome]
+description = """Add dedup_by(), first_value_by(), and last_value_by() helpers to expressions.py
+that generate Ibis window function expression strings compatible with ComputedColumn.expression."""
+
+[job_story]
+description = """When I need to deduplicate events or pick the first/last value per group,
+I want expression helpers that generate the correct Ibis window function strings,
+so I don't have to hand-write fragile ibis.window() expressions."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "dedup_by generates correct Ibis row_number window expression",
+    "first_value_by generates correct Ibis first() window expression",
+    "last_value_by generates correct Ibis last() window expression",
+    "All helpers return strings usable in ComputedColumn.expression",
+    "Edge cases: single/multiple partition columns, descending order",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/components/expressions.py",
+    "src/fyrnheim/primitives/aggregations.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "tests/test_expressions.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+The existing primitives/aggregations.py has SQL-style helpers (row_number_by, first_value, etc.)
+but they generate raw SQL strings. The new helpers go in components/expressions.py and generate
+Ibis API expression strings that work with _bind_expression() in codegen.
+
+Ibis patterns:
+- Row number: ibis.row_number().over(ibis.window(group_by='col', order_by='col'))
+- First value: t.col.first().over(ibis.window(group_by='col', order_by='col'))
+- Last value: t.col.last().over(ibis.window(group_by='col', order_by='col'))
+
+Note: ibis row_number() is 0-indexed (unlike SQL's 1-indexed).
+"""
+
+estimated_stories = 2

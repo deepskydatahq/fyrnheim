@@ -1,0 +1,45 @@
+id = "M020-E002-S002"
+parent = "M020-E002"
+title = "MERGE strategy in executor"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """Implement MERGE incremental strategy: on subsequent runs, upsert rows matching the unique_key."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "First run with MERGE creates the table (same as full refresh)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Second run with new rows adds them to the table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Second run with updated rows (same unique_key, different values) replaces them"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing rows not in the new result are preserved (not deleted)"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/executor.py"]
+input_fixtures = []
+depends_on = ["M020-E002-S001"]
+
+[handoff]
+implementation_hints = """
+MERGE via Ibis (backend-agnostic approach):
+1. Get existing table
+2. Anti-join: existing rows NOT matching any new row's unique_key
+3. Union: anti-join result + new result (new rows win)
+4. Overwrite table with the union
+This is semantically equivalent to an upsert but works on any backend.
+Alternative for DuckDB: INSERT OR REPLACE using raw_sql.
+Start with the Ibis approach for portability.
+"""
+reference_files = []

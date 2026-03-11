@@ -1,0 +1,42 @@
+id = "M020-E001-S001"
+parent = "M020-E001"
+title = "Add incremental config fields to layer models"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """Add incremental_strategy, unique_key, and incremental_key fields to PrepLayer and DimensionLayer."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PrepLayer accepts incremental_strategy as Optional[IncrementalStrategy]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PrepLayer accepts unique_key as Optional[str] and incremental_key as Optional[str]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DimensionLayer accepts the same three fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Fields default to None and existing entities without them still validate"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/layer.py", "src/fyrnheim/core/types.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Add to both PrepLayer and DimensionLayer:
+  incremental_strategy: IncrementalStrategy | None = None
+  unique_key: str | None = None
+  incremental_key: str | None = None
+Import IncrementalStrategy from .types.
+"""
+reference_files = []

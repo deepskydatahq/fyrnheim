@@ -1,0 +1,45 @@
+id = "M020-E002"
+parent = "M020"
+title = "Executor incremental strategies"
+status = "active"
+created = 2026-03-10
+depends_on = ["M020-E001"]
+
+[outcome]
+description = """Implement APPEND and MERGE incremental strategies in the executor so that
+subsequent runs of incremental entities don't reprocess all data."""
+
+[job_story]
+description = """When I run an incremental entity a second time, I want the executor to detect
+the existing table and apply the correct incremental strategy (APPEND new rows or MERGE on
+unique key), so that I don't duplicate data or reprocess the entire dataset."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "APPEND: executor inserts only rows with incremental_key > max existing value",
+    "MERGE: executor upserts rows matching the unique_key",
+    "First run (no existing table) does a full create for both strategies",
+    "Existing non-incremental entities still use create_table(overwrite=True)",
+    "E2E: run incremental entity twice with different source data, verify correct result",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/core/layer.py",
+    "src/fyrnheim/core/types.py",
+    "tests/test_e2e_prep_dim.py",
+]
+dependencies = ["M020-E001"]
+
+[notes]
+considerations = """The executor currently always does create_table(overwrite=True). For incremental:
+- It needs the Entity object to read incremental config from the layer.
+- APPEND: filter result where incremental_key > max(incremental_key) in existing table, then insert.
+- MERGE: use ibis to anti-join + union, or backend-specific upsert.
+- Start with DuckDB; backend-specific optimizations can come later.
+- The entity parameter is already optional in execute() — make it required for incremental entities."""
+
+estimated_stories = 3

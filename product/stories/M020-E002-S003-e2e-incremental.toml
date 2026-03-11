@@ -1,0 +1,37 @@
+id = "M020-E002-S003"
+parent = "M020-E002"
+title = "E2E incremental tests"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """End-to-end tests verifying both APPEND and MERGE strategies work correctly across multiple runs."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "APPEND: entity run twice with new source data, second run adds only new rows, total row count is correct"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "MERGE: entity run twice with overlapping data, updated rows reflect new values, total is correct"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Full refresh (materialization=TABLE) entity run twice still overwrites (backward compat)"
+
+[context]
+relevant_paths = ["tests/test_e2e_prep_dim.py", "src/fyrnheim/engine/executor.py"]
+input_fixtures = []
+depends_on = ["M020-E002-S002"]
+
+[handoff]
+implementation_hints = """
+Create a test file tests/test_e2e_incremental.py.
+Each test: define entity with incremental config, write parquet test data, run executor,
+write more parquet data (or modify), run executor again, verify final table state.
+Use DuckDB in-memory backend.
+"""
+reference_files = []

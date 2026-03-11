@@ -1,0 +1,42 @@
+id = "M020-E001"
+parent = "M020"
+title = "Incremental layer configuration"
+status = "active"
+created = 2026-03-10
+depends_on = []
+
+[outcome]
+description = """Add incremental configuration to PrepLayer and DimensionLayer so entities can declare
+APPEND or MERGE strategies with the required metadata (unique_key, incremental_key)."""
+
+[job_story]
+description = """When I define an entity with a high-volume event source, I want to configure
+incremental materialization on its prep or dimension layer, so that only new data is processed
+on subsequent runs."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "PrepLayer and DimensionLayer accept incremental_strategy, unique_key, and incremental_key fields",
+    "Validation: materialization=INCREMENTAL requires incremental_strategy to be set",
+    "Validation: MERGE strategy requires unique_key to be set",
+    "Validation: APPEND strategy requires incremental_key to be set",
+    "Existing entities without incremental config continue to work unchanged",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/types.py",
+    "src/fyrnheim/core/layer.py",
+    "tests/test_core_types.py",
+]
+dependencies = []
+
+[notes]
+considerations = """IncrementalStrategy enum already exists in types.py. PrepLayer and DimensionLayer
+already have a materialization field that accepts INCREMENTAL. The new fields (incremental_strategy,
+unique_key, incremental_key) should be optional with validation enforcing them only when
+materialization=INCREMENTAL."""
+
+estimated_stories = 2

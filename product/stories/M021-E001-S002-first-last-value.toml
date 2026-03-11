@@ -1,0 +1,44 @@
+id = "M021-E001-S002"
+parent = "M021-E001"
+title = "first_value_by() and last_value_by() expression helpers"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """Add first_value_by() and last_value_by() helpers that generate Ibis window expressions for ordered value extraction without GROUP BY."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "first_value_by('t.channel', 'account_id', 'timestamp') generates t.channel.first().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "last_value_by('t.channel', 'account_id', 'timestamp') generates t.channel.last().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Both helpers support list partition_by and descending order"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Result strings are usable inside ComputedColumn.expression"
+
+[context]
+relevant_paths = ["src/fyrnheim/components/expressions.py", "tests/test_expressions.py"]
+input_fixtures = []
+depends_on = ["M021-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Add to src/fyrnheim/components/expressions.py:
+
+def first_value_by(column: str, partition_by: str | list[str], order_by: str, descending: bool = False) -> str:
+def last_value_by(column: str, partition_by: str | list[str], order_by: str, descending: bool = False) -> str:
+
+These share the same window-building logic as dedup_by. Consider extracting a _build_window() helper.
+Output: "t.channel.first().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+"""
+reference_files = []

@@ -1,0 +1,46 @@
+id = "M021-E001-S001"
+parent = "M021-E001"
+title = "dedup_by() expression helper"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """Add dedup_by() helper that generates an Ibis ROW_NUMBER window expression for deduplication patterns."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "dedup_by('account_id', 'timestamp') generates ibis.row_number().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "dedup_by with multiple partition columns: dedup_by(['account_id', 'signal_type'], 'timestamp') generates correct group_by list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "dedup_by with descending order: dedup_by('account_id', 'timestamp', descending=True) generates ibis.desc('timestamp')"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Result string is usable inside ComputedColumn.expression"
+
+[context]
+relevant_paths = ["src/fyrnheim/components/expressions.py", "tests/test_expressions.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Add to src/fyrnheim/components/expressions.py:
+
+def dedup_by(partition_by: str | list[str], order_by: str, descending: bool = False) -> str:
+    Generate the ibis expression string. The output should look like:
+    "ibis.row_number().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+    or with descending:
+    "ibis.row_number().over(ibis.window(group_by='account_id', order_by=ibis.desc('timestamp')))"
+    or with list partition:
+    "ibis.row_number().over(ibis.window(group_by=['account_id', 'signal_type'], order_by='timestamp'))"
+"""
+reference_files = []

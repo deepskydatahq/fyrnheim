@@ -1,0 +1,46 @@
+id = "M020-E002-S001"
+parent = "M020-E002"
+title = "APPEND strategy in executor"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """Implement APPEND incremental strategy: on subsequent runs, only insert rows where incremental_key > max existing value."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "First run with APPEND creates the table (same as full refresh)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Second run filters result to rows with incremental_key > max existing value and inserts them"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Second run does not duplicate rows that were already in the table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Non-incremental entities still use create_table(overwrite=True)"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/executor.py", "src/fyrnheim/core/layer.py"]
+input_fixtures = []
+depends_on = ["M020-E001-S002"]
+
+[handoff]
+implementation_hints = """
+In executor.execute(), after _run_transform_pipeline produces result_table:
+1. Read incremental config from entity's active layer (prep or dimension)
+2. If strategy is APPEND:
+   a. Check if target table exists (try conn.table(target_name))
+   b. If exists: get max(incremental_key), filter result to > max, insert (conn.insert)
+   c. If not exists: create_table as normal
+3. The entity parameter must be provided for incremental entities.
+For DuckDB insert, use: conn.raw_sql(f"INSERT INTO {target} SELECT * FROM {temp}")
+or conn.create_table with overwrite=False after filtering.
+"""
+reference_files = []

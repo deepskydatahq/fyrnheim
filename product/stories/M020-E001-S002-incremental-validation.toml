@@ -1,0 +1,50 @@
+id = "M020-E001-S002"
+parent = "M020-E001"
+title = "Incremental config validation rules"
+status = "ready"
+created = 2026-03-10
+
+[outcome]
+description = """Add model validators to enforce: INCREMENTAL materialization requires strategy, MERGE requires unique_key, APPEND requires incremental_key."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "materialization=INCREMENTAL without incremental_strategy raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "incremental_strategy=MERGE without unique_key raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "incremental_strategy=APPEND without incremental_key raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Valid APPEND config (materialization=INCREMENTAL, strategy=APPEND, incremental_key set) validates successfully"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Valid MERGE config (materialization=INCREMENTAL, strategy=MERGE, unique_key set) validates successfully"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "materialization=TABLE with no incremental fields validates successfully (backward compat)"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/layer.py"]
+input_fixtures = []
+depends_on = ["M020-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Add a model_validator(mode='after') to both PrepLayer and DimensionLayer that checks:
+1. If materialization == INCREMENTAL and incremental_strategy is None -> error
+2. If incremental_strategy == MERGE and unique_key is None -> error
+3. If incremental_strategy == APPEND and incremental_key is None -> error
+Consider extracting the validator into a shared function since both layers need the same logic.
+"""
+reference_files = []

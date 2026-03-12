@@ -1,0 +1,50 @@
+id = "M023"
+title = "HelperEntity for intermediate computation"
+status = "active"
+created = 2026-03-12
+
+[outcome]
+description = """
+Provide a first-class HelperEntity type for intermediate computation steps
+(e.g., identity resolution mapping tables). HelperEntity is a subclass of Entity
+with two constraints: must be depended on by another entity, and only prep layer allowed.
+"""
+
+[scope]
+in_scope = [
+    "HelperEntity subclass in core/entity.py with prep-only layer restriction",
+    "is_internal=True automatic behavior",
+    "Runner validation: orphaned helper entities fail the pipeline",
+    "Unit tests for layer restriction and orphan validation",
+    "CLI list shows [helper] marker",
+]
+out_of_scope = [
+    "Auto-cleanup or count limits",
+    "Changes to codegen or executor (HelperEntity uses same paths as Entity)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/engine/runner.py",
+    "docs/plans/2026-03-12-helper-entity-design.md",
+]
+origin = "Zeffy PoC — identity resolution requires intermediate mapping table"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "HelperEntity with prep layer validates successfully",
+    "HelperEntity with dimension/snapshot/activity/analytics raises ValidationError",
+    "Orphaned HelperEntity (not referenced) fails runner validation",
+    "Referenced HelperEntity passes runner validation",
+    "HelperEntity.is_internal is always True",
+]
+validator_context = ["tests/", "src/fyrnheim/core/entity.py"]
+
+[notes]
+considerations = """
+Design doc: docs/plans/2026-03-12-helper-entity-design.md
+Unblocks M022 (Zeffy PoC) which needs an identity_map helper entity.
+"""

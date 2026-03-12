@@ -8,7 +8,7 @@ from .analytics import (
     AnalyticsSource as AnalyticsSource,
     ComputedMetric as ComputedMetric,
 )
-from .entity import Entity as Entity, LayersConfig as LayersConfig, Source as Source
+from .entity import Entity as Entity, HelperEntity as HelperEntity, LayersConfig as LayersConfig, Source as Source
 from .layer import (
     DimensionLayer as DimensionLayer,
     PrepLayer as PrepLayer,

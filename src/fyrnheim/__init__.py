@@ -24,6 +24,7 @@ from fyrnheim.core import (
     DimensionLayer as DimensionLayer,
     Divide as Divide,
     Entity as Entity,
+    HelperEntity as HelperEntity,
     EventAggregationSource as EventAggregationSource,
     Field as Field,
     IdentityGraphConfig as IdentityGraphConfig,
@@ -103,6 +104,7 @@ from fyrnheim.quality import (
 
 # Resolve forward references (order matters: Entity first, then SourceMapping)
 Entity.model_rebuild()
+HelperEntity.model_rebuild()
 SourceMapping.model_rebuild()
 
 __version__ = "0.1.0"
@@ -147,6 +149,7 @@ def __getattr__(name: str) -> Any:  # noqa: N807
 __all__ = [
     # Core
     "Entity",
+    "HelperEntity",
     "LayersConfig",
     "Source",
     "Field",

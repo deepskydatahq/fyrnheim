@@ -134,3 +134,29 @@ class Entity(BaseModel):
     def has_layer(self, layer_name: str) -> bool:
         """Check if a layer is configured."""
         return self.get_layer(layer_name) is not None
+
+
+class HelperEntity(Entity):
+    """An intermediate computation entity that must be referenced by another entity.
+
+    HelperEntity is constrained to the prep layer only. It is intended for
+    intermediate computation steps (e.g., identity resolution mapping tables)
+    that other entities depend on but that are not output tables themselves.
+    """
+
+    @model_validator(mode="after")
+    def validate_prep_only(self) -> HelperEntity:
+        """Validate that only the prep layer is configured."""
+        non_prep = [
+            name
+            for name in ("dimension", "activity", "snapshot", "analytics")
+            if self.has_layer(name)
+        ]
+        if non_prep:
+            raise ValueError(
+                f"HelperEntity only supports the prep layer, "
+                f"but found: {', '.join(non_prep)}"
+            )
+        if not self.has_layer("prep"):
+            raise ValueError("HelperEntity requires a prep layer")
+        return self

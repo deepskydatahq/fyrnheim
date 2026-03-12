@@ -7,14 +7,12 @@ from fyrnheim import (
     DerivedSource,
     DimensionLayer,
     Entity,
-    Field,
     LayersConfig,
     PrepLayer,
     TableSource,
 )
 from fyrnheim.core.entity import HelperEntity
 from fyrnheim.engine.runner import validate_helper_entities
-
 
 # ---------------------------------------------------------------------------
 # Helpers

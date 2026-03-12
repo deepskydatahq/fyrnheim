@@ -519,9 +519,12 @@ def list_cmd(entities_dir: str | None) -> None:
         click.echo(f"No entities found in {cfg.entities_dir}")
         return
 
+    from fyrnheim.core.entity import HelperEntity
+
     for _name, info in registry.items():
         layers_str = ", ".join(info.layers)
-        click.echo(f"  {info.name:<20s} {layers_str:<30s} {info.path}")
+        marker = " [helper]" if isinstance(info.entity, HelperEntity) else ""
+        click.echo(f"  {info.name:<20s} {layers_str:<30s} {info.path}{marker}")
 
     click.echo(f"\n{len(registry)} entities found")
 

@@ -16,6 +16,18 @@ entity = Entity(
 )
 """
 
+HELPER_ENTITY = """\
+from fyrnheim.core.entity import HelperEntity
+from fyrnheim import LayersConfig, PrepLayer, TableSource
+
+entity = HelperEntity(
+    name="{name}",
+    description="Helper entity",
+    source=TableSource(project="test", dataset="raw", table="{name}"),
+    layers=LayersConfig(prep=PrepLayer(model_name="prep_{name}")),
+)
+"""
+
 ENTITY_WITH_DIM = """\
 from fyrnheim import Entity, DimensionLayer, LayersConfig, PrepLayer, TableSource
 
@@ -97,3 +109,23 @@ class TestListOutput:
         result = CliRunner().invoke(main, ["list"])
         assert result.exit_code == 0
         assert "2 entities found" in result.output
+
+
+class TestListHelperMarker:
+    def test_helper_entity_shows_marker(self, tmp_path, monkeypatch):
+        """fyr list output contains '[helper]' for a HelperEntity file."""
+        _make_project(tmp_path, [("mapping", HELPER_ENTITY)])
+        monkeypatch.chdir(tmp_path)
+        result = CliRunner().invoke(main, ["list"])
+        assert result.exit_code == 0
+        assert "[helper]" in result.output
+        assert "mapping" in result.output
+
+    def test_regular_entity_no_marker(self, tmp_path, monkeypatch):
+        """fyr list output does NOT contain '[helper]' for a regular Entity file."""
+        _make_project(tmp_path, [("customers", MINIMAL_ENTITY)])
+        monkeypatch.chdir(tmp_path)
+        result = CliRunner().invoke(main, ["list"])
+        assert result.exit_code == 0
+        assert "customers" in result.output
+        assert "[helper]" not in result.output

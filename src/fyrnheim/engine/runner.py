@@ -144,6 +144,33 @@ def _register_entity_source(
                     ) from None
 
 
+def validate_helper_entities(entities: list[Entity]) -> None:
+    """Validate all HelperEntities are referenced by at least one other entity.
+
+    Raises ValueError if any HelperEntity is not referenced in another
+    entity's dependencies (via DerivedSource.depends_on or
+    AggregationSource.source_entity).
+    """
+    from fyrnheim.core.entity import HelperEntity
+
+    helper_names = {e.name for e in entities if isinstance(e, HelperEntity)}
+    if not helper_names:
+        return
+
+    referenced: set[str] = set()
+    for e in entities:
+        referenced.update(extract_dependencies(e))
+
+    orphaned = helper_names - referenced
+    if orphaned:
+        sorted_orphaned = sorted(orphaned)
+        raise ValueError(
+            f"HelperEntity(s) not referenced by any other entity: "
+            f"{', '.join(sorted_orphaned)}. "
+            "Helper entities must be depended on."
+        )
+
+
 _OUTPUT_TABLE_PREFIXES = ("dim_", "analytics_", "activity_")
 
 
@@ -361,6 +388,10 @@ def run(
             total_duration_seconds=time.monotonic() - pipeline_start,
             backend=backend,
         )
+
+    # Phase 1.5: Validate helper entities
+    all_entities = [info.entity for _name, info in registry.items()]
+    validate_helper_entities(all_entities)
 
     # Phase 2: Resolve dependency order
     sorted_entities = resolve_execution_order(registry)

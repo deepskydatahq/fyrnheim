@@ -1,0 +1,37 @@
+id = "M023-E001"
+parent = "M023"
+title = "HelperEntity model and exports"
+status = "active"
+created = 2026-03-12
+depends_on = []
+
+[outcome]
+description = """HelperEntity subclass of Entity with prep-only layer restriction, is_internal=True forced, exported from fyrnheim package."""
+
+[job_story]
+description = """When I define an intermediate computation step, I want a HelperEntity type that restricts me to prep-only layers and marks itself as internal, so that helper tables stay constrained and don't proliferate."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "HelperEntity with prep layer validates successfully",
+    "HelperEntity with dimension/snapshot/activity/analytics raises ValidationError",
+    "HelperEntity.is_internal is always True even if explicitly set False",
+    "HelperEntity is importable from fyrnheim top-level package",
+    "HelperEntity is a subclass of Entity",
+]
+validator_context = ["src/fyrnheim/core/entity.py", "tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/__init__.py",
+    "src/fyrnheim/__init__.py",
+    "docs/plans/2026-03-12-helper-entity-design.md",
+]
+dependencies = []
+
+[notes]
+considerations = """Thin subclass with model_validator for layer restriction and model_post_init for is_internal."""
+
+estimated_stories = 2

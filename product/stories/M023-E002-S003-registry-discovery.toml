@@ -1,0 +1,24 @@
+id = "M023-E002-S003"
+parent = "M023-E002"
+title = "Registry discovers HelperEntity instances"
+status = "ready"
+created = 2026-03-12
+
+[outcome]
+description = """EntityRegistry.discover() correctly picks up HelperEntity instances from entity files."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Registry discovers a HelperEntity from a .py file and isinstance(info.entity, HelperEntity) is True"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/registry.py", "tests/test_engine_registry.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """HelperEntity is a subclass of Entity so discovery should work already. This story is a verification test only — no production code changes expected."""
+reference_files = []

@@ -1,0 +1,40 @@
+id = "M023-E002-S001"
+parent = "M023-E002"
+title = "Runner validates orphaned HelperEntities"
+status = "ready"
+created = 2026-03-12
+
+[outcome]
+description = """validate_helper_entities() function in runner.py rejects orphaned helpers and is wired into run()."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Orphaned HelperEntity (not in any depends_on) raises ValueError matching 'not referenced'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity referenced via DerivedSource.depends_on passes validation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity referenced via AggregationSource.source_entity passes validation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pipeline with no HelperEntities passes validation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Multiple orphaned helpers are all listed in the error message"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/runner.py", "src/fyrnheim/engine/resolution.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Use extract_dependencies() from resolution.py to collect all entity references. validate_helper_entities() checks HelperEntity names against referenced set. Wire into run() between discovery and resolve_execution_order()."""
+reference_files = ["docs/plans/2026-03-12-helper-entity-design.md"]

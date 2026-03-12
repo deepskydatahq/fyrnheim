@@ -1,0 +1,24 @@
+id = "M023-E001-S002"
+parent = "M023-E001"
+title = "Export HelperEntity from fyrnheim package"
+status = "ready"
+created = 2026-03-12
+
+[outcome]
+description = """HelperEntity importable from fyrnheim top-level: from fyrnheim import HelperEntity."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim import HelperEntity succeeds and returns the same class as fyrnheim.core.entity.HelperEntity"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/__init__.py", "src/fyrnheim/__init__.py"]
+input_fixtures = []
+depends_on = ["M023-E001-S001"]
+
+[handoff]
+implementation_hints = """Add to core/__init__.py imports, __init__.py re-export, __all__ list, and HelperEntity.model_rebuild() after Entity.model_rebuild()."""
+reference_files = []

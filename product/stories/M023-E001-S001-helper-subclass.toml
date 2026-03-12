@@ -1,0 +1,48 @@
+id = "M023-E001-S001"
+parent = "M023-E001"
+title = "HelperEntity subclass with layer restriction and is_internal"
+status = "ready"
+created = 2026-03-12
+
+[outcome]
+description = """HelperEntity subclass in core/entity.py with prep-only layer validation and forced is_internal=True."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity(layers=LayersConfig(prep=PrepLayer(...))) validates successfully"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity with dimension layer raises ValidationError matching 'does not support dimension layer'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity with snapshot layer raises ValidationError matching 'does not support snapshot layer'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity with prep + dimension raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity.is_internal is True by default"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "HelperEntity(is_internal=False).is_internal is still True"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "isinstance(HelperEntity(...), Entity) is True"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/entity.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Use @model_validator(mode='after') for layer restriction. Use model_post_init with object.__setattr__ for is_internal override (model is frozen)."""
+reference_files = ["docs/plans/2026-03-12-helper-entity-design.md"]

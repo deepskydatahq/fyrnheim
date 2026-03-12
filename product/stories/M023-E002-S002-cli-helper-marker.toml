@@ -1,0 +1,28 @@
+id = "M023-E002-S002"
+parent = "M023-E002"
+title = "CLI list shows [helper] marker"
+status = "ready"
+created = 2026-03-12
+
+[outcome]
+description = """fyr list output appends [helper] marker to HelperEntity rows."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr list output contains '[helper]' for a HelperEntity file"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr list output does NOT contain '[helper]' for a regular Entity file"
+
+[context]
+relevant_paths = ["src/fyrnheim/cli.py", "tests/test_cli_list.py"]
+input_fixtures = []
+depends_on = ["M023-E002-S001"]
+
+[handoff]
+implementation_hints = """In cli.py list_cmd, check isinstance(info.entity, HelperEntity) and append ' [helper]' to the output line."""
+reference_files = []

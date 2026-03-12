@@ -1,0 +1,38 @@
+id = "M023-E002"
+parent = "M023"
+title = "Runner validation and CLI integration"
+status = "active"
+created = 2026-03-12
+depends_on = ["M023-E001"]
+
+[outcome]
+description = """Runner validates orphaned HelperEntities fail the pipeline. CLI list command shows [helper] marker. Registry discovers HelperEntity instances."""
+
+[job_story]
+description = """When I run a pipeline with HelperEntities, I want the runner to reject orphaned helpers that nothing depends on, and I want fyr list to clearly mark helpers, so that I can spot misconfigurations early."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Orphaned HelperEntity raises ValueError in runner validation",
+    "Referenced HelperEntity (via depends_on or AggregationSource) passes validation",
+    "Pipeline with no helpers passes validation",
+    "fyr list shows [helper] marker for HelperEntity",
+    "Registry discovers HelperEntity from entity files",
+]
+validator_context = ["src/fyrnheim/engine/runner.py", "src/fyrnheim/cli.py", "tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_cli_list.py",
+    "tests/test_engine_registry.py",
+]
+dependencies = []
+
+[notes]
+considerations = """Uses existing extract_dependencies() from resolution.py to collect references. Validation goes between discovery and dependency resolution in runner.run()."""
+
+estimated_stories = 3

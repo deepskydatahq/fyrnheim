@@ -14,6 +14,18 @@ def _write_entity_file(directory: Path, filename: str, entity_code: str) -> Path
     return path
 
 
+HELPER_ENTITY_TEMPLATE = """\
+from fyrnheim.core.entity import HelperEntity
+from fyrnheim import LayersConfig, PrepLayer, TableSource
+
+entity = HelperEntity(
+    name="{name}",
+    description="Helper entity {name}",
+    layers=LayersConfig(prep=PrepLayer(model_name="prep_{name}")),
+    source=TableSource(project="p", dataset="d", table="{name}"),
+)
+"""
+
 ENTITY_TEMPLATE = """\
 from fyrnheim import Entity, LayersConfig, PrepLayer, TableSource
 
@@ -212,3 +224,25 @@ class TestEntityRegistryProtocol:
         assert len(registry) == 2
         assert "alpha" in registry
         assert "beta" in registry
+
+
+class TestHelperEntityDiscovery:
+    """Test that EntityRegistry discovers HelperEntity instances."""
+
+    def test_discovers_helper_entity(self, tmp_path):
+        """Registry discovers a HelperEntity and isinstance check is True."""
+        from fyrnheim.core.entity import HelperEntity
+
+        entities_dir = tmp_path / "entities"
+        entities_dir.mkdir()
+        _write_entity_file(
+            entities_dir, "mapping.py", HELPER_ENTITY_TEMPLATE.format(name="mapping")
+        )
+
+        registry = EntityRegistry()
+        registry.discover(entities_dir)
+        assert len(registry) == 1
+        info = registry.get("mapping")
+        assert info is not None
+        assert isinstance(info.entity, HelperEntity)
+        assert info.layers == ["prep"]

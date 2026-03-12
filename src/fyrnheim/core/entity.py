@@ -134,3 +134,28 @@ class Entity(BaseModel):
     def has_layer(self, layer_name: str) -> bool:
         """Check if a layer is configured."""
         return self.get_layer(layer_name) is not None
+
+
+class HelperEntity(Entity):
+    """Intermediate computation entity with restricted layers.
+
+    Must be depended on by at least one other entity.
+    Only prep layer is allowed.
+    """
+
+    @model_validator(mode="after")
+    def _restrict_layers(self) -> HelperEntity:
+        layers = self.layers
+        if layers.dimension is not None:
+            raise ValueError("HelperEntity does not support dimension layer")
+        if layers.snapshot is not None:
+            raise ValueError("HelperEntity does not support snapshot layer")
+        if layers.activity is not None:
+            raise ValueError("HelperEntity does not support activity layer")
+        if layers.analytics is not None:
+            raise ValueError("HelperEntity does not support analytics layer")
+        return self
+
+    def model_post_init(self, __context: object) -> None:
+        super().model_post_init(__context)
+        object.__setattr__(self, "is_internal", True)

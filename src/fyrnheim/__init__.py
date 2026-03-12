@@ -26,6 +26,7 @@ from fyrnheim.core import (
     Entity as Entity,
     EventAggregationSource as EventAggregationSource,
     Field as Field,
+    HelperEntity as HelperEntity,
     IdentityGraphConfig as IdentityGraphConfig,
     IdentityGraphSource as IdentityGraphSource,
     IncrementalStrategy as IncrementalStrategy,
@@ -103,6 +104,7 @@ from fyrnheim.quality import (
 
 # Resolve forward references (order matters: Entity first, then SourceMapping)
 Entity.model_rebuild()
+HelperEntity.model_rebuild()
 SourceMapping.model_rebuild()
 
 __version__ = "0.1.0"
@@ -147,6 +149,7 @@ def __getattr__(name: str) -> Any:  # noqa: N807
 __all__ = [
     # Core
     "Entity",
+    "HelperEntity",
     "LayersConfig",
     "Source",
     "Field",

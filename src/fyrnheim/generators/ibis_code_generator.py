@@ -125,6 +125,8 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         return raw{rename}
     elif backend == "bigquery":
         return conn.table("{source.table}", database=("{source.project}", "{source.dataset}")){rename}
+    elif backend == "clickhouse":
+        return conn.table("{source.dataset}___{source.table}"){rename}
     else:
         raise ValueError(f"Unsupported backend: {{backend}}")
 '''
@@ -197,6 +199,8 @@ def {sub_name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         return raw{suffix}
     elif backend == "bigquery":
         return conn.table("{sub_source.table}", database=("{sub_source.project}", "{sub_source.dataset}")){suffix}
+    elif backend == "clickhouse":
+        return conn.table("{sub_source.dataset}___{sub_source.table}"){suffix}
     else:
         raise ValueError(f"Unsupported backend: {{backend}}")
 '''
@@ -246,6 +250,9 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         lines.append("    elif backend == \"bigquery\":")
         lines.append(f"        t_{src.name} = conn.table("
                       f"\"{ts.table}\", database=(\"{ts.project}\", \"{ts.dataset}\"))")
+        lines.append("    elif backend == \"clickhouse\":")
+        lines.append(f"        t_{src.name} = conn.table("
+                      f"\"{ts.dataset}___{ts.table}\")")
         lines.append("    else:")
         lines.append("        raise ValueError(f\"Unsupported backend: {backend}\")")
 

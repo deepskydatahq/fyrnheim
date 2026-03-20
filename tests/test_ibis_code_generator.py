@@ -148,7 +148,7 @@ class TestRenameGeneration:
         # bigquery branch also has .rename()
         lines = code.split("\n")
         rename_lines = [line for line in lines if ".rename(" in line]
-        assert len(rename_lines) == 2  # duckdb + bigquery
+        assert len(rename_lines) == 3  # duckdb + bigquery + clickhouse
 
     def test_multiple_renames(self, simple_entity):
         sm = SourceMapping(

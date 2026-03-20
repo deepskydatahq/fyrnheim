@@ -284,7 +284,8 @@ def run_entity(
             conn = create_connection(backend, **(backend_config or {}))
             executor = IbisExecutor(conn=conn, backend=backend, generated_dir=gen_dir)
         assert executor is not None  # guaranteed: either _executor was given or we just created one
-        _register_entity_source(executor, entity, data_dir)
+        if backend == "duckdb":
+            _register_entity_source(executor, entity, data_dir)
 
         log.info("Transforming: %s", entity.name)
         exec_result = executor.execute(entity.name, generated_dir=gen_dir, entity=entity)

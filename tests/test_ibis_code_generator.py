@@ -1041,3 +1041,230 @@ class TestAggregationSourceCodeGeneration:
         gen = IbisCodeGenerator(entity)
         code = gen.generate_module()
         assert "cnt=t.person_id.count()," in code
+
+
+# ---------------------------------------------------------------------------
+# ClickHouse backend code generation tests
+# ---------------------------------------------------------------------------
+
+
+class TestClickHouseSourceCodeGeneration:
+    """Test that generated source functions include a clickhouse branch."""
+
+    def test_single_source_clickhouse_branch(self, simple_entity):
+        """Generated single source function includes clickhouse branch."""
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert 'elif backend == "clickhouse"' in code
+        assert 'conn.table("stripe___charges")' in code
+
+    def test_single_source_clickhouse_uses_dataset_table_format(self):
+        """ClickHouse branch uses {dataset}___{table} naming convention."""
+        entity = Entity(
+            name="posts",
+            description="Blog posts",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_posts")),
+            source=TableSource(
+                project="warehouse",
+                dataset="ghost",
+                table="ghost_posts",
+                duckdb_path="data/posts/*.parquet",
+            ),
+        )
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert 'conn.table("ghost___ghost_posts")' in code
+
+    def test_single_source_duckdb_unchanged(self, simple_entity):
+        """DuckDB branch remains unchanged after adding clickhouse."""
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert 'if backend == "duckdb"' in code
+        assert "conn.read_parquet" in code
+
+    def test_single_source_bigquery_unchanged(self, simple_entity):
+        """BigQuery branch remains unchanged after adding clickhouse."""
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert 'elif backend == "bigquery"' in code
+        assert 'conn.table("charges", database=("warehouse", "stripe"))' in code
+
+    def test_single_source_still_raises_unsupported(self, simple_entity):
+        """ValueError still raised for unsupported backends."""
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert "raise ValueError" in code
+
+    def test_single_source_clickhouse_with_rename(self, simple_entity):
+        """ClickHouse branch includes .rename() when source_mapping has field_mappings."""
+        sm = SourceMapping(
+            entity=simple_entity,
+            source=simple_entity.source,
+            field_mappings={"transaction_id": "id"},
+        )
+        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
+        code = gen._generate_source_functions()
+        # Find the clickhouse line
+        lines = [l for l in code.split("\n") if "clickhouse" in l.lower() or "stripe___charges" in l]
+        clickhouse_return = [l for l in code.split("\n") if "stripe___charges" in l]
+        assert len(clickhouse_return) == 1
+        assert ".rename(" in clickhouse_return[0]
+
+    def test_union_source_clickhouse_branch(self, union_entity):
+        """Generated union sub-source functions include clickhouse branch."""
+        gen = IbisCodeGenerator(union_entity)
+        code = gen._generate_source_functions()
+        assert 'conn.table("hubspot___contacts")' in code
+        assert 'conn.table("stripe___customers")' in code
+
+    def test_union_source_clickhouse_valid_python(self, union_entity):
+        """Generated union source module with clickhouse branch is valid Python."""
+        gen = IbisCodeGenerator(union_entity)
+        code = gen.generate_module()
+        ast.parse(code)
+
+    def test_single_source_clickhouse_valid_python(self, simple_entity):
+        """Generated single source module with clickhouse branch is valid Python."""
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen.generate_module()
+        ast.parse(code)
+
+
+class TestClickHouseInlineIdentitySourceCodeGeneration:
+    """Test that inline identity graph source codegen includes clickhouse branch."""
+
+    def _make_entity(self, config):
+        return Entity(
+            name="person",
+            description="Unified person",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
+            source=DerivedSource(
+                identity_graph="person_graph",
+                identity_graph_config=config,
+            ),
+        )
+
+    def test_inline_source_clickhouse_branch(self):
+        """Inline identity source generates clickhouse branch with correct table name."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="src_a",
+                    source=TableSource(
+                        project="p", dataset="mailerlite", table="mailerlite_subscribers",
+                        duckdb_path="~/data/a.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_a"},
+                ),
+                IdentityGraphSource(
+                    name="src_b",
+                    source=TableSource(
+                        project="p", dataset="ghost", table="ghost_members",
+                        duckdb_path="~/data/b.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_b"},
+                ),
+            ],
+            priority=["src_a", "src_b"],
+        )
+        entity = self._make_entity(config)
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert 'conn.table("mailerlite___mailerlite_subscribers")' in code
+        assert 'conn.table("ghost___ghost_members")' in code
+
+    def test_inline_source_clickhouse_duckdb_unchanged(self):
+        """DuckDB branch in inline source remains unchanged."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="src_a",
+                    source=TableSource(
+                        project="p", dataset="d", table="a",
+                        duckdb_path="~/data/a.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_a"},
+                ),
+                IdentityGraphSource(
+                    name="src_b",
+                    source=TableSource(
+                        project="p", dataset="d", table="b",
+                        duckdb_path="~/data/b.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_b"},
+                ),
+            ],
+            priority=["src_a", "src_b"],
+        )
+        entity = self._make_entity(config)
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert 'conn.read_parquet(os.path.expanduser("~/data/a.parquet"))' in code
+
+    def test_inline_source_clickhouse_bigquery_unchanged(self):
+        """BigQuery branch in inline source remains unchanged."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="src_a",
+                    source=TableSource(
+                        project="myproj", dataset="raw", table="leads",
+                        duckdb_path="~/leads.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_a"},
+                ),
+                IdentityGraphSource(
+                    name="src_b",
+                    source=TableSource(
+                        project="myproj", dataset="raw", table="contacts",
+                        duckdb_path="~/contacts.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_b"},
+                ),
+            ],
+            priority=["src_a", "src_b"],
+        )
+        entity = self._make_entity(config)
+        gen = IbisCodeGenerator(entity)
+        code = gen._generate_source_functions()
+        assert 'conn.table("leads", database=("myproj", "raw"))' in code
+
+    def test_inline_source_clickhouse_valid_python(self):
+        """Generated module with inline sources and clickhouse is valid Python."""
+        config = IdentityGraphConfig(
+            match_key="email",
+            sources=[
+                IdentityGraphSource(
+                    name="src_a",
+                    source=TableSource(
+                        project="p", dataset="mailerlite", table="subscribers",
+                        duckdb_path="~/data/a.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_a"},
+                ),
+                IdentityGraphSource(
+                    name="src_b",
+                    source=TableSource(
+                        project="p", dataset="ghost", table="members",
+                        duckdb_path="~/data/b.parquet",
+                    ),
+                    match_key_field="email",
+                    fields={"name": "name_b"},
+                ),
+            ],
+            priority=["src_a", "src_b"],
+        )
+        entity = self._make_entity(config)
+        gen = IbisCodeGenerator(entity)
+        code = gen.generate_module()
+        ast.parse(code)

@@ -1,7 +1,14 @@
 """Tests for expression helper functions."""
 
 from fyrnheim.components.computed_column import ComputedColumn
-from fyrnheim.components.expressions import CaseColumn, contains_any, isin_literal
+from fyrnheim.components.expressions import (
+    CaseColumn,
+    contains_any,
+    dedup_by,
+    first_value_by,
+    isin_literal,
+    last_value_by,
+)
 
 
 class TestContainsAny:
@@ -92,3 +99,84 @@ class TestIsinLiteral:
         result = isin_literal("t.name", ["O'Brien", 'say "hi"'])
         # Values should be properly quoted
         assert "O'Brien" in result or "O\\'Brien" in result
+
+
+class TestDedupBy:
+    """Tests for dedup_by() expression helper."""
+
+    def test_simple_partition_and_order(self):
+        result = dedup_by("account_id", "timestamp")
+        assert result == (
+            "ibis.row_number().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+        )
+
+    def test_multiple_partition_columns(self):
+        result = dedup_by(["account_id", "signal_type"], "timestamp")
+        assert result == (
+            "ibis.row_number().over(ibis.window(group_by=['account_id', 'signal_type'], order_by='timestamp'))"
+        )
+
+    def test_descending_order(self):
+        result = dedup_by("account_id", "timestamp", descending=True)
+        assert result == (
+            "ibis.row_number().over(ibis.window(group_by='account_id', order_by=ibis.desc('timestamp')))"
+        )
+
+    def test_result_usable_in_computed_column(self):
+        expr = dedup_by("account_id", "timestamp")
+        col = ComputedColumn(name="row_num", expression=expr)
+        assert col.expression == expr
+
+
+class TestFirstValueBy:
+    """Tests for first_value_by() expression helper."""
+
+    def test_simple_first_value(self):
+        result = first_value_by("t.channel", "account_id", "timestamp")
+        assert result == (
+            "t.channel.first().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+        )
+
+    def test_list_partition_by(self):
+        result = first_value_by("t.channel", ["account_id", "region"], "timestamp")
+        assert result == (
+            "t.channel.first().over(ibis.window(group_by=['account_id', 'region'], order_by='timestamp'))"
+        )
+
+    def test_descending_order(self):
+        result = first_value_by("t.channel", "account_id", "timestamp", descending=True)
+        assert result == (
+            "t.channel.first().over(ibis.window(group_by='account_id', order_by=ibis.desc('timestamp')))"
+        )
+
+    def test_result_usable_in_computed_column(self):
+        expr = first_value_by("t.channel", "account_id", "timestamp")
+        col = ComputedColumn(name="first_channel", expression=expr)
+        assert col.expression == expr
+
+
+class TestLastValueBy:
+    """Tests for last_value_by() expression helper."""
+
+    def test_simple_last_value(self):
+        result = last_value_by("t.channel", "account_id", "timestamp")
+        assert result == (
+            "t.channel.last().over(ibis.window(group_by='account_id', order_by='timestamp'))"
+        )
+
+    def test_list_partition_by(self):
+        result = last_value_by("t.channel", ["account_id", "region"], "timestamp")
+        assert result == (
+            "t.channel.last().over(ibis.window(group_by=['account_id', 'region'], order_by='timestamp'))"
+        )
+
+    def test_descending_order(self):
+        result = last_value_by("t.channel", "account_id", "timestamp", descending=True)
+        assert result == (
+            "t.channel.last().over(ibis.window(group_by='account_id', order_by=ibis.desc('timestamp')))"
+        )
+
+    def test_result_usable_in_computed_column(self):
+        expr = last_value_by("t.channel", "account_id", "timestamp")
+        col = ComputedColumn(name="last_channel", expression=expr)
+        assert col.expression == expr

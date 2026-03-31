@@ -1,0 +1,67 @@
+# Epic: Scaffold Astro Project + Landing Page
+
+id = "M013-E001"
+parent = "M013"
+title = "Scaffold Astro Starlight project and build landing page"
+status = "active"
+created = "2026-03-06"
+depends_on = []
+
+[outcome]
+description = """
+A working Astro Starlight project exists in website/ with a custom landing page at
+index.astro. The landing page has a hero section (fire imagery background, headline,
+pip install snippet, CTA button), feature cards, 4-step code walkthrough, and dbt
+comparison table. Dark theme with amber accents. Site builds without errors.
+"""
+
+[job_story]
+description = """When a potential user visits the Fyrnheim website, I want them to see
+a compelling dark-themed landing page that explains what Fyrnheim does, shows how it
+works, and compares it to dbt, so that they're motivated to try it."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "website/package.json exists with astro and @astrojs/starlight dependencies",
+    "website/astro.config.mjs configures Starlight with dark theme",
+    "npm run build in website/ succeeds without errors",
+    "website/src/pages/index.astro exists with custom landing page",
+    "Landing page has hero section with background image, headline, pip install snippet, CTA",
+    "Landing page has feature cards section (4 cards)",
+    "Landing page has code walkthrough section (4 steps)",
+    "Landing page has dbt comparison table",
+    "Dark color scheme with amber/orange accents throughout",
+    "Hero images copied to website/public/images/",
+]
+
+validator_context = [
+    "website/package.json",
+    "website/astro.config.mjs",
+    "website/src/pages/index.astro",
+    "website/public/images/",
+]
+
+[context]
+relevant_paths = [
+    "docs/plans/2026-03-06-website-design.md",
+    "README.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+The landing page is a custom Astro page, NOT the default Starlight index page.
+Starlight handles /docs/* routes, the landing page is at /.
+
+Image assets are in ~/Downloads/Download_1772794973234/:
+- Gemini_Generated_Image_4nahdb4nahdb4nah.png -> hero background (fiery landscape)
+- Gemini_Generated_Image_rkbqj3rkbqj3rkbq.png -> colored illustration
+- Gemini_Generated_Image_phjoekphjoekphjo.png -> monochrome ink
+- Gemini_Generated_Image_vxrkktvxrkktvxrk.png -> monochrome ink
+
+Color palette: bg #0a0a0a, accent amber #f59e0b to #ef4444, text #f5f5f5, secondary #a3a3a3
+Typography: Inter for headings, clean sans-serif body, JetBrains Mono for code
+"""
+
+estimated_stories = 3

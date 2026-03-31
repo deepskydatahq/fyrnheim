@@ -2,9 +2,9 @@
 
 :root {
   /* Accent colors — amber */
-  --sl-color-accent-low: #451a03;
-  --sl-color-accent: #f59e0b;
-  --sl-color-accent-high: #fde68a;
+  --sl-color-accent-low: #4a1510;
+  --sl-color-accent: #f4442e;
+  --sl-color-accent-high: #fca5a5;
 
   /* Gray scale — matching landing page */
   --sl-color-white: #f5f5f5;
@@ -24,7 +24,7 @@
 
   /* Text */
   --sl-color-text: #e5e5e5;
-  --sl-color-text-accent: #fde68a;
+  --sl-color-text-accent: #fca5a5;
 
   /* Hairline borders */
   --sl-color-hairline-shade: rgba(245, 158, 11, 0.1);
@@ -34,9 +34,9 @@
 /* Force dark mode for Starlight (disable light mode) */
 [data-theme='light'],
 :root[data-theme='light'] {
-  --sl-color-accent-low: #451a03;
-  --sl-color-accent: #f59e0b;
-  --sl-color-accent-high: #fde68a;
+  --sl-color-accent-low: #4a1510;
+  --sl-color-accent: #f4442e;
+  --sl-color-accent-high: #fca5a5;
   --sl-color-white: #f5f5f5;
   --sl-color-gray-1: #e5e5e5;
   --sl-color-gray-2: #a3a3a3;
@@ -50,7 +50,7 @@
   --sl-color-bg-sidebar: #111111;
   --sl-color-bg-inline-code: rgba(245, 158, 11, 0.08);
   --sl-color-text: #e5e5e5;
-  --sl-color-text-accent: #fde68a;
+  --sl-color-text-accent: #fca5a5;
   --sl-color-hairline-shade: rgba(245, 158, 11, 0.1);
   --sl-color-hairline-light: rgba(255, 255, 255, 0.06);
 }
@@ -62,10 +62,12 @@ header.header {
   border-bottom: 1px solid rgba(245, 158, 11, 0.15);
 }
 
-/* Site title in amber */
+/* Site title in amber with Marcellus */
 .site-title {
-  color: #f59e0b !important;
-  font-weight: 700;
+  color: #f4442e !important;
+  font-family: 'Skranji', cursive !important;
+  font-weight: 400;
+  letter-spacing: 0.05em;
 }
 
 /* Sidebar styling */
@@ -82,7 +84,7 @@ nav.sidebar {
 
 .sidebar-content a:hover,
 .sidebar-content a[aria-current='page'] {
-  color: #f59e0b;
+  color: #f4442e;
 }
 
 /* Code blocks — darker background */
@@ -100,13 +102,13 @@ pre:not(.astro-code) {
   --ec-frm-edActTabBg: #0f0f0f;
   --ec-frm-edTabBarBg: #0a0a0a;
   --ec-frm-edTabBrdBtmCol: rgba(245, 158, 11, 0.2);
-  --ec-frm-tooltipSuccessBg: #451a03;
+  --ec-frm-tooltipSuccessBg: #4a1510;
 }
 
 /* Inline code */
 :not(pre) > code {
   background: rgba(245, 158, 11, 0.08) !important;
-  color: #fde68a !important;
+  color: #fca5a5 !important;
   border: 1px solid rgba(245, 158, 11, 0.15);
   border-radius: 4px;
   padding: 0.15em 0.35em;
@@ -114,13 +116,13 @@ pre:not(.astro-code) {
 
 /* Links */
 .sl-markdown-content a {
-  color: #f59e0b;
+  color: #f4442e;
   text-decoration-color: rgba(245, 158, 11, 0.3);
 }
 
 .sl-markdown-content a:hover {
-  color: #fde68a;
-  text-decoration-color: #fde68a;
+  color: #fca5a5;
+  text-decoration-color: #fca5a5;
 }
 
 /* Table of contents */
@@ -130,7 +132,7 @@ starlight-toc a {
 
 starlight-toc a:hover,
 starlight-toc a[aria-current='true'] {
-  color: #f59e0b;
+  color: #f4442e;
 }
 
 /* Headings */
@@ -143,7 +145,7 @@ starlight-toc a[aria-current='true'] {
 
 /* Blockquotes */
 .sl-markdown-content blockquote {
-  border-left-color: #f59e0b;
+  border-left-color: #f4442e;
   background: rgba(245, 158, 11, 0.04);
 }
 

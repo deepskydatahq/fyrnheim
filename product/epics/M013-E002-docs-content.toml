@@ -1,0 +1,71 @@
+# Epic: Documentation Content
+
+id = "M013-E002"
+parent = "M013"
+title = "Create docs pages seeded from README"
+status = "active"
+created = "2026-03-06"
+depends_on = []
+
+[outcome]
+description = """
+Starlight docs site has all content pages: Getting Started, Core Concepts (entities,
+layers, sources, source-mapping, primitives, components, quality), Configuration, and
+a placeholder API Reference. Content is seeded from the existing README. Sidebar
+navigation is configured with proper grouping and ordering.
+"""
+
+[job_story]
+description = """When a data engineer wants to learn Fyrnheim, I want comprehensive
+docs organized by topic with content from the README expanded into dedicated pages,
+so that they can find what they need quickly."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "website/src/content/docs/getting-started.md exists with install + quick start content",
+    "website/src/content/docs/concepts/entities.md exists",
+    "website/src/content/docs/concepts/layers.md exists",
+    "website/src/content/docs/concepts/sources.md exists",
+    "website/src/content/docs/concepts/source-mapping.md exists",
+    "website/src/content/docs/concepts/primitives.md exists",
+    "website/src/content/docs/concepts/components.md exists",
+    "website/src/content/docs/concepts/quality.md exists",
+    "website/src/content/docs/configuration.md exists",
+    "website/src/content/docs/api-reference.md exists listing public exports",
+    "Starlight sidebar configured with Getting Started, Core Concepts group, Configuration, API Reference",
+    "npm run build succeeds with all docs pages",
+]
+
+validator_context = [
+    "website/src/content/docs/",
+    "website/astro.config.mjs",
+]
+
+[context]
+relevant_paths = [
+    "README.md",
+    "src/fyrnheim/__init__.py",
+    "docs/plans/2026-03-06-website-design.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Content mapping from README:
+- Getting Started <- Install + Quick Start sections
+- Entities <- Entities section
+- Layers <- Layers section (Prep, Dimension, Snapshot, Activity, Analytics)
+- Sources <- Source Types (TableSource, UnionSource, DerivedSource, AggregationSource, EventAggregationSource)
+- Source Mapping <- SourceMapping section
+- Primitives <- Primitives section
+- Components <- Components section
+- Quality <- Quality Checks section
+- Configuration <- Project Configuration + Production Deployment sections
+- API Reference <- list exports from __init__.py with brief descriptions (placeholder)
+
+Each doc page needs Starlight frontmatter (title, description).
+API Reference should list the ~118 public exports grouped by category with one-line descriptions.
+"""
+
+estimated_stories = 3

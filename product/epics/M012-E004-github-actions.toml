@@ -1,0 +1,30 @@
+id = "M012-E004"
+parent = "M012"
+title = "GitHub Actions CI and publish workflows"
+status = "active"
+created = "2026-03-04"
+depends_on = ["M012-E001", "M012-E002", "M012-E003"]
+
+[outcome]
+description = """CI workflow runs pytest, ruff, and mypy on push/PR across Python 3.11-3.13.
+Publish workflow builds and uploads to PyPI on tag push. Both workflows use uv for speed."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    ".github/workflows/ci.yml exists and is valid YAML",
+    "CI runs pytest, ruff check, and mypy",
+    "CI matrix includes Python 3.11, 3.12, 3.13",
+    ".github/workflows/publish.yml exists and triggers on tag v*",
+    "Publish workflow uses uv build and trusted publishing",
+]
+validator_context = [".github/workflows/"]
+
+[context]
+relevant_paths = [".github/workflows/", "pyproject.toml"]
+
+[notes]
+considerations = """Use astral-sh/setup-uv action for fast uv installs. CI needs no
+external services — all tests are local DuckDB. Publish should use PyPI trusted
+publishing (OIDC) rather than API tokens."""
+estimated_stories = 1

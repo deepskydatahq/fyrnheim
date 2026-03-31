@@ -1,0 +1,114 @@
+# Mission: Fyrnheim Website
+# Build a docs + landing page site with Astro Starlight, dark Norse theme, deployed on Cloudflare Pages
+
+id = "M013"
+title = "Fyrnheim website with landing page and docs"
+status = "complete"
+created = "2026-03-06"
+depends_on = ["M012"]
+
+[outcome]
+description = """
+fyrnheim has a public website with a dark-themed landing page (hero with Norse fire
+imagery, feature cards, code walkthrough, dbt comparison table) and a Starlight docs
+site covering Getting Started, Core Concepts (entities, layers, sources, source mapping,
+primitives, components, quality), Configuration, and a placeholder API Reference.
+Content is seeded from the existing README. Site deploys automatically to Cloudflare
+Pages on push to main.
+"""
+
+user_progress = "From 'README on GitHub only' to 'polished website with docs at a public URL'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "website/ directory exists with working Astro Starlight project",
+    "npm run build in website/ produces a static site without errors",
+    "Landing page (index.astro) has hero section with fire imagery background, headline, pip install snippet, and CTA",
+    "Landing page has feature cards section (typed entities, multi-backend, local dev, no SQL)",
+    "Landing page has 4-step code walkthrough section",
+    "Landing page has dbt comparison table",
+    "Landing page uses dark theme with amber/orange accent colors",
+    "Docs site has Getting Started page seeded from README",
+    "Docs site has Core Concepts section: entities, layers, sources, source-mapping, primitives, components, quality",
+    "Docs site has Configuration page",
+    "Docs site has API Reference page listing all public exports with brief descriptions",
+    "Starlight configured with dark theme matching landing page colors",
+    "Hero images copied to website/public/ and referenced correctly",
+    "Site builds and is ready for Cloudflare Pages deployment (build command + output dir documented)",
+]
+
+validator_context = [
+    "website/package.json",
+    "website/astro.config.mjs",
+    "website/src/pages/index.astro",
+    "website/src/content/docs/",
+    "website/public/",
+    "docs/plans/2026-03-06-website-design.md",
+]
+
+[context]
+related_docs = [
+    "docs/plans/2026-03-06-website-design.md",
+    "README.md",
+]
+relevant_paths = [
+    "website/",
+    "README.md",
+    "src/fyrnheim/__init__.py",
+]
+
+[scope]
+in_scope = [
+    "Scaffold Astro Starlight project in website/",
+    "Custom landing page (index.astro) with hero, features, code walkthrough, comparison table",
+    "Dark theme with amber/lava accent colors matching design doc",
+    "Copy and integrate Norse fire imagery assets into website/public/",
+    "Getting Started docs page (seeded from README install + quick start)",
+    "Core Concepts docs pages: entities, layers, sources, source-mapping, primitives, components, quality (seeded from README)",
+    "Configuration docs page (seeded from README project config + production deployment)",
+    "API Reference placeholder page listing public exports with brief descriptions",
+    "Starlight sidebar navigation configuration",
+    "Cloudflare Pages build configuration documented in README or website/README.md",
+]
+out_of_scope = [
+    "Blog or changelog section",
+    "Examples/showcase page",
+    "Contributing guide",
+    "Detailed API reference with full docstrings for all 118 symbols",
+    "Custom domain setup (done manually in Cloudflare dashboard)",
+    "Search functionality beyond Starlight built-in",
+    "Analytics or tracking",
+    "i18n / internationalization",
+]
+acceptable_breakage = [
+    "None -- this is purely additive, no existing code is modified",
+]
+
+[notes]
+considerations = """
+Design decisions (2026-03-06 brainstorming session):
+
+- Astro Starlight chosen for docs framework (built-in search, sidebar, dark mode)
+- Landing page is a custom Astro page outside Starlight, not the default Starlight index
+- Dark theme with Norse/Muspelheim fire aesthetic: near-black bg (#0a0a0a), amber accents (#f59e0b)
+- Headlines are straightforward ("Create data entities from raw sources")
+- Explanatory copy has subtle Norse forge flavor
+- 4 AI-generated images available: fiery landscape (hero bg), colored illustration (brand mark),
+  2 monochrome ink versions (section illustrations)
+- Content seeded from README which already has comprehensive docs
+- API Reference is placeholder only -- lists exports, not full documentation
+- Lean launch: ship fast, iterate later
+
+Image assets location: ~/Downloads/Download_1772794973234/
+- Gemini_Generated_Image_4nahdb4nahdb4nah.png (fiery dark landscape - hero)
+- Gemini_Generated_Image_rkbqj3rkbqj3rkbq.png (colored illustration)
+- Gemini_Generated_Image_phjoekphjoekphjo.png (monochrome ink)
+- Gemini_Generated_Image_vxrkktvxrkktvxrk.png (monochrome ink)
+
+Epic sequencing suggestion:
+- E001: Scaffold + landing page (Astro project setup, custom index page with all sections)
+- E002: Docs content (all markdown pages seeded from README, sidebar config)
+- E003: Theme + polish (dark theme customization, image assets, final styling)
+E001 and E002 can run in parallel. E003 depends on both.
+"""

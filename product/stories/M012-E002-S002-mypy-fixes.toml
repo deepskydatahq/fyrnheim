@@ -1,0 +1,48 @@
+id = "M012-E002-S002"
+parent = "M012-E002"
+title = "Fix all mypy type errors and add types-PyYAML"
+status = "ready"
+created = "2026-03-04"
+
+[outcome]
+description = """All 16 mypy type errors fixed. types-PyYAML added to dev deps.
+uv run mypy src/ passes clean."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "uv run mypy src/ exits 0 with no errors"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "types-PyYAML is in [project.optional-dependencies] dev list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests still pass"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/primitives/time.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = ["M012-E002-S001"]
+
+[handoff]
+implementation_hints = """uv add --dev types-PyYAML for the stubs.
+ibis_code_generator.py: add None guards before accessing .sources/.priority/.match_key
+on IdentityGraphConfig and .date_column etc on SnapshotLayer.
+resolution.py: filter None from list comprehension.
+cli.py: add type annotations to Click callback functions.
+__init__.py: add return type to __getattr__.
+primitives/time.py and core/activity.py: add missing type annotations."""
+reference_files = []

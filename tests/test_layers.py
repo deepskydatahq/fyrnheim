@@ -1,8 +1,10 @@
 """Tests for layer configuration classes."""
 
+import pytest
+from pydantic import ValidationError
 
 from fyrnheim.core.layer import DimensionLayer, PrepLayer, SnapshotLayer
-from fyrnheim.core.types import MaterializationType
+from fyrnheim.core.types import IncrementalStrategy, MaterializationType
 
 
 class TestPrepLayer:
@@ -103,3 +105,126 @@ class TestSnapshotLayer:
     def test_custom_clustering(self):
         layer = SnapshotLayer(clustering_fields=["user_id", "ds"])
         assert layer.clustering_fields == ["user_id", "ds"]
+
+
+class TestPrepLayerIncremental:
+    """Tests for PrepLayer incremental configuration fields and validation."""
+
+    def test_incremental_fields_default_to_none(self):
+        layer = PrepLayer(model_name="prep_events")
+        assert layer.incremental_strategy is None
+        assert layer.unique_key is None
+        assert layer.incremental_key is None
+
+    def test_existing_entities_without_incremental_still_validate(self):
+        layer = PrepLayer(model_name="prep_events", materialization=MaterializationType.TABLE)
+        assert layer.materialization == MaterializationType.TABLE
+
+    def test_valid_append_config(self):
+        layer = PrepLayer(
+            model_name="prep_events",
+            materialization=MaterializationType.INCREMENTAL,
+            incremental_strategy=IncrementalStrategy.APPEND,
+            incremental_key="created_at",
+        )
+        assert layer.incremental_strategy == IncrementalStrategy.APPEND
+        assert layer.incremental_key == "created_at"
+
+    def test_valid_merge_config(self):
+        layer = PrepLayer(
+            model_name="prep_events",
+            materialization=MaterializationType.INCREMENTAL,
+            incremental_strategy=IncrementalStrategy.MERGE,
+            unique_key="event_id",
+        )
+        assert layer.incremental_strategy == IncrementalStrategy.MERGE
+        assert layer.unique_key == "event_id"
+
+    def test_incremental_without_strategy_raises(self):
+        with pytest.raises(ValidationError, match="incremental_strategy"):
+            PrepLayer(
+                model_name="prep_events",
+                materialization=MaterializationType.INCREMENTAL,
+            )
+
+    def test_merge_without_unique_key_raises(self):
+        with pytest.raises(ValidationError, match="unique_key"):
+            PrepLayer(
+                model_name="prep_events",
+                materialization=MaterializationType.INCREMENTAL,
+                incremental_strategy=IncrementalStrategy.MERGE,
+            )
+
+    def test_append_without_incremental_key_raises(self):
+        with pytest.raises(ValidationError, match="incremental_key"):
+            PrepLayer(
+                model_name="prep_events",
+                materialization=MaterializationType.INCREMENTAL,
+                incremental_strategy=IncrementalStrategy.APPEND,
+            )
+
+    def test_table_materialization_ignores_incremental_fields(self):
+        """Backward compat: TABLE materialization with no incremental fields is fine."""
+        layer = PrepLayer(model_name="prep_events", materialization=MaterializationType.TABLE)
+        assert layer.incremental_strategy is None
+
+
+class TestDimensionLayerIncremental:
+    """Tests for DimensionLayer incremental configuration fields and validation."""
+
+    def test_incremental_fields_default_to_none(self):
+        layer = DimensionLayer(model_name="dim_users")
+        assert layer.incremental_strategy is None
+        assert layer.unique_key is None
+        assert layer.incremental_key is None
+
+    def test_existing_entities_without_incremental_still_validate(self):
+        layer = DimensionLayer(model_name="dim_users", materialization=MaterializationType.TABLE)
+        assert layer.materialization == MaterializationType.TABLE
+
+    def test_valid_append_config(self):
+        layer = DimensionLayer(
+            model_name="dim_users",
+            materialization=MaterializationType.INCREMENTAL,
+            incremental_strategy=IncrementalStrategy.APPEND,
+            incremental_key="updated_at",
+        )
+        assert layer.incremental_strategy == IncrementalStrategy.APPEND
+        assert layer.incremental_key == "updated_at"
+
+    def test_valid_merge_config(self):
+        layer = DimensionLayer(
+            model_name="dim_users",
+            materialization=MaterializationType.INCREMENTAL,
+            incremental_strategy=IncrementalStrategy.MERGE,
+            unique_key="user_id",
+        )
+        assert layer.incremental_strategy == IncrementalStrategy.MERGE
+        assert layer.unique_key == "user_id"
+
+    def test_incremental_without_strategy_raises(self):
+        with pytest.raises(ValidationError, match="incremental_strategy"):
+            DimensionLayer(
+                model_name="dim_users",
+                materialization=MaterializationType.INCREMENTAL,
+            )
+
+    def test_merge_without_unique_key_raises(self):
+        with pytest.raises(ValidationError, match="unique_key"):
+            DimensionLayer(
+                model_name="dim_users",
+                materialization=MaterializationType.INCREMENTAL,
+                incremental_strategy=IncrementalStrategy.MERGE,
+            )
+
+    def test_append_without_incremental_key_raises(self):
+        with pytest.raises(ValidationError, match="incremental_key"):
+            DimensionLayer(
+                model_name="dim_users",
+                materialization=MaterializationType.INCREMENTAL,
+                incremental_strategy=IncrementalStrategy.APPEND,
+            )
+
+    def test_table_materialization_ignores_incremental_fields(self):
+        layer = DimensionLayer(model_name="dim_users", materialization=MaterializationType.TABLE)
+        assert layer.incremental_strategy is None

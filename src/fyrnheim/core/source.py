@@ -263,6 +263,46 @@ class DerivedSource(BaseModel):
         return self
 
 
+class StateSource(BaseTableSource):
+    """Source for entity-shaped (state) data like CRM exports or user profiles.
+
+    Represents a snapshot of current state for an entity type.
+    Requires a name to identify the source and an id_field that uniquely
+    identifies each record.
+    """
+    name: str = PydanticField(min_length=1)
+    id_field: str = PydanticField(min_length=1)
+    transforms: SourceTransforms | None = None
+    fields: list[Field] | None = None
+
+
+class EventSource(BaseTableSource):
+    """Source for event-shaped data like page views and transactions.
+
+    Represents a stream of events associated with an entity.
+    Requires entity_id_field (foreign key to entity) and timestamp_field.
+    Optionally, set event_type (static string) or event_type_field (column name)
+    to classify events, but not both.
+    """
+    name: str = PydanticField(min_length=1)
+    entity_id_field: str = PydanticField(min_length=1)
+    timestamp_field: str = PydanticField(min_length=1)
+    event_type: str | None = None
+    event_type_field: str | None = None
+    transforms: SourceTransforms | None = None
+    fields: list[Field] | None = None
+
+    @model_validator(mode="after")
+    def _validate_event_type_exclusivity(self) -> "EventSource":
+        """Ensure event_type and event_type_field are mutually exclusive."""
+        if self.event_type is not None and self.event_type_field is not None:
+            raise ValueError(
+                "EventSource cannot have both 'event_type' and 'event_type_field'; "
+                "use one or the other"
+            )
+        return self
+
+
 class AggregationSource(BaseModel):
     """Source for entities aggregated from other entities.
 

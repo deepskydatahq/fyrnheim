@@ -1,0 +1,46 @@
+id = "M027-E001"
+parent = "M027"
+title = "Snapshot store for state sources"
+status = "active"
+created = 2026-04-01
+depends_on = []
+
+[outcome]
+description = """
+Implement a SnapshotStore that persists daily copies of state source data
+as parquet files on disk, keyed by source name and date. Supports saving
+current snapshots and retrieving previous snapshots for diffing.
+"""
+
+[job_story]
+description = """
+When the pipeline runs daily, I want each state source's current data to be
+persisted as a dated snapshot, so that subsequent runs can compare against the
+previous snapshot to detect changes.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "SnapshotStore saves a snapshot as parquet file with correct naming",
+    "SnapshotStore retrieves the most recent previous snapshot for a source",
+    "SnapshotStore returns None when no previous snapshot exists (cold start)",
+    "Snapshots are organized by source name and date",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/core/source.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Store as parquet on disk for DuckDB dev. Design the interface so warehouse
+backends could be added later. Directory structure:
+  {base_dir}/{source_name}/{YYYY-MM-DD}.parquet
+"""
+
+estimated_stories = 2

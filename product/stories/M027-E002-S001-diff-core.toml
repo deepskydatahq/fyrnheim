@@ -1,0 +1,40 @@
+id = "M027-E002-S001"
+parent = "M027-E002"
+title = "Core diff algorithm detecting row changes"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Implement diff_snapshots() that compares two Ibis tables and produces row_appeared, field_changed, and row_disappeared events."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "diff_snapshots(current, previous, id_field='id') returns row_appeared events for IDs in current but not previous"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "diff_snapshots returns row_disappeared events for IDs in previous but not current"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "diff_snapshots returns field_changed events for IDs present in both where field values differ, with old_value and new_value"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "field_changed produces one event per changed field per row"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Rows where all fields are identical produce no events"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/diff_engine.py. The diff algorithm: (1) outer join current and previous on id_field, (2) classify each row: left-only = appeared, right-only = disappeared, both = check fields. For field_changed, iterate non-id columns and compare. Use DuckDB in-memory for tests with synthetic data. Output should be a single Ibis table with columns: source, entity_id, ts, event_type, payload (as JSON string or struct)."""
+reference_files = []

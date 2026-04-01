@@ -1,0 +1,28 @@
+id = "M014-E001-S002"
+parent = "M014-E001"
+title = "Update README and docs for Postgres support"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """README Status section lists Postgres as supported backend."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README Status section includes 'Postgres backend -- supported'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README backend config example mentions postgres as an option"
+
+[context]
+relevant_paths = ["README.md"]
+input_fixtures = []
+depends_on = ["M014-E001-S001"]
+
+[handoff]
+implementation_hints = """Add Postgres to the Status section following the existing BigQuery/ClickHouse pattern. Add postgres connection params to the create_connection docstring example in connection.py."""
+reference_files = ["README.md"]

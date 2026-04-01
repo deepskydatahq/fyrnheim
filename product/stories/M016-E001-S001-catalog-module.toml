@@ -1,0 +1,53 @@
+id = "M016-E001-S001"
+parent = "M016-E001"
+title = "Build catalog module"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """Implement src/fyrnheim/docs/catalog.py that walks EntityRegistry and builds a JSON-serializable catalog dict with all entity metadata."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "build_catalog(registry) returns dict with 'entities' key containing list of entity dicts"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Each entity dict includes: name, description, source_type, fields, computed_columns, measures, quality, layers, dependencies, dependents"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dependencies and dependents are bidirectionally computed from resolution._extract_dependencies"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "json.dumps(build_catalog(registry)) succeeds without errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "build_catalog(empty_registry) returns {'entities': [], 'metadata': {...}}"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/components/measure.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Create src/fyrnheim/docs/__init__.py and src/fyrnheim/docs/catalog.py.
+Use _extract_dependencies from resolution.py for dependency edges.
+Compute dependents by inverting the dependency graph.
+Include layer flow info: which layers are active per entity.
+Source type detection: check isinstance(entity.source, TableSource/DerivedSource/etc).
+"""
+reference_files = []

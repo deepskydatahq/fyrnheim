@@ -1,0 +1,36 @@
+id = "M026-E001-S001"
+parent = "M026-E001"
+title = "Define StateSource Pydantic model"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Add StateSource model to core/source.py extending BaseTableSource with name and id_field."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource(name='crm', project='p', dataset='d', table='t', id_field='id') validates successfully"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource without id_field raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource without name raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource accepts optional transforms and fields"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Extend BaseTableSource. Add name: str and id_field: str as required fields. Add optional transforms and fields like TableSource."""
+reference_files = []

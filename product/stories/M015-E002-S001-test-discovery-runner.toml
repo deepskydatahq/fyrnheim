@@ -1,0 +1,47 @@
+id = "M015-E002-S001"
+parent = "M015-E002"
+title = "Test discovery and runner module"
+status = "ready"
+created = "2026-03-07"
+
+[outcome]
+description = """Create test discovery that finds test_*.py files, imports EntityTest subclasses, and runs test_ methods with pass/fail tracking."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "discover_tests(path) finds test_*.py files in a directory"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "discover_tests returns list of (class, method_name) tuples for EntityTest subclasses"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run_tests() executes each test method and returns list of TestOutcome (name, passed, error)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run_tests(entity_filter='name') only runs tests where entity matches filter"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Failed tests capture the exception message for reporting"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/testing/",
+]
+input_fixtures = []
+depends_on = ["M015-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Add discover_tests() and run_tests() to fyrnheim.testing.runner module.
+Discovery: importlib to load test_*.py files, inspect to find EntityTest subclasses,
+dir() to find test_ methods. Runner: instantiate class, call method, catch exceptions.
+TestOutcome dataclass with test_name, passed, error, duration_seconds.
+"""
+reference_files = []

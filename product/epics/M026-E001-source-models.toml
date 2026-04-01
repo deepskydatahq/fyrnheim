@@ -1,0 +1,49 @@
+id = "M026-E001"
+parent = "M026"
+title = "StateSource and EventSource Pydantic models"
+status = "active"
+created = 2026-04-01
+depends_on = []
+
+[outcome]
+description = """
+Define StateSource and EventSource as new Pydantic models in core/source.py,
+add them to the Source union type and public exports, and write comprehensive
+unit tests. Preserve all existing source types for backward compatibility.
+"""
+
+[job_story]
+description = """
+When I define a data source, I want to explicitly declare whether it is
+state-shaped or event-shaped, so that downstream pipeline components can
+handle each type appropriately.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource model validates with required fields (name, project, dataset, table, id_field)",
+    "EventSource model validates with required fields (name, project, dataset, table, entity_id_field, timestamp_field)",
+    "Both models support SourceTransforms and Field lists",
+    "Both models are added to the Source union type in entity.py",
+    "Both models are exported from core/__init__.py",
+    "All existing tests continue to pass unchanged",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/__init__.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+StateSource and EventSource both extend BaseTableSource for warehouse/duckdb
+reading. StateSource adds id_field and name. EventSource adds entity_id_field,
+timestamp_field, event_type/event_type_field, and name.
+"""
+
+estimated_stories = 3

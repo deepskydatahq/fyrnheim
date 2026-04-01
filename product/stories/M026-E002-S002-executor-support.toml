@@ -1,0 +1,36 @@
+id = "M026-E002-S002"
+parent = "M026-E002"
+title = "Executor support for new source types"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Ensure IbisExecutor handles entities with StateSource and EventSource through the full pipeline."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity with StateSource executes through prep and dim layers successfully"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Entity with EventSource executes through prep and dim layers successfully"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Existing TableSource entities still execute correctly"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_engine_executor.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+input_fixtures = []
+depends_on = ["M026-E002-S001"]
+
+[handoff]
+implementation_hints = """The executor may not need changes if codegen handles the source type differences. Write e2e tests that define an entity with each new source type, generate code, and execute it."""
+reference_files = []

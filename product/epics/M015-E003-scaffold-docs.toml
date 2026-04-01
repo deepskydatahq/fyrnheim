@@ -1,0 +1,45 @@
+id = "M015-E003"
+parent = "M015"
+title = "Scaffold example test and README update"
+status = "active"
+created = "2026-03-07"
+depends_on = ["M015-E001"]
+
+[outcome]
+description = """
+fyr init scaffolds an example test file alongside the sample entity. README
+documents fyr test usage and the testing API.
+"""
+
+[job_story]
+description = """When I scaffold a new project with fyr init, I want to see an example test file so that I know how to test my entities from day one."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr init creates tests/test_customers.py with a working example test",
+    "Example test uses EntityTest with given/run/assert pattern",
+    "README documents fyr test command and basic testing workflow",
+    "All existing tests still pass",
+]
+validator_context = [
+    "src/fyrnheim/_scaffold/",
+    "src/fyrnheim/cli.py",
+    "README.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/_scaffold/",
+    "src/fyrnheim/cli.py",
+    "README.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+The scaffold test file should be simple and self-contained. It tests the
+sample customers entity that fyr init already creates.
+"""
+
+estimated_stories = 2

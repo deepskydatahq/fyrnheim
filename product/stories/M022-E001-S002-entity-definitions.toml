@@ -1,0 +1,73 @@
+id = "M022-E001-S002"
+parent = "M022-E001"
+title = "Define all Zeffy attribution entities"
+status = "ready"
+created = 2026-03-22
+
+[outcome]
+description = """Define 5 Fyrnheim entities modeling the Zeffy attribution pipeline: touchpoints, account, acquisition_signal, attribution_first_touch, attribution_paid_priority, and account_attributed."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "touchpoints entity: TableSource reading amplitude events parquet, PrepLayer with JSON extraction (gclid, fbclid, utm_source, utm_medium, organization_id), CaseColumn for channel classification"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "account entity: DerivedSource with IdentityGraphConfig matching on organization_id, sources: organizations (TableSource inline) and amplitude_merges (TableSource inline)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "acquisition_signal entity: depends on touchpoints, uses dedup_by() for signal deduplication (one per account+type+day)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "attribution_first_touch entity: AggregationSource from acquisition_signal, uses first_value_by() for earliest channel per account"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "attribution_paid_priority entity: similar to first_touch but with paid channel priority override via CaseColumn"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "account_attributed entity: DerivedSource joining account + attribution models into one-row-per-account wide table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All entities validate without errors (Entity model validation passes)"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/components/expressions.py",
+    "examples/timo-data-stack/entities/person.py",
+    "examples/timo-data-stack/entities/signals.py",
+]
+input_fixtures = []
+depends_on = ["M022-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Create entity files under examples/zeffy-attribution/entities/:
+- touchpoints.py
+- account.py
+- acquisition_signal.py
+- attribution.py (both first_touch and paid_priority)
+- account_attributed.py
+
+Reference examples/timo-data-stack/entities/person.py for IdentityGraphConfig patterns.
+Reference examples/timo-data-stack/entities/signals.py for UnionSource patterns.
+Use dedup_by(), first_value_by(), CaseColumn from components/expressions.py.
+
+Key channel classification rules (cascading priority):
+1. gclid present → paid_search_google
+2. fbclid present → paid_social_meta
+3. utm_medium in [cpc, ppc, paid, paidsocial] → paid_other
+4. utm_source present → organic_campaign
+5. referring_domain present → organic_referral
+6. else → direct_or_unknown
+"""
+reference_files = []

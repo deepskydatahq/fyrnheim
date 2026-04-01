@@ -1,0 +1,46 @@
+id = "M016-E002"
+parent = "M016"
+title = "HTML Template and Generator"
+status = "active"
+created = 2026-03-08
+depends_on = ["M016-E001"]
+
+[outcome]
+description = """
+A self-contained HTML template with embedded CSS and JS (dagre-d3 for lineage DAG)
+and a Python generator that takes the catalog dict, embeds it as JSON, and writes
+a single index.html file. The HTML includes a sidebar with entity list, interactive
+DAG view, and per-entity detail pages.
+"""
+
+[job_story]
+description = """
+When I have a catalog dict of entity metadata, I want to render it into a single
+self-contained HTML file with interactive DAG and entity detail views, so that
+data teams can browse documentation in a browser.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "generator.generate_html(catalog, output_dir) writes index.html",
+    "The HTML file contains the catalog data as embedded JSON",
+    "The HTML renders entity nodes in a DAG layout",
+    "Clicking a DAG node scrolls to the entity detail section",
+    "Entity detail shows fields, computed columns, measures, quality, layers",
+    "Works with empty catalog (shows 'no entities' message)",
+]
+validator_context = ["src/fyrnheim/docs/"]
+
+[context]
+relevant_paths = ["src/fyrnheim/docs/"]
+dependencies = ["M016-E001 catalog builder"]
+
+[notes]
+considerations = """
+Use dagre-d3 (or dagre + d3) vendored inline in the HTML. The template should be
+a Python string or a separate .html file bundled in the package. Keep the JS minimal
+— just enough for DAG layout, click-to-navigate, and sidebar filtering.
+"""
+
+estimated_stories = 2

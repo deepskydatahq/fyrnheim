@@ -1,0 +1,57 @@
+id = "M026"
+title = "Source type split: StateSource and EventSource"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Replace the current Source union type (TableSource, DerivedSource, AggregationSource,
+EventAggregationSource, UnionSource) with two fundamental source types: StateSource
+(for entity-shaped data like CRM exports) and EventSource (for event-shaped data like
+page views and transactions). This is the foundation for the activities-first architecture.
+"""
+
+[scope]
+in_scope = [
+    "Define StateSource Pydantic model with id_field for diffing",
+    "Define EventSource Pydantic model with entity_id_field, timestamp_field, event_type",
+    "Migrate existing TableSource usage to StateSource or EventSource",
+    "Update codegen to generate source functions for both types",
+    "Update executor to handle both source types",
+    "Preserve existing SourceTransforms and Field definitions",
+    "Tests for both source types",
+]
+out_of_scope = [
+    "Snapshot-diff engine (M027)",
+    "Removing DerivedSource, AggregationSource, UnionSource (handled by later missions)",
+    "Activity definitions (M028)",
+    "Identity graph refactor (M029)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource and EventSource models validate correctly",
+    "Codegen produces working source functions for both types",
+    "Existing examples can be expressed with new source types",
+    "All existing tests continue to pass (backward compat during transition)",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+This mission introduces the new source types alongside existing ones. The old Source
+union type should remain functional during the transition period. New source types
+should be usable immediately but the old types don't get removed until all downstream
+missions are complete.
+"""

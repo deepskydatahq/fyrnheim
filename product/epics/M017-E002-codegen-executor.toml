@@ -1,0 +1,50 @@
+id = "M017-E002"
+parent = "M017"
+title = "Code Generator and Executor for Inline Sources"
+status = "active"
+created = 2026-03-09
+depends_on = ["M017-E001"]
+
+[outcome]
+description = """
+The Ibis code generator produces correct source functions for inline TableSource
+references in identity graphs, including prep_columns application. The executor's
+_build_sources_dict reads from inline TableSources directly instead of looking up
+named entity tables. End-to-end tests verify the full pipeline works.
+"""
+
+[job_story]
+description = """
+When I run fyr run on an entity with inline identity graph sources, I want the
+pipeline to read from the inline TableSources, apply prep_columns, and join
+correctly, so that the identity graph works without separate entity files.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Code generator produces source function that reads inline TableSource",
+    "Generated code applies prep_columns before the join",
+    "Mixed inline + entity-reference sources generate correct code",
+    "Executor _build_sources_dict handles inline sources",
+    "End-to-end test with inline sources produces correct output",
+    "Existing entity-reference codegen tests unchanged",
+]
+validator_context = ["src/fyrnheim/generators/", "src/fyrnheim/engine/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+]
+dependencies = ["M017-E001 data model"]
+
+[notes]
+considerations = """
+The code generator's _generate_derived_source_function must handle inline sources:
+for each IdentityGraphSource with source instead of entity, generate a read function
+that reads from the TableSource and applies prep_columns. The executor's
+_build_sources_dict must detect inline sources and read from them directly.
+"""
+
+estimated_stories = 3

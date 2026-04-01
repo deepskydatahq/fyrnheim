@@ -1,0 +1,43 @@
+id = "M016-E003"
+parent = "M016"
+title = "CLI Commands (docs generate + serve)"
+status = "active"
+created = 2026-03-08
+depends_on = ["M016-E002"]
+
+[outcome]
+description = """
+Two new CLI subcommands under `fyr docs`: `fyr docs generate` discovers entities
+and writes index.html, `fyr docs serve` starts a local HTTP server and opens the
+browser. Follows existing CLI patterns (handle_errors, resolve_config).
+"""
+
+[job_story]
+description = """
+When I want to view my entity documentation, I want to run `fyr docs generate`
+followed by `fyr docs serve`, so that I can browse the docs in my browser with
+a single command.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr docs generate creates index.html in the output directory",
+    "fyr docs generate --output-dir custom/ writes to custom directory",
+    "fyr docs serve starts an HTTP server (test that it binds the port)",
+    "fyr docs serve --port 9090 uses the specified port",
+    "Error handling follows existing CLI patterns (handle_errors decorator)",
+]
+validator_context = ["src/fyrnheim/cli.py"]
+
+[context]
+relevant_paths = ["src/fyrnheim/cli.py", "src/fyrnheim/docs/"]
+dependencies = ["M016-E002 HTML generator"]
+
+[notes]
+considerations = """
+Use click.Group for 'docs' subcommand group. For 'serve', use http.server from
+stdlib and webbrowser.open. Follow the existing CLI patterns in cli.py.
+"""
+
+estimated_stories = 2

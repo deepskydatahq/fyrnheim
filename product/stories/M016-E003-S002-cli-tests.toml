@@ -1,0 +1,40 @@
+id = "M016-E003-S002"
+parent = "M016-E003"
+title = "CLI docs command tests"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """Write tests for fyr docs generate and fyr docs serve CLI commands."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test fyr docs generate creates index.html with entity data"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test fyr docs generate with --output-dir flag"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test fyr docs generate with missing entities directory shows error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test fyr docs serve --port flag is accepted"
+
+[context]
+relevant_paths = ["src/fyrnheim/cli.py", "tests/test_cli.py"]
+input_fixtures = []
+depends_on = ["M016-E003-S001"]
+
+[handoff]
+implementation_hints = """
+Add tests to tests/test_cli.py or a new tests/test_docs_cli.py. Use click.testing.CliRunner
+for CLI invocation (see existing test_cli.py patterns). For serve, test that the command
+accepts the port flag but don't test actual server binding (would block).
+"""
+reference_files = ["tests/test_cli.py"]

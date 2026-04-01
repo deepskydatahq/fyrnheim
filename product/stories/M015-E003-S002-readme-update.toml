@@ -1,0 +1,35 @@
+id = "M015-E003-S002"
+parent = "M015-E003"
+title = "Update README with fyr test documentation"
+status = "ready"
+created = "2026-03-07"
+
+[outcome]
+description = """README documents fyr test command usage and basic entity testing workflow."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README includes fyr test in the CLI commands section"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README has a Testing section with EntityTest example code"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README shows the given/run/assert workflow"
+
+[context]
+relevant_paths = ["README.md"]
+input_fixtures = []
+depends_on = ["M015-E003-S001"]
+
+[handoff]
+implementation_hints = """
+Add a Testing section to README.md after the existing Quick Start or Usage section.
+Show a minimal EntityTest example. Keep it concise - 10-15 lines of example code.
+"""
+reference_files = ["README.md"]

@@ -1,0 +1,61 @@
+id = "M032"
+title = "Deprecate entity-centric pipeline"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Remove the old entity-centric architecture once the activities-first pipeline is
+fully operational. Remove Entity, HelperEntity, LayersConfig, PrepLayer, DimensionLayer,
+SnapshotLayer, old ActivityConfig, old AnalyticsLayer, DerivedSource, AggregationSource,
+EventAggregationSource, and UnionSource. Migrate examples and documentation.
+"""
+
+[scope]
+in_scope = [
+    "Remove Entity and HelperEntity from core",
+    "Remove LayersConfig, PrepLayer, DimensionLayer, SnapshotLayer",
+    "Remove old ActivityConfig and ActivityType",
+    "Remove old AnalyticsLayer and AnalyticsModel (from analytics.py)",
+    "Remove DerivedSource, AggregationSource, EventAggregationSource, UnionSource",
+    "Remove old codegen paths for entity pipeline",
+    "Migrate all examples to new activities-first definitions",
+    "Update CLI commands for new asset types",
+    "Update README and documentation",
+    "Clean up unused code in executor, runner, registry",
+]
+out_of_scope = [
+    "Automated migration tool for external users (document manual migration)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/",
+    "src/fyrnheim/generators/",
+    "src/fyrnheim/engine/",
+    "examples/",
+    "README.md",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = ["M030", "M031"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All old entity-centric types are removed",
+    "All examples use new activities-first definitions",
+    "All tests pass with new architecture only",
+    "CLI commands work with new asset types",
+    "No dead code remains from old pipeline",
+]
+validator_context = ["tests/", "src/"]
+
+[notes]
+considerations = """
+This is a big cleanup mission. It should only be executed once M026-M031 are
+all complete and validated. Consider doing this incrementally if the scope
+is too large for a single mission.
+
+The migration table in the design spec maps every old concept to its replacement.
+"""

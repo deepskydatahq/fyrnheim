@@ -1,0 +1,44 @@
+id = "M017-E002-S001"
+parent = "M017-E002"
+title = "Code generator for inline sources"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Update _generate_derived_source_function to handle IdentityGraphSource instances with inline TableSource, generating read functions that read from the TableSource and apply prep_columns before the join."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code includes read function for inline TableSource (conn.read_parquet or conn.table)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated code applies prep_columns as .mutate() calls before the join"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Mixed inline + entity-reference sources generate correct join code"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated source function signature includes conn and backend params for inline sources"
+
+[context]
+relevant_paths = ["src/fyrnheim/generators/ibis_code_generator.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+In _generate_derived_source_function:
+- For each IdentityGraphSource, check if it has source (inline) vs entity (reference)
+- For inline sources: generate a local read function that reads from TableSource.duckdb_path
+  and applies prep_columns as .mutate() expressions
+- For entity-reference sources: keep existing behavior (read from sources dict)
+- The source function signature changes: needs conn and backend params when inline sources exist
+- Update _build_sources_dict in executor to handle inline sources by reading from TableSource directly
+"""
+reference_files = []

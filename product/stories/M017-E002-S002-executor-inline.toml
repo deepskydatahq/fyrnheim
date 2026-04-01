@@ -1,0 +1,48 @@
+id = "M017-E002-S002"
+parent = "M017-E002"
+title = "Executor support for inline sources"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Update executor's _build_sources_dict and _run_transform_pipeline to handle inline sources by reading from TableSource directly and applying prep_columns."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_build_sources_dict reads inline TableSource via source.read_table(conn, backend)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_build_sources_dict applies prep_columns as ibis .mutate() on inline source tables"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_run_transform_pipeline passes conn and backend to source function when inline sources present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Mixed inline + entity sources both resolve correctly in _build_sources_dict"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/executor.py"]
+input_fixtures = []
+depends_on = ["M017-E002-S001"]
+
+[handoff]
+implementation_hints = """
+In _build_sources_dict:
+- For each ig_source: check if ig_source.source is not None (inline)
+- If inline: use ig_source.source.read_table(conn, backend) to get the table
+- If inline with prep_columns: apply each as t.mutate(col.name=eval(col.expression))
+  Actually, prep_columns are ibis expressions as strings - need to handle them
+  similar to how _generate_prep_function handles computed columns
+- If entity reference: keep existing behavior (look up dim_{entity})
+
+In _run_transform_pipeline:
+- When DerivedSource has inline sources, the generated source function may need
+  conn and backend params. Update the call accordingly.
+"""
+reference_files = []

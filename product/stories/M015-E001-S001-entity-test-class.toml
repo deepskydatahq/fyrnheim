@@ -1,0 +1,69 @@
+id = "M015-E001-S001"
+parent = "M015-E001"
+title = "EntityTest base class with given/run/TestResult"
+status = "ready"
+created = "2026-03-07"
+
+[outcome]
+description = """Create fyrnheim.testing module with EntityTest class, given() for input data, run() for execution, and TestResult for output inspection."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.testing import EntityTest works"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityTest subclass with entity=Entity(...) can call given() with dict of table -> rows"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityTest.run() executes entity on ephemeral DuckDB and returns TestResult"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TestResult.row_count returns number of output rows"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TestResult.columns returns list of column names"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TestResult.column('name') returns list of values for that column"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TestResult.to_dicts() returns list of row dicts for easy assertion"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/_scaffold/customers_entity.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Create src/fyrnheim/testing/__init__.py with EntityTest and TestResult classes.
+
+EntityTest.given(tables: dict[str, list[dict]]) stores the fixture data.
+EntityTest.run() creates an ephemeral DuckDB connection, registers fixture data
+as in-memory tables using ibis, generates transforms to a temp dir, executes
+the entity, and returns TestResult wrapping the output table.
+
+TestResult wraps a pandas DataFrame (from ibis .execute()). row_count, columns,
+column(), to_dicts() are thin wrappers around DataFrame methods.
+
+Use the existing IbisExecutor.duckdb() and run_entity() functions — don't
+reinvent the execution pipeline.
+"""
+reference_files = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+]

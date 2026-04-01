@@ -1,0 +1,70 @@
+id = "M027"
+title = "Snapshot-diff engine"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Build the snapshot-diff engine that operates on StateSources. Maintains a snapshot store
+with daily copies of each state source keyed by id_field. On each run, compares current
+snapshot to previous and produces raw events: row_appeared, field_changed (with old_value
+and new_value), and row_disappeared. This is the core infrastructure that makes the
+activities-first model work.
+"""
+
+[scope]
+in_scope = [
+    "Snapshot store implementation (daily copies of state sources)",
+    "Diff algorithm: compare current vs previous snapshot by id_field",
+    "Produce row_appeared events for new IDs",
+    "Produce field_changed events per changed field with old_value/new_value",
+    "Produce row_disappeared events for removed IDs",
+    "Universal event schema: source, entity_id, ts, event_type, payload",
+    "Cold start handling: first snapshot produces only row_appeared events",
+    "Integration with StateSource from M026",
+    "Configurable field exclusions (ignore noisy fields like last_synced_at)",
+    "Tests with synthetic state data across multiple snapshots",
+]
+out_of_scope = [
+    "Activity definitions / business logic interpretation (M028)",
+    "Identity resolution (M029)",
+    "Schema evolution handling (future mission)",
+    "Incremental/streaming diff (daily batch only for now)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/snapshot.py",
+    "src/fyrnheim/engine/executor.py",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = ["M026"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Snapshot store persists daily copies correctly",
+    "Diff detects new rows, changed fields, and disappeared rows",
+    "field_changed events include old_value and new_value",
+    "Cold start (no previous snapshot) produces row_appeared for all rows",
+    "Field exclusions work correctly",
+    "Universal event schema is consistent across all event types",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+The snapshot store needs a storage strategy. Options:
+1. Parquet files on disk (good for DuckDB dev)
+2. Tables in the warehouse (good for production)
+3. Pluggable storage backend
+
+Start with parquet on disk for DuckDB, design the interface so warehouse
+backends can be added later.
+
+The existing snapshot.py has apply_snapshot() which does SCD-style dedup.
+The new engine is different — it's about diffing, not deduplication.
+Consider whether to extend or replace.
+"""

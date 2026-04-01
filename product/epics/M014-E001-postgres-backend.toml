@@ -1,0 +1,52 @@
+id = "M014-E001"
+parent = "M014"
+title = "Add Postgres backend to connection factory"
+status = "active"
+created = "2026-03-06"
+depends_on = []
+
+[outcome]
+description = """
+create_connection('postgres', ...) returns an Ibis Postgres backend. Postgres is
+in SUPPORTED_BACKENDS, has a pyproject.toml extras group, unit tests following
+the existing BigQuery/ClickHouse mock pattern, and README/docs updated.
+"""
+
+[job_story]
+description = """When I want to run my entities on Postgres, I want to pass --backend postgres to fyr run, so that I can use the same entity definitions on Postgres without changes."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "create_connection('postgres', host='localhost', database='mydb') returns mocked Ibis Postgres backend",
+    "'postgres' in SUPPORTED_BACKENDS",
+    "ImportError with install hint when ibis postgres extras not installed",
+    "pyproject.toml has [postgres] optional dependency group",
+    "Unit tests follow existing ClickHouse mock pattern",
+    "README Status section lists Postgres as supported",
+    "All existing tests still pass",
+]
+validator_context = [
+    "src/fyrnheim/engine/connection.py",
+    "tests/test_engine_connection.py",
+    "pyproject.toml",
+    "README.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/connection.py",
+    "tests/test_engine_connection.py",
+    "pyproject.toml",
+    "README.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Single epic — all changes follow established patterns from BigQuery/ClickHouse.
+The test file already has a test_unknown_backend_raises_value_error that tests
+'postgres' as unsupported — this test needs updating.
+"""
+
+estimated_stories = 2

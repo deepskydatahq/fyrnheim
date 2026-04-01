@@ -1,0 +1,48 @@
+id = "M022-E001"
+parent = "M022"
+title = "Synthetic data and entity definitions"
+status = "active"
+created = 2026-03-22
+depends_on = []
+
+[outcome]
+description = """Create synthetic parquet data mimicking Zeffy's Snowflake schema, then define all 5
+Fyrnheim entities: amplitude_event (touchpoints), account, acquisition_signal,
+attribution_first_touch, attribution_paid_priority, and account_attributed."""
+
+[job_story]
+description = """When I want to validate Fyrnheim's capabilities against a real-world attribution pipeline,
+I want synthetic data and entity definitions that model the Zeffy pipeline,
+so I can run end-to-end without needing production credentials."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Synthetic data generator creates parquet files with correct schemas",
+    "All 5+ entities load without validation errors",
+    "Entity definitions use existing Fyrnheim features only (no framework changes)",
+    "Channel classification uses CaseColumn with cascading priority rules",
+    "Account entity uses IdentityGraphConfig with org + amplitude sources",
+    "acquisition_signal uses dedup_by for signal deduplication",
+    "Attribution entities use first_value_by for ordered value extraction",
+]
+validator_context = ["tests/", "examples/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/components/expressions.py",
+    "examples/",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Synthetic data should have ~200 events, ~30 orgs, ~50 merge_ids with realistic
+JSON structures (event_properties with gclid/fbclid/utm_*, user_properties with Organization).
+Entity definitions go under examples/zeffy-attribution/entities/.
+Data goes under examples/zeffy-attribution/data/.
+"""
+
+estimated_stories = 3

@@ -1,0 +1,40 @@
+id = "M026-E001-S002"
+parent = "M026-E001"
+title = "Define EventSource Pydantic model"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Add EventSource model to core/source.py extending BaseTableSource with event-specific fields."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource(name='views', project='p', dataset='d', table='t', entity_id_field='user_id', timestamp_field='ts') validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource without entity_id_field raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource without timestamp_field raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource accepts optional event_type (static) or event_type_field (column)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource with both event_type and event_type_field raises ValidationError"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Extend BaseTableSource. Add name, entity_id_field, timestamp_field as required. event_type and event_type_field are optional but mutually exclusive (model_validator)."""
+reference_files = []

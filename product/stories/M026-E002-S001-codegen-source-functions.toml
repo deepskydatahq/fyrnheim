@@ -1,0 +1,39 @@
+id = "M026-E002-S001"
+parent = "M026-E002"
+title = "Codegen source functions for StateSource and EventSource"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Update IbisCodeGenerator to generate source_* functions for StateSource and EventSource."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Codegen for StateSource entity produces a valid source function that reads the table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Codegen for EventSource entity produces a source function that reads the table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated EventSource function selects entity_id_field and timestamp_field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing TableSource codegen still works unchanged"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "tests/test_ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = ["M026-E001-S003"]
+
+[handoff]
+implementation_hints = """Add isinstance checks for StateSource and EventSource in _generate_source_functions(). StateSource generates similar to TableSource. EventSource generates similarly but the function should also handle the event_type/event_type_field columns."""
+reference_files = []

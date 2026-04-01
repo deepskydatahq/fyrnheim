@@ -1,0 +1,44 @@
+id = "M016-E001-S002"
+parent = "M016-E001"
+title = "Catalog unit tests"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """Write comprehensive unit tests for the catalog builder using mock entities."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test catalog with single entity containing fields, computed columns, measures"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test catalog with multiple entities that have dependencies between them"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test catalog with empty registry"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that catalog output is JSON-serializable"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that all source types are correctly identified (TableSource, DerivedSource, etc)"
+
+[context]
+relevant_paths = ["src/fyrnheim/docs/catalog.py", "tests/"]
+input_fixtures = []
+depends_on = ["M016-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Create tests/test_docs_catalog.py. Build Entity instances directly using the
+Pydantic constructors (see existing tests for patterns). Test various source types
+and layer configurations.
+"""
+reference_files = ["tests/test_entity.py"]

@@ -1,0 +1,51 @@
+id = "M016-E001"
+parent = "M016"
+title = "JSON Catalog Builder"
+status = "active"
+created = 2026-03-08
+depends_on = []
+
+[outcome]
+description = """
+A catalog module that walks the EntityRegistry, extracts all metadata (fields,
+computed columns, measures, quality checks, layers, dependencies), and produces
+a JSON-serializable Python dict. This is the data layer that feeds the HTML template.
+"""
+
+[job_story]
+description = """
+When I have entities discovered in the registry, I want to extract a complete
+metadata catalog as structured data, so that the HTML generator can render
+documentation without needing to understand entity internals.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "catalog.build_catalog(registry) returns a dict with entity metadata",
+    "Each entity entry includes fields, computed_columns, measures, quality, layers",
+    "Dependencies and dependents are correctly computed",
+    "The catalog dict is JSON-serializable (json.dumps succeeds)",
+    "Works with an empty registry (returns empty entities list)",
+]
+validator_context = ["src/fyrnheim/docs/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/components/measure.py",
+]
+dependencies = ["EntityRegistry", "resolve_execution_order"]
+
+[notes]
+considerations = """
+The catalog should be a plain dict, not Pydantic models, so it can be trivially
+serialized to JSON and embedded in the HTML template. Include source type info,
+layer flow, and all field-level metadata.
+"""
+
+estimated_stories = 2

@@ -1,0 +1,47 @@
+id = "M016-E003-S001"
+parent = "M016-E003"
+title = "CLI docs generate and serve commands"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """Add `fyr docs generate` and `fyr docs serve` CLI subcommands following existing CLI patterns."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr docs generate discovers entities and writes index.html"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr docs generate --output-dir custom/ writes to custom directory"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr docs generate with no entities prints message and exits cleanly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr docs serve --port 9090 binds to specified port"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Both commands use handle_errors decorator"
+
+[context]
+relevant_paths = ["src/fyrnheim/cli.py", "src/fyrnheim/docs/"]
+input_fixtures = []
+depends_on = ["M016-E002-S002"]
+
+[handoff]
+implementation_hints = """
+Add a click.Group 'docs' to the main CLI group. Two subcommands:
+- generate: --entities-dir, --output-dir options. Uses resolve_config, EntityRegistry,
+  build_catalog, generate_docs.
+- serve: --port option (default 8080), --output-dir. Uses http.server.HTTPServer and
+  webbrowser.open. Run server in foreground (blocking).
+Follow existing CLI patterns: handle_errors, resolve_config, lazy imports.
+"""
+reference_files = ["src/fyrnheim/cli.py"]

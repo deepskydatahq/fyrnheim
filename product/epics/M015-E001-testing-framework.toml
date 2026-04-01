@@ -1,0 +1,54 @@
+id = "M015-E001"
+parent = "M015"
+title = "Testing framework core"
+status = "active"
+created = "2026-03-07"
+depends_on = []
+
+[outcome]
+description = """
+fyrnheim.testing module with EntityTest base class. given() provides input data,
+run() executes the entity on ephemeral DuckDB, TestResult provides column access
+and assertion helpers. Full unit test coverage for the framework itself.
+"""
+
+[job_story]
+description = """When I define an entity and want to verify its output, I want to write a test class with sample input and expected output assertions, so that I can catch transformation bugs before running on production data."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyrnheim.testing module exists with EntityTest class",
+    "EntityTest.given() accepts dict of table_name -> list of row dicts",
+    "EntityTest.run() executes entity pipeline on ephemeral DuckDB and returns TestResult",
+    "TestResult has row_count, columns, column() accessor, and to_dicts() for inspection",
+    "Unit tests verify given/run/result workflow end-to-end with the scaffold customers entity",
+    "All existing tests still pass",
+]
+validator_context = [
+    "src/fyrnheim/testing/",
+    "tests/test_testing.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/_scaffold/customers_entity.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+The EntityTest class needs to:
+1. Accept an entity name or entity object
+2. Create a temp directory with entity file + data
+3. Use run_entity() with ephemeral DuckDB
+4. Return a TestResult wrapping the DuckDB output table
+
+Key design decision: EntityTest should work with entity objects directly (not file paths)
+to keep tests simple. The given() method creates in-memory tables via ibis/DuckDB.
+"""
+
+estimated_stories = 2

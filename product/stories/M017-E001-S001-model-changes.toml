@@ -1,0 +1,54 @@
+id = "M017-E001-S001"
+parent = "M017-E001"
+title = "IdentityGraphSource model changes"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Update IdentityGraphSource to accept optional inline TableSource and prep_columns, with validation ensuring exactly one of entity/source is set. Update DerivedSource._derive_depends_on to skip inline sources."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphSource(name='x', source=TableSource(...), match_key_field='email') validates without entity"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphSource with both entity='foo' and source=TableSource(...) raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphSource with neither entity nor source raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphSource with source and prep_columns=[ComputedColumn(...)] validates correctly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DerivedSource with inline sources does not include them in depends_on"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing IdentityGraphSource(entity='foo', ...) still works unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py", "src/fyrnheim/engine/resolution.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+In IdentityGraphSource:
+- Change entity from required to optional: entity: str | None = None
+- Add source: TableSource | None = None
+- Add prep_columns: list[ComputedColumn] = Field(default_factory=list)
+- Add model_validator ensuring exactly one of entity/source is set
+- Keep frozen=True
+
+In DerivedSource._derive_depends_on:
+- Only add s.entity to depends_on when s.entity is not None (skip inline sources)
+"""
+reference_files = []

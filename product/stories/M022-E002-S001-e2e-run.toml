@@ -1,0 +1,49 @@
+id = "M022-E002-S001"
+parent = "M022-E002"
+title = "End-to-end pipeline run and validation"
+status = "ready"
+created = 2026-03-22
+
+[outcome]
+description = """Run the full Zeffy attribution pipeline on DuckDB with synthetic data, verify outputs are correct."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Generate code for all entities: fyr generate works without errors"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Execute all entities on DuckDB: fyr run works without errors"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "account_attributed output has one row per account with attribution columns"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Channel classification produces expected values for synthetic data signals"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "examples/zeffy-attribution/",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Write an integration test or script that:
+1. Generates code from the entity definitions
+2. Runs the pipeline on DuckDB
+3. Queries each output table and validates row counts and columns
+4. Specific checks: account_attributed has attribution columns, channel values are correct
+
+If codegen/executor issues arise, document them as gaps in a LEARNINGS.md file
+rather than trying to fix the framework.
+"""
+reference_files = []

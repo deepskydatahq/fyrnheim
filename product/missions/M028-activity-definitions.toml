@@ -1,0 +1,63 @@
+id = "M028"
+title = "Activity definitions and named events"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Introduce ActivityDefinition as a top-level asset that interprets raw diff events
+(from M027) and raw event source data into named, meaningful business events. The diff
+engine detects all changes mechanically; activity definitions filter and name the ones
+that matter. Supports triggers: RowAppeared, FieldChanged (with from/to value filters),
+RowDisappeared, and EventOccurred (for event sources).
+"""
+
+[scope]
+in_scope = [
+    "ActivityDefinition Pydantic model with name, source, trigger, include_fields",
+    "Trigger types: RowAppeared, FieldChanged, RowDisappeared, EventOccurred",
+    "FieldChanged supports optional from_values and to_values filters",
+    "EventOccurred supports optional event_type filter for event sources",
+    "Codegen: generate filter/transform functions from activity definitions",
+    "Executor: apply activity definitions to raw event stream to produce named events",
+    "Activity discovery: scan activity definition files like entity discovery today",
+    "Tests for each trigger type with realistic scenarios",
+]
+out_of_scope = [
+    "Identity resolution / enrichment (M029)",
+    "Entity models (M030)",
+    "Analytics models (M031)",
+    "Complex trigger composition (AND/OR of multiple triggers)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/registry.py",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = ["M027"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ActivityDefinition model validates correctly with all trigger types",
+    "FieldChanged trigger filters by from_values and to_values",
+    "EventOccurred trigger filters event sources by type",
+    "Named events appear in output with correct schema",
+    "Activity definitions can be discovered from a definitions directory",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+The current ActivityConfig and ActivityType in core/activity.py will be replaced
+by the new ActivityDefinition. During transition, both can coexist.
+
+Key design decision: activity definitions reference sources by name, not by
+entity. This is the fundamental shift — activities are peers of entities,
+not children.
+"""

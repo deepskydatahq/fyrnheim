@@ -1,0 +1,64 @@
+id = "M030"
+title = "Entity models as derived state projections"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Introduce EntityModel as a top-level asset that projects current state from the
+enriched activity stream. For each canonical ID, the projection engine gathers
+all events and derives current field values using configurable strategies (latest,
+first, coalesce). Replaces the current Entity with its prep/dim/snapshot pipeline.
+"""
+
+[scope]
+in_scope = [
+    "EntityModel Pydantic model with name, identity_graph, state_fields, computed_fields",
+    "StateField model with name, source, field, strategy, priority",
+    "Resolution strategies: latest, first, coalesce (with source priority)",
+    "Codegen: generate projection functions from EntityModel definitions",
+    "Executor: materialize entity projections as tables",
+    "Computed fields on top of projected state (same as current ComputedColumn)",
+    "EntityModel discovery (scan definition files)",
+    "Tests with multi-source entity projection",
+]
+out_of_scope = [
+    "Incremental entity projection updates (future optimization)",
+    "Removing old Entity/LayersConfig (deprecation mission)",
+    "Quality checks on entity projections (future mission)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = ["M029"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EntityModel validates correctly with all resolution strategies",
+    "latest strategy returns most recent value from specified source",
+    "first strategy returns earliest observed value",
+    "coalesce strategy respects source priority ordering",
+    "Computed fields work on top of projected state",
+    "Materialized entity table has correct schema and values",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+This is the mission where the current Entity concept gets its replacement.
+The key simplification: no more prep/dim/snapshot pipeline per entity.
+The entity is purely a projection — it declares which fields it wants,
+from which sources, resolved how.
+
+Performance consideration: deriving state from full event history could be
+expensive. Start with full recomputation, optimize with incremental
+strategies in a future mission.
+"""

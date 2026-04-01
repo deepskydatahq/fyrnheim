@@ -1,0 +1,36 @@
+id = "M026-E001-S003"
+parent = "M026-E001"
+title = "Add new source types to exports and Source union"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Add StateSource and EventSource to the Source union type in entity.py and export from core/__init__.py."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity can be constructed with source=StateSource(...)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Entity can be constructed with source=EventSource(...)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.core import StateSource, EventSource works"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/entity.py", "src/fyrnheim/core/__init__.py", "tests/test_public_api.py"]
+input_fixtures = []
+depends_on = ["M026-E001-S001", "M026-E001-S002"]
+
+[handoff]
+implementation_hints = """Add StateSource and EventSource to the Source union in entity.py. Add exports in core/__init__.py."""
+reference_files = []

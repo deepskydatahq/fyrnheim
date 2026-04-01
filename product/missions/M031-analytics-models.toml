@@ -1,0 +1,60 @@
+id = "M031"
+title = "Analytics models as top-level assets"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Promote AnalyticsModel from a nested layer inside Entity to a top-level asset.
+Analytics models aggregate the enriched activity stream into time-grain metrics,
+grouped by date and optional dimensions. Operates directly on the activity stream
+rather than branching off a dimension layer.
+"""
+
+[scope]
+in_scope = [
+    "AnalyticsModel Pydantic model with name, identity_graph, date_grain, dimensions, metrics",
+    "Metric model with name, expression, event_filter, metric_type",
+    "Date grains: daily, weekly, monthly",
+    "Metric types: count, sum, snapshot (cumulative)",
+    "Codegen: generate aggregation functions from AnalyticsModel definitions",
+    "Executor: materialize analytics tables",
+    "AnalyticsModel discovery (scan definition files)",
+    "Tests with realistic metric scenarios",
+]
+out_of_scope = [
+    "Removing old AnalyticsLayer from Entity (deprecation mission)",
+    "Custom aggregation functions beyond count/sum",
+    "Metric dependencies (metrics that reference other metrics)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/analytics.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = ["M029"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "AnalyticsModel validates correctly with all date grains",
+    "count and sum metrics produce correct aggregations",
+    "snapshot metrics compute cumulative values",
+    "event_filter correctly restricts which events are aggregated",
+    "Dimensions create correct grouping in output",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+This is the least changed piece from current architecture. The main difference
+is that AnalyticsModel operates on the enriched activity stream directly,
+rather than branching off a dimension layer.
+
+M031 can run in parallel with M030 since both depend on M029 (identity graph)
+but not on each other.
+"""

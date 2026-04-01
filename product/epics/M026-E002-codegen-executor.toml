@@ -1,0 +1,51 @@
+id = "M026-E002"
+parent = "M026"
+title = "Codegen and executor support for new source types"
+status = "active"
+created = 2026-04-01
+depends_on = ["M026-E001"]
+
+[outcome]
+description = """
+Update IbisCodeGenerator to generate source functions for StateSource and
+EventSource. Update IbisExecutor to handle the new source types. Add
+end-to-end tests proving entities can use the new source types through
+the full pipeline.
+"""
+
+[job_story]
+description = """
+When I define an entity with a StateSource or EventSource, I want the code
+generator and executor to handle it correctly, so that I can run the full
+transformation pipeline with the new source types.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IbisCodeGenerator generates valid source functions for StateSource",
+    "IbisCodeGenerator generates valid source functions for EventSource",
+    "IbisExecutor can execute entities using StateSource end-to-end",
+    "IbisExecutor can execute entities using EventSource end-to-end",
+    "Existing entities using TableSource still work unchanged",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_ibis_code_generator.py",
+    "tests/test_engine_executor.py",
+    "tests/test_e2e_ibis_executor.py",
+]
+dependencies = ["M026-E001"]
+
+[notes]
+considerations = """
+StateSource and EventSource both inherit from BaseTableSource so read_table()
+already works. The codegen just needs new isinstance branches. EventSource
+codegen should also select the timestamp and event_type columns explicitly.
+"""
+
+estimated_stories = 3

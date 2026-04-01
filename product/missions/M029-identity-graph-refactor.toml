@@ -1,0 +1,66 @@
+id = "M029"
+title = "Identity graph as top-level asset"
+status = "planned"
+created = 2026-04-01
+
+[outcome]
+description = """
+Promote identity resolution from a DerivedSource implementation detail to a top-level
+IdentityGraph asset. The identity graph observes match keys across event streams from
+multiple sources and produces a canonical_id mapping. Events get enriched with
+canonical_id to produce the enriched activity stream — the single source of truth
+for all downstream models.
+"""
+
+[scope]
+in_scope = [
+    "IdentityGraph Pydantic model with name, canonical_id, sources, resolution_strategy",
+    "IdentitySource model with source, id_field, match_key_field",
+    "Match-key resolution: link raw IDs to canonical IDs when same match key appears across sources",
+    "Event enrichment: add canonical_id to all events in the activity stream",
+    "Codegen for identity resolution and event enrichment",
+    "Identity graph discovery (scan definition files)",
+    "Tests with multi-source identity resolution",
+]
+out_of_scope = [
+    "Probabilistic identity resolution (future)",
+    "Multiple match keys per source (future)",
+    "Identity graph versioning / temporal identity changes (future)",
+    "Removing DerivedSource/IdentityGraphConfig (deprecation mission)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+]
+origin = "Activities-first architecture design (2026-04-01)"
+depends_on = ["M028"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IdentityGraph model validates correctly",
+    "Match-key resolution links IDs across 2-3 sources",
+    "Events in the enriched stream carry canonical_id",
+    "Events from sources not in an identity graph retain their raw entity_id",
+    "Identity graph can be discovered from definition files",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+The current DerivedSource does FULL OUTER JOINs and field coalescing. The new
+IdentityGraph is lighter — it only produces an ID mapping. Field coalescing
+moves to EntityModel (M030).
+
+The resolution_strategy field is a placeholder for future probabilistic matching.
+Start with deterministic match_key only.
+
+Key question: how to handle canonical_id generation. Options:
+1. Use one source's ID as canonical (e.g., CRM contact_id)
+2. Generate a synthetic ID (hash of match key)
+3. Configurable per graph
+"""

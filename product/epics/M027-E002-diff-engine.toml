@@ -1,0 +1,54 @@
+id = "M027-E002"
+parent = "M027"
+title = "Diff engine producing raw events"
+status = "active"
+created = 2026-04-01
+depends_on = ["M027-E001"]
+
+[outcome]
+description = """
+Implement a DiffEngine that compares two Ibis tables (current vs previous snapshot)
+by id_field and produces a unified event table with row_appeared, field_changed,
+and row_disappeared events. Supports configurable field exclusions and the universal
+event schema (source, entity_id, ts, event_type, payload).
+"""
+
+[job_story]
+description = """
+When I have today's snapshot and yesterday's snapshot of a state source, I want
+to automatically detect all changes (new rows, changed fields, disappeared rows)
+and produce a normalized event table, so that downstream activity definitions
+can interpret these changes.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Diff detects new rows and produces row_appeared events",
+    "Diff detects changed fields and produces field_changed events with old_value and new_value",
+    "Diff detects disappeared rows and produces row_disappeared events",
+    "Cold start (no previous snapshot) produces row_appeared for all rows",
+    "Field exclusions prevent specified fields from generating field_changed events",
+    "All events follow the universal schema: source, entity_id, ts, event_type, payload",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+]
+dependencies = ["M027-E001"]
+
+[notes]
+considerations = """
+The diff operates on Ibis table expressions, not raw data. This keeps it
+backend-agnostic. The key operation is a full outer join on id_field, then
+classifying each row as appeared/changed/disappeared.
+
+field_changed events: produce one event per changed field per row. The payload
+should include field_name, old_value, new_value.
+
+Use Ibis operations throughout — no pandas conversion.
+"""
+
+estimated_stories = 3

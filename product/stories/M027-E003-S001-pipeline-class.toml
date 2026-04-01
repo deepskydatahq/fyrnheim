@@ -1,0 +1,32 @@
+id = "M027-E003-S001"
+parent = "M027-E003"
+title = "SnapshotDiffPipeline orchestrating store and diff"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Implement SnapshotDiffPipeline that combines SnapshotStore and diff_snapshots into a single run() call."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotDiffPipeline.run(source_name, current_table, id_field, snapshot_date) saves snapshot and returns events"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pipeline accepts optional exclude_fields parameter"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pipeline returns empty event table when no changes detected"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M027-E002-S002", "M027-E002-S003"]
+
+[handoff]
+implementation_hints = """Create SnapshotDiffPipeline in src/fyrnheim/engine/snapshot_diff.py. It takes a SnapshotStore and DuckDB connection in __init__. The run() method: (1) get previous snapshot, (2) diff current vs previous, (3) save current as new snapshot, (4) return events."""
+reference_files = []

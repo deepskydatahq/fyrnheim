@@ -1,0 +1,36 @@
+id = "M027-E001-S001"
+parent = "M027-E001"
+title = "Implement SnapshotStore with parquet persistence"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Implement SnapshotStore class that saves and retrieves daily snapshots as parquet files."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.save(source_name, date, ibis_table) writes a parquet file at {base_dir}/{source_name}/{YYYY-MM-DD}.parquet"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.get_previous(source_name, date) returns the most recent snapshot before the given date as an Ibis table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.get_previous returns None when no previous snapshot exists"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.save overwrites if a snapshot for the same source+date already exists"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/snapshot_store.py. Use ibis.to_parquet() for saving and ibis.read_parquet() for loading. The store needs a DuckDB connection for reading parquet back as Ibis tables."""
+reference_files = []

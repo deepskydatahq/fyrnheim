@@ -1,0 +1,36 @@
+id = "M027-E003-S002"
+parent = "M027-E003"
+title = "End-to-end test with multiple pipeline runs"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """E2e test simulating multiple daily runs with changing data, verifying correct event production across runs."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Run 1 (cold start): all rows produce row_appeared events"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Run 2 (with changes): produces correct mix of row_appeared, field_changed, row_disappeared"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Run 3 (no changes): produces empty event table"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Events from all runs can be unioned into a single consistent event log"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M027-E003-S001"]
+
+[handoff]
+implementation_hints = """Use DuckDB in-memory. Create synthetic customer data. Run 1: 3 customers. Run 2: 1 new, 1 changed, 1 removed. Run 3: same as run 2. Verify event counts and types for each run."""
+reference_files = []

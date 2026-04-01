@@ -1,0 +1,32 @@
+id = "M027-E002-S002"
+parent = "M027-E002"
+title = "Cold start handling and field exclusions"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Handle cold start (no previous snapshot) and configurable field exclusions in the diff engine."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "diff_snapshots(current, previous=None) produces row_appeared for every row in current"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "diff_snapshots with exclude_fields=['last_synced_at'] ignores changes to that field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Excluded fields still appear in row_appeared events (only field_changed is suppressed)"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/diff_engine.py"]
+input_fixtures = []
+depends_on = ["M027-E002-S001"]
+
+[handoff]
+implementation_hints = """Add exclude_fields parameter to diff_snapshots(). When previous is None, produce row_appeared for all rows. Exclude_fields only affects field_changed detection, not row_appeared/row_disappeared."""
+reference_files = []

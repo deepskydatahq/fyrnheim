@@ -1,0 +1,36 @@
+id = "M027-E002-S003"
+parent = "M027-E002"
+title = "Universal event schema for all event types"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Ensure all events from the diff engine follow the universal schema: source, entity_id, ts, event_type, payload."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "row_appeared events have columns: source, entity_id, ts, event_type='row_appeared', payload (JSON with all field values)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "field_changed events have columns: source, entity_id, ts, event_type='field_changed', payload (JSON with field_name, old_value, new_value)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "row_disappeared events have columns: source, entity_id, ts, event_type='row_disappeared', payload (JSON with all last-known field values)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All three event types can be unioned into a single table with consistent schema"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/diff_engine.py"]
+input_fixtures = []
+depends_on = ["M027-E002-S001"]
+
+[handoff]
+implementation_hints = """The payload column should be a JSON string (simplest for cross-backend compat). Use json.dumps or ibis string concatenation. The ts column is the snapshot date. The source column is passed as a parameter to diff_snapshots."""
+reference_files = []

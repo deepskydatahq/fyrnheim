@@ -1,0 +1,47 @@
+id = "M027-E003"
+parent = "M027"
+title = "End-to-end integration of snapshot-diff pipeline"
+status = "active"
+created = 2026-04-01
+depends_on = ["M027-E002"]
+
+[outcome]
+description = """
+Wire SnapshotStore and DiffEngine together into a SnapshotDiffPipeline that
+takes a StateSource, reads its current data, saves the snapshot, diffs against
+the previous snapshot, and returns the event table. End-to-end test with
+synthetic data across multiple runs.
+"""
+
+[job_story]
+description = """
+When I run the pipeline for a StateSource, I want a single function call to
+handle snapshotting and diffing, producing the raw events I need for downstream
+activity definitions.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "SnapshotDiffPipeline processes a StateSource end-to-end",
+    "First run (cold start) produces only row_appeared events",
+    "Second run with changes produces correct mix of event types",
+    "Multiple runs produce correct cumulative event history",
+    "Pipeline integrates with DuckDB backend",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/core/source.py",
+]
+dependencies = ["M027-E002"]
+
+[notes]
+considerations = """
+This is the glue epic. It combines E001 and E002 into a usable pipeline.
+The pipeline should be callable from the executor but also usable standalone.
+"""
+
+estimated_stories = 2

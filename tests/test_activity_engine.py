@@ -1,0 +1,478 @@
+"""Tests for the activity engine (apply_activity_definitions)."""
+
+from __future__ import annotations
+
+import json
+
+import ibis
+import pandas as pd
+import pytest
+
+from fyrnheim.core.activity import (
+    ActivityDefinition,
+    EventOccurred,
+    FieldChanged,
+    RowAppeared,
+    RowDisappeared,
+)
+from fyrnheim.engine.activity_engine import apply_activity_definitions
+
+
+def _make_raw_events(rows: list[dict[str, str]]) -> ibis.Table:
+    """Helper to create a raw events Ibis table from dicts."""
+    if not rows:
+        schema = ibis.schema(
+            {
+                "source": "string",
+                "entity_id": "string",
+                "ts": "string",
+                "event_type": "string",
+                "payload": "string",
+            }
+        )
+        return ibis.memtable([], schema=schema)
+    return ibis.memtable(pd.DataFrame(rows))
+
+
+class TestRowAppearedTrigger:
+    def test_matches_row_appeared_events_from_source(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-01",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"name": "alice", "plan": "free"}),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="signup",
+                source="customers",
+                trigger=RowAppeared(),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["event_type"] == "signup"
+        assert result.iloc[0]["entity_id"] == "1"
+
+    def test_does_not_match_other_sources(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "orders",
+                    "entity_id": "1",
+                    "ts": "2024-01-01",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"item": "widget"}),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="signup",
+                source="customers",
+                trigger=RowAppeared(),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 0
+
+
+class TestFieldChangedTrigger:
+    def test_matches_field_changed_by_field_name(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                    ),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {
+                            "field_name": "email",
+                            "old_value": "a@b.com",
+                            "new_value": "a@c.com",
+                        }
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="plan_changed",
+                source="customers",
+                trigger=FieldChanged(field="plan"),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["event_type"] == "plan_changed"
+
+    def test_to_values_filter(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                    ),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "2",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {
+                            "field_name": "plan",
+                            "old_value": "pro",
+                            "new_value": "enterprise",
+                        }
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="became_pro",
+                source="customers",
+                trigger=FieldChanged(field="plan", to_values=["pro"]),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["entity_id"] == "1"
+        assert result.iloc[0]["event_type"] == "became_pro"
+
+    def test_from_values_filter(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                    ),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "2",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {
+                            "field_name": "plan",
+                            "old_value": "trial",
+                            "new_value": "pro",
+                        }
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="converted_from_free",
+                source="customers",
+                trigger=FieldChanged(field="plan", from_values=["free"]),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["entity_id"] == "1"
+        assert result.iloc[0]["event_type"] == "converted_from_free"
+
+    def test_from_and_to_values_combined(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                    ),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "2",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {
+                            "field_name": "plan",
+                            "old_value": "trial",
+                            "new_value": "pro",
+                        }
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="free_to_pro",
+                source="customers",
+                trigger=FieldChanged(
+                    field="plan", from_values=["free"], to_values=["pro"]
+                ),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["entity_id"] == "1"
+
+
+class TestRowDisappearedTrigger:
+    def test_matches_row_disappeared_events(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-03",
+                    "event_type": "row_disappeared",
+                    "payload": json.dumps({"name": "alice", "plan": "pro"}),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "2",
+                    "ts": "2024-01-03",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"name": "bob", "plan": "free"}),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="churned",
+                source="customers",
+                trigger=RowDisappeared(),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["event_type"] == "churned"
+        assert result.iloc[0]["entity_id"] == "1"
+
+
+class TestEventOccurredTrigger:
+    def test_matches_all_events_from_source(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "page_events",
+                    "entity_id": "user1",
+                    "ts": "2024-01-01",
+                    "event_type": "page_view",
+                    "payload": json.dumps({"url": "/home"}),
+                },
+                {
+                    "source": "page_events",
+                    "entity_id": "user1",
+                    "ts": "2024-01-01",
+                    "event_type": "click",
+                    "payload": json.dumps({"element": "button"}),
+                },
+                {
+                    "source": "other_source",
+                    "entity_id": "user2",
+                    "ts": "2024-01-01",
+                    "event_type": "page_view",
+                    "payload": json.dumps({"url": "/other"}),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="web_interaction",
+                source="page_events",
+                trigger=EventOccurred(),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 2
+        assert all(r == "web_interaction" for r in result["event_type"])
+
+    def test_with_event_type_filter(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "page_events",
+                    "entity_id": "user1",
+                    "ts": "2024-01-01",
+                    "event_type": "page_view",
+                    "payload": json.dumps({"url": "/home"}),
+                },
+                {
+                    "source": "page_events",
+                    "entity_id": "user1",
+                    "ts": "2024-01-01",
+                    "event_type": "click",
+                    "payload": json.dumps({"element": "button"}),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="viewed_page",
+                source="page_events",
+                trigger=EventOccurred(event_type="page_view"),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["event_type"] == "viewed_page"
+
+
+class TestOutputEventFormat:
+    def test_event_type_replaced_with_definition_name(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-01",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"name": "alice"}),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="signup",
+                source="customers",
+                trigger=RowAppeared(),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert result.iloc[0]["event_type"] == "signup"
+
+    def test_include_fields_filters_payload(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-01",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps(
+                        {"name": "alice", "plan": "free", "email": "a@b.com"}
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="signup",
+                source="customers",
+                trigger=RowAppeared(),
+                include_fields=["name", "plan"],
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        payload = json.loads(result.iloc[0]["payload"])
+        assert set(payload.keys()) == {"name", "plan"}
+
+    def test_empty_result_returns_correct_schema(self):
+        raw = _make_raw_events([])
+
+        defns = [
+            ActivityDefinition(
+                name="signup",
+                source="customers",
+                trigger=RowAppeared(),
+            )
+        ]
+
+        result = apply_activity_definitions(raw, defns)
+        cols = result.columns
+        assert set(cols) == {"source", "entity_id", "ts", "event_type", "payload"}
+
+    def test_multiple_definitions_produce_union(self):
+        raw = _make_raw_events(
+            [
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-01",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"name": "alice", "plan": "free"}),
+                },
+                {
+                    "source": "customers",
+                    "entity_id": "1",
+                    "ts": "2024-01-02",
+                    "event_type": "field_changed",
+                    "payload": json.dumps(
+                        {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                    ),
+                },
+            ]
+        )
+
+        defns = [
+            ActivityDefinition(
+                name="signup",
+                source="customers",
+                trigger=RowAppeared(),
+            ),
+            ActivityDefinition(
+                name="became_paying",
+                source="customers",
+                trigger=FieldChanged(field="plan", to_values=["pro"]),
+            ),
+        ]
+
+        result = apply_activity_definitions(raw, defns).execute()
+        assert len(result) == 2
+        event_types = set(result["event_type"])
+        assert event_types == {"signup", "became_paying"}

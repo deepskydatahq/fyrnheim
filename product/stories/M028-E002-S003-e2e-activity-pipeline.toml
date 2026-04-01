@@ -1,0 +1,32 @@
+id = "M028-E002-S003"
+parent = "M028-E002"
+title = "E2e test: diff engine → activity definitions → named events"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """E2e test wiring diff_snapshots output through activity definitions to produce named business events."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Raw events from diff_snapshots are filtered by activity definitions into named events"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Multiple activity definitions produce a unioned stream of named events"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Named events preserve source, entity_id, ts columns from raw events"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M028-E002-S001", "M028-E002-S002"]
+
+[handoff]
+implementation_hints = """Create synthetic customer data. Run diff_snapshots to get raw events. Define activities: 'signup' (RowAppeared on crm), 'became_paying' (FieldChanged on plan to ['pro']). Apply activity definitions. Verify named events have correct types and counts."""
+reference_files = []

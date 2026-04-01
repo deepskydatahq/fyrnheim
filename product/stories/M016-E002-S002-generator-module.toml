@@ -1,0 +1,41 @@
+id = "M016-E002-S002"
+parent = "M016-E002"
+title = "Python HTML generator module"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """Implement src/fyrnheim/docs/generator.py that reads the template, embeds catalog JSON, and writes index.html."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate_docs(catalog, output_dir) writes output_dir/index.html"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The written HTML contains the catalog data as a JSON script tag"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate_docs creates the output directory if it doesn't exist"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "generate_docs with empty catalog produces valid HTML"
+
+[context]
+relevant_paths = ["src/fyrnheim/docs/template.html", "src/fyrnheim/docs/"]
+input_fixtures = []
+depends_on = ["M016-E002-S001"]
+
+[handoff]
+implementation_hints = """
+Read template.html using importlib.resources (same pattern as scaffold files).
+Replace the CATALOG_JSON placeholder with json.dumps(catalog).
+Write to output_dir/index.html. Return the path written.
+Bundle template.html in pyproject.toml [tool.hatch.build] include list.
+"""
+reference_files = ["src/fyrnheim/cli.py"]

@@ -1,0 +1,50 @@
+id = "M024"
+title = "Multi-entity registry support"
+status = "planned"
+created = 2026-03-22
+
+[outcome]
+description = """
+Support discovering multiple Entity instances per Python file in the entity registry.
+Currently the registry only looks for module.entity, silently ignoring files that define
+multiple entities (e.g., attribution_first_touch and attribution_paid_priority in one file).
+"""
+
+[scope]
+in_scope = [
+    "GAP-002: Scan all module-level Entity instances, not just module.entity",
+    "Support entities = [...] list convention as alternative discovery mechanism",
+    "Update EntityRegistry.discover to handle both patterns",
+    "Tests for single-entity files (backward compatible), multi-entity files, and entities list",
+]
+out_of_scope = [
+    "Nested entity discovery (only top-level module attributes)",
+    "Dynamic entity generation or factory patterns",
+    "Changes to codegen or executor beyond registry",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/registry.py",
+    "examples/zeffy-attribution/entities/attribution.py",
+    "examples/zeffy-attribution/LEARNINGS.md",
+]
+origin = "M022 Zeffy attribution PoC — GAP-002 (2026-03-22)"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Single-entity files (module.entity) still work unchanged",
+    "Multi-entity files (multiple Entity instances as module attributes) are all discovered",
+    "entities = [e1, e2] list convention is supported",
+    "Duplicate entity names across files raise a clear error",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+Discovery order matters for deterministic behavior. Scan module attributes in definition
+order (vars(module) iteration). If both module.entity and module.entities exist, prefer
+entities list. Warn on name collisions across files rather than silently overwriting.
+"""

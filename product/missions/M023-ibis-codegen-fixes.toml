@@ -1,0 +1,58 @@
+id = "M023"
+title = "Fix Ibis codegen gaps"
+status = "planned"
+created = 2026-03-22
+
+[outcome]
+description = """
+Fix the high-severity code generation issues discovered during the M022 Zeffy attribution PoC.
+Four gaps prevent entities from running through the standard fyr CLI path without workarounds:
+CaseColumn else_ syntax, json_extract_scalar producing invalid Ibis, IdentityGraphSource rename
+collisions, and window functions in AggregationSource aggregate context.
+"""
+
+[scope]
+in_scope = [
+    "GAP-004: Fix CaseColumn.build_expression to use else_ as keyword arg instead of chained method (ibis.cases(..., else_='value'))",
+    "GAP-001: Rewrite json_extract_scalar to produce Ibis-native expressions per backend (t.col.json_extract_string('key') for DuckDB)",
+    "GAP-005: Detect and handle rename collisions in IdentityGraphSource codegen (match_key_field vs fields referencing same column)",
+    "GAP-006: Handle window-in-aggregate pattern — use row_number + filter or subquery instead of window inside group_by().aggregate()",
+]
+out_of_scope = [
+    "Multi-entity registry support (M024)",
+    "DerivedSource join mode (M025)",
+    "New expression helpers beyond fixing existing ones",
+    "Backend support beyond DuckDB (focus on DuckDB correctness first)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/components/expressions.py",
+    "src/fyrnheim/primitives/json_ops.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "examples/zeffy-attribution/LEARNINGS.md",
+]
+origin = "M022 Zeffy attribution PoC — gap analysis (2026-03-22)"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "CaseColumn with default generates ibis.cases(..., else_='value') — valid Ibis at runtime",
+    "json_extract_scalar produces backend-aware Ibis expressions that execute on DuckDB",
+    "IdentityGraphSource with overlapping match_key_field and fields generates correct rename without collision",
+    "AggregationSource with first_value_by or similar window expression generates valid grouped output",
+    "Zeffy PoC entities run through fyr CLI without workarounds after fixes",
+]
+validator_context = ["tests/", "examples/zeffy-attribution/"]
+
+[notes]
+considerations = """
+GAP-004 (CaseColumn else_) is the simplest fix — single line change in expressions.py.
+GAP-001 (json_extract_scalar) requires rethinking the primitive to return Ibis API strings
+instead of raw SQL. May need backend-aware variants.
+GAP-005 (rename collision) needs detection logic in codegen — rename match_key first, then
+alias conflicting fields via .mutate().
+GAP-006 (window-in-aggregate) is the hardest — may require a new codegen pattern that uses
+a CTE/subquery with row_number + filter=1, then joins back.
+"""

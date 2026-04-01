@@ -1,0 +1,44 @@
+id = "M017-E001-S002"
+parent = "M017-E001"
+title = "Data model unit tests"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Write comprehensive unit tests for the inline source model changes."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test inline source creation with all field combinations"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test validation errors for invalid combinations (both, neither)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test prep_columns on inline source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test DerivedSource depends_on with mixed inline/entity sources"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test existing entity-reference path still works"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py", "tests/"]
+input_fixtures = []
+depends_on = ["M017-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Create tests/test_inline_identity_source.py. Build IdentityGraphSource instances
+directly. Test IdentityGraphConfig with mixed sources. Test DerivedSource
+depends_on population with inline sources.
+"""
+reference_files = ["tests/test_entity.py", "tests/test_source.py"]

@@ -1,0 +1,8 @@
+{
+    "mcpServers": {
+      "huginn-memory": {
+        "type": "http",
+        "url": "https://huginn.timodechau.com/mcp"
+      }
+    }
+}

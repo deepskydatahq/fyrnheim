@@ -1,0 +1,64 @@
+id = "M025"
+title = "DerivedSource join mode"
+status = "planned"
+created = 2026-03-22
+
+[outcome]
+description = """
+Add join semantics to DerivedSource for cases that don't use IdentityGraphConfig.
+Currently DerivedSource without identity_graph_config generates no source function,
+blocking entities like account_attributed that need to join multiple upstream entities
+into a wide table.
+"""
+
+[scope]
+in_scope = [
+    "GAP-003: Add join_config to DerivedSource as alternative to identity_graph_config",
+    "Support left_join and inner_join with configurable join keys",
+    "Generate source functions that accept multiple dependency tables and produce joined output",
+    "Codegen for join-based DerivedSource entities",
+    "Tests for join mode with 2-3 input entities",
+]
+out_of_scope = [
+    "Cross joins or full outer joins outside identity graph context",
+    "Complex join conditions (only equi-joins on column names)",
+    "Subquery or CTE-based join patterns",
+    "Changes to IdentityGraphConfig behavior",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+    "examples/zeffy-attribution/entities/account_attributed.py",
+    "examples/zeffy-attribution/LEARNINGS.md",
+]
+origin = "M022 Zeffy attribution PoC — GAP-003 (2026-03-22)"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "DerivedSource with join_config validates correctly",
+    "Codegen produces source function that joins N input tables on specified keys",
+    "Executor resolves dependencies and passes tables to join source function",
+    "account_attributed-style wide table entity works end-to-end",
+    "Existing IdentityGraphConfig-based DerivedSource still works unchanged",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+Model design options:
+1. JoinConfig with list of JoinStep(entity, join_key, join_type)
+2. Simpler: depends_on + join_keys dict {entity_name: (left_key, right_key)}
+
+Option 2 is simpler and sufficient for the Zeffy use case. The join generates:
+  base = dep1
+  base = base.left_join(dep2, base.key == dep2.key).drop(...)
+  base = base.left_join(dep3, base.key == dep3.key).drop(...)
+
+The executor already handles depends_on for dependency resolution — just need codegen
+to generate the join logic and the executor to pass the resolved tables.
+"""

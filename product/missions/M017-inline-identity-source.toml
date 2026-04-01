@@ -1,0 +1,64 @@
+id = "M017"
+title = "Inline Identity Graph Sources"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """
+IdentityGraphSource can accept an inline TableSource instead of requiring a named
+entity reference. This eliminates boilerplate entity files that exist only to feed
+identity graphs. Optional prep_columns allow lightweight transforms (e.g. email.lower())
+before the join, keeping the identity graph definition self-contained.
+"""
+
+[job_story]
+description = """
+When I build an identity graph from multiple data sources, I want to define the
+sources inline with optional prep transforms, so that I don't need to create
+throwaway entity files for each source feeding the graph.
+"""
+
+[scope]
+in_scope = [
+    "IdentityGraphSource accepts either entity: str (existing) or source: TableSource (new) — exactly one must be set",
+    "Optional prep_columns: list[ComputedColumn] on IdentityGraphSource for lightweight transforms before the join",
+    "Identity graph resolver reads from inline TableSource directly instead of looking up a named entity",
+    "depends_on auto-population skips inline sources (no entity dependency to track)",
+    "Code generator handles inline sources: reads data, applies prep_columns, then joins",
+    "Existing entity-reference behavior is completely unchanged",
+]
+out_of_scope = [
+    "Inline sources for non-identity-graph source types (AggregationSource, UnionSource, etc)",
+    "Inline sources with full layer stacks (only prep_columns, not full PrepLayer)",
+    "Migration tooling to convert existing boilerplate entities to inline sources",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+    "src/fyrnheim/engine/executor.py",
+]
+dependencies = ["IdentityGraphSource", "IdentityGraphConfig", "DerivedSource", "TableSource", "ComputedColumn"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IdentityGraphSource(source=TableSource(...), prep_columns=[...]) validates correctly",
+    "IdentityGraphSource with both entity and source raises ValidationError",
+    "IdentityGraphSource with neither entity nor source raises ValidationError",
+    "Code generator produces correct Ibis code for inline sources with prep_columns",
+    "Identity graph with mix of inline and entity-reference sources works end-to-end",
+    "depends_on correctly excludes inline sources from dependency tracking",
+    "Existing entity-reference tests continue to pass unchanged",
+]
+
+[notes]
+origin = "propel-data/docs/fyrnheim-backlog-inline-identity-source.md"
+real_world_example = """
+propel-data accounts entity: DerivedSource joining MailerLite subscribers and Ghost
+newsletter members on email. Currently requires two boilerplate entity files
+(mailerlite_accounts.py, ghost_accounts.py) that only exist to lowercase emails.
+"""

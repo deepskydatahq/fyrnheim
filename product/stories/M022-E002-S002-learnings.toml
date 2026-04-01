@@ -1,0 +1,34 @@
+id = "M022-E002-S002"
+parent = "M022-E002"
+title = "Document learnings and gaps"
+status = "ready"
+created = 2026-03-22
+
+[outcome]
+description = """Document what worked, what didn't, and any gaps discovered during the PoC."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "LEARNINGS.md exists in examples/zeffy-attribution/ documenting gaps and successes"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Any framework gaps are noted with enough detail to create follow-up missions"
+
+[context]
+relevant_paths = ["examples/zeffy-attribution/"]
+input_fixtures = []
+depends_on = ["M022-E002-S001"]
+
+[handoff]
+implementation_hints = """
+Create examples/zeffy-attribution/LEARNINGS.md summarizing:
+- What Fyrnheim features worked well
+- What was awkward or required workarounds
+- Any gaps that need new missions
+- Comparison to the dbt approach
+"""
+reference_files = []

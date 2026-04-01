@@ -148,7 +148,7 @@ class TestRenameGeneration:
         # bigquery branch also has .rename()
         lines = code.split("\n")
         rename_lines = [line for line in lines if ".rename(" in line]
-        assert len(rename_lines) == 3  # duckdb + bigquery + clickhouse
+        assert len(rename_lines) == 2  # duckdb + bigquery
 
     def test_multiple_renames(self, simple_entity):
         sm = SourceMapping(
@@ -1044,227 +1044,253 @@ class TestAggregationSourceCodeGeneration:
 
 
 # ---------------------------------------------------------------------------
-# ClickHouse backend code generation tests
+# StateSource code generation tests
 # ---------------------------------------------------------------------------
 
 
-class TestClickHouseSourceCodeGeneration:
-    """Test that generated source functions include a clickhouse branch."""
+class TestStateSourceGeneration:
+    """Test source function generation for StateSource."""
 
-    def test_single_source_clickhouse_branch(self, simple_entity):
-        """Generated single source function includes clickhouse branch."""
-        gen = IbisCodeGenerator(simple_entity)
-        code = gen._generate_source_functions()
-        assert 'elif backend == "clickhouse"' in code
-        assert 'conn.table("stripe___charges")' in code
+    @pytest.fixture()
+    def state_entity(self):
+        """Entity with a StateSource."""
+        from fyrnheim.core.source import StateSource
 
-    def test_single_source_clickhouse_uses_dataset_table_format(self):
-        """ClickHouse branch uses {dataset}___{table} naming convention."""
-        entity = Entity(
-            name="posts",
-            description="Blog posts",
-            layers=LayersConfig(prep=PrepLayer(model_name="prep_posts")),
-            source=TableSource(
+        return Entity(
+            name="users",
+            description="User profiles",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_users")),
+            source=StateSource(
+                name="crm_users",
+                id_field="user_id",
                 project="warehouse",
-                dataset="ghost",
-                table="ghost_posts",
-                duckdb_path="data/posts/*.parquet",
+                dataset="crm",
+                table="users",
+                duckdb_path="data/users/*.parquet",
             ),
         )
-        gen = IbisCodeGenerator(entity)
-        code = gen._generate_source_functions()
-        assert 'conn.table("ghost___ghost_posts")' in code
 
-    def test_single_source_duckdb_unchanged(self, simple_entity):
-        """DuckDB branch remains unchanged after adding clickhouse."""
-        gen = IbisCodeGenerator(simple_entity)
+    def test_function_signature(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert "def source_users(conn: ibis.BaseBackend, backend: str)" in code
+
+    def test_duckdb_branch(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
         code = gen._generate_source_functions()
         assert 'if backend == "duckdb"' in code
         assert "conn.read_parquet" in code
 
-    def test_single_source_bigquery_unchanged(self, simple_entity):
-        """BigQuery branch remains unchanged after adding clickhouse."""
-        gen = IbisCodeGenerator(simple_entity)
+    def test_bigquery_branch(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
         code = gen._generate_source_functions()
         assert 'elif backend == "bigquery"' in code
-        assert 'conn.table("charges", database=("warehouse", "stripe"))' in code
+        assert 'conn.table("users"' in code
 
-    def test_single_source_still_raises_unsupported(self, simple_entity):
-        """ValueError still raised for unsupported backends."""
-        gen = IbisCodeGenerator(simple_entity)
+    def test_raises_on_unsupported(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
         code = gen._generate_source_functions()
         assert "raise ValueError" in code
 
-    def test_single_source_clickhouse_with_rename(self, simple_entity):
-        """ClickHouse branch includes .rename() when source_mapping has field_mappings."""
-        sm = SourceMapping(
-            entity=simple_entity,
-            source=simple_entity.source,
-            field_mappings={"transaction_id": "id"},
+    def test_is_valid_python(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_full_module_valid(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen.generate_module()
+        tree = ast.parse(code)
+        func_names = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        assert "source_users" in func_names
+
+    def test_docstring_mentions_state(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert "state source" in code.lower()
+
+    def test_raises_without_duckdb_path(self):
+        from fyrnheim.core.source import StateSource
+
+        entity = Entity(
+            name="users",
+            description="User profiles",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_users")),
+            source=StateSource(
+                name="crm_users",
+                id_field="user_id",
+                project="warehouse",
+                dataset="crm",
+                table="users",
+            ),
         )
-        gen = IbisCodeGenerator(simple_entity, source_mapping=sm)
-        code = gen._generate_source_functions()
-        # Find the clickhouse line
-        lines = [l for l in code.split("\n") if "clickhouse" in l.lower() or "stripe___charges" in l]
-        clickhouse_return = [l for l in code.split("\n") if "stripe___charges" in l]
-        assert len(clickhouse_return) == 1
-        assert ".rename(" in clickhouse_return[0]
-
-    def test_union_source_clickhouse_branch(self, union_entity):
-        """Generated union sub-source functions include clickhouse branch."""
-        gen = IbisCodeGenerator(union_entity)
-        code = gen._generate_source_functions()
-        assert 'conn.table("hubspot___contacts")' in code
-        assert 'conn.table("stripe___customers")' in code
-
-    def test_union_source_clickhouse_valid_python(self, union_entity):
-        """Generated union source module with clickhouse branch is valid Python."""
-        gen = IbisCodeGenerator(union_entity)
-        code = gen.generate_module()
-        ast.parse(code)
-
-    def test_single_source_clickhouse_valid_python(self, simple_entity):
-        """Generated single source module with clickhouse branch is valid Python."""
-        gen = IbisCodeGenerator(simple_entity)
-        code = gen.generate_module()
-        ast.parse(code)
+        gen = IbisCodeGenerator(entity)
+        with pytest.raises(ValueError, match="duckdb_path"):
+            gen._generate_source_functions()
 
 
-class TestClickHouseInlineIdentitySourceCodeGeneration:
-    """Test that inline identity graph source codegen includes clickhouse branch."""
+# ---------------------------------------------------------------------------
+# EventSource code generation tests
+# ---------------------------------------------------------------------------
 
-    def _make_entity(self, config):
+
+class TestEventSourceGeneration:
+    """Test source function generation for EventSource."""
+
+    @pytest.fixture()
+    def event_entity(self):
+        """Entity with an EventSource."""
+        from fyrnheim.core.source import EventSource
+
         return Entity(
-            name="person",
-            description="Unified person",
-            layers=LayersConfig(prep=PrepLayer(model_name="prep_person")),
-            source=DerivedSource(
-                identity_graph="person_graph",
-                identity_graph_config=config,
+            name="page_views",
+            description="Page view events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_page_views")),
+            source=EventSource(
+                name="web_events",
+                entity_id_field="user_id",
+                timestamp_field="viewed_at",
+                project="warehouse",
+                dataset="analytics",
+                table="page_views",
+                duckdb_path="data/page_views/*.parquet",
             ),
         )
 
-    def test_inline_source_clickhouse_branch(self):
-        """Inline identity source generates clickhouse branch with correct table name."""
-        config = IdentityGraphConfig(
-            match_key="email",
-            sources=[
-                IdentityGraphSource(
-                    name="src_a",
-                    source=TableSource(
-                        project="p", dataset="mailerlite", table="mailerlite_subscribers",
-                        duckdb_path="~/data/a.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_a"},
-                ),
-                IdentityGraphSource(
-                    name="src_b",
-                    source=TableSource(
-                        project="p", dataset="ghost", table="ghost_members",
-                        duckdb_path="~/data/b.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_b"},
-                ),
-            ],
-            priority=["src_a", "src_b"],
-        )
-        entity = self._make_entity(config)
-        gen = IbisCodeGenerator(entity)
-        code = gen._generate_source_functions()
-        assert 'conn.table("mailerlite___mailerlite_subscribers")' in code
-        assert 'conn.table("ghost___ghost_members")' in code
+    @pytest.fixture()
+    def event_entity_with_type(self):
+        """Entity with an EventSource with static event_type."""
+        from fyrnheim.core.source import EventSource
 
-    def test_inline_source_clickhouse_duckdb_unchanged(self):
-        """DuckDB branch in inline source remains unchanged."""
-        config = IdentityGraphConfig(
-            match_key="email",
-            sources=[
-                IdentityGraphSource(
-                    name="src_a",
-                    source=TableSource(
-                        project="p", dataset="d", table="a",
-                        duckdb_path="~/data/a.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_a"},
-                ),
-                IdentityGraphSource(
-                    name="src_b",
-                    source=TableSource(
-                        project="p", dataset="d", table="b",
-                        duckdb_path="~/data/b.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_b"},
-                ),
-            ],
-            priority=["src_a", "src_b"],
+        return Entity(
+            name="purchases",
+            description="Purchase events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_purchases")),
+            source=EventSource(
+                name="purchase_events",
+                entity_id_field="customer_id",
+                timestamp_field="purchased_at",
+                event_type="purchase",
+                project="warehouse",
+                dataset="ecommerce",
+                table="purchases",
+                duckdb_path="data/purchases/*.parquet",
+            ),
         )
-        entity = self._make_entity(config)
-        gen = IbisCodeGenerator(entity)
-        code = gen._generate_source_functions()
-        assert 'conn.read_parquet(os.path.expanduser("~/data/a.parquet"))' in code
 
-    def test_inline_source_clickhouse_bigquery_unchanged(self):
-        """BigQuery branch in inline source remains unchanged."""
-        config = IdentityGraphConfig(
-            match_key="email",
-            sources=[
-                IdentityGraphSource(
-                    name="src_a",
-                    source=TableSource(
-                        project="myproj", dataset="raw", table="leads",
-                        duckdb_path="~/leads.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_a"},
-                ),
-                IdentityGraphSource(
-                    name="src_b",
-                    source=TableSource(
-                        project="myproj", dataset="raw", table="contacts",
-                        duckdb_path="~/contacts.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_b"},
-                ),
-            ],
-            priority=["src_a", "src_b"],
-        )
-        entity = self._make_entity(config)
-        gen = IbisCodeGenerator(entity)
-        code = gen._generate_source_functions()
-        assert 'conn.table("leads", database=("myproj", "raw"))' in code
+    @pytest.fixture()
+    def event_entity_with_type_field(self):
+        """Entity with an EventSource with event_type_field."""
+        from fyrnheim.core.source import EventSource
 
-    def test_inline_source_clickhouse_valid_python(self):
-        """Generated module with inline sources and clickhouse is valid Python."""
-        config = IdentityGraphConfig(
-            match_key="email",
-            sources=[
-                IdentityGraphSource(
-                    name="src_a",
-                    source=TableSource(
-                        project="p", dataset="mailerlite", table="subscribers",
-                        duckdb_path="~/data/a.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_a"},
-                ),
-                IdentityGraphSource(
-                    name="src_b",
-                    source=TableSource(
-                        project="p", dataset="ghost", table="members",
-                        duckdb_path="~/data/b.parquet",
-                    ),
-                    match_key_field="email",
-                    fields={"name": "name_b"},
-                ),
-            ],
-            priority=["src_a", "src_b"],
+        return Entity(
+            name="activities",
+            description="Activity events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_activities")),
+            source=EventSource(
+                name="activity_events",
+                entity_id_field="user_id",
+                timestamp_field="occurred_at",
+                event_type_field="action_type",
+                project="warehouse",
+                dataset="analytics",
+                table="activities",
+                duckdb_path="data/activities/*.parquet",
+            ),
         )
-        entity = self._make_entity(config)
-        gen = IbisCodeGenerator(entity)
-        code = gen.generate_module()
+
+    def test_function_signature(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert "def source_page_views(conn: ibis.BaseBackend, backend: str)" in code
+
+    def test_duckdb_branch(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert 'if backend == "duckdb"' in code
+        assert "conn.read_parquet" in code
+
+    def test_bigquery_branch(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert 'elif backend == "bigquery"' in code
+
+    def test_is_valid_python(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_imports() + gen._generate_source_functions()
         ast.parse(code)
+
+    def test_full_module_valid(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen.generate_module()
+        tree = ast.parse(code)
+        func_names = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        assert "source_page_views" in func_names
+
+    def test_static_event_type_adds_mutate(self, event_entity_with_type):
+        gen = IbisCodeGenerator(event_entity_with_type)
+        code = gen._generate_source_functions()
+        assert '.mutate(event_type=ibis.literal("purchase"))' in code
+
+    def test_static_event_type_valid_python(self, event_entity_with_type):
+        gen = IbisCodeGenerator(event_entity_with_type)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_event_type_field_adds_rename(self, event_entity_with_type_field):
+        gen = IbisCodeGenerator(event_entity_with_type_field)
+        code = gen._generate_source_functions()
+        assert '.rename(event_type="action_type")' in code
+
+    def test_event_type_field_valid_python(self, event_entity_with_type_field):
+        gen = IbisCodeGenerator(event_entity_with_type_field)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_no_event_type_no_extra_ops(self, event_entity):
+        """Without event_type or event_type_field, no mutate/rename added."""
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert ".mutate(event_type=" not in code
+        assert '.rename(event_type="' not in code
+
+    def test_docstring_mentions_event(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert "event source" in code.lower()
+
+    def test_raises_without_duckdb_path(self):
+        from fyrnheim.core.source import EventSource
+
+        entity = Entity(
+            name="events",
+            description="Events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_events")),
+            source=EventSource(
+                name="raw_events",
+                entity_id_field="user_id",
+                timestamp_field="ts",
+                project="warehouse",
+                dataset="analytics",
+                table="events",
+            ),
+        )
+        gen = IbisCodeGenerator(entity)
+        with pytest.raises(ValueError, match="duckdb_path"):
+            gen._generate_source_functions()
+
+
+# ---------------------------------------------------------------------------
+# TableSource still works (regression)
+# ---------------------------------------------------------------------------
+
+
+class TestTableSourceStillWorks:
+    """Ensure existing TableSource codegen is unchanged."""
+
+    def test_table_source_codegen_unchanged(self, simple_entity):
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert "def source_transactions(" in code
+        assert "conn.read_parquet" in code
+        assert 'if backend == "duckdb"' in code

@@ -1,0 +1,49 @@
+id = "M015-E002"
+parent = "M015"
+title = "fyr test CLI command with test discovery"
+status = "active"
+created = "2026-03-07"
+depends_on = ["M015-E001"]
+
+[outcome]
+description = """
+fyr test CLI command discovers test files in tests/ directory, runs test classes
+and methods, and prints pass/fail results with diffs on failure. Supports
+--entity filter. Exit code 0 = all pass, 1 = failures.
+"""
+
+[job_story]
+description = """When I have entity test files in my project, I want to run fyr test and see which tests pass or fail with clear output, so that I can quickly identify broken transformations."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr test discovers test_*.py files in tests/ directory",
+    "fyr test runs all TestCase subclasses and test_ methods",
+    "fyr test --entity <name> filters to tests for that entity",
+    "Pass/fail output shows test name and status",
+    "Failure output shows expected vs actual diff",
+    "Exit code 0 when all pass, 1 on any failure",
+    "Unit tests for discovery and CLI command",
+]
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/testing/",
+    "tests/test_cli.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/testing/",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Test discovery: import test_*.py files, find EntityTest subclasses, run test_ methods.
+Keep it simple - no pytest dependency, just basic discovery + execution + reporting.
+The runner catches exceptions per test and reports pass/fail.
+"""
+
+estimated_stories = 2

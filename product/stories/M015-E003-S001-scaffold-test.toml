@@ -1,0 +1,44 @@
+id = "M015-E003-S001"
+parent = "M015-E003"
+title = "Add example test to fyr init scaffold"
+status = "ready"
+created = "2026-03-07"
+
+[outcome]
+description = """fyr init creates a tests/ directory with test_customers.py using the EntityTest API."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr init creates tests/test_customers.py in the project directory"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Scaffold test file imports from fyrnheim.testing and uses EntityTest"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Scaffold test has a working test_basic_transform method with given/run/assert"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml includes test_customers.py in scaffold data files"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/_scaffold/",
+    "src/fyrnheim/cli.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = ["M015-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Create src/fyrnheim/_scaffold/test_customers.py with a simple test.
+Update _scaffold_project() in cli.py to copy the test file to tests/.
+Update pyproject.toml wheel include for _scaffold/test_customers.py.
+"""
+reference_files = ["src/fyrnheim/cli.py", "src/fyrnheim/_scaffold/customers_entity.py"]

@@ -1,0 +1,48 @@
+id = "M017-E001"
+parent = "M017"
+title = "Inline Source Data Model"
+status = "active"
+created = 2026-03-09
+depends_on = []
+
+[outcome]
+description = """
+IdentityGraphSource accepts an optional inline TableSource and prep_columns as
+alternatives to the entity string reference. Validation ensures exactly one of
+entity/source is set. DerivedSource._derive_depends_on skips inline sources.
+"""
+
+[job_story]
+description = """
+When I define an identity graph source, I want to provide a TableSource inline
+instead of referencing a named entity, so that I don't need boilerplate entity files.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IdentityGraphSource(source=TableSource(...)) validates correctly",
+    "IdentityGraphSource with both entity and source raises ValidationError",
+    "IdentityGraphSource with neither entity nor source raises ValidationError",
+    "prep_columns accepted on IdentityGraphSource with inline source",
+    "DerivedSource.depends_on excludes inline sources",
+    "Existing entity-reference behavior unchanged",
+]
+validator_context = ["src/fyrnheim/core/source.py"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/resolution.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+IdentityGraphSource currently has entity as required (min_length=1). Need to make it
+optional and add source: TableSource | None and prep_columns: list[ComputedColumn].
+Use model_validator to ensure exactly one of entity/source is set. The frozen config
+must be preserved.
+"""
+
+estimated_stories = 2

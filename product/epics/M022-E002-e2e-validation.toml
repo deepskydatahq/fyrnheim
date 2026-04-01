@@ -1,0 +1,42 @@
+id = "M022-E002"
+parent = "M022"
+title = "E2E validation and gap documentation"
+status = "active"
+created = 2026-03-22
+depends_on = ["M022-E001"]
+
+[outcome]
+description = """Run the full attribution pipeline end-to-end on DuckDB, verify outputs,
+and document any gaps or learnings discovered during the PoC."""
+
+[job_story]
+description = """When the entities are defined and data exists,
+I want to run the pipeline and validate outputs,
+so I can confirm Fyrnheim handles the Zeffy use case and document any gaps."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Pipeline runs end-to-end without errors on DuckDB",
+    "account_attributed produces one row per account with attribution columns",
+    "Channel classification correctly applies priority rules",
+    "Identity resolution maps amplitude IDs to accounts",
+    "Learnings document captures any gaps found",
+]
+validator_context = ["tests/", "examples/"]
+
+[context]
+relevant_paths = [
+    "examples/zeffy-attribution/",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/generators/ibis_code_generator.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+This epic validates the work from E001 by actually running the pipeline.
+If codegen or executor issues arise, document them as gaps rather than fixing them.
+"""
+
+estimated_stories = 2

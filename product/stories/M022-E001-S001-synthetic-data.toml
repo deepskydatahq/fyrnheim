@@ -1,0 +1,49 @@
+id = "M022-E001-S001"
+parent = "M022-E001"
+title = "Generate synthetic Zeffy parquet data"
+status = "ready"
+created = 2026-03-22
+
+[outcome]
+description = """Create a Python script and synthetic parquet files that mimic the Zeffy Snowflake schema for amplitude events, merge IDs, and organizations."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Script generates events parquet with columns: amplitude_id, event_type, event_time, event_properties (JSON with gclid/fbclid/utm_source/utm_medium/utm_campaign/referring_domain/form_type), user_properties (JSON with Organization key), user_id, device_id, session_id, country, region, platform"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Script generates merge_ids parquet with columns: amplitude_id, merged_amplitude_id, merge_event_time, merge_server_time"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Script generates organizations parquet with columns: id (UUID), name, country, region, category, cause, created_at_utc, how_did_you_hear_about_simplyk_question, type, website"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Events include realistic attribution signals: some with gclid (Google Ads), some with fbclid (Meta), some with UTM params, some organic/direct"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Data has referential integrity: event user_properties.Organization references org IDs, merge_ids reference valid amplitude_ids"
+
+[context]
+relevant_paths = ["examples/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Create examples/zeffy-attribution/generate_data.py that produces:
+- examples/zeffy-attribution/data/amplitude/events/*.parquet (~200 events)
+- examples/zeffy-attribution/data/amplitude/merge_ids/*.parquet (~50 merge records)
+- examples/zeffy-attribution/data/organizations/*.parquet (~30 orgs)
+
+Use pandas + pyarrow to generate. JSON columns should be actual JSON strings.
+Event types should include: Page Viewed, Donor Form Viewed, Donor Form Submitted, Thank You Page Viewed, Form Step Submitted.
+Include a mix of channel signals: gclid, fbclid, utm_source/medium, referring_domain, and direct (no attribution).
+"""
+reference_files = []

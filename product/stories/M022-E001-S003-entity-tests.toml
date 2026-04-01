@@ -1,0 +1,39 @@
+id = "M022-E001-S003"
+parent = "M022-E001"
+title = "Tests for entity validation"
+status = "ready"
+created = 2026-03-22
+
+[outcome]
+description = """Write tests that verify all Zeffy attribution entities load and validate correctly."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test imports all 6 entities without errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test each entity has the expected source type (TableSource, DerivedSource, AggregationSource)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test touchpoints channel CaseColumn generates expected expression string"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test account IdentityGraphConfig has correct match_key and source names"
+
+[context]
+relevant_paths = ["tests/", "examples/"]
+input_fixtures = []
+depends_on = ["M022-E001-S002"]
+
+[handoff]
+implementation_hints = """
+Create tests/test_zeffy_entities.py that imports and validates the entity definitions.
+These are model-level tests (Pydantic validation), not execution tests.
+"""
+reference_files = []

@@ -1,0 +1,41 @@
+id = "M017-E002-S003"
+parent = "M017-E002"
+title = "End-to-end integration tests"
+status = "ready"
+created = 2026-03-09
+
+[outcome]
+description = """Write end-to-end tests that verify inline identity graph sources work through the full pipeline: entity definition → code generation → execution → correct output."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Entity with 2 inline sources joins on match key and produces correct output"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Entity with mixed inline + entity-reference sources works correctly"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Inline source with prep_columns applies transforms before join"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Resolution order correctly handles entities with inline sources (no false dependencies)"
+
+[context]
+relevant_paths = ["tests/"]
+input_fixtures = []
+depends_on = ["M017-E002-S001", "M017-E002-S002"]
+
+[handoff]
+implementation_hints = """
+Create tests/test_inline_identity_e2e.py. Use EntityTest or direct IbisExecutor
+with in-memory DuckDB. Create test entities with inline sources pointing to
+temp parquet files. Verify the full generate → execute pipeline produces
+correct joined output.
+"""
+reference_files = ["tests/test_identity_graph.py"]

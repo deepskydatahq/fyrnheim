@@ -1,0 +1,64 @@
+id = "M016"
+title = "Entity Documentation Site"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """
+Data teams can run `fyr docs generate` to produce a self-contained HTML documentation
+site for their fyrnheim project. The site shows an interactive entity lineage DAG,
+per-entity detail pages with fields, computed columns, measures, quality checks, and
+layer configuration. `fyr docs serve` opens it in a browser. No external dependencies
+(no npm, no build step) — one index.html with embedded JSON catalog and vendored JS.
+"""
+
+[job_story]
+description = """
+When I define entities in fyrnheim, I want to generate browsable documentation that
+shows how my entities relate to each other and what each entity contains, so that my
+team can understand the data model without reading Python source files.
+"""
+
+[scope]
+in_scope = [
+    "fyr docs generate command — produces index.html",
+    "fyr docs serve command — local HTTP server + open browser",
+    "JSON catalog builder from EntityRegistry metadata",
+    "Interactive entity lineage DAG (dagre-d3, vendored inline)",
+    "Entity detail view: fields, computed columns, measures, quality checks, layers",
+    "Layer flow diagram per entity (source → prep → dim → snapshot → activity → analytics)",
+    "Sidebar with entity list",
+    "Single self-contained HTML file, no build step",
+]
+out_of_scope = [
+    "Field-level column lineage (requires expression parsing)",
+    "Live/hot-reload during development",
+    "Search across field names and descriptions",
+    "Export to PDF or markdown",
+    "Hosting or deployment automation",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/engine/resolution.py",
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/components/measure.py",
+    "src/fyrnheim/cli.py",
+]
+dependencies = ["EntityRegistry", "resolve_execution_order", "Entity Pydantic models"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr docs generate creates a valid index.html in the output directory",
+    "The HTML file contains embedded JSON with all entity metadata",
+    "The lineage DAG renders correctly with entity nodes and dependency edges",
+    "Clicking a DAG node navigates to the entity detail section",
+    "Entity detail shows fields, computed columns, measures, quality checks, and layers",
+    "Layer flow diagram shows only active layers for each entity",
+    "fyr docs serve starts a local server and opens the browser",
+    "Works with zero entities (empty project) without errors",
+]

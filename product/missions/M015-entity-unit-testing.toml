@@ -1,0 +1,116 @@
+# Mission: Entity Unit Testing via fyr test
+# Let data engineers test entity transformations against fixtures with expected output assertions
+
+id = "M015"
+title = "Entity unit testing via fyr test"
+status = "draft"
+created = "2026-03-07"
+depends_on = ["M002"]
+
+[outcome]
+description = """
+`fyr test` discovers and runs entity-level unit tests. Each test defines sample input
+data (CSV or inline), runs the entity pipeline on DuckDB, and asserts the output matches
+expected results. Tests are defined as Python files in a tests/ directory alongside
+entities, using a simple assert-based API. Exit code 0 = all pass, 1 = failures.
+"""
+
+user_progress = "From 'must run full pipeline to verify correctness' to 'test entity logic in isolation with fixtures and assertions'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr test discovers and runs test files from tests/ directory",
+    "fyr test --entity <name> runs tests for a single entity",
+    "Test fixture API: EntityTest class with given() for input data and expect() for assertions",
+    "Input data can be inline dicts or CSV file paths",
+    "Assertions compare output columns/rows against expected values",
+    "Each test runs the entity pipeline on an ephemeral DuckDB instance",
+    "Clear pass/fail output with diff on failure (expected vs actual)",
+    "Exit code 0 when all tests pass, exit code 1 on any failure",
+    "Example test file included in fyr init scaffold",
+    "All existing tests still pass",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/core/entity.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/runner.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/quality/runner.py",
+    "src/fyrnheim/_scaffold/",
+]
+
+[scope]
+in_scope = [
+    "New fyr test CLI command that discovers and runs entity test files",
+    "EntityTest base class or helper API for defining test cases",
+    "given() method to provide input fixture data (inline dicts or CSV paths)",
+    "expect() method to assert output matches expected values",
+    "Ephemeral DuckDB execution per test (no persistent state)",
+    "Pass/fail output with column-level diff on failure",
+    "fyr test --entity <name> to filter to a single entity",
+    "Scaffold test example in fyr init",
+    "Unit tests for the testing framework itself",
+]
+out_of_scope = [
+    "Integration with pytest (future mission)",
+    "Snapshot testing / golden file comparisons",
+    "Performance benchmarking",
+    "Test coverage reporting",
+    "Mock backends other than DuckDB",
+    "CI integration (already handled by existing CI)",
+]
+acceptable_breakage = [
+    "None - additive feature only, no changes to existing behavior",
+]
+
+[notes]
+considerations = """
+Design direction: Keep it simple and Python-native. A test file looks like:
+
+    # tests/test_customers.py
+    from fyrnheim.testing import EntityTest
+
+    class TestCustomers(EntityTest):
+        entity = "customers"
+
+        def test_basic_transform(self):
+            self.given({
+                "customers": [
+                    {"id": 1, "name": "Alice", "email": "alice@example.com"},
+                    {"id": 2, "name": "Bob", "email": "bob@example.com"},
+                ]
+            })
+            result = self.run()
+            assert result.row_count == 2
+            assert "customer_id" in result.columns
+            assert result.column("email_hash").not_null().all()
+
+The testing module (fyrnheim.testing) provides:
+- EntityTest base class with given/run/assert helpers
+- Ephemeral DuckDB backend per test
+- Result object with column access and assertion helpers
+
+fyr test discovers test files, instantiates test classes, runs methods
+prefixed with test_, and reports results. This is intentionally simpler
+than pytest — it's domain-specific testing for entity definitions.
+
+Epic sequencing:
+- E001: Testing framework core (EntityTest, given/run, result object)
+- E002: CLI command (fyr test, discovery, output formatting)
+- E003: Scaffold and docs (example test in fyr init, README update)
+"""

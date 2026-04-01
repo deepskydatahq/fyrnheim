@@ -1,0 +1,48 @@
+id = "M014-E001-S001"
+parent = "M014-E001"
+title = "Add postgres branch to connection factory with tests"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Add postgres to SUPPORTED_BACKENDS and create_connection() with mocked unit tests following the ClickHouse pattern."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "'postgres' is in SUPPORTED_BACKENDS list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "create_connection('postgres', host='localhost', database='mydb') calls ibis.postgres.connect with correct params"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Default params: host=localhost, port=5432, database=postgres, user=postgres, password=''"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ImportError with 'pip install' hint when ibis.backends.postgres not available"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing test_unknown_backend_raises_value_error updated (postgres is no longer unsupported)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml has postgres extras group: ibis-framework[postgres]>=11.0.0"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/connection.py",
+    "tests/test_engine_connection.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Follow the ClickHouse pattern exactly: mock ibis.postgres, patch sys.modules for import check. Update the docstring to mention postgres. The existing test on line 132 uses 'postgres' as an unsupported backend example — change it to 'mysql' or similar."""
+reference_files = ["tests/test_engine_connection.py"]

@@ -1,0 +1,45 @@
+id = "M016-E002-S001"
+parent = "M016-E002"
+title = "HTML template with DAG and entity detail views"
+status = "ready"
+created = 2026-03-08
+
+[outcome]
+description = """Create the HTML/CSS/JS template with sidebar, interactive DAG (dagre-d3), and entity detail sections. Template has a {{CATALOG_JSON}} placeholder for data injection."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Template file exists at src/fyrnheim/docs/template.html"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Template contains a CATALOG_JSON placeholder for data embedding"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Template includes dagre-d3 JS for DAG rendering (vendored inline or CDN with fallback)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Template has sidebar, DAG view, and entity detail sections in the HTML structure"
+
+[context]
+relevant_paths = ["src/fyrnheim/docs/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Create src/fyrnheim/docs/template.html. Use dagre-d3 (d3 v5 + dagre-d3) loaded from
+CDN with integrity hashes. The template should be a complete HTML file with:
+- Sidebar: entity list with search/filter
+- Main area: DAG view (SVG rendered by dagre-d3)
+- Entity detail: rendered from catalog JSON via JS
+- Click DAG node -> scroll to entity detail
+- Clean, dark-themed styling matching the fyrnheim website
+Keep JS minimal and focused.
+"""
+reference_files = []

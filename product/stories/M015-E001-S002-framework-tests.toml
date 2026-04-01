@@ -1,0 +1,53 @@
+id = "M015-E001-S002"
+parent = "M015-E001"
+title = "Unit tests for EntityTest framework"
+status = "ready"
+created = "2026-03-07"
+
+[outcome]
+description = """Comprehensive unit tests proving the testing framework works end-to-end with a real entity definition."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that EntityTest with a simple prep-only entity produces correct row count"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that TestResult.columns includes expected computed columns"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that TestResult.column() returns correct values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that TestResult.to_dicts() returns expected row data"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that run() with missing given() data raises clear error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Test that given() with multiple tables works for entities with dependencies"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/testing/",
+    "src/fyrnheim/_scaffold/customers_entity.py",
+]
+input_fixtures = []
+depends_on = ["M015-E001-S001"]
+
+[handoff]
+implementation_hints = """
+Create tests/test_testing.py. Define a minimal test entity inline (simpler than
+the scaffold customers entity) with just a prep layer and one computed column.
+Use that entity to test EntityTest end-to-end.
+"""
+reference_files = [
+    "src/fyrnheim/_scaffold/customers_entity.py",
+]

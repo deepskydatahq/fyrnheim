@@ -6,7 +6,6 @@ import json
 
 import ibis
 import pandas as pd
-import pytest
 
 from fyrnheim.core.activity import (
     ActivityDefinition,

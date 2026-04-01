@@ -3,6 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
+from fyrnheim.core.entity import Entity, LayersConfig
+from fyrnheim.core.layer import PrepLayer
 from fyrnheim.core.source import (
     EventSource,
     Field,
@@ -224,3 +226,45 @@ class TestEventSource:
                 entity_id_field="user_id",
                 timestamp_field="ts",
             )
+
+
+class TestSourceUnionAndExports:
+    """Tests for Story 3: Source union type and public exports."""
+
+    def test_entity_with_state_source(self):
+        entity = Entity(
+            name="customer",
+            description="A customer entity",
+            source=StateSource(
+                name="crm",
+                project="p",
+                dataset="d",
+                table="t",
+                id_field="customer_id",
+            ),
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_customer")),
+        )
+        assert isinstance(entity.source, StateSource)
+
+    def test_entity_with_event_source(self):
+        entity = Entity(
+            name="page_views",
+            description="Page view events",
+            source=EventSource(
+                name="views",
+                project="p",
+                dataset="d",
+                table="t",
+                entity_id_field="user_id",
+                timestamp_field="ts",
+            ),
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_views")),
+        )
+        assert isinstance(entity.source, EventSource)
+
+    def test_import_from_core(self):
+        """Verify public API exports work."""
+        from fyrnheim.core import EventSource as ES, StateSource as SS
+
+        assert SS is StateSource
+        assert ES is EventSource

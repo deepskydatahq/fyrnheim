@@ -13,7 +13,9 @@ from .source import (
     AggregationSource,
     DerivedSource,
     EventAggregationSource,
+    EventSource,
     Field,
+    StateSource,
     TableSource,
     UnionSource,
 )
@@ -28,6 +30,8 @@ Source = (
     | AggregationSource
     | EventAggregationSource
     | UnionSource
+    | StateSource
+    | EventSource
 )
 
 

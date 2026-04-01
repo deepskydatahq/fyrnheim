@@ -184,7 +184,6 @@ class TestSnapshotDiffPipelineE2E:
         )
 
         result = events.execute()
-        event_types = result["event_type"].tolist()
 
         # Dave appeared
         appeared = result[result["event_type"] == "row_appeared"]

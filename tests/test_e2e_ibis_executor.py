@@ -2807,3 +2807,284 @@ class TestE2EAccountAggregationFromPerson:
         expected = {"account_id", "email_domain", "num_persons", "has_ghost_person",
                     "has_transactions", "first_seen_date"}
         assert expected.issubset(set(df.columns))
+
+
+# ---------------------------------------------------------------------------
+# E2E tests for StateSource and EventSource
+# ---------------------------------------------------------------------------
+
+
+class TestE2EStateSource:
+    """E2E: entity with StateSource through full pipeline."""
+
+    @pytest.fixture()
+    def state_parquet(self, tmp_path):
+        """Create sample parquet data for a state source."""
+        df = pd.DataFrame({
+            "user_id": [1, 2, 3],
+            "name": ["Alice", "Bob", "Carol"],
+            "email": ["alice@example.com", "bob@example.com", "carol@example.com"],
+            "plan": ["free", "pro", "enterprise"],
+        })
+        path = tmp_path / "data" / "users.parquet"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(path, index=False)
+        return path, len(df)
+
+    @pytest.fixture()
+    def state_entity_and_generated(self, state_parquet, tmp_path):
+        """Define entity with StateSource, generate code."""
+        from fyrnheim.core.source import StateSource
+
+        parquet_path, row_count = state_parquet
+        generated_dir = tmp_path / "generated"
+
+        entity = Entity(
+            name="users",
+            description="E2E StateSource entity",
+            source=StateSource(
+                name="crm_users",
+                id_field="user_id",
+                project="test",
+                dataset="test",
+                table="users",
+                duckdb_path=str(parquet_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(
+                    model_name="prep_users",
+                    computed_columns=[
+                        ComputedColumn(
+                            name="is_paying",
+                            expression="t.plan != 'free'",
+                            description="True if on a paid plan",
+                        ),
+                    ],
+                ),
+                dimension=DimensionLayer(
+                    model_name="dim_users",
+                ),
+            ),
+        )
+
+        generate(entity, output_dir=generated_dir)
+        return entity, generated_dir, parquet_path, row_count
+
+    def test_state_source_executes_successfully(self, state_entity_and_generated):
+        """StateSource entity executes through prep and dim layers."""
+        entity, generated_dir, _, row_count = state_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("users")
+
+            assert result.success is True
+            assert result.entity_name == "users"
+            assert result.target_name == "dim_users"
+            assert result.row_count == row_count
+
+    def test_state_source_output_has_computed_columns(self, state_entity_and_generated):
+        """Output table includes computed columns from prep."""
+        _, generated_dir, _, _ = state_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("users")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "user_id" in df.columns
+        assert "name" in df.columns
+        assert "is_paying" in df.columns
+
+    def test_state_source_computed_values_correct(self, state_entity_and_generated):
+        """Spot-check computed column values."""
+        _, generated_dir, _, _ = state_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("users")
+            df = executor.connection.table("dim_users").to_pandas()
+
+        alice = df[df["user_id"] == 1].iloc[0]
+        assert not alice["is_paying"]
+
+        bob = df[df["user_id"] == 2].iloc[0]
+        assert bob["is_paying"]
+
+    def test_state_source_row_count_preserved(self, state_entity_and_generated):
+        """No rows lost or duplicated."""
+        _, generated_dir, _, row_count = state_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("users")
+            assert result.row_count == row_count
+
+
+class TestE2EEventSource:
+    """E2E: entity with EventSource through full pipeline."""
+
+    @pytest.fixture()
+    def event_parquet(self, tmp_path):
+        """Create sample parquet data for an event source."""
+        df = pd.DataFrame({
+            "user_id": [1, 1, 2, 2, 3],
+            "page_url": ["/home", "/pricing", "/home", "/docs", "/home"],
+            "viewed_at": pd.to_datetime([
+                "2024-01-01", "2024-01-02", "2024-01-01",
+                "2024-01-03", "2024-01-04",
+            ]),
+        })
+        path = tmp_path / "data" / "page_views.parquet"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(path, index=False)
+        return path, len(df)
+
+    @pytest.fixture()
+    def event_entity_and_generated(self, event_parquet, tmp_path):
+        """Define entity with EventSource, generate code."""
+        from fyrnheim.core.source import EventSource
+
+        parquet_path, row_count = event_parquet
+        generated_dir = tmp_path / "generated"
+
+        entity = Entity(
+            name="page_views",
+            description="E2E EventSource entity",
+            source=EventSource(
+                name="web_events",
+                entity_id_field="user_id",
+                timestamp_field="viewed_at",
+                project="test",
+                dataset="test",
+                table="page_views",
+                duckdb_path=str(parquet_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(
+                    model_name="prep_page_views",
+                    computed_columns=[
+                        ComputedColumn(
+                            name="is_pricing_page",
+                            expression="t.page_url == '/pricing'",
+                            description="True if viewing pricing page",
+                        ),
+                    ],
+                ),
+                dimension=DimensionLayer(
+                    model_name="dim_page_views",
+                ),
+            ),
+        )
+
+        generate(entity, output_dir=generated_dir)
+        return entity, generated_dir, parquet_path, row_count
+
+    def test_event_source_executes_successfully(self, event_entity_and_generated):
+        """EventSource entity executes through prep and dim layers."""
+        entity, generated_dir, _, row_count = event_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("page_views")
+
+            assert result.success is True
+            assert result.entity_name == "page_views"
+            assert result.target_name == "dim_page_views"
+            assert result.row_count == row_count
+
+    def test_event_source_output_has_computed_columns(self, event_entity_and_generated):
+        """Output table includes computed columns from prep."""
+        _, generated_dir, _, _ = event_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("page_views")
+            df = executor.connection.table(result.target_name).to_pandas()
+
+        assert "user_id" in df.columns
+        assert "page_url" in df.columns
+        assert "viewed_at" in df.columns
+        assert "is_pricing_page" in df.columns
+
+    def test_event_source_computed_values_correct(self, event_entity_and_generated):
+        """Spot-check computed column values."""
+        _, generated_dir, _, _ = event_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            executor.execute("page_views")
+            df = executor.connection.table("dim_page_views").to_pandas()
+
+        pricing_rows = df[df["is_pricing_page"] == True]  # noqa: E712
+        assert len(pricing_rows) == 1
+
+    def test_event_source_row_count_preserved(self, event_entity_and_generated):
+        """No rows lost or duplicated."""
+        _, generated_dir, _, row_count = event_entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("page_views")
+            assert result.row_count == row_count
+
+    def test_event_source_with_event_type(self, tmp_path):
+        """EventSource with static event_type adds the column."""
+        from fyrnheim.core.source import EventSource
+
+        df = pd.DataFrame({
+            "customer_id": [1, 2, 3],
+            "amount": [100, 200, 300],
+            "purchased_at": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"]),
+        })
+        parquet_path = tmp_path / "data" / "purchases.parquet"
+        parquet_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(parquet_path, index=False)
+
+        generated_dir = tmp_path / "generated"
+        entity = Entity(
+            name="purchases",
+            description="E2E EventSource with event_type",
+            source=EventSource(
+                name="purchase_events",
+                entity_id_field="customer_id",
+                timestamp_field="purchased_at",
+                event_type="purchase",
+                project="test",
+                dataset="test",
+                table="purchases",
+                duckdb_path=str(parquet_path),
+            ),
+            layers=LayersConfig(
+                prep=PrepLayer(model_name="prep_purchases"),
+                dimension=DimensionLayer(model_name="dim_purchases"),
+            ),
+        )
+
+        generate(entity, output_dir=generated_dir)
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("purchases")
+
+            assert result.success is True
+            assert result.row_count == 3
+
+            output_df = executor.connection.table("dim_purchases").to_pandas()
+            assert "event_type" in output_df.columns
+            assert all(output_df["event_type"] == "purchase")
+
+
+class TestE2ETableSourceRegression:
+    """Regression: existing TableSource entities still execute correctly."""
+
+    def test_table_source_still_works(self, entity_and_generated):
+        """TableSource entity still works after new source type additions."""
+        entity, generated_dir, _, row_count = entity_and_generated
+
+        conn = create_connection("duckdb")
+        with IbisExecutor(conn=conn, backend="duckdb", generated_dir=generated_dir) as executor:
+            result = executor.execute("customers")
+
+            assert result.success is True
+            assert result.row_count == row_count

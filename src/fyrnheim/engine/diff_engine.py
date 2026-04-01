@@ -65,11 +65,17 @@ def diff_snapshots(
         )
 
     if not events:
-        # Return an empty table with the correct schema
-        empty = pd.DataFrame(
-            columns=["source", "entity_id", "ts", "event_type", "payload"]
+        # Return an empty table with the correct schema (explicit string types)
+        empty_schema = ibis.schema(
+            {
+                "source": "string",
+                "entity_id": "string",
+                "ts": "string",
+                "event_type": "string",
+                "payload": "string",
+            }
         )
-        return ibis.memtable(empty)
+        return ibis.memtable([], schema=empty_schema)
 
     return ibis.memtable(pd.DataFrame(events))
 

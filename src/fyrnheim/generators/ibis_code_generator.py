@@ -13,7 +13,9 @@ from fyrnheim.core.source import (
     AggregationSource,
     DerivedSource,
     EventAggregationSource,
+    EventSource,
     IdentityGraphSource,
+    StateSource,
     TableSource,
     UnionSource,
 )
@@ -84,6 +86,10 @@ import ibis
             return self._generate_union_source_functions(source)
         elif isinstance(source, (TableSource, EventAggregationSource)):
             return self._generate_single_source_function(source)
+        elif isinstance(source, StateSource):
+            return self._generate_state_source_function(source)
+        elif isinstance(source, EventSource):
+            return self._generate_event_source_function(source)
         elif isinstance(source, AggregationSource):
             return self._generate_aggregation_source_function(source)
         elif isinstance(source, DerivedSource):
@@ -125,6 +131,76 @@ def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
         return raw{rename}
     elif backend == "bigquery":
         return conn.table("{source.table}", database=("{source.project}", "{source.dataset}")){rename}
+    else:
+        raise ValueError(f"Unsupported backend: {{backend}}")
+'''
+        return func
+
+    def _generate_state_source_function(self, source: StateSource) -> str:
+        """Generate source function for StateSource.
+
+        StateSource extends BaseTableSource and behaves similarly to TableSource.
+        """
+        name = self.entity_name
+        rename = self._build_rename_suffix()
+
+        if not source.duckdb_path:
+            raise ValueError(
+                f"StateSource '{source.table}' requires duckdb_path for code generation"
+            )
+        duckdb_path = source.duckdb_path
+
+        func = f'''
+def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
+    """Read {name} from configured state source."""
+    if backend == "duckdb":
+        try:
+            raw = conn.table("source_{name}")
+        except Exception:
+            parquet_path = os.path.expanduser("{duckdb_path}")
+            raw = conn.read_parquet(parquet_path)
+        return raw{rename}
+    elif backend == "bigquery":
+        return conn.table("{source.table}", database=("{source.project}", "{source.dataset}")){rename}
+    else:
+        raise ValueError(f"Unsupported backend: {{backend}}")
+'''
+        return func
+
+    def _generate_event_source_function(self, source: EventSource) -> str:
+        """Generate source function for EventSource.
+
+        EventSource reads a table and selects entity_id_field, timestamp_field,
+        and optionally handles event_type / event_type_field.
+        """
+        name = self.entity_name
+        rename = self._build_rename_suffix()
+
+        if not source.duckdb_path:
+            raise ValueError(
+                f"EventSource '{source.table}' requires duckdb_path for code generation"
+            )
+        duckdb_path = source.duckdb_path
+
+        # Build event_type mutate suffix if needed
+        event_type_suffix = ""
+        if source.event_type:
+            event_type_suffix = f'.mutate(event_type=ibis.literal("{source.event_type}"))'
+        elif source.event_type_field:
+            event_type_suffix = f'.rename(event_type="{source.event_type_field}")' if source.event_type_field != "event_type" else ""
+
+        func = f'''
+def source_{name}(conn: ibis.BaseBackend, backend: str) -> ibis.Table:
+    """Read {name} from configured event source."""
+    if backend == "duckdb":
+        try:
+            raw = conn.table("source_{name}")
+        except Exception:
+            parquet_path = os.path.expanduser("{duckdb_path}")
+            raw = conn.read_parquet(parquet_path)
+        return raw{event_type_suffix}{rename}
+    elif backend == "bigquery":
+        return conn.table("{source.table}", database=("{source.project}", "{source.dataset}")){event_type_suffix}{rename}
     else:
         raise ValueError(f"Unsupported backend: {{backend}}")
 '''

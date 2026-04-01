@@ -1041,3 +1041,256 @@ class TestAggregationSourceCodeGeneration:
         gen = IbisCodeGenerator(entity)
         code = gen.generate_module()
         assert "cnt=t.person_id.count()," in code
+
+
+# ---------------------------------------------------------------------------
+# StateSource code generation tests
+# ---------------------------------------------------------------------------
+
+
+class TestStateSourceGeneration:
+    """Test source function generation for StateSource."""
+
+    @pytest.fixture()
+    def state_entity(self):
+        """Entity with a StateSource."""
+        from fyrnheim.core.source import StateSource
+
+        return Entity(
+            name="users",
+            description="User profiles",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_users")),
+            source=StateSource(
+                name="crm_users",
+                id_field="user_id",
+                project="warehouse",
+                dataset="crm",
+                table="users",
+                duckdb_path="data/users/*.parquet",
+            ),
+        )
+
+    def test_function_signature(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert "def source_users(conn: ibis.BaseBackend, backend: str)" in code
+
+    def test_duckdb_branch(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert 'if backend == "duckdb"' in code
+        assert "conn.read_parquet" in code
+
+    def test_bigquery_branch(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert 'elif backend == "bigquery"' in code
+        assert 'conn.table("users"' in code
+
+    def test_raises_on_unsupported(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert "raise ValueError" in code
+
+    def test_is_valid_python(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_full_module_valid(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen.generate_module()
+        tree = ast.parse(code)
+        func_names = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        assert "source_users" in func_names
+
+    def test_docstring_mentions_state(self, state_entity):
+        gen = IbisCodeGenerator(state_entity)
+        code = gen._generate_source_functions()
+        assert "state source" in code.lower()
+
+    def test_raises_without_duckdb_path(self):
+        from fyrnheim.core.source import StateSource
+
+        entity = Entity(
+            name="users",
+            description="User profiles",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_users")),
+            source=StateSource(
+                name="crm_users",
+                id_field="user_id",
+                project="warehouse",
+                dataset="crm",
+                table="users",
+            ),
+        )
+        gen = IbisCodeGenerator(entity)
+        with pytest.raises(ValueError, match="duckdb_path"):
+            gen._generate_source_functions()
+
+
+# ---------------------------------------------------------------------------
+# EventSource code generation tests
+# ---------------------------------------------------------------------------
+
+
+class TestEventSourceGeneration:
+    """Test source function generation for EventSource."""
+
+    @pytest.fixture()
+    def event_entity(self):
+        """Entity with an EventSource."""
+        from fyrnheim.core.source import EventSource
+
+        return Entity(
+            name="page_views",
+            description="Page view events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_page_views")),
+            source=EventSource(
+                name="web_events",
+                entity_id_field="user_id",
+                timestamp_field="viewed_at",
+                project="warehouse",
+                dataset="analytics",
+                table="page_views",
+                duckdb_path="data/page_views/*.parquet",
+            ),
+        )
+
+    @pytest.fixture()
+    def event_entity_with_type(self):
+        """Entity with an EventSource with static event_type."""
+        from fyrnheim.core.source import EventSource
+
+        return Entity(
+            name="purchases",
+            description="Purchase events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_purchases")),
+            source=EventSource(
+                name="purchase_events",
+                entity_id_field="customer_id",
+                timestamp_field="purchased_at",
+                event_type="purchase",
+                project="warehouse",
+                dataset="ecommerce",
+                table="purchases",
+                duckdb_path="data/purchases/*.parquet",
+            ),
+        )
+
+    @pytest.fixture()
+    def event_entity_with_type_field(self):
+        """Entity with an EventSource with event_type_field."""
+        from fyrnheim.core.source import EventSource
+
+        return Entity(
+            name="activities",
+            description="Activity events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_activities")),
+            source=EventSource(
+                name="activity_events",
+                entity_id_field="user_id",
+                timestamp_field="occurred_at",
+                event_type_field="action_type",
+                project="warehouse",
+                dataset="analytics",
+                table="activities",
+                duckdb_path="data/activities/*.parquet",
+            ),
+        )
+
+    def test_function_signature(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert "def source_page_views(conn: ibis.BaseBackend, backend: str)" in code
+
+    def test_duckdb_branch(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert 'if backend == "duckdb"' in code
+        assert "conn.read_parquet" in code
+
+    def test_bigquery_branch(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert 'elif backend == "bigquery"' in code
+
+    def test_is_valid_python(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_full_module_valid(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen.generate_module()
+        tree = ast.parse(code)
+        func_names = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        assert "source_page_views" in func_names
+
+    def test_static_event_type_adds_mutate(self, event_entity_with_type):
+        gen = IbisCodeGenerator(event_entity_with_type)
+        code = gen._generate_source_functions()
+        assert '.mutate(event_type=ibis.literal("purchase"))' in code
+
+    def test_static_event_type_valid_python(self, event_entity_with_type):
+        gen = IbisCodeGenerator(event_entity_with_type)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_event_type_field_adds_rename(self, event_entity_with_type_field):
+        gen = IbisCodeGenerator(event_entity_with_type_field)
+        code = gen._generate_source_functions()
+        assert '.rename(event_type="action_type")' in code
+
+    def test_event_type_field_valid_python(self, event_entity_with_type_field):
+        gen = IbisCodeGenerator(event_entity_with_type_field)
+        code = gen._generate_imports() + gen._generate_source_functions()
+        ast.parse(code)
+
+    def test_no_event_type_no_extra_ops(self, event_entity):
+        """Without event_type or event_type_field, no mutate/rename added."""
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert ".mutate(event_type=" not in code
+        assert '.rename(event_type="' not in code
+
+    def test_docstring_mentions_event(self, event_entity):
+        gen = IbisCodeGenerator(event_entity)
+        code = gen._generate_source_functions()
+        assert "event source" in code.lower()
+
+    def test_raises_without_duckdb_path(self):
+        from fyrnheim.core.source import EventSource
+
+        entity = Entity(
+            name="events",
+            description="Events",
+            layers=LayersConfig(prep=PrepLayer(model_name="prep_events")),
+            source=EventSource(
+                name="raw_events",
+                entity_id_field="user_id",
+                timestamp_field="ts",
+                project="warehouse",
+                dataset="analytics",
+                table="events",
+            ),
+        )
+        gen = IbisCodeGenerator(entity)
+        with pytest.raises(ValueError, match="duckdb_path"):
+            gen._generate_source_functions()
+
+
+# ---------------------------------------------------------------------------
+# TableSource still works (regression)
+# ---------------------------------------------------------------------------
+
+
+class TestTableSourceStillWorks:
+    """Ensure existing TableSource codegen is unchanged."""
+
+    def test_table_source_codegen_unchanged(self, simple_entity):
+        gen = IbisCodeGenerator(simple_entity)
+        code = gen._generate_source_functions()
+        assert "def source_transactions(" in code
+        assert "conn.read_parquet" in code
+        assert 'if backend == "duckdb"' in code

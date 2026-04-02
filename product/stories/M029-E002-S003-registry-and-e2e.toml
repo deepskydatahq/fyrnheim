@@ -1,0 +1,36 @@
+id = "M029-E002-S003"
+parent = "M029-E002"
+title = "IdentityGraphRegistry and e2e multi-source test"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add IdentityGraphRegistry for discovery and e2e test proving multi-source identity resolution works end-to-end."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphRegistry.discover(dir) finds module-level 'identity_graph' variables"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraphRegistry.get(name) returns the IdentityGraph by name"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Events from 3 sources (crm, billing, pageviews) with shared email_hash get unified canonical_id"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Events from a source not in the graph retain entity_id as canonical_id"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/", "src/fyrnheim/engine/activity_registry.py"]
+input_fixtures = []
+depends_on = ["M029-E002-S002"]
+
+[handoff]
+implementation_hints = """Add IdentityGraphRegistry to a new file or identity_engine.py. Follow ActivityRegistry pattern. E2e test: create events from 3 sources where some share an email_hash. Run resolve_identities + enrich_events. Verify matching events get same canonical_id, non-graph events get fallback."""
+reference_files = []

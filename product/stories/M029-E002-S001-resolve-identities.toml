@@ -1,0 +1,44 @@
+id = "M029-E002-S001"
+parent = "M029-E002"
+title = "Identity resolution from event stream"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Implement resolve_identities() that builds an ID mapping table from events using match keys defined in an IdentityGraph."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "resolve_identities returns a mapping table with columns: source, entity_id, canonical_id"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Two events from different sources with same match key value get the same canonical_id"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Events from different match keys get different canonical_ids"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "canonical_id is deterministic (same match key always produces same canonical_id)"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/", "src/fyrnheim/core/identity.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/identity_engine.py. The resolve_identities(events, identity_graph) function:
+1. Materialize events to pandas
+2. For each IdentitySource in the graph, filter events by source name
+3. For row_appeared events, parse payload JSON to extract the match_key_field value
+4. Build a dict: match_key_value -> list of (source, entity_id) tuples
+5. For each match key group, generate canonical_id = hashlib.sha256(match_key_value).hexdigest()[:16]
+6. Return as Ibis memtable with columns: source, entity_id, canonical_id
+
+The match_key_field is a field name in the event payload (e.g., 'email_hash'). For row_appeared events, the payload contains all fields including the match key."""
+reference_files = []

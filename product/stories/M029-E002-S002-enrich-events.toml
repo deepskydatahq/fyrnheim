@@ -1,0 +1,36 @@
+id = "M029-E002-S002"
+parent = "M029-E002"
+title = "Enrich events with canonical_id"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Implement enrich_events() that adds canonical_id to all events using the ID mapping from resolve_identities."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "enrich_events adds canonical_id column to event table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Events from mapped sources get the resolved canonical_id"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Events from unmapped sources get entity_id as canonical_id (fallback)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output has 6 columns: source, entity_id, ts, event_type, payload, canonical_id"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/identity_engine.py"]
+input_fixtures = []
+depends_on = ["M029-E002-S001"]
+
+[handoff]
+implementation_hints = """Add enrich_events(events, id_mapping) to identity_engine.py. Left join events on (source, entity_id) to the mapping table. For unmatched rows, fill canonical_id with entity_id. Use pandas for the join (same pattern as other engines)."""
+reference_files = []

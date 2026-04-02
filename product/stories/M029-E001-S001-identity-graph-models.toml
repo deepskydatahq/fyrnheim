@@ -1,0 +1,48 @@
+id = "M029-E001-S001"
+parent = "M029-E001"
+title = "Define IdentityGraph and IdentitySource models"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add new IdentityGraph and IdentitySource Pydantic models as top-level identity assets, exported from core."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraph(name='customer', canonical_id='customer_id', sources=[...2 sources...]) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraph with fewer than 2 sources raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraph without name raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentityGraph.resolution_strategy defaults to 'match_key'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentitySource(source='crm', id_field='contact_id', match_key_field='email_hash') validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IdentitySource without match_key_field raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.core import IdentityGraph as NewIdentityGraph works (use distinct name to avoid clash with existing)"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py", "src/fyrnheim/core/__init__.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create a new file src/fyrnheim/core/identity.py for the new models (avoids cluttering source.py which has the old identity types). IdentityGraph: name: str, canonical_id: str, sources: list[IdentitySource] (min 2), resolution_strategy: Literal['match_key'] = 'match_key'. IdentitySource: source: str, id_field: str, match_key_field: str. Export from core/__init__.py and top-level __init__.py. Note: the existing IdentityGraphConfig/IdentityGraphSource in source.py remain untouched."""
+reference_files = []

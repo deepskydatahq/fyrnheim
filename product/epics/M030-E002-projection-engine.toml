@@ -1,0 +1,55 @@
+id = "M030-E002"
+parent = "M030"
+title = "Projection engine, discovery, and e2e tests"
+status = "active"
+created = 2026-04-02
+depends_on = ["M030-E001"]
+
+[outcome]
+description = """
+Implement a projection engine that materializes EntityModel definitions from
+enriched event streams. Add EntityModelRegistry for discovery. E2e test with
+multi-source projection using all three strategies plus computed fields.
+"""
+
+[job_story]
+description = """
+When I run the pipeline with EntityModel definitions, I want the projection
+engine to produce materialized tables with current state derived from events,
+so that downstream consumers can query entity state directly.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "project_entity returns a table with one row per canonical_id",
+    "latest strategy picks the most recent value from the specified source",
+    "first strategy picks the earliest value",
+    "coalesce strategy picks from sources in priority order",
+    "Computed fields are applied on top of projected state",
+    "EntityModelRegistry discovers EntityModel instances from Python files",
+    "E2e test with multi-source events produces correct entity projection",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/components/computed_column.py",
+]
+dependencies = ["M030-E001"]
+
+[notes]
+considerations = """
+The projection engine works on enriched events (with canonical_id).
+For each canonical_id, it derives field values based on the StateField strategy:
+- latest: most recent value from row_appeared/field_changed events for that source
+- first: earliest value
+- coalesce: check sources in priority order, use first non-null
+
+Start with pandas-based implementation (same pattern as other engines).
+"""
+
+estimated_stories = 3

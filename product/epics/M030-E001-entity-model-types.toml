@@ -1,0 +1,48 @@
+id = "M030-E001"
+parent = "M030"
+title = "EntityModel and StateField Pydantic models"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Define EntityModel and StateField Pydantic models as top-level assets.
+EntityModel has name, identity_graph, state_fields, computed_fields.
+StateField has name, source, field, strategy (latest/first/coalesce), priority.
+Export from core package.
+"""
+
+[job_story]
+description = """
+When I want to define a derived entity view from the activity stream, I want
+to declare an EntityModel with state fields and resolution strategies, so that
+the system can project current state from events.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EntityModel validates with name, identity_graph, state_fields",
+    "StateField validates with all three strategies: latest, first, coalesce",
+    "StateField with strategy='coalesce' requires priority list",
+    "EntityModel accepts optional computed_fields (list of ComputedColumn)",
+    "Both models are exported from core package",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity.py",
+    "src/fyrnheim/core/identity.py",
+    "src/fyrnheim/components/computed_column.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Create src/fyrnheim/core/entity_model.py to avoid conflicting with entity.py.
+EntityModel is the activities-first replacement for Entity.
+"""
+
+estimated_stories = 1

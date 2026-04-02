@@ -1,0 +1,32 @@
+id = "M030-E002-S003"
+parent = "M030-E002"
+title = "E2e test: multi-source entity projection"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """E2e test proving the full pipeline: enriched events → entity projection with all strategies + computed fields."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Projection from events across 2 sources produces correct entity table"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "latest/first/coalesce strategies produce correct values in the projected table"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Computed field (e.g., is_paying = plan != 'free') appears in output with correct values"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M030-E002-S001", "M030-E002-S002"]
+
+[handoff]
+implementation_hints = """Create enriched events from 2 sources (crm, billing) with shared canonical_ids. Define EntityModel with: email (latest from crm), first_seen (first from crm), plan (coalesce crm,billing), computed is_paying. Run project_entity, verify output."""
+reference_files = []

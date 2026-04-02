@@ -3,7 +3,6 @@
 import json
 
 import ibis
-import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.entity_model import EntityModel, StateField

@@ -1,0 +1,57 @@
+id = "M028-E002"
+parent = "M028"
+title = "Activity engine and discovery"
+status = "active"
+created = 2026-04-01
+depends_on = ["M028-E001"]
+
+[outcome]
+description = """
+Implement an activity engine that applies ActivityDefinitions to raw event streams
+(from diff_snapshots) to produce named business events. Add an ActivityRegistry
+for discovering ActivityDefinition instances from Python files, following the
+EntityRegistry pattern.
+"""
+
+[job_story]
+description = """
+When the pipeline runs, I want activity definitions to be automatically discovered
+and applied to the raw event stream, producing named business events that I can
+query and analyze.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Activity engine filters raw events by RowAppeared trigger and produces named events",
+    "Activity engine filters raw events by FieldChanged trigger with from/to value filters",
+    "Activity engine filters raw events by RowDisappeared trigger",
+    "Activity engine filters raw events by EventOccurred trigger",
+    "ActivityRegistry discovers ActivityDefinition instances from Python files",
+    "Named events preserve the universal schema (source, entity_id, ts, event_type, payload)",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/registry.py",
+    "src/fyrnheim/core/activity.py",
+]
+dependencies = ["M028-E001"]
+
+[notes]
+considerations = """
+The activity engine takes a raw event table (from diff_snapshots or event sources)
+and a list of ActivityDefinitions, then filters/transforms into named events.
+
+For FieldChanged: parse the payload JSON, check field_name matches trigger.field,
+and optionally check old_value in from_values and new_value in to_values.
+
+The output replaces event_type with the activity definition name and adjusts the payload.
+
+ActivityRegistry follows the EntityRegistry pattern: scan .py files for module-level
+'activity' or 'activities' variables.
+"""
+
+estimated_stories = 3

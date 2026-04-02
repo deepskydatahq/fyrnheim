@@ -1,0 +1,47 @@
+id = "M028-E001"
+parent = "M028"
+title = "ActivityDefinition and trigger models"
+status = "active"
+created = 2026-04-01
+depends_on = []
+
+[outcome]
+description = """
+Define ActivityDefinition Pydantic model with trigger types (RowAppeared, FieldChanged,
+RowDisappeared, EventOccurred) as top-level assets. FieldChanged supports from_values/to_values
+filters. EventOccurred supports event_type filter. Include validation and unit tests.
+"""
+
+[job_story]
+description = """
+When I want to define a meaningful business event from raw data changes, I want to
+declare an ActivityDefinition with a named trigger, so that the system can filter
+raw events into named business events.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ActivityDefinition validates with all four trigger types",
+    "FieldChanged trigger accepts optional from_values and to_values",
+    "EventOccurred trigger accepts optional event_type filter",
+    "ActivityDefinition requires name, source, and trigger fields",
+    "ActivityDefinition is exported from core package",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/core/__init__.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+The new ActivityDefinition coexists with the old ActivityConfig/ActivityType.
+Trigger types are separate Pydantic models, not Literal strings.
+The trigger field is a union: RowAppeared | FieldChanged | RowDisappeared | EventOccurred.
+"""
+
+estimated_stories = 2

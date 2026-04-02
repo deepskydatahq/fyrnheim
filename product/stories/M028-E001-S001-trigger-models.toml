@@ -1,0 +1,40 @@
+id = "M028-E001-S001"
+parent = "M028-E001"
+title = "Define trigger type models"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Add RowAppeared, FieldChanged, RowDisappeared, and EventOccurred Pydantic models."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "RowAppeared() validates with no required fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "FieldChanged(field='plan') validates; from_values and to_values are optional"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "FieldChanged without field raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "RowDisappeared() validates with no required fields"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventOccurred() validates with optional event_type filter"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/activity.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Add the four trigger models to core/activity.py. Each has a type literal discriminator for union serialization. FieldChanged has field: str (required), from_values: list[str] | None, to_values: list[str] | None. EventOccurred has event_type: str | None."""
+reference_files = []

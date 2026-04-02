@@ -1,0 +1,44 @@
+id = "M028-E001-S002"
+parent = "M028-E001"
+title = "Define ActivityDefinition model and exports"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Add ActivityDefinition Pydantic model with name, source, trigger (union of four types), include_fields, and export from core package."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition(name='signup', source='crm', trigger=RowAppeared()) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition(name='upgrade', source='crm', trigger=FieldChanged(field='plan', to_values=['pro'])) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition without name raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition without source raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition accepts optional include_fields list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.core import ActivityDefinition, RowAppeared, FieldChanged, RowDisappeared, EventOccurred works"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/activity.py", "src/fyrnheim/core/__init__.py"]
+input_fixtures = []
+depends_on = ["M028-E001-S001"]
+
+[handoff]
+implementation_hints = """ActivityDefinition has: name: str, source: str, trigger: RowAppeared | FieldChanged | RowDisappeared | EventOccurred, include_fields: list[str] = []. Export all new types from core/__init__.py and top-level __init__.py."""
+reference_files = []

@@ -1,0 +1,36 @@
+id = "M028-E002-S002"
+parent = "M028-E002"
+title = "ActivityRegistry for discovering definitions"
+status = "ready"
+created = 2026-04-01
+
+[outcome]
+description = """Implement ActivityRegistry that discovers ActivityDefinition instances from Python files, following the EntityRegistry pattern."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityRegistry.discover(dir) finds module-level 'activity' variables that are ActivityDefinition instances"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityRegistry.discover finds module-level 'activities' lists of ActivityDefinition"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityRegistry.get(name) returns the ActivityDefinition by name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityRegistry raises ValueError on duplicate activity names"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/registry.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Add ActivityRegistry class to registry.py or a new file. Follow the EntityRegistry pattern: scan .py files, import them, look for 'activity' (single) or 'activities' (list) module-level variables. Store by name."""
+reference_files = []

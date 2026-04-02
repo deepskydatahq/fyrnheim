@@ -1,0 +1,48 @@
+id = "M028-E002-S001"
+parent = "M028-E002"
+title = "Activity engine applying definitions to raw events"
+status = "plan"
+created = 2026-04-01
+
+[outcome]
+description = """Implement apply_activity_definitions() that filters raw event tables by activity definitions and produces named events."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "RowAppeared trigger matches raw events with event_type='row_appeared' from the matching source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "FieldChanged trigger matches field_changed events where payload.field_name matches trigger.field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "FieldChanged with to_values=['pro'] only matches when payload.new_value is 'pro'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "FieldChanged with from_values=['free'] only matches when payload.old_value is 'free'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "RowDisappeared trigger matches raw events with event_type='row_disappeared'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventOccurred trigger matches events from event sources; with event_type filter, only matching types"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output events have event_type set to the activity definition name (e.g., 'signup' instead of 'row_appeared')"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/diff_engine.py", "src/fyrnheim/core/activity.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/activity_engine.py. The function takes a raw event table (Ibis) and a list of ActivityDefinitions. For each definition, filter the event table by source name and trigger type, then rename event_type to the definition name. Union all results. Since events use JSON payloads, you'll need to parse the payload to check field_name/old_value/new_value — use pandas for this (same pattern as diff_engine)."""
+reference_files = []

@@ -12,18 +12,22 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/deepskydatahq/fyrnheim' },
       ],
       sidebar: [
-        { label: 'Getting Started', slug: 'getting-started' },
+        {
+          label: 'Getting Started',
+          items: [
+            { label: 'Introduction', slug: 'getting-started/introduction' },
+          ],
+        },
         {
           label: 'Core Concepts',
           collapsed: true,
           items: [
-            { label: 'Entities', slug: 'concepts/entities' },
-            { label: 'Layers', slug: 'concepts/layers' },
             { label: 'Sources', slug: 'concepts/sources' },
-            { label: 'Source Mapping', slug: 'concepts/source-mapping' },
+            { label: 'Activities', slug: 'concepts/activities' },
+            { label: 'Identity', slug: 'concepts/identity' },
+            { label: 'Entity Models', slug: 'concepts/entity-models' },
+            { label: 'Analytics', slug: 'concepts/analytics' },
             { label: 'Primitives', slug: 'concepts/primitives' },
-            { label: 'Components', slug: 'concepts/components' },
-            { label: 'Quality Checks', slug: 'concepts/quality' },
           ],
         },
         { label: 'Configuration', slug: 'configuration' },

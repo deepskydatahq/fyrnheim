@@ -1,15 +1,17 @@
 ---
 title: Introduction
-description: Get started with Fyrnheim — a Python-native dbt alternative.
+description: Get started with Fyrnheim -- an activities-first Python data pipeline tool.
 ---
 
-Fyrnheim lets data teams define typed Python entities, generate transformations, and run them on any backend via Ibis.
+Fyrnheim is a Python-native dbt alternative built on an activities-first architecture. You define sources, activity definitions, identity graphs, entity models, and analytics models in Python. Fyrnheim generates Ibis transformation code and runs it on DuckDB, BigQuery, ClickHouse, or Postgres.
 
 ## Install
 
 ```bash
 pip install fyrnheim[duckdb]
 ```
+
+Requires Python 3.11 or later.
 
 ## Quick Start
 
@@ -19,4 +21,4 @@ fyr generate
 fyr run
 ```
 
-See the full documentation for more details.
+See [Getting Started](/getting-started/) for a full walkthrough of the pipeline, or jump to [Core Concepts](/concepts/sources/) to learn about sources, activities, identity, and entity models.

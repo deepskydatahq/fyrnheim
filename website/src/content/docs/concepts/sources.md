@@ -1,114 +1,73 @@
 ---
 title: Sources
-description: Connect entities to data using TableSource, UnionSource, DerivedSource, and more.
+description: Declare raw data inputs as StateSource or EventSource.
 ---
 
-Fyrnheim supports multiple source types for different data patterns. Each entity declares a source that tells Fyrnheim where to read data from.
+Sources are the entry point of every Fyrnheim pipeline. They declare where data comes from and what shape it has. There are two types.
 
-## TableSource
+## StateSource
 
-Read from a single warehouse table or local parquet file:
-
-```python
-from fyrnheim import TableSource
-
-source = TableSource(
-    project="myproject",
-    dataset="raw",
-    table="customers",
-    duckdb_path="data/customers.parquet",  # local dev
-)
-```
-
-The `duckdb_path` field is used for local development with DuckDB. The `project`, `dataset`, and `table` fields are used for warehouse backends like BigQuery.
-
-## UnionSource
-
-Combine multiple sources into a common schema. Each sub-source can remap columns with `field_mappings` and inject constants with `literal_columns`:
+Use `StateSource` for data that represents current state -- CRM exports, dimension tables, configuration tables. These are tables where rows represent entities and columns represent their current attributes.
 
 ```python
-from fyrnheim import UnionSource, TableSource
+from fyrnheim.core import StateSource, Field
 
-source = UnionSource(
-    sources=[
-        TableSource(
-            project="myproject", dataset="raw", table="youtube_videos",
-            duckdb_path="youtube_videos/*.parquet",
-            field_mappings={"video_id": "product_id"},
-            literal_columns={"product_type": "video", "source_platform": "youtube"},
-        ),
-        TableSource(
-            project="myproject", dataset="raw", table="linkedin_posts",
-            duckdb_path="linkedin_posts/*.parquet",
-            field_mappings={"post_id": "product_id", "text": "title"},
-            literal_columns={"product_type": "post", "source_platform": "linkedin"},
-        ),
+crm_source = StateSource(
+    name="crm_contacts",
+    project="my_project",
+    dataset="crm",
+    table="contacts",
+    id_field="contact_id",
+    fields=[
+        Field(name="email", type="string"),
+        Field(name="plan", type="string"),
+        Field(name="created_at", type="timestamp"),
     ],
 )
 ```
 
-## DerivedSource
+The `id_field` tells the snapshot-diff engine which column uniquely identifies each row. On every run, Fyrnheim compares the current snapshot to the previous one and produces change events automatically.
 
-Build identity graphs by joining multiple entities on a shared key. Uses cascading FULL OUTER JOIN with priority-based field resolution:
+## EventSource
+
+Use `EventSource` for data that is already event-shaped -- page views, transactions, webhook logs. Each row is an occurrence with a timestamp.
 
 ```python
-from fyrnheim import DerivedSource, IdentityGraphConfig, IdentityGraphSource
+from fyrnheim.core import EventSource
 
-source = DerivedSource(
-    identity_graph="person_graph",
-    identity_graph_config=IdentityGraphConfig(
-        match_key="email_hash",
-        sources=[
-            IdentityGraphSource(
-                name="crm",
-                entity="crm_contacts",
-                match_key_field="email_hash",
-                fields={"email": "email", "name": "full_name"},
-            ),
-            IdentityGraphSource(
-                name="billing",
-                entity="transactions",
-                match_key_field="customer_email_hash",
-                fields={"email": "customer_email", "name": "customer_name"},
-            ),
-        ],
-        priority=["crm", "billing"],  # CRM wins when both have a value
+billing_source = EventSource(
+    name="billing_events",
+    project="my_project",
+    dataset="billing",
+    table="transactions",
+    entity_id_field="customer_id",
+    timestamp_field="created_at",
+    event_type_field="event_type",
+)
+```
+
+Event sources pass through directly into the activity stream. The `event_type_field` (or a static `event_type` string) identifies what kind of event each row represents.
+
+## SourceTransforms
+
+Both source types accept an optional `transforms` parameter for cleaning data at ingestion time -- renaming columns, casting types, or applying simple arithmetic.
+
+```python
+from fyrnheim.core import StateSource, SourceTransforms, Rename, TypeCast
+
+source = StateSource(
+    name="raw_accounts",
+    project="warehouse",
+    dataset="crm",
+    table="accounts",
+    id_field="account_id",
+    transforms=SourceTransforms(
+        renames=[Rename(from_name="acct_id", to_name="account_id")],
+        casts=[TypeCast(column="revenue", to_type="float64")],
     ),
 )
 ```
 
-Auto-generated columns: `is_{source}` flags, `{source}_id`, `first_seen_{source}` dates.
+## How sources connect to the pipeline
 
-## AggregationSource
-
-Aggregate from another entity with GROUP BY and Ibis expressions:
-
-```python
-from fyrnheim import AggregationSource, ComputedColumn
-
-source = AggregationSource(
-    source_entity="person",
-    group_by_column="account_id",
-    filter_expression="t.account_id.notnull()",
-    aggregations=[
-        ComputedColumn(name="num_persons", expression="t.person_id.nunique()"),
-        ComputedColumn(name="first_seen", expression="t.created_at.min()"),
-    ],
-)
-```
-
-## EventAggregationSource
-
-Aggregate raw event streams. Reads from a table and groups by a key:
-
-```python
-from fyrnheim import EventAggregationSource
-
-source = EventAggregationSource(
-    project="myproject",
-    dataset="raw",
-    table="page_views",
-    duckdb_path="page_views/*.parquet",
-    group_by_column="user_id",
-)
-```
+State sources feed into the **snapshot-diff engine**, which detects changes and produces raw events. Event sources flow directly into the activity stream. Both converge at the [activity definition](/concepts/activities/) step, where raw changes become named business events.

@@ -1,9 +1,9 @@
 ---
 title: Getting Started
-description: Install Fyrnheim and run your first entity pipeline in minutes.
+description: Install Fyrnheim and build your first activities-first data pipeline.
 ---
 
-Fyrnheim lets data teams define business entities as typed Pydantic models and automatically generates Ibis transformation code from those definitions. The same entity runs on DuckDB for instant local development and deploys to BigQuery, ClickHouse, or Postgres in production with zero changes.
+Fyrnheim is a Python-native dbt alternative. You define sources, activity definitions, identity graphs, entity models, and analytics models in Python. Fyrnheim generates Ibis transformation code and runs it on DuckDB, BigQuery, ClickHouse, or Postgres.
 
 ## Install
 
@@ -11,79 +11,140 @@ Fyrnheim lets data teams define business entities as typed Pydantic models and a
 pip install fyrnheim[duckdb]
 ```
 
-Fyrnheim requires Python 3.11 or later.
+Requires Python 3.11 or later.
 
 ## Quick Start
-
-### 1. Create a project
 
 ```bash
 fyr init myproject && cd myproject
 ```
 
-This scaffolds a project directory with everything you need:
+Then open `entities/customers.py` and build a pipeline step by step.
 
-```
-Created myproject/
-  created  entities/
-  created  data/
-  created  generated/
-  created  fyrnheim.yaml
-  created  entities/customers.py
-  created  data/customers.parquet
-```
+### 1. Define sources
 
-### 2. Look at the sample entity
-
-Open `entities/customers.py` to see a complete entity definition:
+Declare where your data lives and what shape it has.
 
 ```python
-entity = Entity(
-    name="customers",
-    source=TableSource(..., duckdb_path="customers.parquet"),
-    layers=LayersConfig(
-        prep=PrepLayer(model_name="prep_customers", computed_columns=[
-            ComputedColumn(name="email_hash", expression=hash_email("email")),
-            ComputedColumn(name="amount_dollars", expression="t.amount_cents / 100.0"),
-        ]),
-        dimension=DimensionLayer(model_name="dim_customers", computed_columns=[
-            ComputedColumn(name="is_paying", expression="t.plan != 'free'"),
-        ]),
-    ),
-    quality=QualityConfig(checks=[NotNull("email"), Unique("email_hash")]),
+from fyrnheim.core import StateSource, EventSource
+
+crm_source = StateSource(
+    name="crm_contacts",
+    project="my_project",
+    dataset="crm",
+    table="contacts",
+    id_field="contact_id",
+)
+
+billing_source = EventSource(
+    name="billing_events",
+    project="my_project",
+    dataset="billing",
+    table="transactions",
+    entity_id_field="customer_id",
+    timestamp_field="created_at",
+    event_type_field="event_type",
 )
 ```
 
-An entity declares its source, transformation layers, and quality rules in one place.
+State sources get automatic change detection via the snapshot-diff engine. Event sources pass through directly.
 
-### 3. Generate transformation code
+### 2. Define activities
+
+Tell Fyrnheim which changes matter to your business.
+
+```python
+from fyrnheim.core import ActivityDefinition, RowAppeared, FieldChanged, EventOccurred
+
+signup = ActivityDefinition(
+    name="signup",
+    source="crm_contacts",
+    trigger=RowAppeared(),
+)
+
+became_paying = ActivityDefinition(
+    name="became_paying",
+    source="crm_contacts",
+    trigger=FieldChanged(field="plan", to_values=["pro", "enterprise"]),
+)
+
+purchase = ActivityDefinition(
+    name="purchase",
+    source="billing_events",
+    trigger=EventOccurred(event_types=["purchase"]),
+)
+```
+
+### 3. Build an identity graph
+
+Link IDs across sources to a single canonical ID.
+
+```python
+from fyrnheim.core import IdentityGraph, IdentitySource
+
+customer_identity = IdentityGraph(
+    name="customer_identity",
+    canonical_id="customer_id",
+    sources=[
+        IdentitySource(source="crm_contacts", id_field="contact_id", match_key_field="email_hash"),
+        IdentitySource(source="billing_events", id_field="customer_id", match_key_field="email_hash"),
+    ],
+)
+```
+
+### 4. Create an entity model
+
+Project current state from the enriched activity stream.
+
+```python
+from fyrnheim.core import EntityModel, StateField, ComputedColumn
+
+customers = EntityModel(
+    name="customers",
+    identity_graph="customer_identity",
+    state_fields=[
+        StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
+        StateField(name="name", source="crm_contacts", field="full_name", strategy="latest"),
+        StateField(name="plan", source="crm_contacts", field="plan", strategy="latest"),
+        StateField(name="first_seen", source="crm_contacts", field="created_at", strategy="first"),
+    ],
+    computed_fields=[
+        ComputedColumn(name="is_paying", expression="plan != 'free'"),
+    ],
+)
+```
+
+### 5. Add analytics
+
+Aggregate time-grain metrics from the activity stream.
+
+```python
+from fyrnheim.core import StreamAnalyticsModel, StreamMetric
+
+daily_metrics = StreamAnalyticsModel(
+    name="customer_metrics_daily",
+    identity_graph="customer_identity",
+    date_grain="daily",
+    metrics=[
+        StreamMetric(name="new_signups", expression="count()", event_filter="signup", metric_type="count"),
+        StreamMetric(name="total_customers", expression="count()", metric_type="snapshot"),
+    ],
+)
+```
+
+### 6. Generate and run
 
 ```bash
 fyr generate
-```
-
-```
-Generating transforms from entities
-  customers            generated/customers_transforms.py   written
-
-Generated: 1 written, 0 unchanged
-```
-
-Fyrnheim reads your entity definitions and generates Ibis transformation code into the `generated/` directory.
-
-### 4. Run the pipeline
-
-```bash
 fyr run
 ```
 
-```
-Discovering entities... 1 found
-Running on duckdb
+Fyrnheim reads your definitions, generates Ibis transformation code, and executes the full pipeline.
 
-  customers        prep -> dim            12 rows    0.1s  ok
+## Next steps
 
-Done: 1 success, 0 errors (0.2s)
-```
-
-Add your own entities to `entities/` and data to `data/`. See the [Core Concepts](/concepts/entities/) section to learn about entities, layers, sources, and more.
+- [Sources](/concepts/sources/) -- StateSource vs EventSource in detail
+- [Activities](/concepts/activities/) -- The snapshot-diff engine and trigger types
+- [Identity](/concepts/identity/) -- How ID resolution works
+- [Entity Models](/concepts/entity-models/) -- Resolution strategies for current state
+- [Analytics](/concepts/analytics/) -- Time-grain metric aggregation

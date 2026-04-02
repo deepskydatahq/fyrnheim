@@ -1,0 +1,32 @@
+id = "M032-E001-S003"
+parent = "M032-E001"
+title = "Remove old tests and verify new tests pass"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Remove all test files that test old entity-centric pipeline. Verify all remaining tests pass."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All old entity-centric test files are removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All remaining tests pass (uv run pytest)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No test imports reference removed types"
+
+[context]
+relevant_paths = ["tests/"]
+input_fixtures = []
+depends_on = ["M032-E001-S001", "M032-E001-S002"]
+
+[handoff]
+implementation_hints = """Remove test files listed in the epic considerations. Keep: test_state_event_source.py, test_activity_definition.py, test_activity_engine.py, test_activity_registry.py, test_diff_engine.py, test_snapshot_store.py, test_snapshot_diff.py, test_identity_graph.py, test_identity_engine.py, test_identity_registry.py, test_entity_model.py, test_entity_projection.py, test_entity_projection_e2e.py, test_entity_model_registry.py, test_stream_analytics_model.py, test_analytics_aggregation.py, test_analytics_aggregation_e2e.py, test_analytics_model_registry.py, test_e2e_activity_pipeline.py, test_e2e_ibis_executor.py, test_package.py, test_core_types.py (if it tests new types), test_primitives.py. Run uv run pytest and fix any import errors in remaining tests."""
+reference_files = []

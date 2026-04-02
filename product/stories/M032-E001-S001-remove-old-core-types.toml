@@ -1,0 +1,48 @@
+id = "M032-E001-S001"
+parent = "M032-E001"
+title = "Remove old core type definitions and exports"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Remove old entity-centric type files and clean up exports in __init__.py files."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/entity.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/layer.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/analytics.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Old source types (DerivedSource, AggregationSource, etc.) removed from source.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Old ActivityConfig/ActivityType removed from activity.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "core/__init__.py only exports new activities-first types"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyrnheim/__init__.py only exports new activities-first types"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/", "src/fyrnheim/__init__.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Delete entity.py, layer.py, analytics.py, source_mapping.py, types.py entirely. In source.py: keep BaseTableSource, TableSource, Field, TypeCast, Rename, Divide, Multiply, SourceTransforms, StateSource, EventSource. Remove DerivedSource, DerivedEntitySource, AggregationSource, EventAggregationSource, UnionSource, IdentityGraphConfig, IdentityGraphSource. In activity.py: keep RowAppeared, FieldChanged, RowDisappeared, EventOccurred, ActivityDefinition. Remove ActivityConfig, ActivityType. Update __init__.py files to only export new types."""
+reference_files = []

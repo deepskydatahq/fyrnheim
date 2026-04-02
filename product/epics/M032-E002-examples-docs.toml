@@ -1,0 +1,54 @@
+id = "M032-E002"
+parent = "M032"
+title = "Migrate examples and update documentation"
+status = "active"
+created = 2026-04-02
+depends_on = ["M032-E001"]
+
+[outcome]
+description = """
+Migrate all example entity files to the new activities-first definitions using
+StateSource, EventSource, ActivityDefinition, IdentityGraph, EntityModel, and
+StreamAnalyticsModel. Update README and CLI scaffold template.
+"""
+
+[job_story]
+description = """
+When a new user looks at the examples or README, I want them to see the
+activities-first API so they learn the current way to use Fyrnheim.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Example files use new activities-first types",
+    "README reflects the new architecture",
+    "CLI scaffold uses new types",
+    "All remaining tests pass",
+]
+validator_context = ["examples/", "README.md"]
+
+[context]
+relevant_paths = [
+    "examples/",
+    "README.md",
+    "src/fyrnheim/_scaffold/",
+    "src/fyrnheim/cli.py",
+]
+dependencies = ["M032-E001"]
+
+[notes]
+considerations = """
+The examples directory has:
+- examples/entities/customers.py (simple example)
+- examples/timo-data-stack/entities/*.py (12 files)
+
+These all use old Entity/LayersConfig/source types. They need to be rewritten
+or removed. Since they serve as documentation, rewrite them to show the new API.
+
+The CLI has commands: init, generate, run, check, list, test, docs.
+These depend on the old EntityRegistry and runner. They'll need to be updated
+or temporarily disabled until the new pipeline has CLI integration.
+"""
+
+estimated_stories = 2

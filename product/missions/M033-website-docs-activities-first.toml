@@ -1,0 +1,89 @@
+id = "M033"
+title = "Update website docs for activities-first architecture"
+status = "draft"
+created = 2026-04-02
+
+[outcome]
+description = """
+Rewrite the fyrnheim website documentation to describe the activities-first
+architecture. Replace the old entity-centric concept pages (Entities, Layers,
+Sources, Source Mapping) with 5 new pages matching the actual architecture:
+Sources, Activities, Identity, Entity Models, Analytics. Rewrite Getting Started
+with a new quick-start example. Remove outdated pages (Source Mapping, Quality,
+Components). Defer detailed API reference.
+"""
+
+user_progress = "From 'website describes removed entity-centric pipeline' to 'website describes the shipped activities-first architecture'"
+
+[scope]
+in_scope = [
+    "Rewrite getting-started.md with activities-first quick-start example",
+    "New concept page: Sources (StateSource, EventSource)",
+    "New concept page: Activities (SnapshotDiff, ActivityDefinition, triggers)",
+    "New concept page: Identity (IdentityGraph, resolution, enrichment)",
+    "New concept page: Entity Models (EntityModel, StateField, projection strategies)",
+    "New concept page: Analytics (StreamAnalyticsModel, metrics, aggregation)",
+    "Update sidebar navigation in astro.config.mjs",
+    "Remove outdated pages: source-mapping.md, quality.md, components.md",
+    "Update or simplify api-reference.md to list new types only",
+    "Keep primitives.md (type-agnostic, still relevant)",
+    "Keep configuration.md (unaffected)",
+    "Update index.mdx tagline/description if it references old concepts",
+]
+out_of_scope = [
+    "Auto-generated API reference from code (future)",
+    "Interactive examples or playground",
+    "New website features or design changes",
+    "Architecture diagrams (text descriptions sufficient for now)",
+    "Tutorials beyond quick-start",
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "No documentation page references old Entity, LayersConfig, PrepLayer, DimensionLayer, SnapshotLayer",
+    "No documentation page references old ActivityConfig, ActivityType, DerivedSource, UnionSource, AggregationSource",
+    "Getting Started shows a working activities-first example",
+    "All 5 new concept pages exist and describe the correct architecture",
+    "Sidebar navigation reflects new concept structure",
+    "Removed pages (source-mapping, quality, components) are gone from content and sidebar",
+]
+validator_context = ["website/src/content/docs/", "website/astro.config.mjs"]
+
+[context]
+relevant_paths = [
+    "website/src/content/docs/",
+    "website/astro.config.mjs",
+    "website/package.json",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+    "examples/entities/customers.py",
+]
+origin = "M032 evaluator finding: website docs still reference old types"
+depends_on = ["M032"]
+
+[notes]
+considerations = """
+The website uses Astro + Starlight. Content is in website/src/content/docs/.
+Sidebar is configured in astro.config.mjs.
+
+New sidebar structure should be:
+- Getting Started
+  - Introduction
+- Core Concepts
+  - Sources
+  - Activities
+  - Identity
+  - Entity Models
+  - Analytics
+  - Primitives
+- Configuration
+- API Reference
+
+The design spec at docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md
+is the authoritative reference for what the docs should describe.
+
+The example at examples/entities/customers.py shows the new API and can serve
+as the basis for the Getting Started code example.
+
+12 content files total. 3 to remove, 5 to replace, 2 to rewrite, 2 unchanged.
+"""

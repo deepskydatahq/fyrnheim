@@ -1,0 +1,57 @@
+id = "M029-E002"
+parent = "M029"
+title = "Identity resolution engine and event enrichment"
+status = "active"
+created = 2026-04-02
+depends_on = ["M029-E001"]
+
+[outcome]
+description = """
+Implement identity resolution that builds an ID mapping from events by observing
+match keys across sources, then enriches events with canonical_id. Add
+IdentityGraphRegistry for discovery. End-to-end test with multi-source resolution.
+"""
+
+[job_story]
+description = """
+When events flow from multiple sources, I want the identity graph to automatically
+resolve raw IDs to canonical IDs and enrich the event stream, so that downstream
+models can group events by unified identity.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "resolve_identities builds correct ID mapping from events and match keys",
+    "enrich_events adds canonical_id column to event table",
+    "Events from sources not in the graph retain entity_id as canonical_id",
+    "Multi-source resolution links IDs via shared match key",
+    "IdentityGraphRegistry discovers IdentityGraph instances from Python files",
+    "E2e test: events from 2-3 sources get unified canonical_id",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/activity_registry.py",
+]
+dependencies = ["M029-E001"]
+
+[notes]
+considerations = """
+The resolution approach:
+1. From the event stream, extract (source, entity_id, match_key_value) tuples
+2. Group by match_key_value to find which raw IDs share a match key
+3. Generate canonical_id (hash of match key for simplicity)
+4. Produce a mapping table: (source, entity_id) -> canonical_id
+5. Enrich events by joining on (source, entity_id)
+
+The match_key_value comes from the event payload. Each IdentitySource specifies
+which payload field contains the match key via match_key_field.
+
+For events from sources NOT in the identity graph, use entity_id as canonical_id.
+"""
+
+estimated_stories = 3

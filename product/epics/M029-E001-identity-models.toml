@@ -1,0 +1,46 @@
+id = "M029-E001"
+parent = "M029"
+title = "IdentityGraph and IdentitySource models"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Define IdentityGraph and IdentitySource Pydantic models as top-level assets.
+IdentityGraph has name, canonical_id, sources list, and resolution_strategy.
+IdentitySource has source, id_field, match_key_field. Export from core package.
+"""
+
+[job_story]
+description = """
+When I want to unify identities across data sources, I want to declare an
+IdentityGraph that maps which sources contribute IDs and how they match,
+so that the system can resolve raw IDs to canonical IDs.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IdentityGraph validates with name, canonical_id, sources, resolution_strategy",
+    "IdentitySource validates with source, id_field, match_key_field",
+    "IdentityGraph requires at least 2 sources",
+    "Both models are exported from core package",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/__init__.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+These are NEW models separate from the existing IdentityGraphConfig/IdentityGraphSource
+in source.py. The new ones are simpler — just ID mapping, no field coalescing.
+Name them distinctly to avoid confusion during coexistence.
+"""
+
+estimated_stories = 1

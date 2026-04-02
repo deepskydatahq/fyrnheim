@@ -1,0 +1,58 @@
+id = "M031-E002"
+parent = "M031"
+title = "Analytics aggregation engine, discovery, and e2e"
+status = "active"
+created = 2026-04-02
+depends_on = ["M031-E001"]
+
+[outcome]
+description = """
+Implement an analytics aggregation engine that takes enriched events and an
+AnalyticsModel definition, groups by date grain + dimensions, and computes
+metrics. Add AnalyticsModelRegistry for discovery. E2e test with realistic
+metrics including count, sum, and snapshot types.
+"""
+
+[job_story]
+description = """
+When the pipeline runs, I want analytics models to aggregate the enriched
+activity stream into time-grain metric tables, so that I can build dashboards
+and track KPIs.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "aggregate_analytics produces a table grouped by date grain and dimensions",
+    "count metric type counts events matching the filter",
+    "sum metric type sums a numeric value from event payloads",
+    "snapshot metric type computes cumulative values",
+    "event_filter restricts which events are included in a metric",
+    "AnalyticsModelRegistry discovers AnalyticsModel instances from Python files",
+    "E2e test with multiple metrics produces correct aggregation",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/entity_projection.py",
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/activity_registry.py",
+]
+dependencies = ["M031-E001"]
+
+[notes]
+considerations = """
+The aggregation engine works on enriched events (with canonical_id).
+Events have: source, entity_id, ts, event_type, payload (JSON), canonical_id.
+
+For date graining: extract date from ts, then truncate to grain.
+For metrics:
+- count: count rows matching event_filter
+- sum: parse payload for a numeric field and sum it
+- snapshot: count_distinct(canonical_id) — cumulative unique count
+
+Use pandas for implementation (same pattern as other engines).
+"""
+
+estimated_stories = 3

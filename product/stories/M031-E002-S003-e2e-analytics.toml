@@ -1,0 +1,36 @@
+id = "M031-E002-S003"
+parent = "M031-E002"
+title = "E2e test: analytics aggregation from enriched events"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """E2e test proving full analytics pipeline: enriched events → aggregation with count, sum, snapshot metrics."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Daily aggregation from enriched events produces one row per date"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "count metric correctly counts signup events per day"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "snapshot metric correctly counts distinct canonical_ids"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "Dimensions (e.g., source) create correct sub-groupings"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M031-E002-S001", "M031-E002-S002"]
+
+[handoff]
+implementation_hints = """Create enriched events with different dates, sources, and canonical_ids. Define StreamAnalyticsModel with count (signups), snapshot (total_customers). Verify daily aggregation produces correct values."""
+reference_files = []

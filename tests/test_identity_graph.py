@@ -122,14 +122,11 @@ class TestIdentityGraphExport:
         assert IG is IdentityGraph
         assert IS is IdentitySource
 
-    def test_no_clash_with_old_types(self) -> None:
+    def test_new_identity_types_are_distinct(self) -> None:
         from fyrnheim.core import (
             IdentityGraph,
-            IdentityGraphConfig,
-            IdentityGraphSource,
             IdentitySource,
         )
 
-        # All four types are distinct
-        assert IdentityGraph is not IdentityGraphConfig
-        assert IdentitySource is not IdentityGraphSource
+        # Both types are distinct
+        assert IdentityGraph is not IdentitySource

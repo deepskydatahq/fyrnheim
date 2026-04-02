@@ -1,53 +1,21 @@
 """fyrnheim -- Define typed Python entities, generate transformations, run anywhere."""
 
-from typing import Any
-
-from fyrnheim.components import (
-    ComputedColumn as ComputedColumn,
-    DataQualityChecks as DataQualityChecks,
-    LifecycleFlags as LifecycleFlags,
-    Measure as Measure,
-    TimeBasedMetrics as TimeBasedMetrics,
-)
+from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn
 from fyrnheim.core import (
-    ActivityConfig as ActivityConfig,
     ActivityDefinition as ActivityDefinition,
-    ActivityType as ActivityType,
-    AggregationSource as AggregationSource,
-    AnalyticsLayer as AnalyticsLayer,
-    AnalyticsMetric as AnalyticsMetric,
-    AnalyticsModel as AnalyticsModel,
-    AnalyticsSource as AnalyticsSource,
     BaseTableSource as BaseTableSource,
-    ComputedMetric as ComputedMetric,
-    DerivedEntitySource as DerivedEntitySource,
-    DerivedSource as DerivedSource,
-    DimensionLayer as DimensionLayer,
     Divide as Divide,
-    Entity as Entity,
     EntityModel as EntityModel,
-    EventAggregationSource as EventAggregationSource,
     EventOccurred as EventOccurred,
     EventSource as EventSource,
     Field as Field,
     FieldChanged as FieldChanged,
-    HelperEntity as HelperEntity,
     IdentityGraph as IdentityGraph,
-    IdentityGraphConfig as IdentityGraphConfig,
-    IdentityGraphSource as IdentityGraphSource,
     IdentitySource as IdentitySource,
-    IncrementalStrategy as IncrementalStrategy,
-    LayersConfig as LayersConfig,
-    MaterializationType as MaterializationType,
     Multiply as Multiply,
-    PrepLayer as PrepLayer,
     Rename as Rename,
     RowAppeared as RowAppeared,
     RowDisappeared as RowDisappeared,
-    SnapshotLayer as SnapshotLayer,
-    Source as Source,
-    SourceMapping as SourceMapping,
-    SourcePriority as SourcePriority,
     SourceTransforms as SourceTransforms,
     StateField as StateField,
     StateSource as StateSource,
@@ -55,7 +23,6 @@ from fyrnheim.core import (
     StreamMetric as StreamMetric,
     TableSource as TableSource,
     TypeCast as TypeCast,
-    UnionSource as UnionSource,
 )
 from fyrnheim.primitives import (
     account_id_from_domain as account_id_from_domain,
@@ -98,141 +65,38 @@ from fyrnheim.primitives import (
     sum_ as sum_,
     to_json_struct as to_json_struct,
 )
-from fyrnheim.quality import (
-    CheckResult as CheckResult,
-    CustomSQL as CustomSQL,
-    EntityResult as EntityResult,
-    ForeignKey as ForeignKey,
-    InRange as InRange,
-    InSet as InSet,
-    MatchesPattern as MatchesPattern,
-    MaxAge as MaxAge,
-    NotEmpty as NotEmpty,
-    NotNull as NotNull,
-    QualityCheck as QualityCheck,
-    QualityConfig as QualityConfig,
-    QualityRunner as QualityRunner,
-    Unique as Unique,
-)
-
-# Resolve forward references (order matters: Entity first, then SourceMapping)
-Entity.model_rebuild()
-HelperEntity.model_rebuild()
-SourceMapping.model_rebuild()
 
 __version__ = "0.1.0"
 
-# Lazy imports for generator/engine symbols that require ibis
-_LAZY_IMPORTS = {
-    "generate": "fyrnheim._generate",
-    "GenerateResult": "fyrnheim._generate",
-    "IbisCodeGenerator": "fyrnheim.generators",
-    "run": "fyrnheim.engine.runner",
-    "run_entity": "fyrnheim.engine.runner",
-    "RunResult": "fyrnheim.engine.runner",
-    "EntityRunResult": "fyrnheim.engine.runner",
-    "IbisExecutor": "fyrnheim.engine.executor",
-    "ExecutionResult": "fyrnheim.engine.executor",
-    "create_connection": "fyrnheim.engine.connection",
-    # Engine: Errors
-    "ExecutionError": "fyrnheim.engine.errors",
-    "SourceNotFoundError": "fyrnheim.engine.errors",
-    "TransformModuleError": "fyrnheim.engine.errors",
-    "FyrnheimEngineError": "fyrnheim.engine.errors",
-    # Engine: Resolution
-    "CircularDependencyError": "fyrnheim.engine.resolution",
-    # Engine: Registry
-    "EntityRegistry": "fyrnheim.engine.registry",
-    "EntityInfo": "fyrnheim.engine.registry",
-}
-
-
-def __getattr__(name: str) -> Any:  # noqa: N807
-    if name in _LAZY_IMPORTS:
-        module_path = _LAZY_IMPORTS[name]
-        import importlib
-
-        mod = importlib.import_module(module_path)
-        val = getattr(mod, name)
-        globals()[name] = val
-        return val
-    raise AttributeError(f"module 'fyrnheim' has no attribute {name!r}")
-
-
 __all__ = [
-    # Core
-    "Entity",
+    # Core types
     "EntityModel",
-    "HelperEntity",
-    "LayersConfig",
-    "Source",
+    "StateField",
     "Field",
-    # Types/Enums
-    "MaterializationType",
-    "IncrementalStrategy",
-    "SourcePriority",
     # Sources
     "BaseTableSource",
     "TableSource",
-    "DerivedSource",
-    "DerivedEntitySource",
-    "AggregationSource",
-    "EventAggregationSource",
     "EventSource",
-    "IdentityGraph",
-    "IdentityGraphConfig",
-    "IdentityGraphSource",
-    "IdentitySource",
-    "UnionSource",
     "StateSource",
-    "StateField",
     "SourceTransforms",
     "TypeCast",
     "Rename",
     "Divide",
     "Multiply",
-    # Layers
-    "PrepLayer",
-    "DimensionLayer",
-    "SnapshotLayer",
-    "ActivityConfig",
+    # Identity
+    "IdentityGraph",
+    "IdentitySource",
+    # Activities
     "ActivityDefinition",
-    "ActivityType",
     "RowAppeared",
     "FieldChanged",
     "RowDisappeared",
     "EventOccurred",
-    "AnalyticsLayer",
-    "AnalyticsMetric",
-    "AnalyticsModel",
-    "AnalyticsSource",
-    "ComputedMetric",
-    # Stream Analytics (top-level)
+    # Analytics
     "StreamAnalyticsModel",
     "StreamMetric",
-    # Source Mapping
-    "SourceMapping",
     # Components
     "ComputedColumn",
-    "Measure",
-    "LifecycleFlags",
-    "TimeBasedMetrics",
-    "DataQualityChecks",
-    # Quality
-    "QualityConfig",
-    "QualityCheck",
-    "NotNull",
-    "NotEmpty",
-    "InRange",
-    "InSet",
-    "MatchesPattern",
-    "ForeignKey",
-    "Unique",
-    "MaxAge",
-    "CustomSQL",
-    "QualityRunner",
-    "CheckResult",
-    "EntityResult",
     # Primitives: Hashing
     "concat_hash",
     "hash_email",
@@ -279,25 +143,4 @@ __all__ = [
     "account_id_from_domain",
     # Primitives: Time
     "parse_iso8601_duration",
-    # Code generation (lazy imports)
-    "generate",
-    "GenerateResult",
-    "IbisCodeGenerator",
-    # Execution engine (lazy imports)
-    "run",
-    "run_entity",
-    "RunResult",
-    "EntityRunResult",
-    "IbisExecutor",
-    "ExecutionResult",
-    "create_connection",
-    # Engine: Errors (lazy imports)
-    "ExecutionError",
-    "SourceNotFoundError",
-    "TransformModuleError",
-    "FyrnheimEngineError",
-    "CircularDependencyError",
-    # Engine: Registry (lazy imports)
-    "EntityRegistry",
-    "EntityInfo",
 ]

@@ -1,5 +1,7 @@
 """Core types and source configuration classes."""
 
+from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn
+
 from .activity import (
     ActivityDefinition as ActivityDefinition,
     EventOccurred as EventOccurred,
@@ -31,5 +33,3 @@ from .source import (
     TableSource as TableSource,
     TypeCast as TypeCast,
 )
-
-from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn

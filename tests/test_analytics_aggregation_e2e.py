@@ -125,28 +125,28 @@ class TestE2eDailyAggregation:
         ]
         assert day2_crm["signups"].iloc[0] == 2
 
-    def test_snapshot_metric_counts_distinct_canonical_ids(self):
+    def test_snapshot_metric_computes_cumulative_distinct_canonical_ids(self):
         events = _build_enriched_events()
         model = _build_analytics_model()
         result = aggregate_analytics(events, model).execute()
 
-        # Day 1, crm: c1, c2 => 2 unique
+        # Day 1, crm: c1, c2 => 2 cumulative unique
         day1_crm = result[
             (result["_date"] == "2024-01-01") & (result["source"] == "crm")
         ]
         assert day1_crm["total_customers"].iloc[0] == 2
 
-        # Day 1, billing: c3 => 1 unique
+        # Day 1, billing: c3 => 1 cumulative unique
         day1_billing = result[
             (result["_date"] == "2024-01-01") & (result["source"] == "billing")
         ]
         assert day1_billing["total_customers"].iloc[0] == 1
 
-        # Day 2, crm: c4, c1 => 2 unique
+        # Day 2, crm: c1 (returning) + c4 (new) => cumulative 3 (c1, c2, c4)
         day2_crm = result[
             (result["_date"] == "2024-01-02") & (result["source"] == "crm")
         ]
-        assert day2_crm["total_customers"].iloc[0] == 2
+        assert day2_crm["total_customers"].iloc[0] == 3
 
     def test_dimensions_create_correct_sub_groupings(self):
         events = _build_enriched_events()

@@ -74,11 +74,37 @@ def _compute_metric(
         result = filtered.groupby(group_cols, as_index=False)["_metric_value"].sum()
         result = result.rename(columns={"_metric_value": metric.name})
     elif metric.metric_type == "snapshot":
-        # Count distinct canonical_ids
-        result = filtered.groupby(group_cols, as_index=False)[
-            "canonical_id"
-        ].nunique()
-        result = result.rename(columns={"canonical_id": metric.name})
+        # Cumulative distinct canonical_ids: for each date+dimension group,
+        # count all distinct canonical_ids seen up to and including that date.
+        dim_cols = [c for c in group_cols if c != "_date"]
+        sorted_dates = sorted(filtered["_date"].unique())
+
+        snapshot_rows: list[dict] = []
+        if dim_cols:
+            dim_groups = filtered.groupby(dim_cols, as_index=False)
+            for dim_vals, dim_df in dim_groups:
+                if not isinstance(dim_vals, tuple):
+                    dim_vals = (dim_vals,)
+                seen: set[str] = set()
+                for date in sorted_dates:
+                    day_ids = dim_df[dim_df["_date"] == date]["canonical_id"]
+                    if day_ids.empty:
+                        continue
+                    seen.update(day_ids.tolist())
+                    row = {"_date": date, metric.name: len(seen)}
+                    for col, val in zip(dim_cols, dim_vals):
+                        row[col] = val
+                    snapshot_rows.append(row)
+        else:
+            seen_ids: set[str] = set()
+            for date in sorted_dates:
+                day_ids = filtered[filtered["_date"] == date]["canonical_id"]
+                if day_ids.empty:
+                    continue
+                seen_ids.update(day_ids.tolist())
+                snapshot_rows.append({"_date": date, metric.name: len(seen_ids)})
+
+        result = pd.DataFrame(snapshot_rows, columns=group_cols + [metric.name])
     else:
         raise ValueError(f"Unsupported metric type: {metric.metric_type}")
 

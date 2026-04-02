@@ -170,9 +170,9 @@ class TestSumMetric:
 
 
 class TestSnapshotMetric:
-    """Test snapshot metric type (count distinct canonical_id)."""
+    """Test snapshot metric type (cumulative distinct canonical_id)."""
 
-    def test_snapshot_counts_distinct_canonical_ids(self):
+    def test_snapshot_counts_distinct_canonical_ids_single_day(self):
         events = _make_enriched_events(
             [
                 {
@@ -217,6 +217,74 @@ class TestSnapshotMetric:
 
         assert len(result) == 1
         assert result["unique_customers"].iloc[0] == 2
+
+    def test_snapshot_computes_cumulative_distinct_counts(self):
+        """Day 1 has 3 unique canonical_ids, Day 2 adds 1 new => cumulative = 4."""
+        events = _make_enriched_events(
+            [
+                # Day 1: c1, c2, c3 => 3 unique
+                {
+                    "source": "crm",
+                    "entity_id": "u1",
+                    "ts": "2024-01-15",
+                    "event_type": "signup",
+                    "payload": "{}",
+                    "canonical_id": "c1",
+                },
+                {
+                    "source": "crm",
+                    "entity_id": "u2",
+                    "ts": "2024-01-15",
+                    "event_type": "signup",
+                    "payload": "{}",
+                    "canonical_id": "c2",
+                },
+                {
+                    "source": "crm",
+                    "entity_id": "u3",
+                    "ts": "2024-01-15",
+                    "event_type": "signup",
+                    "payload": "{}",
+                    "canonical_id": "c3",
+                },
+                # Day 2: c4 is new, c1 is returning => cumulative = 4
+                {
+                    "source": "crm",
+                    "entity_id": "u4",
+                    "ts": "2024-01-16",
+                    "event_type": "signup",
+                    "payload": "{}",
+                    "canonical_id": "c4",
+                },
+                {
+                    "source": "crm",
+                    "entity_id": "u1",
+                    "ts": "2024-01-16",
+                    "event_type": "signup",
+                    "payload": "{}",
+                    "canonical_id": "c1",
+                },
+            ]
+        )
+        model = StreamAnalyticsModel(
+            name="daily_metrics",
+            identity_graph="test_graph",
+            date_grain="daily",
+            metrics=[
+                StreamMetric(
+                    name="unique_customers",
+                    expression="canonical_id",
+                    metric_type="snapshot",
+                ),
+            ],
+        )
+        result = aggregate_analytics(events, model).execute()
+
+        assert len(result) == 2
+        day_15 = result[result["_date"] == "2024-01-15"]
+        day_16 = result[result["_date"] == "2024-01-16"]
+        assert day_15["unique_customers"].iloc[0] == 3
+        assert day_16["unique_customers"].iloc[0] == 4
 
 
 class TestDimensions:

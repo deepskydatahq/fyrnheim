@@ -1,6 +1,14 @@
 """Core types and source configuration classes."""
 
-from .activity import ActivityConfig as ActivityConfig, ActivityType as ActivityType
+from .activity import (
+    ActivityConfig as ActivityConfig,
+    ActivityDefinition as ActivityDefinition,
+    ActivityType as ActivityType,
+    EventOccurred as EventOccurred,
+    FieldChanged as FieldChanged,
+    RowAppeared as RowAppeared,
+    RowDisappeared as RowDisappeared,
+)
 from .analytics import (
     AnalyticsLayer as AnalyticsLayer,
     AnalyticsMetric as AnalyticsMetric,

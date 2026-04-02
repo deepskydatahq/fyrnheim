@@ -1,0 +1,32 @@
+id = "M031-E002-S002"
+parent = "M031-E002"
+title = "AnalyticsModelRegistry for discovery"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Implement AnalyticsModelRegistry that discovers StreamAnalyticsModel instances from Python files."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsModelRegistry.discover(dir) finds module-level 'analytics_model' variables"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsModelRegistry.get(name) returns the model by name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsModelRegistry raises ValueError on duplicate names"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/activity_registry.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/analytics_model_registry.py. Follow ActivityRegistry pattern."""
+reference_files = []

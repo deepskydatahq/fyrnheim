@@ -1,0 +1,52 @@
+id = "M031-E001-S001"
+parent = "M031-E001"
+title = "Define new AnalyticsModel and Metric models"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add new top-level AnalyticsModel and Metric Pydantic models for the activities-first architecture."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamAnalyticsModel(name='daily_metrics', identity_graph='customer', date_grain='daily', metrics=[...]) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamAnalyticsModel without name raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "date_grain accepts 'daily', 'weekly', 'monthly'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamMetric(name='signups', expression='count()', metric_type='count') validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamMetric accepts optional event_filter string"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamMetric metric_type accepts count, sum, snapshot"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamAnalyticsModel accepts optional dimensions list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.core import StreamAnalyticsModel, StreamMetric works"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/analytics.py", "src/fyrnheim/core/__init__.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/core/analytics_model.py. Use StreamAnalyticsModel and StreamMetric names to avoid clash with existing AnalyticsModel in analytics.py. StreamMetric: name (str), expression (str), event_filter (str | None = None), metric_type (Literal['count','sum','snapshot']). StreamAnalyticsModel: name (str, min_length=1), identity_graph (str, min_length=1), date_grain (Literal['daily','weekly','monthly']), metrics (list[StreamMetric], min 1), dimensions (list[str] = []). Export from core/__init__.py and __init__.py."""
+reference_files = []

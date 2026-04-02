@@ -1,0 +1,54 @@
+id = "M031-E002-S001"
+parent = "M031-E002"
+title = "Analytics aggregation engine"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Implement aggregate_analytics() that groups enriched events by date grain and dimensions, computing metrics."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "aggregate_analytics groups events by daily date grain"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "count metric counts events matching event_filter"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "sum metric sums a numeric payload field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "snapshot metric computes count_distinct(canonical_id)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "event_filter restricts which events are aggregated"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "dimensions create additional grouping columns"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/analytics_aggregation.py. Function aggregate_analytics(enriched_events, analytics_model) -> ibis.Table.
+1. Materialize to pandas
+2. Parse ts to date, truncate to grain (daily=date, weekly=week start, monthly=month start)
+3. For each metric: filter by event_filter (match event_type), then aggregate:
+   - count: len(filtered)
+   - sum: parse payload for expression field, sum values
+   - snapshot: nunique(canonical_id) in filtered
+4. Group by _date + dimensions
+5. Return as ibis.memtable
+
+For sum metrics: the expression field references a payload key (e.g., 'amount'). Parse the JSON payload and extract that numeric value."""
+reference_files = []

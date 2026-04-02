@@ -1,0 +1,53 @@
+id = "M031-E001"
+parent = "M031"
+title = "New AnalyticsModel and Metric Pydantic models"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Define new top-level AnalyticsModel and Metric Pydantic models for the
+activities-first architecture. AnalyticsModel has name, identity_graph,
+date_grain, dimensions, metrics. Metric has name, expression, event_filter,
+metric_type. Coexists with old analytics types.
+"""
+
+[job_story]
+description = """
+When I want to define time-grain metrics from the activity stream, I want to
+declare an AnalyticsModel with metrics and dimensions, so that the system can
+aggregate events into a metrics table.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "New AnalyticsModel validates with name, identity_graph, date_grain, metrics",
+    "Metric validates with name, expression, metric_type (count/sum/snapshot)",
+    "Metric accepts optional event_filter",
+    "date_grain accepts daily, weekly, monthly",
+    "Both models are exported from core package",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/analytics.py",
+    "src/fyrnheim/core/__init__.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+The existing AnalyticsModel in analytics.py is the OLD type (combines entity layers).
+Create new types in src/fyrnheim/core/analytics_model.py to avoid conflicts.
+Name them NewAnalyticsModel and NewMetric to distinguish, or use a different
+module path. Simplest: put them in analytics_model.py and export with clear names.
+Actually, since the design spec calls them AnalyticsModel and Metric, and the old
+AnalyticsModel is already exported — use StreamAnalyticsModel and StreamMetric
+to avoid name clashes during coexistence. Or simpler: just put them in a new file
+and use the same names — they're in different modules.
+"""
+
+estimated_stories = 1

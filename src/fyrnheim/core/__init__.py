@@ -16,6 +16,10 @@ from .analytics import (
     AnalyticsSource as AnalyticsSource,
     ComputedMetric as ComputedMetric,
 )
+from .analytics_model import (
+    StreamAnalyticsModel as StreamAnalyticsModel,
+    StreamMetric as StreamMetric,
+)
 from .entity import (
     Entity as Entity,
     HelperEntity as HelperEntity,

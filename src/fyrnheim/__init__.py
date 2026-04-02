@@ -51,6 +51,8 @@ from fyrnheim.core import (
     SourceTransforms as SourceTransforms,
     StateField as StateField,
     StateSource as StateSource,
+    StreamAnalyticsModel as StreamAnalyticsModel,
+    StreamMetric as StreamMetric,
     TableSource as TableSource,
     TypeCast as TypeCast,
     UnionSource as UnionSource,
@@ -205,6 +207,9 @@ __all__ = [
     "AnalyticsModel",
     "AnalyticsSource",
     "ComputedMetric",
+    # Stream Analytics (top-level)
+    "StreamAnalyticsModel",
+    "StreamMetric",
     # Source Mapping
     "SourceMapping",
     # Components

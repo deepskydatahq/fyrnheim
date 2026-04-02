@@ -1,0 +1,32 @@
+id = "M030-E002-S002"
+parent = "M030-E002"
+title = "EntityModelRegistry for discovery"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Implement EntityModelRegistry that discovers EntityModel instances from Python files."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModelRegistry.discover(dir) finds module-level 'entity_model' variables"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModelRegistry.get(name) returns the EntityModel by name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModelRegistry raises ValueError on duplicate names"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/activity_registry.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Add to src/fyrnheim/engine/entity_model_registry.py. Follow ActivityRegistry pattern."""
+reference_files = []

@@ -1,0 +1,52 @@
+id = "M030-E001-S001"
+parent = "M030-E001"
+title = "Define EntityModel and StateField models"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add EntityModel and StateField Pydantic models as top-level entity projection assets."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel(name='customers', identity_graph='customer_identity', state_fields=[...]) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel without name raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField(name='email', source='crm', field='email', strategy='latest') validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField with strategy='coalesce' and priority=['crm','billing'] validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField with strategy='coalesce' without priority raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField with strategy='latest' ignores priority (no error)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel accepts optional computed_fields list of ComputedColumn"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.core import EntityModel, StateField works"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/", "src/fyrnheim/components/computed_column.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/core/entity_model.py. StateField: name: str, source: str, field: str, strategy: Literal['latest','first','coalesce'], priority: list[str] | None = None. Validator: if strategy=='coalesce', priority is required. EntityModel: name: str (min_length=1), identity_graph: str (min_length=1), state_fields: list[StateField] (min 1), computed_fields: list[ComputedColumn] = []. Export from core/__init__.py and top-level __init__.py."""
+reference_files = []

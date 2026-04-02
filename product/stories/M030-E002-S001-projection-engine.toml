@@ -1,0 +1,56 @@
+id = "M030-E002-S001"
+parent = "M030-E002"
+title = "Projection engine with resolution strategies"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Implement project_entity() that derives current state from enriched events using latest/first/coalesce strategies."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "project_entity returns one row per canonical_id"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "latest strategy: for canonical_id with events at ts='2024-01-01' and ts='2024-01-02', returns the ts='2024-01-02' value"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "first strategy: returns the earliest observed value"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "coalesce strategy: with priority=['crm','billing'], uses crm value when available, falls back to billing"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Computed fields are evaluated on top of projected state"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/identity_engine.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/entity_projection.py. project_entity(enriched_events: ibis.Table, entity_model: EntityModel) -> ibis.Table.
+
+The enriched events have: source, entity_id, ts, event_type, payload, canonical_id.
+For each canonical_id, gather all events from the sources referenced in state_fields.
+
+For 'latest' strategy: from events where source matches, parse payload for the field, pick the one with max ts.
+For 'first' strategy: pick the one with min ts.
+For 'coalesce': iterate sources in priority order, pick first non-null value (latest from each source).
+
+For row_appeared events, the field value is in payload JSON (e.g., {"email": "alice@example.com", ...}).
+For field_changed events, the new value is in payload.new_value when payload.field_name matches.
+
+Start simple: only use row_appeared events for deriving state. field_changed can enhance accuracy later.
+
+For computed_fields: after projecting state, evaluate ComputedColumn expressions. Use the existing expression binding pattern (t.field_name for simple expressions).
+
+Use pandas for implementation (same pattern as other engines)."""
+reference_files = []

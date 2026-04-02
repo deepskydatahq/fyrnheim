@@ -1,0 +1,32 @@
+id = "M032-E002-S001"
+parent = "M032-E002"
+title = "Migrate examples to activities-first definitions"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Rewrite example files to use new activities-first types or remove outdated examples."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "examples/entities/customers.py uses new activities-first types (or is removed)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No example file imports old Entity, LayersConfig, or old source types"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "At least one example demonstrates the full activities-first pipeline"
+
+[context]
+relevant_paths = ["examples/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Remove examples/timo-data-stack/ entirely (too specific, would need full rewrite). Rewrite examples/entities/customers.py to show StateSource, ActivityDefinition, IdentityGraph, EntityModel, StreamAnalyticsModel. Or create a new examples/activities-first/ directory. Keep it simple — one clear example file showing the full pipeline."""
+reference_files = []

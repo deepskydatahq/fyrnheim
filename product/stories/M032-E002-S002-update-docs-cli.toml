@@ -1,0 +1,32 @@
+id = "M032-E002-S002"
+parent = "M032-E002"
+title = "Update README, CLI scaffold, and documentation references"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Update README to reflect activities-first architecture. Update CLI scaffold template. Remove or update stale documentation references."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README.md describes activities-first concepts (Sources, Activities, Identity, EntityModel, Analytics)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CLI scaffold template (_scaffold/) uses new types or is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No documentation references old Entity/LayersConfig pipeline"
+
+[context]
+relevant_paths = ["README.md", "src/fyrnheim/_scaffold/", "src/fyrnheim/cli.py"]
+input_fixtures = []
+depends_on = ["M032-E002-S001"]
+
+[handoff]
+implementation_hints = """Update README Core Concepts section to describe: StateSource/EventSource, SnapshotDiffPipeline, ActivityDefinition, IdentityGraph, EntityModel, StreamAnalyticsModel. Remove or update the _scaffold/ directory. For CLI: the old commands (generate, run, check, list, test, docs) depend on old EntityRegistry. Either update them to use new registries or add TODO comments noting they need updating in a follow-up. Don't break existing CLI entry points — just remove internal references to removed modules."""
+reference_files = []

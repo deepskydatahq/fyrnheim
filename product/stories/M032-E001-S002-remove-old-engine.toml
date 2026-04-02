@@ -1,0 +1,44 @@
+id = "M032-E001-S002"
+parent = "M032-E001"
+title = "Remove old engine code (codegen, runner, registry, resolution)"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Remove old engine files and clean up executor. Keep new activities-first engine files."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/generators/ibis_code_generator.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/runner.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/registry.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/resolution.py is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/snapshot.py (old SCD) is removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Old entity pipeline paths removed from executor.py"
+
+[context]
+relevant_paths = ["src/fyrnheim/generators/", "src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M032-E001-S001"]
+
+[handoff]
+implementation_hints = """Delete: ibis_code_generator.py, runner.py, registry.py, resolution.py, snapshot.py, _loader.py. Clean up executor.py — remove old Entity import paths and old execute() method that takes entity_name. Keep IbisExecutor class with DuckDB connection support since it's used for parquet registration. Remove the generators/ directory entirely if ibis_code_generator.py was the only file. Update engine/__init__.py."""
+reference_files = []

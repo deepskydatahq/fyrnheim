@@ -1,0 +1,100 @@
+id = "M032-E001"
+parent = "M032"
+title = "Remove old entity-centric types, engine code, and tests"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Remove all old entity-centric types (Entity, HelperEntity, LayersConfig, PrepLayer,
+DimensionLayer, SnapshotLayer, old ActivityConfig/ActivityType, old AnalyticsLayer/
+AnalyticsModel/AnalyticsMetric/AnalyticsSource/ComputedMetric, DerivedSource,
+DerivedEntitySource, AggregationSource, EventAggregationSource, UnionSource,
+IdentityGraphConfig, IdentityGraphSource). Remove old codegen (IbisCodeGenerator),
+old executor paths, old runner, old entity registry, old resolution logic. Remove
+all tests that only test old types. Keep new activities-first code and tests intact.
+"""
+
+[job_story]
+description = """
+When the activities-first pipeline is complete, I want to remove the old entity-centric
+code so that the codebase is clean and there is only one way to define data assets.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All old entity-centric types are removed from core/",
+    "Old IbisCodeGenerator is removed or stripped of old source type handling",
+    "Old executor/runner entity pipeline paths are removed",
+    "Old entity registry is removed",
+    "All remaining tests pass (new activities-first tests)",
+    "No dead imports or unused code remain",
+]
+validator_context = ["tests/", "src/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/",
+    "src/fyrnheim/generators/",
+    "src/fyrnheim/engine/",
+    "tests/",
+]
+dependencies = []
+
+[notes]
+considerations = """
+This is a large removal. The key insight: the new activities-first code lives in
+separate files from the old code. Remove old files entirely where possible.
+For shared files (like __init__.py exports), update them.
+
+Files to REMOVE entirely:
+- src/fyrnheim/core/entity.py (old Entity, HelperEntity, LayersConfig)
+- src/fyrnheim/core/layer.py (old PrepLayer, DimensionLayer, SnapshotLayer)
+- src/fyrnheim/core/analytics.py (old AnalyticsLayer, AnalyticsModel, etc.)
+- src/fyrnheim/core/source_mapping.py
+- src/fyrnheim/core/types.py (old types)
+- src/fyrnheim/generators/ibis_code_generator.py (old codegen)
+- src/fyrnheim/engine/runner.py (old runner)
+- src/fyrnheim/engine/registry.py (old entity registry)
+- src/fyrnheim/engine/resolution.py (old dependency resolution)
+- src/fyrnheim/engine/snapshot.py (old SCD snapshot, replaced by snapshot_store/diff)
+
+Files to UPDATE (remove old exports/imports):
+- src/fyrnheim/core/__init__.py
+- src/fyrnheim/__init__.py
+- src/fyrnheim/core/source.py (remove old source types, keep BaseTableSource, TableSource, Field, StateSource, EventSource, SourceTransforms)
+- src/fyrnheim/core/activity.py (remove old ActivityConfig/ActivityType, keep new trigger/definition types)
+- src/fyrnheim/engine/executor.py (remove old entity pipeline, keep new)
+
+Test files to REMOVE (test old pipeline only):
+- tests/test_entity.py, test_helper_entity.py, test_layers.py
+- tests/test_core_source.py (tests old source types)
+- tests/test_activity_analytics.py (tests old ActivityConfig)
+- tests/test_source_mapping.py
+- tests/test_ibis_code_generator.py (tests old codegen)
+- tests/test_engine_executor.py, test_engine_runner.py, test_engine_registry.py, test_engine_resolution.py
+- tests/test_e2e_pipeline.py, test_e2e_analytics.py, test_e2e_activity.py, test_e2e_snapshot.py, test_e2e_full_pipeline.py
+- tests/test_snapshot_generation.py, test_prep_dimension_generation.py
+- tests/test_inline_*.py (old inline identity tests)
+- tests/test_cli_*.py (CLI tests that depend on old entity pipeline)
+- tests/test_generate.py, test_docs_catalog.py, test_docs_*.py
+- tests/test_testing.py, test_testing_runner.py, test_readme_testing.py
+- tests/test_public_api.py (tests old exports)
+- tests/test_expressions.py, test_components.py, test_config.py
+- tests/test_quality_*.py
+
+Test files to KEEP (new activities-first tests):
+- tests/test_state_event_source.py
+- tests/test_activity_definition.py
+- tests/test_activity_engine.py, test_activity_registry.py
+- tests/test_diff_engine.py
+- tests/test_snapshot_store.py, test_snapshot_diff.py
+- tests/test_identity_graph.py, test_identity_engine.py, test_identity_registry.py
+- tests/test_entity_model.py, test_entity_projection.py, test_entity_projection_e2e.py, test_entity_model_registry.py
+- tests/test_stream_analytics_model.py, test_analytics_aggregation.py, test_analytics_aggregation_e2e.py, test_analytics_model_registry.py
+- tests/test_e2e_activity_pipeline.py, test_e2e_ibis_executor.py
+"""
+
+estimated_stories = 3

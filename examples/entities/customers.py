@@ -1,112 +1,113 @@
-"""Sample customers entity demonstrating the full fyrnheim workflow.
+"""Example: Activities-first customer pipeline.
 
-This entity transforms raw customer records through four layers:
-- PrepLayer: email hashing, date casting, unit conversion
-- DimensionLayer: business logic columns (email domain, paying flag, signup cohort)
-- SnapshotLayer: daily snapshot with dedup by email_hash
-- ActivityConfig: signup (row_appears) + became_paying (status_becomes)
-
-Quality checks validate the output: NotNull, Unique, InRange.
+Demonstrates: StateSource -> SnapshotDiff -> ActivityDefinition -> IdentityGraph -> EntityModel
 """
 
-from fyrnheim import (
-    ActivityConfig,
-    ActivityType,
+from fyrnheim.core import (
+    ActivityDefinition,
     ComputedColumn,
-    DimensionLayer,
-    Entity,
-    InRange,
-    LayersConfig,
-    NotNull,
-    PrepLayer,
-    QualityConfig,
-    SnapshotLayer,
-    TableSource,
-    Unique,
+    EntityModel,
+    EventOccurred,
+    EventSource,
+    FieldChanged,
+    IdentityGraph,
+    IdentitySource,
+    RowAppeared,
+    StateField,
+    StateSource,
+    StreamAnalyticsModel,
+    StreamMetric,
 )
-from fyrnheim.primitives import date_trunc_month, hash_email
 
-entity = Entity(
+# 1. Sources
+crm_source = StateSource(
+    name="crm_contacts",
+    project="my_project",
+    dataset="crm",
+    table="contacts",
+    id_field="contact_id",
+)
+
+billing_source = EventSource(
+    name="billing_events",
+    project="my_project",
+    dataset="billing",
+    table="transactions",
+    entity_id_field="customer_id",
+    timestamp_field="created_at",
+    event_type_field="event_type",
+)
+
+# 2. Activity Definitions
+signup = ActivityDefinition(
+    name="signup",
+    source="crm_contacts",
+    trigger=RowAppeared(),
+)
+
+became_paying = ActivityDefinition(
+    name="became_paying",
+    source="crm_contacts",
+    trigger=FieldChanged(field="plan", to_values=["pro", "enterprise"]),
+)
+
+purchase = ActivityDefinition(
+    name="purchase",
+    source="billing_events",
+    trigger=EventOccurred(event_types=["purchase"]),
+)
+
+# 3. Identity Graph
+customer_identity = IdentityGraph(
+    name="customer_identity",
+    canonical_id="customer_id",
+    sources=[
+        IdentitySource(
+            source="crm_contacts",
+            id_field="contact_id",
+            match_key_field="email_hash",
+        ),
+        IdentitySource(
+            source="billing_events",
+            id_field="customer_id",
+            match_key_field="email_hash",
+        ),
+    ],
+)
+
+# 4. Entity Model
+customers = EntityModel(
     name="customers",
-    description="Sample customer entity for fyrnheim demonstration",
-    source=TableSource(
-        project="example",
-        dataset="raw",
-        table="customers",
-        duckdb_path="customers.parquet",
-    ),
-    layers=LayersConfig(
-        prep=PrepLayer(
-            model_name="prep_customers",
-            computed_columns=[
-                ComputedColumn(
-                    name="email_hash",
-                    expression=hash_email("email"),
-                    description="SHA256 hash of lowercase trimmed email",
-                ),
-                ComputedColumn(
-                    name="created_date",
-                    expression='t.created_at.cast("date")',
-                    description="Account creation date (date only)",
-                ),
-                ComputedColumn(
-                    name="amount_dollars",
-                    expression="t.amount_cents / 100.0",
-                    description="Monthly payment in dollars",
-                ),
-            ],
+    identity_graph="customer_identity",
+    state_fields=[
+        StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
+        StateField(name="name", source="crm_contacts", field="full_name", strategy="latest"),
+        StateField(name="plan", source="crm_contacts", field="plan", strategy="latest"),
+        StateField(
+            name="first_seen", source="crm_contacts", field="created_at", strategy="first"
         ),
-        dimension=DimensionLayer(
-            model_name="dim_customers",
-            computed_columns=[
-                ComputedColumn(
-                    name="email_domain",
-                    expression="t.email.split('@')[1]",
-                    description="Email domain extracted from address",
-                ),
-                ComputedColumn(
-                    name="is_paying",
-                    expression="t.plan != 'free'",
-                    description="True if customer is on a paid plan",
-                ),
-                ComputedColumn(
-                    name="signup_month",
-                    expression=date_trunc_month("created_at"),
-                    description="Signup month for cohort analysis",
-                ),
-            ],
+    ],
+    computed_fields=[
+        ComputedColumn(name="is_paying", expression="plan != 'free'"),
+    ],
+)
+
+# 5. Analytics Model
+daily_metrics = StreamAnalyticsModel(
+    name="customer_metrics_daily",
+    identity_graph="customer_identity",
+    date_grain="daily",
+    metrics=[
+        StreamMetric(
+            name="new_signups",
+            expression="count()",
+            event_filter="signup",
+            metric_type="count",
         ),
-        snapshot=SnapshotLayer(
-            natural_key="email_hash",
-            deduplication_order_by="created_at DESC",
+        StreamMetric(
+            name="total_customers",
+            expression="count()",
+            metric_type="snapshot",
         ),
-        activity=ActivityConfig(
-            model_name="activity_customers",
-            types=[
-                ActivityType(
-                    name="signup",
-                    trigger="row_appears",
-                    timestamp_field="created_at",
-                ),
-                ActivityType(
-                    name="became_paying",
-                    trigger="status_becomes",
-                    timestamp_field="created_at",
-                    field="plan",
-                    values=["pro", "starter", "enterprise"],
-                ),
-            ],
-            entity_id_field="id",
-            person_id_field="email_hash",
-        ),
-    ),
-    quality=QualityConfig(
-        primary_key="email_hash",
-        checks=[
-            NotNull("email"),
-            NotNull("id"),
-            Unique("email_hash"),
-            InRange("amount_cents", min=0),
-        ],
-    ),
+    ],
 )

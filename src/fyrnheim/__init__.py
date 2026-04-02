@@ -25,6 +25,7 @@ from fyrnheim.core import (
     DimensionLayer as DimensionLayer,
     Divide as Divide,
     Entity as Entity,
+    EntityModel as EntityModel,
     EventAggregationSource as EventAggregationSource,
     EventOccurred as EventOccurred,
     EventSource as EventSource,
@@ -48,6 +49,7 @@ from fyrnheim.core import (
     SourceMapping as SourceMapping,
     SourcePriority as SourcePriority,
     SourceTransforms as SourceTransforms,
+    StateField as StateField,
     StateSource as StateSource,
     TableSource as TableSource,
     TypeCast as TypeCast,
@@ -158,6 +160,7 @@ def __getattr__(name: str) -> Any:  # noqa: N807
 __all__ = [
     # Core
     "Entity",
+    "EntityModel",
     "HelperEntity",
     "LayersConfig",
     "Source",
@@ -180,6 +183,7 @@ __all__ = [
     "IdentitySource",
     "UnionSource",
     "StateSource",
+    "StateField",
     "SourceTransforms",
     "TypeCast",
     "Rename",

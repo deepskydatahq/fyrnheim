@@ -22,6 +22,10 @@ from .entity import (
     LayersConfig as LayersConfig,
     Source as Source,
 )
+from .entity_model import (
+    EntityModel as EntityModel,
+    StateField as StateField,
+)
 from .identity import (
     IdentityGraph as IdentityGraph,
     IdentitySource as IdentitySource,

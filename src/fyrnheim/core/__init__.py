@@ -22,6 +22,10 @@ from .entity import (
     LayersConfig as LayersConfig,
     Source as Source,
 )
+from .identity import (
+    IdentityGraph as IdentityGraph,
+    IdentitySource as IdentitySource,
+)
 from .layer import (
     DimensionLayer as DimensionLayer,
     PrepLayer as PrepLayer,

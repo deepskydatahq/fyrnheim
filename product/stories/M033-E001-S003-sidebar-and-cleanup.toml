@@ -1,0 +1,36 @@
+id = "M033-E001-S003"
+parent = "M033-E001"
+title = "Update sidebar navigation and clean up remaining pages"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Update astro.config.mjs sidebar to reflect new concept pages. Update api-reference.md and index.mdx if they reference old types."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "astro.config.mjs sidebar lists: Sources, Activities, Identity, Entity Models, Analytics, Primitives under Core Concepts"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Old sidebar entries (Entities, Layers, Source Mapping, Components, Quality) are removed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "api-reference.md lists only new types (or is simplified/removed)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "index.mdx does not reference old Entity/LayersConfig concepts"
+
+[context]
+relevant_paths = ["website/astro.config.mjs", "website/src/content/docs/api-reference.md", "website/src/content/docs/index.mdx"]
+input_fixtures = []
+depends_on = ["M033-E001-S002"]
+
+[handoff]
+implementation_hints = """Update the sidebar array in astro.config.mjs. For api-reference.md, either rewrite to list new types or simplify to a placeholder noting that full API docs are coming. Check index.mdx for any old references."""
+reference_files = []

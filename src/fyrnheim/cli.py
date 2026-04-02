@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.resources
 import logging
 import shutil
-import sys
 from pathlib import Path
 
 import click
@@ -28,7 +27,7 @@ def _scaffold_project(target: Path, *, named: bool) -> None:
     else:
         click.echo("Initializing in current directory...")
 
-    for subdir in ("entities", "data", "generated", "tests"):
+    for subdir in ("entities", "data", "tests"):
         d = target / subdir
         if not d.exists():
             d.mkdir(parents=True)
@@ -44,8 +43,8 @@ def _scaffold_project(target: Path, *, named: bool) -> None:
     click.echo("Next steps:")
     if named:
         click.echo(f"  cd {target.name}")
-    click.echo("  fyr generate")
-    click.echo("  fyr run")
+    click.echo("  Edit entities/customers.py to define your pipeline")
+    click.echo("  Run tests with: pytest tests/")
 
 
 def _copy_scaffold(scaffold: importlib.resources.abc.Traversable, src: str, dest: Path) -> None:
@@ -95,15 +94,3 @@ def init(project_name: str | None) -> None:
     _scaffold_project(target, named=project_name is not None)
 
 
-@main.command()
-def generate() -> None:
-    """Generate transformation code from entity definitions."""
-    click.echo("Error: generate command is not available (old pipeline removed).", err=True)
-    sys.exit(1)
-
-
-@main.command()
-def run() -> None:
-    """Execute the pipeline."""
-    click.echo("Error: run command is not available (old pipeline removed).", err=True)
-    sys.exit(1)

@@ -1,95 +1,65 @@
-"""Sample customers entity -- edit or replace this with your own.
+"""Sample customer pipeline -- edit or replace this with your own.
 
-Demonstrates: prep, dimension, snapshot, and activity layers.
+Demonstrates: StateSource, ActivityDefinition, IdentityGraph, EntityModel.
 """
 
 from fyrnheim import (
-    ActivityConfig,
-    ActivityType,
+    ActivityDefinition,
     ComputedColumn,
-    DimensionLayer,
-    Entity,
-    InRange,
-    LayersConfig,
-    NotNull,
-    PrepLayer,
-    QualityConfig,
-    SnapshotLayer,
-    TableSource,
-    Unique,
+    EntityModel,
+    FieldChanged,
+    IdentityGraph,
+    IdentitySource,
+    RowAppeared,
+    StateField,
+    StateSource,
 )
-from fyrnheim.primitives import hash_email
 
-entity = Entity(
+# 1. Source -- a slowly-changing state table
+crm_source = StateSource(
+    name="crm_contacts",
+    project="example",
+    dataset="raw",
+    table="customers",
+    id_field="id",
+)
+
+# 2. Activity Definitions -- named business events detected from state changes
+signup = ActivityDefinition(
+    name="signup",
+    source="crm_contacts",
+    trigger=RowAppeared(),
+)
+
+became_paying = ActivityDefinition(
+    name="became_paying",
+    source="crm_contacts",
+    trigger=FieldChanged(field="plan", to_values=["pro", "starter", "enterprise"]),
+)
+
+# 3. Identity Graph -- cross-source identity resolution
+customer_identity = IdentityGraph(
+    name="customer_identity",
+    canonical_id="customer_id",
+    sources=[
+        IdentitySource(
+            source="crm_contacts",
+            id_field="id",
+            match_key_field="email",
+        ),
+    ],
+)
+
+# 4. Entity Model -- derived current state
+customers = EntityModel(
     name="customers",
-    description="Sample customer entity",
-    source=TableSource(
-        project="example",
-        dataset="raw",
-        table="customers",
-        duckdb_path="customers.parquet",
-    ),
-    layers=LayersConfig(
-        prep=PrepLayer(
-            model_name="prep_customers",
-            computed_columns=[
-                ComputedColumn(
-                    name="email_hash",
-                    expression=hash_email("email"),
-                    description="SHA256 hash of lowercase trimmed email",
-                ),
-                ComputedColumn(
-                    name="amount_dollars",
-                    expression="t.amount_cents / 100.0",
-                    description="Monthly payment in dollars",
-                ),
-            ],
-        ),
-        dimension=DimensionLayer(
-            model_name="dim_customers",
-            computed_columns=[
-                ComputedColumn(
-                    name="email_domain",
-                    expression="t.email.split('@')[1]",
-                    description="Email domain extracted from address",
-                ),
-                ComputedColumn(
-                    name="is_paying",
-                    expression="t.plan != 'free'",
-                    description="True if customer is on a paid plan",
-                ),
-            ],
-        ),
-        snapshot=SnapshotLayer(
-            natural_key="email_hash",
-            deduplication_order_by="created_at DESC",
-        ),
-        activity=ActivityConfig(
-            model_name="activity_customers",
-            types=[
-                ActivityType(
-                    name="signup",
-                    trigger="row_appears",
-                    timestamp_field="created_at",
-                ),
-                ActivityType(
-                    name="became_paying",
-                    trigger="status_becomes",
-                    timestamp_field="created_at",
-                    field="plan",
-                    values=["pro", "starter", "enterprise"],
-                ),
-            ],
-            entity_id_field="id",
-            person_id_field="email_hash",
-        ),
-    ),
-    quality=QualityConfig(
-        primary_key="email_hash",
-        checks=[
-            NotNull("email"),
-            Unique("email_hash"),
-            InRange("amount_cents", min=0),
-        ],
-    ),
+    identity_graph="customer_identity",
+    state_fields=[
+        StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
+        StateField(name="name", source="crm_contacts", field="name", strategy="latest"),
+        StateField(name="plan", source="crm_contacts", field="plan", strategy="latest"),
+    ],
+    computed_fields=[
+        ComputedColumn(name="is_paying", expression="plan != 'free'"),
+    ],
 )

@@ -1,44 +1,37 @@
-"""Example entity test -- validates the customers entity with sample data.
+"""Example test -- validates the customer pipeline definitions.
 
-Run with: fyr test  (or: pytest tests/)
+Run with: pytest tests/
 """
 
-from entities.customers import entity as customers_entity
+from entities.customers import (
+    became_paying,
+    crm_source,
+    customer_identity,
+    customers,
+    signup,
+)
 
-from fyrnheim.testing import EntityTest
+
+def test_source_defined() -> None:
+    """Verify that the source is configured."""
+    assert crm_source.name == "crm_contacts"
+    assert crm_source.id_field == "id"
 
 
-class TestCustomers(EntityTest):
-    entity = customers_entity
+def test_activities_defined() -> None:
+    """Verify that activity definitions exist."""
+    assert signup.name == "signup"
+    assert became_paying.name == "became_paying"
 
-    def test_basic_transform(self) -> None:
-        """Verify that sample customer data flows through the pipeline."""
-        result = (
-            self.given(
-                {
-                    "source_customers": [
-                        {
-                            "id": 1,
-                            "name": "Alice",
-                            "email": "alice@example.com",
-                            "plan": "pro",
-                            "amount_cents": 4900,
-                            "created_at": "2024-01-15",
-                        },
-                        {
-                            "id": 2,
-                            "name": "Bob",
-                            "email": "bob@test.org",
-                            "plan": "free",
-                            "amount_cents": 0,
-                            "created_at": "2024-02-20",
-                        },
-                    ]
-                }
-            )
-            .run()
-        )
 
-        assert result.row_count == 2
-        assert "email_hash" in result.columns
-        assert "amount_dollars" in result.columns
+def test_identity_graph_defined() -> None:
+    """Verify that the identity graph is configured."""
+    assert customer_identity.name == "customer_identity"
+    assert len(customer_identity.sources) == 1
+
+
+def test_entity_model_defined() -> None:
+    """Verify that the entity model is configured."""
+    assert customers.name == "customers"
+    assert len(customers.state_fields) >= 3
+    assert len(customers.computed_fields) >= 1

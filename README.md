@@ -1,10 +1,8 @@
 # Fyrnheim
 
-Define typed Python entities, generate transformations, run anywhere.
+Activities-first data transformation framework.
 
-A dbt alternative built on Pydantic + Ibis.
-
-Fyrnheim lets data teams define business entities as typed Pydantic models and automatically generates Ibis transformation code from those definitions. The same entity runs on DuckDB for instant local development and deploys to BigQuery, ClickHouse, or Postgres in production with zero changes. No SQL, no Jinja, no vendor lock-in.
+Built on Pydantic + Ibis. Define typed sources, detect business events from state changes, resolve identities across systems, and project entity models -- all in Python.
 
 ## Install
 
@@ -20,360 +18,138 @@ pip install fyrnheim[duckdb]
 fyr init myproject && cd myproject
 ```
 
-```
-Created myproject/
-  created  entities/
-  created  data/
-  created  generated/
-  created  fyrnheim.yaml
-  created  entities/customers.py
-  created  data/customers.parquet
-```
-
-**2. Look at the sample entity** in `entities/customers.py`:
+**2. Define your pipeline** in `entities/customers.py`:
 
 ```python
-entity = Entity(
-    name="customers",
-    source=TableSource(..., duckdb_path="customers.parquet"),
-    layers=LayersConfig(
-        prep=PrepLayer(model_name="prep_customers", computed_columns=[
-            ComputedColumn(name="email_hash", expression=hash_email("email")),
-            ComputedColumn(name="amount_dollars", expression="t.amount_cents / 100.0"),
-        ]),
-        dimension=DimensionLayer(model_name="dim_customers", computed_columns=[
-            ComputedColumn(name="is_paying", expression="t.plan != 'free'"),
-        ]),
-    ),
-    quality=QualityConfig(checks=[NotNull("email"), Unique("email_hash")]),
+from fyrnheim import (
+    StateSource, ActivityDefinition, RowAppeared, FieldChanged,
+    IdentityGraph, IdentitySource, EntityModel, StateField,
+)
+
+# Source -- a slowly-changing state table
+crm = StateSource(name="crm_contacts", project="p", dataset="raw", table="contacts", id_field="id")
+
+# Activities -- named business events from state changes
+signup = ActivityDefinition(name="signup", source="crm_contacts", trigger=RowAppeared())
+became_paying = ActivityDefinition(
+    name="became_paying", source="crm_contacts",
+    trigger=FieldChanged(field="plan", to_values=["pro", "enterprise"]),
+)
+
+# Identity -- resolve across sources
+identity = IdentityGraph(
+    name="customer_identity", canonical_id="customer_id",
+    sources=[IdentitySource(source="crm_contacts", id_field="id", match_key_field="email")],
+)
+
+# Entity -- derived current state
+customers = EntityModel(
+    name="customers", identity_graph="customer_identity",
+    state_fields=[
+        StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
+        StateField(name="plan", source="crm_contacts", field="plan", strategy="latest"),
+    ],
 )
 ```
 
-**3. Generate transformation code:**
+**3. Run tests:**
 
 ```bash
-fyr generate
+pytest tests/
 ```
-
-```
-Generating transforms from entities
-  customers            generated/customers_transforms.py   written
-
-Generated: 1 written, 0 unchanged
-```
-
-**4. Run the pipeline:**
-
-```bash
-fyr run
-```
-
-```
-Discovering entities... 1 found
-Running on duckdb
-
-  customers        prep -> dim            12 rows    0.1s  ok
-
-Done: 1 success, 0 errors (0.2s)
-```
-
-**5. Test your entities:**
-
-```bash
-fyr test
-```
-
-```
-tests/test_customers.py .                                            [100%]
-1 passed
-```
-
-Add your own entities to `entities/` and data to `data/`. See `examples/` for more.
-
-## Testing
-
-Fyrnheim includes an entity testing framework. Write tests using `EntityTest` with a given/run/assert workflow. Each test spins up an ephemeral DuckDB, feeds in sample data, runs the entity pipeline, and lets you assert on the output.
-
-```python
-from entities.customers import entity as customers_entity
-from fyrnheim.testing import EntityTest
-
-
-class TestCustomers(EntityTest):
-    entity = customers_entity
-
-    def test_basic_transform(self):
-        result = (
-            self.given({
-                "source_customers": [
-                    {"id": 1, "name": "Alice", "email": "alice@example.com",
-                     "plan": "pro", "amount_cents": 4900, "created_at": "2024-01-15"},
-                ]
-            })
-            .run()
-        )
-
-        assert result.row_count == 1
-        assert "email_hash" in result.columns
-        assert "amount_dollars" in result.columns
-```
-
-`fyr init` scaffolds a working example in `tests/test_customers.py`. Run tests with `fyr test` or directly with `pytest tests/`.
 
 ## Core Concepts
 
-### Entities
+### Sources
 
-An entity is a Pydantic model describing a business object -- customers, orders, products. It declares its source, transformation layers, and quality rules in one place.
+**StateSource** -- a slowly-changing table (CRM contacts, subscription records). The diff engine automatically detects row appearances, disappearances, and field changes between snapshots.
 
 ```python
-entity = Entity(
-    name="customers",
-    description="...",
-    source=TableSource(...),
-    layers=LayersConfig(prep=..., dimension=...),
-    quality=QualityConfig(checks=[...]),
+StateSource(name="crm_contacts", project="p", dataset="d", table="contacts", id_field="contact_id")
+```
+
+**EventSource** -- an append-only event stream (page views, transactions).
+
+```python
+EventSource(
+    name="billing_events", project="p", dataset="d", table="transactions",
+    entity_id_field="customer_id", timestamp_field="created_at", event_type_field="event_type",
 )
 ```
 
-### Layers
+### Activity Definitions
 
-Composable transformation stages that an entity flows through:
+Named business events detected from raw data changes. Each activity ties to a source and a trigger:
 
-| Layer | Purpose |
-|-------|---------|
-| **PrepLayer** | Clean raw data: type casts, renames, computed columns |
-| **DimensionLayer** | Add business logic columns (is_paying, account_type) |
-| **SnapshotLayer** | Track changes over time (daily snapshots, SCD) |
-| **ActivityConfig** | Detect events from state changes (row_appears, status_becomes, field_changes) |
-| **AnalyticsLayer** | Date-grain metric aggregation (snapshot and event metrics) |
+| Trigger | Detects |
+|---------|---------|
+| `RowAppeared()` | New row in a state source |
+| `RowDisappeared()` | Row removed from a state source |
+| `FieldChanged(field, to_values)` | Field value changed (optionally to specific values) |
+| `EventOccurred(event_types)` | Specific event types in an event source |
 
 ```python
-layers=LayersConfig(
-    prep=PrepLayer(
-        model_name="prep_customers",
-        computed_columns=[ComputedColumn(name="amount_dollars", expression="t.amount_cents / 100.0")],
-    ),
-    dimension=DimensionLayer(
-        model_name="dim_customers",
-        computed_columns=[ComputedColumn(name="is_paying", expression="t.plan != 'free'")],
-    ),
-    activity=ActivityConfig(
-        model_name="activity_customers",
-        entity_id_field="customer_id",
-        types=[ActivityType(name="signed_up", trigger="row_appears", timestamp_field="created_at")],
-    ),
-    analytics=AnalyticsLayer(
-        model_name="analytics_customers",
-        date_expression="t.created_at.date()",
-        metrics=[AnalyticsMetric(name="new_customers", expression="t.count()", metric_type="event")],
-    ),
+signup = ActivityDefinition(name="signup", source="crm_contacts", trigger=RowAppeared())
+became_paying = ActivityDefinition(
+    name="became_paying", source="crm_contacts",
+    trigger=FieldChanged(field="plan", to_values=["pro", "enterprise"]),
 )
 ```
 
-### Source Types
+### Identity Graph
 
-Fyrnheim supports multiple source types for different data patterns:
-
-**TableSource** -- read from a single warehouse table or local parquet file:
+Cross-source identity resolution. Link records from different systems by a shared match key:
 
 ```python
-source=TableSource(
-    project="myproject", dataset="raw", table="customers",
-    duckdb_path="data/customers.parquet",  # local dev
-)
-```
-
-**UnionSource** -- combine multiple sources into a common schema. Each sub-source can remap columns with `field_mappings` and inject constants with `literal_columns`:
-
-```python
-source=UnionSource(
+IdentityGraph(
+    name="customer_identity",
+    canonical_id="customer_id",
     sources=[
-        TableSource(
-            project="myproject", dataset="raw", table="youtube_videos",
-            duckdb_path="youtube_videos/*.parquet",
-            field_mappings={"video_id": "product_id"},
-            literal_columns={"product_type": "video", "source_platform": "youtube"},
-        ),
-        TableSource(
-            project="myproject", dataset="raw", table="linkedin_posts",
-            duckdb_path="linkedin_posts/*.parquet",
-            field_mappings={"post_id": "product_id", "text": "title"},
-            literal_columns={"product_type": "post", "source_platform": "linkedin"},
-        ),
+        IdentitySource(source="crm_contacts", id_field="contact_id", match_key_field="email_hash"),
+        IdentitySource(source="billing_events", id_field="customer_id", match_key_field="email_hash"),
     ],
 )
 ```
 
-**DerivedSource** -- build identity graphs by joining multiple entities on a shared key. Cascading FULL OUTER JOIN with priority-based field resolution:
+### Entity Model
+
+Derived current-state projection from resolved identities. Each field picks a source, a column, and a merge strategy (`latest`, `first`):
 
 ```python
-source=DerivedSource(
-    identity_graph="person_graph",
-    identity_graph_config=IdentityGraphConfig(
-        match_key="email_hash",
-        sources=[
-            IdentityGraphSource(name="crm", entity="crm_contacts", match_key_field="email_hash",
-                                fields={"email": "email", "name": "full_name"}),
-            IdentityGraphSource(name="billing", entity="transactions", match_key_field="customer_email_hash",
-                                fields={"email": "customer_email", "name": "customer_name"}),
-        ],
-        priority=["crm", "billing"],  # CRM wins when both have a value
-    ),
+EntityModel(
+    name="customers",
+    identity_graph="customer_identity",
+    state_fields=[
+        StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
+        StateField(name="first_seen", source="crm_contacts", field="created_at", strategy="first"),
+    ],
+    computed_fields=[ComputedColumn(name="is_paying", expression="plan != 'free'")],
 )
 ```
 
-Auto-generated columns: `is_{source}` flags, `{source}_id`, `first_seen_{source}` dates.
+### Analytics Model
 
-**AggregationSource** -- aggregate from another entity with GROUP BY and Ibis expressions:
+Time-grain metric aggregation over the activity stream:
 
 ```python
-source=AggregationSource(
-    source_entity="person",
-    group_by_column="account_id",
-    filter_expression="t.account_id.notnull()",
-    aggregations=[
-        ComputedColumn(name="num_persons", expression="t.person_id.nunique()"),
-        ComputedColumn(name="first_seen", expression="t.created_at.min()"),
+StreamAnalyticsModel(
+    name="daily_metrics",
+    identity_graph="customer_identity",
+    date_grain="daily",
+    metrics=[
+        StreamMetric(name="new_signups", expression="count()", event_filter="signup", metric_type="count"),
+        StreamMetric(name="total_customers", expression="count()", metric_type="snapshot"),
     ],
 )
 ```
 
-**EventAggregationSource** -- aggregate raw event streams (reads from a table, groups by a key):
+## CLI
 
-```python
-source=EventAggregationSource(
-    project="myproject", dataset="raw", table="page_views",
-    duckdb_path="page_views/*.parquet",
-    group_by_column="user_id",
-)
+```bash
+fyr init [project_name]   # Scaffold a new project
+fyr --version             # Show version
+fyr --help                # Show available commands
 ```
-
-### SourceMapping
-
-Decouple entity field names from source column names. Define a contract of `required_fields` on the entity, then map source columns to those fields:
-
-```python
-entity = Entity(
-    name="transactions",
-    description="Customer transactions",
-    required_fields=[
-        Field(name="transaction_id", type="STRING"),
-        Field(name="amount_cents", type="INT64"),
-    ],
-    source=TableSource(project="p", dataset="d", table="orders", duckdb_path="orders/*.parquet"),
-    layers=LayersConfig(prep=PrepLayer(model_name="prep_transactions")),
-)
-
-source_mapping = SourceMapping(
-    entity=entity,
-    source=entity.source,
-    field_mappings={"transaction_id": "id", "amount_cents": "subtotal"},
-)
-```
-
-Validates that all required fields have mappings at definition time.
-
-### Multi-Entity Dependency Resolution
-
-When entities depend on each other (DerivedSource, AggregationSource), `fyr run` automatically resolves the execution order using topological sort. Dependencies run first:
-
-```
-transactions, subscriptions   (TableSource -- no dependencies)
-         |           |
-         v           v
-        person               (DerivedSource -- identity graph joins transactions + subscriptions)
-           |
-           v
-        account              (AggregationSource -- groups person by account_id)
-```
-
-No manual ordering needed. Define your entities and Fyrnheim figures out the DAG.
-
-### Primitives
-
-Reusable Python functions that replace SQL snippets. Hashing, date operations, categorization -- import and compose them instead of copy-pasting SQL.
-
-```python
-from fyrnheim.primitives import hash_email, date_trunc_month
-
-ComputedColumn(name="email_hash", expression=hash_email("email"))
-ComputedColumn(name="signup_month", expression=date_trunc_month("created_at"))
-```
-
-### Components
-
-Multi-column patterns that generate related fields from a single config. LifecycleFlags produces `is_active`, `is_churned`, `is_at_risk` from a status column. TimeBasedMetrics computes tenure and recency.
-
-```python
-from fyrnheim import LifecycleFlags
-
-flags = LifecycleFlags(
-    status_column="status",
-    active_states=["active"],
-    churned_states=["cancelled"],
-)
-```
-
-### Quality Checks
-
-Declarative data quality rules that run after transformations. Built-in checks include NotNull, Unique, InRange, InSet, MatchesPattern, and ForeignKey.
-
-```python
-quality=QualityConfig(
-    primary_key="email_hash",
-    checks=[
-        NotNull("email"),
-        Unique("email_hash"),
-        InRange("amount_cents", min=0),
-    ],
-)
-```
-
-## Project Configuration
-
-Configure your project with `fyrnheim.yaml` at the project root:
-
-```yaml
-entities_dir: entities
-data_dir: data
-output_dir: generated
-backend: duckdb
-backend_config:
-  db_path: my_project.duckdb
-
-# Push results to a separate output backend after fyr run
-output_backend: clickhouse
-output_config:
-  host: localhost
-  port: "8123"
-  database: default
-  user: default
-  password: ""
-```
-
-All settings can be overridden via CLI flags. `fyr run --backend bigquery` (or `--backend postgres`) runs on the specified backend regardless of what `fyrnheim.yaml` says.
-
-## Production Deployment
-
-A typical production pattern:
-
-1. **Extract** raw data with DLT (or any EL tool) into parquet files or a warehouse
-2. **Transform** with Fyrnheim: `fyr run --backend bigquery` (or duckdb for local)
-3. **Push** results to an output backend for serving (ClickHouse, Postgres, etc.)
-
-Configure the output backend in `fyrnheim.yaml`:
-
-```yaml
-backend: duckdb           # transform backend
-output_backend: clickhouse # push dim/analytics tables here after run
-output_config:
-  host: ch.example.com
-  port: "8123"
-  database: analytics
-```
-
-This separation lets you develop locally on DuckDB while pushing production results to a fast query engine.
 
 ## Why Fyrnheim?
 
@@ -383,12 +159,8 @@ This separation lets you develop locally on DuckDB while pushing production resu
 | Type safety | Runtime errors | Pydantic validation at definition time |
 | Local dev | Requires warehouse connection | DuckDB on local parquet files |
 | Backend portability | Dialect-specific SQL | Ibis compiles to 15+ backends |
-| Testing | Custom schema tests | pytest + quality checks |
-| Boilerplate | Jinja macros, YAML configs | Python functions, Pydantic models |
-| Identity resolution | Manual SQL joins | Built-in identity graph (DerivedSource) |
-| Multi-source union | Manual UNION ALL | UnionSource with field mapping |
-
-Fyrnheim is not an orchestrator, not an extraction tool, and not a BI layer. It handles the transformation step: raw data in, clean business entities out.
+| Testing | Custom schema tests | pytest |
+| Identity resolution | Manual SQL joins | Built-in identity graph |
 
 ## Status
 

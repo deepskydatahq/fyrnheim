@@ -1,6 +1,6 @@
 """Tests for pipeline DAG visualization."""
 
-from fyrnheim.core.activity import ActivityDefinition, EventOccurred, RowAppeared
+from fyrnheim.core.activity import ActivityDefinition, RowAppeared
 from fyrnheim.core.analytics_model import StreamAnalyticsModel, StreamMetric
 from fyrnheim.core.entity_model import EntityModel, StateField
 from fyrnheim.core.identity import IdentityGraph, IdentitySource

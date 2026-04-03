@@ -94,3 +94,115 @@ def init(project_name: str | None) -> None:
     _scaffold_project(target, named=project_name is not None)
 
 
+def _discover_assets(entities_dir: Path) -> dict[str, list]:
+    """Discover pipeline assets by importing Python files from entities_dir.
+
+    Scans for module-level variables of known asset types.
+    """
+    import importlib.util
+    import sys
+
+    from fyrnheim.core.activity import ActivityDefinition
+    from fyrnheim.core.analytics_model import StreamAnalyticsModel
+    from fyrnheim.core.entity_model import EntityModel
+    from fyrnheim.core.identity import IdentityGraph
+    from fyrnheim.core.metrics_model import MetricsModel
+    from fyrnheim.core.source import EventSource, StateSource
+
+    assets: dict[str, list] = {
+        "sources": [],
+        "activities": [],
+        "identity_graphs": [],
+        "entity_models": [],
+        "analytics_models": [],
+        "metrics_models": [],
+    }
+
+    if not entities_dir.is_dir():
+        return assets
+
+    type_map: dict[type, tuple[str, bool]] = {
+        StateSource: ("sources", False),
+        EventSource: ("sources", False),
+        ActivityDefinition: ("activities", False),
+        IdentityGraph: ("identity_graphs", False),
+        EntityModel: ("entity_models", False),
+        StreamAnalyticsModel: ("analytics_models", False),
+        MetricsModel: ("metrics_models", False),
+    }
+
+    for py_file in sorted(entities_dir.glob("*.py")):
+        module_name = f"_fyrnheim_entity_{py_file.stem}"
+        spec = importlib.util.spec_from_file_location(module_name, py_file)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)  # type: ignore[union-attr]
+        except Exception as exc:
+            logging.getLogger("fyrnheim").warning(
+                "Failed to import %s: %s", py_file.name, exc
+            )
+            continue
+
+        for attr_name in dir(module):
+            if attr_name.startswith("_"):
+                continue
+            val = getattr(module, attr_name)
+
+            # Check single instances
+            for typ, (key, _) in type_map.items():
+                if isinstance(val, typ):
+                    assets[key].append(val)
+                    break
+
+            # Check lists
+            if isinstance(val, list) and val:
+                for typ, (key, _) in type_map.items():
+                    if isinstance(val[0], typ):
+                        assets[key].extend(val)
+                        break
+
+    return assets
+
+
+@main.command()
+@click.option(
+    "--entities-dir", default="entities", help="Directory with entity definitions"
+)
+@click.option("--output", "-o", default=None, help="Output file (default: open in browser)")
+@click.pass_context
+def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
+    """Generate and display the pipeline DAG."""
+    import tempfile
+    import webbrowser
+
+    from fyrnheim.visualization import generate_dag_html
+
+    edir = Path(entities_dir)
+    assets = _discover_assets(edir)
+
+    html_content = generate_dag_html(
+        sources=assets["sources"],
+        activities=assets["activities"],
+        identity_graphs=assets["identity_graphs"],
+        entity_models=assets["entity_models"],
+        analytics_models=assets["analytics_models"],
+        metrics_models=assets["metrics_models"],
+    )
+
+    if output:
+        out_path = Path(output)
+        out_path.write_text(html_content, encoding="utf-8")
+        click.echo(f"DAG written to {out_path}")
+    else:
+        with tempfile.NamedTemporaryFile(
+            suffix=".html", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            f.write(html_content)
+            tmp_path = f.name
+        click.echo(f"Opening DAG in browser: {tmp_path}")
+        webbrowser.open(f"file://{tmp_path}")
+
+

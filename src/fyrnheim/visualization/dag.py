@@ -411,7 +411,7 @@ svg#edges path {{
   </div>
 
   <div class="layer" id="layer-models">
-    <div class="layer-label">MODELS</div>
+    <div class="layer-label">ENTITIES</div>
     <div class="layer-nodes">{entity_nodes}</div>
   </div>
 

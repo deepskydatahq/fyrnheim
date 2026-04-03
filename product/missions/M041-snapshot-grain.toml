@@ -1,0 +1,64 @@
+id = "M041"
+title = "Snapshot grain on StateSource"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+Add snapshot_grain to StateSource that declares how often this source should be
+snapshotted and diffed. This enables product streams (YouTube hourly, CRM daily)
+to produce activities at the right temporal resolution. The snapshot-diff pipeline
+uses this grain to determine when to run and what timestamp to assign events.
+
+This is also the foundation for future dlt-orchestrated loading — Fyrnheim
+knowing the expected grain per source is the first step toward managing the
+full load→snapshot→diff cycle.
+"""
+
+[scope]
+in_scope = [
+    "Add snapshot_grain: Literal['hourly','daily','weekly'] = 'daily' to StateSource",
+    "Snapshot-diff pipeline respects the grain when assigning event timestamps",
+    "Documentation: product streams (content, transactions) vs account streams (people)",
+    "Tests with different grains",
+]
+out_of_scope = [
+    "Actual orchestration / scheduling (future — dlt integration)",
+    "Automatic load triggering based on grain",
+    "Sub-hourly grains",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+]
+origin = "M040 discussion — product streams need different snapshot frequencies"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource accepts snapshot_grain field",
+    "snapshot_grain defaults to 'daily'",
+    "Snapshot store organizes snapshots by grain-appropriate timestamps",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+This mission introduces the concept without building orchestration. The grain
+is declarative metadata on the source — it tells the pipeline what temporal
+resolution to expect. The snapshot store might need to handle sub-daily
+timestamps in filenames (e.g., 2024-01-15T14.parquet for hourly).
+
+Future vision: Fyrnheim orchestrates dlt loads based on snapshot_grain.
+'hourly' sources get loaded every hour, 'daily' sources once per day. But
+that's a separate mission — this one just establishes the grain concept.
+
+Examples:
+- YouTube videos: snapshot_grain='hourly' (view counts change frequently)
+- CRM contacts: snapshot_grain='daily' (state changes are daily exports)
+- Config tables: snapshot_grain='weekly' (rarely change)
+"""

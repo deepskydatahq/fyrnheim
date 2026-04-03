@@ -1,0 +1,51 @@
+id = "M036"
+title = "Add expression-based source transforms"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+SourceTransforms currently only supports renames, type casts, divide, and multiply.
+Real-world sources need preparation that includes arbitrary expressions like
+email.lower(), field.cast("date"), email.split("@")[1]. Add a computed_columns
+field to SourceTransforms (or to StateSource/EventSource directly) that accepts
+ComputedColumn-style expressions applied at read time.
+"""
+
+[scope]
+in_scope = [
+    "Add computed_columns: list[ComputedColumn] to StateSource and EventSource",
+    "Computed columns are evaluated after the source is read, before entering the pipeline",
+    "Existing SourceTransforms (renames, casts, divides, multiplies) still work",
+    "Tests with realistic expressions (lower(), cast, split)",
+]
+out_of_scope = [
+    "Changing the diff engine or downstream pipeline",
+    "Adding new SourceTransform types beyond computed columns",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/components/computed_column.py",
+]
+origin = "M034 migration gap #5 — email.lower(), cast('date'), split('@') needed at source level"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource accepts computed_columns list",
+    "EventSource accepts computed_columns list",
+    "Computed columns are available to downstream engines",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+This is straightforward — sources need light preparation before data enters the
+pipeline. The old PrepLayer served this purpose. Rather than bringing back a
+full layer system, adding computed_columns directly to the source type is the
+minimal, architecturally-consistent solution. The expressions use the same
+ComputedColumn format that EntityModel.computed_fields already uses.
+"""

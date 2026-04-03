@@ -1,0 +1,45 @@
+id = "M035-E001"
+parent = "M035"
+title = "Make identity_graph optional on models and engines"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Make identity_graph optional on EntityModel and StreamAnalyticsModel. Update
+projection and aggregation engines to use entity_id when no identity graph
+is specified.
+"""
+
+[job_story]
+description = """
+When I define a single-source entity like 'companies' that doesn't need
+cross-source identity resolution, I want to use EntityModel without
+specifying an identity_graph.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EntityModel validates without identity_graph",
+    "StreamAnalyticsModel validates without identity_graph",
+    "Projection engine uses entity_id as grouping key when identity_graph is None",
+    "Aggregation engine works without canonical_id column when identity_graph is None",
+    "Existing tests with identity_graph still pass",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity_model.py",
+    "src/fyrnheim/core/analytics_model.py",
+    "src/fyrnheim/engine/entity_projection.py",
+    "src/fyrnheim/engine/analytics_aggregation.py",
+]
+dependencies = []
+
+[notes]
+considerations = """Two model changes + two engine changes. Compact scope."""
+
+estimated_stories = 2

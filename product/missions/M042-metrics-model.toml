@@ -1,0 +1,96 @@
+id = "M042"
+title = "MetricsModel for aggregating metric deltas from product streams"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+Introduce MetricsModel as a new top-level type (distinct from StreamAnalyticsModel).
+MetricsModel aggregates numeric field changes (deltas) from product activity
+streams into time-grain metric tables. Where StreamAnalyticsModel counts/sums
+events, MetricsModel answers: "how much did view_count grow across all videos
+this hour?"
+
+This is the analytics primitive for product streams — content, transactions,
+inventory, or any state source where numeric metrics change over time and you
+want to track the rate of change.
+"""
+
+[scope]
+in_scope = [
+    "MetricsModel Pydantic model with name, source, grain, metric_fields, dimensions",
+    "MetricField model: field_name (the numeric field to track), aggregation (sum_delta, last_value, max_value)",
+    "Metrics engine: takes field_changed events, computes deltas, aggregates by grain + dimensions",
+    "MetricsModelRegistry for discovery",
+    "Tests with realistic product stream scenarios (YouTube views, LinkedIn impressions)",
+]
+out_of_scope = [
+    "Cross-source metrics (combining YouTube + LinkedIn in one MetricsModel) — use separate models",
+    "Real-time / streaming aggregation",
+    "Metric dependencies (one metric referencing another)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/analytics_model.py",
+    "src/fyrnheim/engine/analytics_aggregation.py",
+    "src/fyrnheim/engine/diff_engine.py",
+]
+origin = "M040 discussion — product streams need metric delta aggregation, not event counting"
+depends_on = ["M035"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "MetricsModel validates with name, source, grain, metric_fields",
+    "sum_delta aggregation correctly sums (new_value - old_value) across entities per grain",
+    "last_value aggregation returns the latest absolute value per grain",
+    "Dimensions create correct sub-groupings",
+    "Empty periods (no changes) produce zero-delta rows",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+Why a new type instead of extending StreamAnalyticsModel:
+
+StreamAnalyticsModel operates on the activity stream — it counts events and
+sums event-level values. It answers: "how many signups per day?"
+
+MetricsModel operates on field_changed events from state sources — it tracks
+how numeric metrics evolve over time. It answers: "how much did total YouTube
+views grow this week?"
+
+These are fundamentally different:
+- StreamAnalyticsModel: event_type filter → count/sum → per-grain table
+- MetricsModel: field_changed filter → delta computation → aggregate deltas → per-grain table
+
+The input is different (named events vs raw field changes), the computation is
+different (counting vs delta aggregation), and the semantics are different
+(event frequency vs rate of change).
+
+Example:
+
+```python
+MetricsModel(
+    name="youtube_metrics_daily",
+    source="youtube_videos",
+    grain="daily",
+    metric_fields=[
+        MetricField(field_name="view_count", aggregation="sum_delta"),
+        MetricField(field_name="like_count", aggregation="sum_delta"),
+        MetricField(field_name="comment_count", aggregation="last_value"),
+    ],
+    dimensions=["channel_id"],
+)
+```
+
+Produces a daily table:
+| _date | channel_id | view_count_delta | like_count_delta | comment_count_last |
+|-------|-----------|-----------------|-----------------|-------------------|
+| 2024-01-15 | UC123 | 1500 | 45 | 12 |
+
+The sum_delta for view_count means: across all videos in channel UC123,
+the total view_count increased by 1500 on this day (summing all individual
+video view_count changes detected by the snapshot-diff engine).
+"""

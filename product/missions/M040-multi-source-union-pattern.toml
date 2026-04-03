@@ -1,0 +1,47 @@
+id = "M040"
+title = "Multi-source union pattern for non-identity data"
+status = "resolved"
+created = 2026-04-02
+
+[outcome]
+description = """
+RESOLVED: UnionSource is NOT needed. The use case (combining LinkedIn posts +
+Ghost newsletters + YouTube videos) is better served by treating each content
+channel as a separate StateSource producing its own product activity stream.
+Cross-channel analytics happen at the MetricsModel layer (see M042).
+
+The insight: content items are products with their own identifiers. They
+participate in the activities-first pipeline as product streams, parallel
+to account streams. No union required.
+"""
+
+[scope]
+in_scope = ["No implementation needed — resolved by architecture discussion"]
+out_of_scope = []
+
+[context]
+relevant_paths = []
+origin = "M034 migration gap #3 — resolved 2026-04-02 via product stream discussion"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = []
+validator_context = []
+
+[notes]
+considerations = """
+Resolution: The union pattern was framed as a data integration problem, but
+the real answer is that each content channel is a separate StateSource that
+produces its own product activity stream via snapshot-diff. LinkedIn posts,
+Ghost newsletters, and YouTube videos each get snapshotted, diffed, and
+produce field_changed events (views_increased, opens_increased, etc.).
+
+Cross-channel analytics (total content count, impressions vs open rates)
+happen at the analytics/metrics layer, not by combining source tables.
+
+This resolution depends on:
+- M035: optional identity_graph (product streams don't need identity)
+- M041: snapshot_grain on StateSource (YouTube might be hourly)
+- M042: MetricsModel for aggregating metric deltas from product streams
+"""

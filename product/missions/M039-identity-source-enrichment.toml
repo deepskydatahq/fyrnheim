@@ -1,0 +1,75 @@
+id = "M039"
+title = "Enrich IdentitySource with field selection and prep"
+status = "deferred"
+created = 2026-04-02
+
+[outcome]
+description = """
+The current IdentitySource only has source, id_field, and match_key_field.
+The old IdentityGraphSource had prep_columns, fields dict, date_field, and
+auto-generated is_{source}/first_seen_{source} columns. Evaluate which of
+these belong in IdentitySource vs. EntityModel vs. nowhere.
+"""
+
+[scope]
+in_scope = [
+    "DISCUSSION: Should IdentitySource have field selection (which fields to carry)?",
+    "DISCUSSION: Should IdentitySource have date_field for first_seen tracking?",
+    "DISCUSSION: Should auto-generated is_{source} flags exist, or be EntityModel computed_fields?",
+    "DISCUSSION: Should prep_columns move to SourceTransforms (M036) instead?",
+]
+out_of_scope = []
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/identity.py",
+    "src/fyrnheim/engine/identity_engine.py",
+]
+origin = "M034 migration gap #6"
+depends_on = ["M036"]
+
+[testing]
+approach = "agent-judgment"
+criteria = []
+validator_context = []
+
+[notes]
+considerations = """
+STATUS: NEEDS DISCUSSION — not ready to implement.
+
+The old IdentityGraphSource was complex because it handled:
+1. Source reading (inline TableSource)
+2. Preparation (prep_columns)
+3. Field selection (fields dict)
+4. Temporal tracking (date_field)
+5. Auto-generated columns (is_{source}, first_seen_{source})
+
+The activities-first architecture deliberately simplified this by separating
+concerns:
+1. Sources read → StateSource/EventSource (separate definition)
+2. Preparation → SourceTransforms or source computed_columns (M036)
+3. Field selection → EntityModel.StateField (already handles this)
+4. Temporal tracking → EntityModel.StateField with strategy='first'
+5. Auto-generated columns → EntityModel.computed_fields
+
+The question: is the current separation sufficient, or does IdentitySource
+need additional fields? If M036 (source expressions) lands, prep_columns
+are handled. Field selection is handled by EntityModel. Auto-generated flags
+are computed_fields.
+
+The one thing that might genuinely belong on IdentitySource is date_field —
+the identity resolution engine could use it to track when each source first
+observed an identity. But this could also be derived from event timestamps.
+
+Recommendation: implement M036 first, then reassess whether any gap remains.
+
+UPDATE (2026-04-02): After M036 (source expressions) lands, the remaining
+gaps are:
+- prep_columns → handled by M036 source computed_columns
+- Field selection → handled by EntityModel.StateField
+- Auto-generated is_*/first_seen_* → handled by EntityModel computed_fields
+- date_field → derivable from event timestamps via StateField(strategy='first')
+
+Likely NO remaining gap after M036. Defer until M036 is complete and
+propel-data migration is re-tested.
+"""

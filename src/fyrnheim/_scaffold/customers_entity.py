@@ -1,12 +1,12 @@
 """Sample customer pipeline -- edit or replace this with your own.
 
-Demonstrates: StateSource, ActivityDefinition, IdentityGraph, EntityModel.
+Demonstrates: StateSource, ActivityDefinition, IdentityGraph, AnalyticsEntity.
 """
 
 from fyrnheim import (
     ActivityDefinition,
+    AnalyticsEntity,
     ComputedColumn,
-    EntityModel,
     FieldChanged,
     IdentityGraph,
     IdentitySource,
@@ -52,8 +52,8 @@ customer_identity = IdentityGraph(
     ],
 )
 
-# 4. Entity Model -- derived current state
-customers = EntityModel(
+# 4. Analytics Entity -- derived current state
+customers = AnalyticsEntity(
     name="customers",
     identity_graph="customer_identity",
     state_fields=[

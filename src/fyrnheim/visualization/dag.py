@@ -6,8 +6,7 @@ import html
 import json
 
 from fyrnheim.core.activity import ActivityDefinition
-from fyrnheim.core.analytics_model import StreamAnalyticsModel
-from fyrnheim.core.entity_model import EntityModel
+from fyrnheim.core.analytics_entity import AnalyticsEntity
 from fyrnheim.core.identity import IdentityGraph
 from fyrnheim.core.metrics_model import MetricsModel
 from fyrnheim.core.source import EventSource, StateSource
@@ -63,30 +62,21 @@ def _identity_tooltip(ig: IdentityGraph) -> str:
     return "\n".join(lines)
 
 
-def _entity_tooltip(em: EntityModel) -> str:
+def _analytics_entity_tooltip(ae: AnalyticsEntity) -> str:
     lines = [
-        f"Identity Graph: {em.identity_graph or 'none'}",
-        f"State Fields ({len(em.state_fields)}):",
+        f"Identity Graph: {ae.identity_graph or 'none'}",
+        f"State Fields ({len(ae.state_fields)}):",
     ]
-    for sf in em.state_fields:
+    for sf in ae.state_fields:
         lines.append(f"  - {sf.name} ({sf.strategy} from {sf.source}.{sf.field})")
-    if em.computed_fields:
-        lines.append(f"Computed Fields: {len(em.computed_fields)}")
-    if em.quality_checks:
-        lines.append(f"Quality Checks: {len(em.quality_checks)}")
-    return "\n".join(lines)
-
-
-def _analytics_tooltip(am: StreamAnalyticsModel) -> str:
-    lines = [
-        f"Date Grain: {am.date_grain}",
-        f"Identity Graph: {am.identity_graph or 'none'}",
-    ]
-    if am.dimensions:
-        lines.append(f"Dimensions: {', '.join(am.dimensions)}")
-    lines.append(f"Metrics ({len(am.metrics)}):")
-    for m in am.metrics:
-        lines.append(f"  - {m.name} ({m.metric_type})")
+    if ae.measures:
+        lines.append(f"Measures ({len(ae.measures)}):")
+        for m in ae.measures:
+            lines.append(f"  - {m.name} ({m.aggregation})")
+    if ae.computed_fields:
+        lines.append(f"Computed Fields: {len(ae.computed_fields)}")
+    if ae.quality_checks:
+        lines.append(f"Quality Checks: {len(ae.quality_checks)}")
     return "\n".join(lines)
 
 
@@ -107,8 +97,7 @@ def _build_edges(
     sources: list[StateSource | EventSource],
     activities: list[ActivityDefinition],
     identity_graphs: list[IdentityGraph],
-    entity_models: list[EntityModel],
-    analytics_models: list[StreamAnalyticsModel],
+    analytics_entities: list[AnalyticsEntity],
     metrics_models: list[MetricsModel],
 ) -> list[dict[str, str]]:
     """Build edge list as [{from_id, to_id}, ...]."""
@@ -131,36 +120,26 @@ def _build_edges(
                     {"from": f"source-{ig_src.source}", "to": f"identity-{ig.name}"}
                 )
 
-    # EntityModel -> IdentityGraph (when identity_graph is set)
-    for em in entity_models:
-        if em.identity_graph and em.identity_graph in ig_names:
+    # AnalyticsEntity -> IdentityGraph (when identity_graph is set)
+    for ae in analytics_entities:
+        if ae.identity_graph and ae.identity_graph in ig_names:
             edges.append(
                 {
-                    "from": f"identity-{em.identity_graph}",
-                    "to": f"entity-{em.name}",
+                    "from": f"identity-{ae.identity_graph}",
+                    "to": f"entity-{ae.name}",
                 }
             )
-        elif em.identity_graph is None:
+        elif ae.identity_graph is None:
             # Connect to sources via state_fields[].source
-            connected_sources = {sf.source for sf in em.state_fields}
+            connected_sources = {sf.source for sf in ae.state_fields}
             for sf_source in connected_sources:
                 if sf_source in source_names:
                     edges.append(
                         {
                             "from": f"source-{sf_source}",
-                            "to": f"entity-{em.name}",
+                            "to": f"entity-{ae.name}",
                         }
                     )
-
-    # StreamAnalyticsModel -> IdentityGraph
-    for am in analytics_models:
-        if am.identity_graph and am.identity_graph in ig_names:
-            edges.append(
-                {
-                    "from": f"identity-{am.identity_graph}",
-                    "to": f"analytics-{am.name}",
-                }
-            )
 
     # MetricsModel -> Source
     for mm in metrics_models:
@@ -176,8 +155,7 @@ def generate_dag_html(
     sources: list[StateSource | EventSource] | None = None,
     activities: list[ActivityDefinition] | None = None,
     identity_graphs: list[IdentityGraph] | None = None,
-    entity_models: list[EntityModel] | None = None,
-    analytics_models: list[StreamAnalyticsModel] | None = None,
+    analytics_entities: list[AnalyticsEntity] | None = None,
     metrics_models: list[MetricsModel] | None = None,
 ) -> str:
     """Generate a self-contained HTML page showing the pipeline DAG.
@@ -186,8 +164,7 @@ def generate_dag_html(
         sources: State and event sources.
         activities: Activity definitions.
         identity_graphs: Identity graph definitions.
-        entity_models: Entity model definitions.
-        analytics_models: Stream analytics model definitions.
+        analytics_entities: Analytics entity definitions.
         metrics_models: Metrics model definitions.
 
     Returns:
@@ -196,12 +173,11 @@ def generate_dag_html(
     sources = sources or []
     activities = activities or []
     identity_graphs = identity_graphs or []
-    entity_models = entity_models or []
-    analytics_models = analytics_models or []
+    analytics_entities = analytics_entities or []
     metrics_models = metrics_models or []
 
     edges = _build_edges(
-        sources, activities, identity_graphs, entity_models, analytics_models,
+        sources, activities, identity_graphs, analytics_entities,
         metrics_models,
     )
 
@@ -245,27 +221,20 @@ def generate_dag_html(
         )
 
     entity_nodes = ""
-    for em in entity_models:
-        tooltip = _entity_tooltip(em)
-        field_count = len(em.state_fields) + len(em.computed_fields)
+    for ae in analytics_entities:
+        tooltip = _analytics_entity_tooltip(ae)
+        field_count = len(ae.state_fields)
+        measure_count = len(ae.measures)
         entity_nodes += (
-            f'<div class="node entity-node" id="entity-{_esc(em.name)}" '
+            f'<div class="node entity-node" id="entity-{_esc(ae.name)}" '
             f'title="{_esc(tooltip)}">'
-            f'<span class="node-name">{_esc(em.name)}</span>'
-            f'<span class="node-detail">{field_count} fields</span>'
+            f'<span class="node-badge badge-entity">ANALYTICS ENTITY</span>'
+            f'<span class="node-name">{_esc(ae.name)}</span>'
+            f'<span class="node-detail">{field_count} state fields, {measure_count} measures</span>'
             f"</div>\n"
         )
 
     bottom_nodes = ""
-    for am in analytics_models:
-        tooltip = _analytics_tooltip(am)
-        bottom_nodes += (
-            f'<div class="node analytics-node" id="analytics-{_esc(am.name)}" '
-            f'title="{_esc(tooltip)}">'
-            f'<span class="node-name">{_esc(am.name)}</span>'
-            f'<span class="node-detail">{len(am.metrics)} metrics</span>'
-            f"</div>\n"
-        )
     for mm in metrics_models:
         tooltip = _metrics_tooltip(mm)
         bottom_nodes += (
@@ -365,8 +334,6 @@ svg#edges path {{
 .identity-node:hover {{ border-color: #c084fc; box-shadow: 0 0 16px rgba(168,85,247,0.15); }}
 .entity-node {{ border-color: #f59e0b; }}
 .entity-node:hover {{ border-color: #fbbf24; box-shadow: 0 0 16px rgba(245,158,11,0.15); }}
-.analytics-node {{ border-color: #ef4444; }}
-.analytics-node:hover {{ border-color: #f87171; box-shadow: 0 0 16px rgba(239,68,68,0.15); }}
 .metrics-node {{ border-color: #ef4444; }}
 .metrics-node:hover {{ border-color: #f87171; box-shadow: 0 0 16px rgba(239,68,68,0.15); }}
 .node-badge {{
@@ -379,6 +346,7 @@ svg#edges path {{
 }}
 .badge-state {{ background: rgba(59,130,246,0.15); color: #60a5fa; }}
 .badge-event {{ background: rgba(59,130,246,0.15); color: #93c5fd; }}
+.badge-entity {{ background: rgba(245,158,11,0.15); color: #fbbf24; }}
 .node-name {{
   font-weight: 600;
   font-size: 0.95rem;
@@ -410,13 +378,13 @@ svg#edges path {{
     <div class="layer-nodes">{identity_nodes}</div>
   </div>
 
-  <div class="layer" id="layer-models">
+  <div class="layer" id="layer-entities">
     <div class="layer-label">ENTITIES</div>
     <div class="layer-nodes">{entity_nodes}</div>
   </div>
 
-  <div class="layer" id="layer-analytics">
-    <div class="layer-label">ANALYTICS &amp; METRICS</div>
+  <div class="layer" id="layer-metrics">
+    <div class="layer-label">METRICS</div>
     <div class="layer-nodes">{bottom_nodes}</div>
   </div>
 </div>

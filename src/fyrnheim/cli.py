@@ -103,8 +103,7 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
     import sys
 
     from fyrnheim.core.activity import ActivityDefinition
-    from fyrnheim.core.analytics_model import StreamAnalyticsModel
-    from fyrnheim.core.entity_model import EntityModel
+    from fyrnheim.core.analytics_entity import AnalyticsEntity
     from fyrnheim.core.identity import IdentityGraph
     from fyrnheim.core.metrics_model import MetricsModel
     from fyrnheim.core.source import EventSource, StateSource
@@ -113,8 +112,7 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
         "sources": [],
         "activities": [],
         "identity_graphs": [],
-        "entity_models": [],
-        "analytics_models": [],
+        "analytics_entities": [],
         "metrics_models": [],
     }
 
@@ -126,8 +124,7 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
         EventSource: ("sources", False),
         ActivityDefinition: ("activities", False),
         IdentityGraph: ("identity_graphs", False),
-        EntityModel: ("entity_models", False),
-        StreamAnalyticsModel: ("analytics_models", False),
+        AnalyticsEntity: ("analytics_entities", False),
         MetricsModel: ("metrics_models", False),
     }
 
@@ -198,8 +195,7 @@ def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
         sources=assets["sources"],
         activities=assets["activities"],
         identity_graphs=assets["identity_graphs"],
-        entity_models=assets["entity_models"],
-        analytics_models=assets["analytics_models"],
+        analytics_entities=assets["analytics_entities"],
         metrics_models=assets["metrics_models"],
     )
 

@@ -3,9 +3,8 @@
 from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn
 from fyrnheim.core import (
     ActivityDefinition as ActivityDefinition,
+    AnalyticsEntity as AnalyticsEntity,
     BaseTableSource as BaseTableSource,
-    MetricField as MetricField,
-    MetricsModel as MetricsModel,
     Divide as Divide,
     EntityModel as EntityModel,
     EventOccurred as EventOccurred,
@@ -14,6 +13,9 @@ from fyrnheim.core import (
     FieldChanged as FieldChanged,
     IdentityGraph as IdentityGraph,
     IdentitySource as IdentitySource,
+    Measure as Measure,
+    MetricField as MetricField,
+    MetricsModel as MetricsModel,
     Multiply as Multiply,
     Rename as Rename,
     RowAppeared as RowAppeared,
@@ -79,6 +81,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     # Core types
+    "AnalyticsEntity",
+    "Measure",
     "EntityModel",
     "StateField",
     "Field",

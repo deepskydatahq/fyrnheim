@@ -1,22 +1,21 @@
 """Example: Activities-first customer pipeline.
 
-Demonstrates: StateSource -> SnapshotDiff -> ActivityDefinition -> IdentityGraph -> EntityModel
+Demonstrates: StateSource -> SnapshotDiff -> ActivityDefinition -> IdentityGraph -> AnalyticsEntity
 """
 
 from fyrnheim.core import (
     ActivityDefinition,
+    AnalyticsEntity,
     ComputedColumn,
-    EntityModel,
     EventOccurred,
     EventSource,
     FieldChanged,
     IdentityGraph,
     IdentitySource,
+    Measure,
     RowAppeared,
     StateField,
     StateSource,
-    StreamAnalyticsModel,
-    StreamMetric,
 )
 
 # 1. Sources
@@ -75,8 +74,8 @@ customer_identity = IdentityGraph(
     ],
 )
 
-# 4. Entity Model
-customers = EntityModel(
+# 4. Analytics Entity
+customers = AnalyticsEntity(
     name="customers",
     identity_graph="customer_identity",
     state_fields=[
@@ -87,27 +86,11 @@ customers = EntityModel(
             name="first_seen", source="crm_contacts", field="created_at", strategy="first"
         ),
     ],
+    measures=[
+        Measure(name="purchase_count", activity="purchase", aggregation="count"),
+        Measure(name="total_spent", activity="purchase", aggregation="sum", field="amount"),
+    ],
     computed_fields=[
         ComputedColumn(name="is_paying", expression="plan != 'free'"),
-    ],
-)
-
-# 5. Analytics Model
-daily_metrics = StreamAnalyticsModel(
-    name="customer_metrics_daily",
-    identity_graph="customer_identity",
-    date_grain="daily",
-    metrics=[
-        StreamMetric(
-            name="new_signups",
-            expression="count()",
-            event_filter="signup",
-            metric_type="count",
-        ),
-        StreamMetric(
-            name="total_customers",
-            expression="count()",
-            metric_type="snapshot",
-        ),
     ],
 )

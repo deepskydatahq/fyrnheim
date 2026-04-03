@@ -1,0 +1,31 @@
+id = "M044-E001"
+parent = "M044"
+title = "Pipeline DAG HTML generator and CLI command"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """Implement generate_dag_html() and fyr dag CLI command."""
+
+[job_story]
+description = """When I run fyr dag in my project, I want a browser to open showing my full pipeline DAG."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "generate_dag_html() returns valid HTML with nodes for all asset types",
+    "Edges connect sources to activities, sources to identity graphs, identity to models",
+    "fyr dag CLI command exists and opens browser",
+    "All existing tests pass",
+]
+validator_context = ["tests/", "src/fyrnheim/visualization/"]
+
+[context]
+relevant_paths = ["src/fyrnheim/core/", "src/fyrnheim/cli.py"]
+dependencies = []
+
+[notes]
+considerations = """Two stories: HTML generator function + CLI command."""
+
+estimated_stories = 2

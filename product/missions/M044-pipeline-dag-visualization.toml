@@ -1,0 +1,73 @@
+id = "M044"
+title = "Pipeline DAG visualization"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+Add a generate_dag_html() function that produces a self-contained HTML page
+showing the pipeline DAG: Sources → Activities → Identity → Entity Models →
+Analytics/Metrics. Add a 'fyr dag' CLI command that discovers all assets from
+the project directory and opens the DAG in a browser. Dark theme matching
+fyrnheim.com, color-coded nodes by asset type.
+"""
+
+[scope]
+in_scope = [
+    "generate_dag_html() function in src/fyrnheim/visualization/dag.py",
+    "Takes lists of all asset types as input, returns self-contained HTML string",
+    "Builds edges by matching source name references across types",
+    "Color-coded nodes: blue=sources, green=activities, purple=identity, amber=entities, red=metrics",
+    "Top-to-bottom layered layout with CSS flexbox",
+    "Hover tooltips showing field details per node",
+    "Dark theme matching fyrnheim.com (red accents)",
+    "'fyr dag' CLI command that discovers assets and opens browser",
+    "Tests for graph building and HTML generation",
+]
+out_of_scope = [
+    "Interactive features beyond hover (no click-to-expand, no drag)",
+    "D3 or canvas-based rendering (CSS/HTML only)",
+    "Real-time updates or live reload",
+    "Integration with website docs",
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "generate_dag_html() returns valid HTML string",
+    "HTML contains nodes for all asset types passed in",
+    "Edges connect sources to activities, sources to identity graphs, identity to entity models",
+    "fyr dag CLI command exists and calls generate_dag_html",
+    "Generated HTML renders correctly in a browser",
+]
+validator_context = ["tests/", "src/fyrnheim/visualization/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/core/identity.py",
+    "src/fyrnheim/core/entity_model.py",
+    "src/fyrnheim/core/analytics_model.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/cli.py",
+]
+origin = "Pipeline visualization request — show how assets connect"
+depends_on = []
+
+[notes]
+considerations = """
+The function takes pre-discovered assets as input — it doesn't do discovery
+itself. The CLI wrapper handles discovery via registries. This keeps the
+visualization pure (input → HTML) and testable.
+
+Edge detection logic:
+- ActivityDefinition.source → matches StateSource/EventSource.name
+- IdentitySource.source → matches StateSource/EventSource.name
+- EntityModel.identity_graph → matches IdentityGraph.name
+- StreamAnalyticsModel.identity_graph → matches IdentityGraph.name
+- MetricsModel.source → matches StateSource/EventSource.name
+
+For entities/analytics without identity_graph (None), they connect directly
+to their sources via state_fields.
+"""

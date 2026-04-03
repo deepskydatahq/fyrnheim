@@ -164,13 +164,14 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
                         assets[key].extend(val)
                         break
 
-    # Deduplicate — a source can appear both as a standalone variable and in a list
+    # Deduplicate by name — same source can be defined in multiple files
     for key in assets:
-        seen_ids: set[int] = set()
+        seen_names: set[str] = set()
         deduped: list = []
         for item in assets[key]:
-            if id(item) not in seen_ids:
-                seen_ids.add(id(item))
+            item_name = getattr(item, "name", None) or str(id(item))
+            if item_name not in seen_names:
+                seen_names.add(item_name)
                 deduped.append(item)
         assets[key] = deduped
 

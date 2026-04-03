@@ -1,0 +1,36 @@
+id = "M041-E001-S002"
+parent = "M041-E001"
+title = "Update SnapshotStore to handle hourly timestamps"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Update SnapshotStore.save and get_previous to accept datetime for hourly snapshots alongside date for daily/weekly."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.save with datetime produces filename like 2024-01-15T14-00-00.parquet"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.get_previous with datetime finds the most recent hourly snapshot"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "SnapshotStore.save with date still produces YYYY-MM-DD.parquet (backward compat)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing snapshot store tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/snapshot_store.py", "tests/test_snapshot_store.py"]
+input_fixtures = []
+depends_on = ["M041-E001-S001"]
+
+[handoff]
+implementation_hints = """Update save() and get_previous() to accept datetime.date | datetime.datetime. When datetime is passed, use isoformat with colons replaced by hyphens for filename safety (2024-01-15T14-00-00.parquet). When parsing filenames in get_previous, try datetime.fromisoformat first (with hyphen-to-colon conversion), fall back to date.fromisoformat. APPEND new tests to test_snapshot_store.py — do NOT delete existing."""
+reference_files = []

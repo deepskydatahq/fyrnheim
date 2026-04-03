@@ -1,0 +1,44 @@
+id = "M041-E001-S001"
+parent = "M041-E001"
+title = "Add snapshot_grain field to StateSource"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add snapshot_grain: Literal['hourly','daily','weekly'] = 'daily' to StateSource."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource with snapshot_grain='hourly' validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource with snapshot_grain='daily' validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource with snapshot_grain='weekly' validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource without snapshot_grain defaults to 'daily'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource with snapshot_grain='minutely' raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing StateSource tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py", "tests/test_state_event_source.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Add snapshot_grain: Literal['hourly','daily','weekly'] = 'daily' to StateSource class in source.py. Add tests to test_state_event_source.py — APPEND only, do NOT delete existing tests."""
+reference_files = []

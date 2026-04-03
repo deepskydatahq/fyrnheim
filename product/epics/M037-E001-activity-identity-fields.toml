@@ -1,0 +1,31 @@
+id = "M037-E001"
+parent = "M037"
+title = "Add entity_id_field and person_id_field to ActivityDefinition"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """Add entity_id_field (required) and person_id_field (optional) to ActivityDefinition. Update activity engine to use entity_id_field for output events."""
+
+[job_story]
+description = """When I define a workshop attendance activity, I want to specify that attendee_email is the entity_id_field, so the activity engine produces events keyed by that field."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ActivityDefinition requires entity_id_field",
+    "ActivityDefinition accepts optional person_id_field",
+    "Activity engine uses entity_id_field to populate entity_id in output",
+    "Existing activity tests still pass (with entity_id_field added)",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = ["src/fyrnheim/core/activity.py", "src/fyrnheim/engine/activity_engine.py", "tests/test_activity_definition.py", "tests/test_activity_engine.py"]
+dependencies = []
+
+[notes]
+considerations = """One model change + one engine change. Existing tests need entity_id_field added to their ActivityDefinition instances."""
+
+estimated_stories = 1

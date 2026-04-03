@@ -1,0 +1,36 @@
+id = "M037-E001-S001"
+parent = "M037-E001"
+title = "Add entity_id_field and person_id_field to ActivityDefinition and engine"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add identity fields to ActivityDefinition and update activity engine to use entity_id_field."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition(name='signup', source='crm', trigger=RowAppeared(), entity_id_field='email') validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition without entity_id_field raises ValidationError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ActivityDefinition with person_id_field='email_hash' validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing activity engine tests pass (with entity_id_field added)"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/activity.py", "src/fyrnheim/engine/activity_engine.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """In activity.py ActivityDefinition: add entity_id_field: str = Field(min_length=1) and person_id_field: str | None = None. In activity_engine.py: the engine currently passes through entity_id from the raw event. The entity_id_field tells the engine which PAYLOAD field to use as entity_id. But note: the raw events from diff_snapshots already have entity_id set by the diff engine. The entity_id_field on ActivityDefinition is metadata that declares which field identifies the actor — it doesn't necessarily change how the engine currently works (the diff engine already sets entity_id from the source's id_field). So for now, just add the fields to the model and ensure existing tests pass with entity_id_field added to their definitions. The engine behavior change (actually using entity_id_field to extract from payload) can be a follow-up if needed."""
+reference_files = []

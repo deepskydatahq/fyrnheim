@@ -8,6 +8,7 @@ from .checks import (
     ForeignKey,
     MatchesPattern,
     MaxAge,
+    NotNull,
     QualityCheck,
     QualityConfig,
     Unique,
@@ -20,6 +21,41 @@ if TYPE_CHECKING:
 
 class QualityRunner:
     """Runs quality checks against a database backend via ibis."""
+
+    @staticmethod
+    def run(table: ibis.Table, checks: list[QualityCheck]) -> list[CheckResult]:
+        """Run quality checks against an ibis Table and return results.
+
+        This is a simple entry point that executes checks by materializing the
+        table to a pandas DataFrame. For production use with large tables,
+        prefer the connection-based run_check / run_entity_checks methods.
+        """
+        df = table.execute()
+        results: list[CheckResult] = []
+        for check in checks:
+            if isinstance(check, NotNull):
+                for col in check.columns:
+                    null_count = int(df[col].isnull().sum())
+                    results.append(CheckResult(
+                        check_name=f"not_null:{col}",
+                        passed=null_count == 0,
+                        failure_count=null_count,
+                        sample_failures=[],
+                        error=f"{null_count} null values" if null_count > 0 else None,
+                    ))
+            elif isinstance(check, Unique):
+                for col in check.columns:
+                    total = len(df)
+                    unique = int(df[col].nunique())
+                    dup_count = total - unique
+                    results.append(CheckResult(
+                        check_name=f"unique:{col}",
+                        passed=unique == total,
+                        failure_count=dup_count,
+                        sample_failures=[],
+                        error=f"{dup_count} duplicates" if unique != total else None,
+                    ))
+        return results
 
     def __init__(self, connection: ibis.BaseBackend, dataset: str | None = None):
         self.connection = connection

@@ -132,6 +132,43 @@ class TestEntityModel:
         assert em.computed_fields[0].name == "full_name"
 
 
+class TestEntityModelQualityChecks:
+    """Tests for quality_checks field on EntityModel."""
+
+    def _make_state_field(self, **overrides):
+        defaults = {"name": "email", "source": "crm", "field": "email", "strategy": "latest"}
+        defaults.update(overrides)
+        return StateField(**defaults)
+
+    def test_entity_model_with_quality_checks(self):
+        from fyrnheim.quality import NotNull, Unique
+
+        em = EntityModel(
+            name="customers",
+            state_fields=[self._make_state_field()],
+            quality_checks=[NotNull("email"), Unique("email")],
+        )
+        assert len(em.quality_checks) == 2
+
+    def test_entity_model_without_quality_checks_defaults_to_empty(self):
+        em = EntityModel(
+            name="customers",
+            state_fields=[self._make_state_field()],
+        )
+        assert em.quality_checks == []
+
+    def test_entity_model_quality_checks_preserves_check_types(self):
+        from fyrnheim.quality import NotNull, Unique
+
+        em = EntityModel(
+            name="customers",
+            state_fields=[self._make_state_field()],
+            quality_checks=[NotNull("email"), Unique("id")],
+        )
+        assert isinstance(em.quality_checks[0], NotNull)
+        assert isinstance(em.quality_checks[1], Unique)
+
+
 class TestCoreImport:
     def test_import_from_core(self):
         from fyrnheim.core import EntityModel as EM, StateField as SF

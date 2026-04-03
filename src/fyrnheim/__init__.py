@@ -65,6 +65,13 @@ from fyrnheim.primitives import (
     sum_ as sum_,
     to_json_struct as to_json_struct,
 )
+from fyrnheim.quality import (
+    CheckResult as CheckResult,
+    NotNull as NotNull,
+    QualityCheck as QualityCheck,
+    QualityRunner as QualityRunner,
+    Unique as Unique,
+)
 
 __version__ = "0.1.0"
 
@@ -97,6 +104,12 @@ __all__ = [
     "StreamMetric",
     # Components
     "ComputedColumn",
+    # Quality
+    "QualityCheck",
+    "NotNull",
+    "Unique",
+    "QualityRunner",
+    "CheckResult",
     # Primitives: Hashing
     "concat_hash",
     "hash_email",

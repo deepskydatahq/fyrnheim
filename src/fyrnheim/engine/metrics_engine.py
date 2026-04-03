@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import ibis
 import pandas as pd
 
-from fyrnheim.core.metrics_model import MetricField, MetricsModel
+from fyrnheim.core.metrics_model import MetricsModel
 
 
 def _truncate_to_grain(ts: str, grain: str) -> str:

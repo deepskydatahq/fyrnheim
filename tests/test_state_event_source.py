@@ -325,3 +325,61 @@ class TestEventSourceComputedColumns:
         )
         assert src.event_type == "pageview"
         assert len(src.computed_columns) == 1
+
+
+class TestStateSourceSnapshotGrain:
+    """Tests for StateSource.snapshot_grain field."""
+
+    def test_snapshot_grain_defaults_to_daily(self):
+        src = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+        )
+        assert src.snapshot_grain == "daily"
+
+    def test_snapshot_grain_hourly(self):
+        src = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            snapshot_grain="hourly",
+        )
+        assert src.snapshot_grain == "hourly"
+
+    def test_snapshot_grain_daily(self):
+        src = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            snapshot_grain="daily",
+        )
+        assert src.snapshot_grain == "daily"
+
+    def test_snapshot_grain_weekly(self):
+        src = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            snapshot_grain="weekly",
+        )
+        assert src.snapshot_grain == "weekly"
+
+    def test_snapshot_grain_invalid_raises(self):
+        with pytest.raises(ValidationError):
+            StateSource(
+                name="crm",
+                project="p",
+                dataset="d",
+                table="t",
+                id_field="id",
+                snapshot_grain="minutely",
+            )

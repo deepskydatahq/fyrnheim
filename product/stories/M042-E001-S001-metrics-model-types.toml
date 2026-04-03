@@ -1,0 +1,48 @@
+id = "M042-E001-S001"
+parent = "M042-E001"
+title = "Define MetricsModel and MetricField Pydantic models"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add MetricsModel and MetricField types, exported from core."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModel(name='yt_daily', source='youtube', grain='daily', metric_fields=[...]) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricField(field_name='view_count', aggregation='sum_delta') validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricField aggregation accepts sum_delta, last_value, max_value"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModel.grain accepts hourly, daily, weekly, monthly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModel accepts optional dimensions list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModel requires at least one metric_field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "from fyrnheim.core import MetricsModel, MetricField works"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/core/metrics_model.py. MetricField: field_name (str, min_length=1), aggregation (Literal['sum_delta','last_value','max_value']). MetricsModel: name (str), source (str), grain (Literal['hourly','daily','weekly','monthly']), metric_fields (list[MetricField], min 1), dimensions (list[str] = []). Export from core/__init__.py and __init__.py."""
+reference_files = []

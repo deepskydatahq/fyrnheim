@@ -1,0 +1,36 @@
+id = "M042-E001-S003"
+parent = "M042-E001"
+title = "MetricsModelRegistry and e2e test"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add MetricsModelRegistry for discovery and e2e test with YouTube-like product stream."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModelRegistry.discover(dir) finds module-level 'metrics_model' variables"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModelRegistry.get(name) returns the MetricsModel by name"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "E2e: field_changed events for view_count produce correct sum_delta per day"
+
+[[acceptance_criteria.criteria]]
+test = "e2e"
+description = "E2e: multiple entities' deltas are summed correctly per grain"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/"]
+input_fixtures = []
+depends_on = ["M042-E001-S002"]
+
+[handoff]
+implementation_hints = """Registry: follow ActivityRegistry pattern. E2e: create field_changed events for 3 YouTube videos across 2 days. Video A: view_count 100→150 (day 1), 150→200 (day 2). Video B: view_count 50→80 (day 1). Video C: view_count 200→250 (day 2). Expected sum_delta: day 1 = 80, day 2 = 100."""
+reference_files = []

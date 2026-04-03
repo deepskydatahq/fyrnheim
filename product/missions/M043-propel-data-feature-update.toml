@@ -1,0 +1,65 @@
+id = "M043"
+title = "Update propel-data with new fyrnheim features (M035-M042)"
+status = "draft"
+created = 2026-04-02
+
+[outcome]
+description = """
+Update propel-data entity definitions to use the new fyrnheim features shipped
+in M035-M042. Replace GAP comments with actual implementations: optional
+identity_graph for single-source entities, source computed_columns, activity
+entity_id_field, quality checks, snapshot grain, and MetricsModel for content
+product deltas. Update MIGRATION_GAPS.md to reflect resolved gaps.
+"""
+
+user_progress = "From 'propel-data with GAP workarounds' to 'propel-data using full activities-first API'"
+
+[scope]
+in_scope = [
+    "companies.py: wrap in EntityModel (identity_graph=None) with quality_checks",
+    "workshop_attendance.py: add entity_id_field/person_id_field, create EntityModel",
+    "content_products.py: add computed_columns to StateSources, set snapshot_grain, add MetricsModel",
+    "accounts.py: add quality_checks to EntityModel",
+    "Update tests for new features",
+    "Update MIGRATION_GAPS.md to mark resolved gaps",
+]
+out_of_scope = [
+    "Fixing remaining unresolvable gaps (IdentitySource field selection, complex analytics)",
+    "Changing dlt pipelines or Dagster orchestration",
+    "Running the full pipeline end-to-end",
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "companies.py uses EntityModel with identity_graph=None and quality_checks",
+    "workshop_attendance.py ActivityDefinition has entity_id_field",
+    "content_products.py StateSources have computed_columns and snapshot_grain",
+    "accounts.py EntityModel has quality_checks",
+    "At least one MetricsModel defined for content products",
+    "All entity tests pass",
+    "MIGRATION_GAPS.md updated with resolved status",
+]
+validator_context = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+    "/home/tmo/roadtothebeach/propel/propel-data/tests/test_entities.py",
+    "/home/tmo/roadtothebeach/propel/propel-data/MIGRATION_GAPS.md",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+    "/home/tmo/roadtothebeach/propel/propel-data/tests/test_entities.py",
+    "/home/tmo/roadtothebeach/propel/propel-data/MIGRATION_GAPS.md",
+]
+origin = "M035-M042 shipped features that resolve M034 migration gaps"
+depends_on = ["M035", "M036", "M037", "M038", "M041", "M042"]
+
+[notes]
+considerations = """
+This is a feature-adoption mission, not a migration. The entity files already
+use the new API from M034 — this mission upgrades them from workarounds to
+proper usage of features that now exist.
+
+All work happens in /home/tmo/roadtothebeach/propel/propel-data/.
+"""

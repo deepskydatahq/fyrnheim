@@ -1,0 +1,35 @@
+id = "M045-E001"
+parent = "M045"
+title = "AnalyticsEntity and Measure types + projection engine"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """Define AnalyticsEntity and Measure Pydantic models. Build a projection engine that produces one row per entity with state fields + activity measures + computed fields."""
+
+[job_story]
+description = """When I define an AnalyticsEntity with state_fields and measures, I want the engine to produce a table with both current state AND aggregated activity counts per entity."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "AnalyticsEntity validates with state_fields and measures",
+    "Measure with aggregation='count' counts matching activity events per entity",
+    "Measure with aggregation='sum' sums a payload field per entity",
+    "Measure with aggregation='latest' returns latest value per entity",
+    "Projection engine produces one row per entity with state + measures + computed fields",
+    "AnalyticsEntity works with identity_graph=None (single source)",
+    "AnalyticsEntityRegistry discovers instances from Python files",
+    "Types exported from core and top-level packages",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = ["src/fyrnheim/core/entity_model.py", "src/fyrnheim/engine/entity_projection.py"]
+dependencies = []
+
+[notes]
+considerations = """Build alongside existing types — don't remove anything yet."""
+
+estimated_stories = 2

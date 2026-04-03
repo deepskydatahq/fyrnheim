@@ -44,10 +44,10 @@ def aggregate_metrics(
     # 1. Materialize to pandas
     df = events.execute()
 
-    # 2. Filter to field_changed events for the specified source
+    # 2. Filter to field_changed events for the specified sources
     df = df[
         (df["event_type"] == "field_changed")
-        & (df["source"] == metrics_model.source)
+        & (df["source"].isin(metrics_model.sources))
     ].copy()
 
     if df.empty:

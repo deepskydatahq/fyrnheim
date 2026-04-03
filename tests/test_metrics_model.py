@@ -33,14 +33,14 @@ class TestMetricsModel:
     def test_valid_model(self):
         mm = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
             ],
         )
         assert mm.name == "yt_daily"
-        assert mm.source == "youtube"
+        assert mm.sources == ["youtube"]
         assert mm.grain == "daily"
         assert len(mm.metric_fields) == 1
         assert mm.dimensions == []
@@ -49,7 +49,7 @@ class TestMetricsModel:
         for grain in ("hourly", "daily", "weekly", "monthly"):
             mm = MetricsModel(
                 name="test",
-                source="src",
+                sources=["src"],
                 grain=grain,
                 metric_fields=[
                     MetricField(field_name="x", aggregation="sum_delta"),
@@ -61,7 +61,7 @@ class TestMetricsModel:
         with pytest.raises(ValidationError):
             MetricsModel(
                 name="test",
-                source="src",
+                sources=["src"],
                 grain="yearly",
                 metric_fields=[
                     MetricField(field_name="x", aggregation="sum_delta"),
@@ -72,7 +72,7 @@ class TestMetricsModel:
         with pytest.raises(ValidationError):
             MetricsModel(
                 name="test",
-                source="src",
+                sources=["src"],
                 grain="daily",
                 metric_fields=[],
             )
@@ -80,7 +80,7 @@ class TestMetricsModel:
     def test_optional_dimensions(self):
         mm = MetricsModel(
             name="test",
-            source="src",
+            sources=["src"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="x", aggregation="sum_delta"),
@@ -93,7 +93,7 @@ class TestMetricsModel:
         with pytest.raises(ValidationError):
             MetricsModel(
                 name="",
-                source="src",
+                sources=["src"],
                 grain="daily",
                 metric_fields=[
                     MetricField(field_name="x", aggregation="sum_delta"),
@@ -104,7 +104,7 @@ class TestMetricsModel:
         with pytest.raises(ValidationError):
             MetricsModel(
                 name="test",
-                source="",
+                sources=[],
                 grain="daily",
                 metric_fields=[
                     MetricField(field_name="x", aggregation="sum_delta"),
@@ -114,7 +114,7 @@ class TestMetricsModel:
     def test_multiple_metric_fields(self):
         mm = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),

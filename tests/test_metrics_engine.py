@@ -50,7 +50,7 @@ class TestSumDelta:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -84,7 +84,7 @@ class TestSumDelta:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -117,7 +117,7 @@ class TestLastValue:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="subscriber_count", aggregation="last_value"),
@@ -157,7 +157,7 @@ class TestMaxValue:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="peak_viewers", aggregation="max_value"),
@@ -190,7 +190,7 @@ class TestDimensions:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -225,7 +225,7 @@ class TestDimensions:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -265,7 +265,7 @@ class TestGrains:
         )
         model = MetricsModel(
             name="test",
-            source="src",
+            sources=["src"],
             grain="hourly",
             metric_fields=[MetricField(field_name="x", aggregation="sum_delta")],
         )
@@ -299,7 +299,7 @@ class TestGrains:
         )
         model = MetricsModel(
             name="test",
-            source="src",
+            sources=["src"],
             grain="weekly",
             metric_fields=[MetricField(field_name="x", aggregation="sum_delta")],
         )
@@ -331,7 +331,7 @@ class TestGrains:
         )
         model = MetricsModel(
             name="test",
-            source="src",
+            sources=["src"],
             grain="monthly",
             metric_fields=[MetricField(field_name="x", aggregation="sum_delta")],
         )
@@ -365,7 +365,7 @@ class TestMultipleMetrics:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -400,7 +400,7 @@ class TestEdgeCases:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -424,7 +424,7 @@ class TestEdgeCases:
         )
         model = MetricsModel(
             name="yt_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),

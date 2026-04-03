@@ -71,11 +71,11 @@ def _make_analytics_entity(
 
 def _make_metrics_model(
     name: str = "revenue_metrics",
-    source: str = "crm_contacts",
+    sources: list[str] | None = None,
 ) -> MetricsModel:
     return MetricsModel(
         name=name,
-        source=source,
+        sources=sources or ["crm_contacts"],
         grain="daily",
         metric_fields=[MetricField(field_name="revenue", aggregation="sum_delta")],
     )
@@ -169,7 +169,7 @@ class TestEdges:
 
     def test_edges_connect_metrics_to_source(self) -> None:
         src = _make_state_source("crm_contacts")
-        mm = _make_metrics_model("revenue_metrics", source="crm_contacts")
+        mm = _make_metrics_model("revenue_metrics", sources=["crm_contacts"])
         result = generate_dag_html(sources=[src], metrics_models=[mm])
         assert '"from": "source-crm_contacts"' in result
         assert '"to": "metrics-revenue_metrics"' in result
@@ -184,7 +184,7 @@ class TestFullPipeline:
         activities = [_make_activity("signup", source="crm_contacts")]
         identity_graphs = [_make_identity_graph("user_graph", ("crm_contacts", "page_views"))]
         analytics_entities = [_make_analytics_entity("customer", identity_graph="user_graph")]
-        metrics_models = [_make_metrics_model("revenue_metrics", source="crm_contacts")]
+        metrics_models = [_make_metrics_model("revenue_metrics", sources=["crm_contacts"])]
 
         result = generate_dag_html(
             sources=sources,

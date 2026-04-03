@@ -22,7 +22,7 @@ class TestMetricsModelRegistry:
 
                 metrics_model = MetricsModel(
                     name="yt_daily",
-                    source="youtube",
+                    sources=["youtube"],
                     grain="daily",
                     metric_fields=[
                         MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -35,7 +35,7 @@ class TestMetricsModelRegistry:
         assert len(registry) == 1
         assert "yt_daily" in registry
         model = registry.get("yt_daily")
-        assert model.source == "youtube"
+        assert model.sources == ["youtube"]
 
     def test_discover_list_of_models(self, tmp_path):
         models_dir = tmp_path / "metrics"
@@ -47,7 +47,7 @@ class TestMetricsModelRegistry:
                 metrics_models = [
                     MetricsModel(
                         name="model_a",
-                        source="src_a",
+                        sources=["src_a"],
                         grain="daily",
                         metric_fields=[
                             MetricField(field_name="x", aggregation="sum_delta"),
@@ -55,7 +55,7 @@ class TestMetricsModelRegistry:
                     ),
                     MetricsModel(
                         name="model_b",
-                        source="src_b",
+                        sources=["src_b"],
                         grain="weekly",
                         metric_fields=[
                             MetricField(field_name="y", aggregation="max_value"),
@@ -85,7 +85,7 @@ class TestMetricsModelRegistry:
 
                     metrics_model = MetricsModel(
                         name="duplicate",
-                        source="src",
+                        sources=["src"],
                         grain="daily",
                         metric_fields=[
                             MetricField(field_name="x", aggregation="sum_delta"),
@@ -111,7 +111,7 @@ class TestMetricsModelRegistry:
 
                 metrics_model = MetricsModel(
                     name="test",
-                    source="src",
+                    sources=["src"],
                     grain="daily",
                     metric_fields=[
                         MetricField(field_name="x", aggregation="sum_delta"),
@@ -134,7 +134,7 @@ class TestMetricsModelRegistry:
 
                 metrics_model = MetricsModel(
                     name="test",
-                    source="src",
+                    sources=["src"],
                     grain="daily",
                     metric_fields=[
                         MetricField(field_name="x", aggregation="sum_delta"),
@@ -201,7 +201,7 @@ class TestMetricsE2E:
 
         model = MetricsModel(
             name="yt_daily_views",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),
@@ -248,7 +248,7 @@ class TestMetricsE2E:
 
         model = MetricsModel(
             name="yt_entity_daily",
-            source="youtube",
+            sources=["youtube"],
             grain="daily",
             metric_fields=[
                 MetricField(field_name="view_count", aggregation="sum_delta"),

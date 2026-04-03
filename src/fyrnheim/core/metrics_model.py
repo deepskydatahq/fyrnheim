@@ -16,7 +16,7 @@ class MetricsModel(BaseModel):
     """Model for aggregating numeric field changes into time-grain metric tables."""
 
     name: str = Field(min_length=1)
-    source: str = Field(min_length=1)
+    sources: list[str] = Field(min_length=1)
     grain: Literal["hourly", "daily", "weekly", "monthly"]
     metric_fields: list[MetricField] = Field(min_length=1)
     dimensions: list[str] = Field(default_factory=list)

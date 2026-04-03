@@ -82,7 +82,7 @@ def _analytics_entity_tooltip(ae: AnalyticsEntity) -> str:
 
 def _metrics_tooltip(mm: MetricsModel) -> str:
     lines = [
-        f"Source: {mm.source}",
+        f"Sources: {', '.join(mm.sources)}",
         f"Grain: {mm.grain}",
     ]
     if mm.dimensions:
@@ -141,12 +141,13 @@ def _build_edges(
                         }
                     )
 
-    # MetricsModel -> Source
+    # MetricsModel -> Sources
     for mm in metrics_models:
-        if mm.source in source_names:
-            edges.append(
-                {"from": f"source-{mm.source}", "to": f"metrics-{mm.name}"}
-            )
+        for ms in mm.sources:
+            if ms in source_names:
+                edges.append(
+                    {"from": f"source-{ms}", "to": f"metrics-{mm.name}"}
+                )
 
     return edges
 

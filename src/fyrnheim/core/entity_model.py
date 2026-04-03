@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from fyrnheim.components.computed_column import ComputedColumn
+from fyrnheim.quality.checks import QualityCheck
 
 
 class StateField(BaseModel):
@@ -26,7 +27,10 @@ class StateField(BaseModel):
 class EntityModel(BaseModel):
     """Projects current state from the enriched activity stream."""
 
+    model_config = {"arbitrary_types_allowed": True}
+
     name: str = Field(min_length=1)
     identity_graph: str | None = None
     state_fields: list[StateField] = Field(min_length=1)
     computed_fields: list[ComputedColumn] = Field(default_factory=list)
+    quality_checks: list[QualityCheck] = Field(default_factory=list)

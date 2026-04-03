@@ -1,6 +1,13 @@
 """Core types and source configuration classes."""
 
 from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn
+from fyrnheim.quality import (
+    CheckResult as CheckResult,
+    NotNull as NotNull,
+    QualityCheck as QualityCheck,
+    QualityRunner as QualityRunner,
+    Unique as Unique,
+)
 
 from .activity import (
     ActivityDefinition as ActivityDefinition,

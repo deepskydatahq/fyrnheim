@@ -1,7 +1,7 @@
 """Source configuration classes for fyrnheim entities."""
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field as PydanticField, field_validator, model_validator
 
@@ -121,6 +121,7 @@ class StateSource(BaseTableSource):
     """
     name: str = PydanticField(min_length=1)
     id_field: str = PydanticField(min_length=1)
+    snapshot_grain: Literal["hourly", "daily", "weekly"] = "daily"
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
     computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)

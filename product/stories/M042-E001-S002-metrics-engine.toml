@@ -1,0 +1,57 @@
+id = "M042-E001-S002"
+parent = "M042-E001"
+title = "Metrics engine for delta aggregation"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Implement aggregate_metrics() that processes field_changed events into grain-aggregated deltas."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "sum_delta: sums (new_value - old_value) across entities per grain period"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "last_value: returns the latest new_value per grain period"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "max_value: returns the max new_value per grain period"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dimensions create correct sub-groupings in output"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output has _date column plus one column per metric_field"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/diff_engine.py", "src/fyrnheim/engine/analytics_aggregation.py"]
+input_fixtures = []
+depends_on = ["M042-E001-S001"]
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/metrics_engine.py. Function aggregate_metrics(events: ibis.Table, metrics_model: MetricsModel) -> ibis.Table.
+
+Input events have: source, entity_id, ts, event_type, payload (JSON). The engine:
+1. Materialize to pandas
+2. Filter to field_changed events from the specified source
+3. Parse payload JSON to get field_name, old_value, new_value
+4. For each MetricField, filter events where payload.field_name matches
+5. Parse old_value/new_value as floats
+6. Truncate ts to grain (daily/hourly/weekly/monthly)
+7. Group by _date + dimensions
+8. For each group, compute aggregation:
+   - sum_delta: sum of (new_value - old_value)
+   - last_value: new_value from the row with max ts
+   - max_value: max of new_value
+9. Output column name: {field_name}_{aggregation} (e.g., view_count_sum_delta)
+10. Return as ibis.memtable
+
+For dimensions: the dimension values come from the event payload. For example, if dimension is 'channel_id', parse it from the payload of the field_changed event. This is tricky since field_changed payloads only have field_name/old_value/new_value. Alternative: dimensions come from entity_id or a separate lookup. SIMPLEST: skip payload-based dimensions for now, support only entity_id as a dimension. Or: also look at row_appeared events to get dimension values per entity_id, then join."""
+reference_files = []

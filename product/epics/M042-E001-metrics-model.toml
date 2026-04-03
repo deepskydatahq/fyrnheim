@@ -1,0 +1,46 @@
+id = "M042-E001"
+parent = "M042"
+title = "MetricsModel type, engine, and registry"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Implement MetricsModel and MetricField Pydantic models, a metrics engine that
+aggregates field_changed deltas by grain and dimensions, and a MetricsModelRegistry
+for discovery.
+"""
+
+[job_story]
+description = """
+When I have YouTube videos snapshotted hourly, I want to define a MetricsModel
+that tracks how view_count and like_count change per day, so I can see growth
+rates across my content.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "MetricsModel validates with name, source, grain, metric_fields",
+    "MetricField validates with field_name and aggregation (sum_delta, last_value, max_value)",
+    "sum_delta correctly sums (new_value - old_value) across entities per grain",
+    "last_value returns the latest absolute value per grain",
+    "Dimensions create correct sub-groupings",
+    "MetricsModelRegistry discovers MetricsModel instances from Python files",
+    "Exported from core and top-level packages",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/analytics_model.py",
+    "src/fyrnheim/engine/analytics_aggregation.py",
+    "src/fyrnheim/engine/diff_engine.py",
+]
+dependencies = []
+
+[notes]
+considerations = """Three stories: model, engine, registry+e2e."""
+
+estimated_stories = 3

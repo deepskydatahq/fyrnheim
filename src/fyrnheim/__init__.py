@@ -24,13 +24,6 @@ from fyrnheim.core import (
     TableSource as TableSource,
     TypeCast as TypeCast,
 )
-from fyrnheim.quality import (
-    CheckResult as CheckResult,
-    NotNull as NotNull,
-    QualityCheck as QualityCheck,
-    QualityRunner as QualityRunner,
-    Unique as Unique,
-)
 from fyrnheim.primitives import (
     account_id_from_domain as account_id_from_domain,
     any_value as any_value,
@@ -71,6 +64,13 @@ from fyrnheim.primitives import (
     row_number_by as row_number_by,
     sum_ as sum_,
     to_json_struct as to_json_struct,
+)
+from fyrnheim.quality import (
+    CheckResult as CheckResult,
+    NotNull as NotNull,
+    QualityCheck as QualityCheck,
+    QualityRunner as QualityRunner,
+    Unique as Unique,
 )
 
 __version__ = "0.1.0"

@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field as PydanticField, field_validator, model_validator
 
+from fyrnheim.components.computed_column import ComputedColumn
+
 
 class Field(BaseModel):
     """Defines a source field with its type and metadata."""
@@ -121,6 +123,7 @@ class StateSource(BaseTableSource):
     id_field: str = PydanticField(min_length=1)
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
+    computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)
 
 
 class EventSource(BaseTableSource):
@@ -138,6 +141,7 @@ class EventSource(BaseTableSource):
     event_type_field: str | None = None
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
+    computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_event_type_exclusivity(self) -> "EventSource":

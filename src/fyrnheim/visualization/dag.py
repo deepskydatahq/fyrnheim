@@ -379,12 +379,12 @@ svg#edges path {{
   </div>
 
   <div class="layer" id="layer-entities">
-    <div class="layer-label">ENTITIES</div>
+    <div class="layer-label">ANALYTICS ENTITIES</div>
     <div class="layer-nodes">{entity_nodes}</div>
   </div>
 
   <div class="layer" id="layer-metrics">
-    <div class="layer-label">METRICS</div>
+    <div class="layer-label">METRICS MODELS</div>
     <div class="layer-nodes">{bottom_nodes}</div>
   </div>
 </div>

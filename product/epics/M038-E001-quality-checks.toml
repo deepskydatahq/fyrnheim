@@ -1,0 +1,44 @@
+id = "M038-E001"
+parent = "M038"
+title = "Quality check models, runner, and EntityModel integration"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Implement QualityCheck base, NotNull, Unique check types, a quality runner
+that validates Ibis tables, and attach quality_checks to EntityModel.
+"""
+
+[job_story]
+description = """
+When I define an EntityModel for customers, I want to declare quality checks
+like NotNull('email') and Unique('email'), so that after projection the
+system validates my data meets expectations.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "NotNull check passes when column has no nulls, fails when it does",
+    "Unique check passes when column has no duplicates, fails when it does",
+    "QualityRunner takes a table and list of checks, returns results per check",
+    "EntityModel accepts optional quality_checks list",
+    "Existing EntityModel tests still pass",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity_model.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Create src/fyrnheim/quality/ directory with checks.py (models), runner.py (executor).
+Keep it minimal — just NotNull and Unique.
+"""
+
+estimated_stories = 2

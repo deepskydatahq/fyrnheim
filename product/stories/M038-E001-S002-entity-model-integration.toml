@@ -1,0 +1,32 @@
+id = "M038-E001-S002"
+parent = "M038-E001"
+title = "Attach quality_checks to EntityModel"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add optional quality_checks field to EntityModel."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel(name='x', state_fields=[...], quality_checks=[NotNull('email'), Unique('email')]) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel without quality_checks still validates (defaults to empty list)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing EntityModel tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/entity_model.py", "tests/test_entity_model.py"]
+input_fixtures = []
+depends_on = ["M038-E001-S001"]
+
+[handoff]
+implementation_hints = """Add quality_checks: list[QualityCheck] = Field(default_factory=list) to EntityModel. Import QualityCheck from fyrnheim.quality.checks. IMPORTANT: do NOT delete existing tests in test_entity_model.py — only ADD new ones."""
+reference_files = []

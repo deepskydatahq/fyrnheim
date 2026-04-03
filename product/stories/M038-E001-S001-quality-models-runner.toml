@@ -1,0 +1,53 @@
+id = "M038-E001-S001"
+parent = "M038-E001"
+title = "Quality check models and runner"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Implement NotNull, Unique check types and a QualityRunner that validates Ibis tables."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "NotNull('email') check passes on a table where email column has no nulls"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "NotNull('email') check fails on a table where email has null values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unique('email') check passes on a table with all distinct email values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unique('email') check fails on a table with duplicate emails"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "QualityRunner.run(table, checks) returns a list of CheckResult with name, passed, details"
+
+[context]
+relevant_paths = ["src/fyrnheim/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/quality/__init__.py, src/fyrnheim/quality/checks.py, src/fyrnheim/quality/runner.py.
+
+checks.py:
+- QualityCheck(BaseModel) with check_type: str, columns: list[str]
+- NotNull(QualityCheck) with check_type='not_null'
+- Unique(QualityCheck) with check_type='unique'
+
+runner.py:
+- CheckResult(BaseModel): check_name: str, passed: bool, details: str | None
+- QualityRunner.run(table: ibis.Table, checks: list[QualityCheck]) -> list[CheckResult]
+  - For NotNull: check table.column.isnull().sum() == 0 via pandas
+  - For Unique: check table.column.nunique() == len(table) via pandas
+
+Export NotNull, Unique, QualityRunner, CheckResult from quality/__init__.py and from fyrnheim core/top-level."""
+reference_files = []

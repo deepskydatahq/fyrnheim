@@ -24,6 +24,10 @@ from .entity_model import (
     EntityModel as EntityModel,
     StateField as StateField,
 )
+from .metrics_model import (
+    MetricField as MetricField,
+    MetricsModel as MetricsModel,
+)
 from .identity import (
     IdentityGraph as IdentityGraph,
     IdentitySource as IdentitySource,

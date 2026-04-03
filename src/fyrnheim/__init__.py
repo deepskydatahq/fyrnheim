@@ -4,6 +4,8 @@ from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn
 from fyrnheim.core import (
     ActivityDefinition as ActivityDefinition,
     BaseTableSource as BaseTableSource,
+    MetricField as MetricField,
+    MetricsModel as MetricsModel,
     Divide as Divide,
     EntityModel as EntityModel,
     EventOccurred as EventOccurred,
@@ -102,6 +104,9 @@ __all__ = [
     # Analytics
     "StreamAnalyticsModel",
     "StreamMetric",
+    # Metrics
+    "MetricsModel",
+    "MetricField",
     # Components
     "ComputedColumn",
     # Quality

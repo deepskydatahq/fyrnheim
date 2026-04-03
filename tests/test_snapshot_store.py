@@ -160,3 +160,106 @@ class TestSnapshotStoreGetPrevious:
         result = store.get_previous("customers", datetime.date(2026, 3, 15))
         assert result is not None
         assert result.count().execute() == 3
+
+
+class TestSnapshotStoreDatetimeSave:
+    """Tests for SnapshotStore.save() with datetime inputs."""
+
+    def test_save_datetime_produces_datetime_filename(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend, tmp_path: Path
+    ) -> None:
+        """save() with datetime produces YYYY-MM-DDTHH-MM-SS.parquet filename."""
+        table = _sample_table(duckdb_conn)
+        dt = datetime.datetime(2024, 1, 15, 14, 0, 0)
+
+        result_path = store.save("customers", dt, table)
+
+        expected = tmp_path / "customers" / "2024-01-15T14-00-00.parquet"
+        assert result_path == expected
+        assert expected.exists()
+
+    def test_save_date_still_produces_date_filename(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend, tmp_path: Path
+    ) -> None:
+        """save() with date still produces YYYY-MM-DD.parquet filename."""
+        table = _sample_table(duckdb_conn)
+        d = datetime.date(2024, 1, 15)
+
+        result_path = store.save("customers", d, table)
+
+        expected = tmp_path / "customers" / "2024-01-15.parquet"
+        assert result_path == expected
+        assert expected.exists()
+
+    def test_save_datetime_data_roundtrips(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend, tmp_path: Path
+    ) -> None:
+        """Saved datetime snapshot data can be read back correctly."""
+        table = _sample_table(duckdb_conn)
+        dt = datetime.datetime(2024, 1, 15, 14, 0, 0)
+
+        store.save("customers", dt, table)
+
+        result = duckdb_conn.read_parquet(
+            str(tmp_path / "customers" / "2024-01-15T14-00-00.parquet")
+        )
+        df = result.order_by("id").execute()
+        assert list(df["id"]) == [1, 2, 3]
+        assert list(df["name"]) == ["alice", "bob", "charlie"]
+
+
+class TestSnapshotStoreGetPreviousDatetime:
+    """Tests for SnapshotStore.get_previous() with datetime inputs."""
+
+    def test_get_previous_datetime_finds_hourly_snapshot(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend
+    ) -> None:
+        """get_previous() with datetime finds the most recent hourly snapshot."""
+        t1 = ibis.memtable({"id": [1], "val": ["hour1"]})
+        t2 = ibis.memtable({"id": [1], "val": ["hour2"]})
+
+        store.save("src", datetime.datetime(2024, 1, 15, 10, 0, 0), t1)
+        store.save("src", datetime.datetime(2024, 1, 15, 12, 0, 0), t2)
+
+        result = store.get_previous("src", datetime.datetime(2024, 1, 15, 14, 0, 0))
+        assert result is not None
+        df = result.execute()
+        assert list(df["val"]) == ["hour2"]
+
+    def test_get_previous_datetime_mixes_date_and_datetime_candidates(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend
+    ) -> None:
+        """get_previous() considers both date and datetime snapshots."""
+        t_daily = ibis.memtable({"id": [1], "val": ["daily"]})
+        t_hourly = ibis.memtable({"id": [1], "val": ["hourly"]})
+
+        store.save("src", datetime.date(2024, 1, 15), t_daily)
+        store.save("src", datetime.datetime(2024, 1, 15, 10, 0, 0), t_hourly)
+
+        # Hourly is later than daily (midnight), so it should be returned
+        result = store.get_previous("src", datetime.datetime(2024, 1, 15, 14, 0, 0))
+        assert result is not None
+        df = result.execute()
+        assert list(df["val"]) == ["hourly"]
+
+    def test_get_previous_date_still_works_with_datetime_snapshots(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend
+    ) -> None:
+        """get_previous() with a date reference still finds datetime snapshots."""
+        t1 = ibis.memtable({"id": [1], "val": ["hourly"]})
+        store.save("src", datetime.datetime(2024, 1, 14, 18, 0, 0), t1)
+
+        result = store.get_previous("src", datetime.date(2024, 1, 15))
+        assert result is not None
+        df = result.execute()
+        assert list(df["val"]) == ["hourly"]
+
+    def test_get_previous_datetime_returns_none_when_no_earlier(
+        self, store: SnapshotStore, duckdb_conn: ibis.BaseBackend
+    ) -> None:
+        """get_previous() returns None when no snapshot is earlier than reference."""
+        t1 = ibis.memtable({"id": [1], "val": ["later"]})
+        store.save("src", datetime.datetime(2024, 1, 15, 14, 0, 0), t1)
+
+        result = store.get_previous("src", datetime.datetime(2024, 1, 15, 10, 0, 0))
+        assert result is None

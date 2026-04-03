@@ -26,7 +26,7 @@ class Measure(BaseModel):
 class StateField(BaseModel):
     """Defines how a single field is projected from the activity stream.
 
-    Same definition as entity_model.StateField -- kept here for AnalyticsEntity usage.
+    Defines how a single field is projected from the activity stream.
     """
 
     name: str = Field(min_length=1)

@@ -6,7 +6,6 @@ from fyrnheim.core import (
     AnalyticsEntity as AnalyticsEntity,
     BaseTableSource as BaseTableSource,
     Divide as Divide,
-    EntityModel as EntityModel,
     EventOccurred as EventOccurred,
     EventSource as EventSource,
     Field as Field,
@@ -23,8 +22,6 @@ from fyrnheim.core import (
     SourceTransforms as SourceTransforms,
     StateField as StateField,
     StateSource as StateSource,
-    StreamAnalyticsModel as StreamAnalyticsModel,
-    StreamMetric as StreamMetric,
     TableSource as TableSource,
     TypeCast as TypeCast,
 )
@@ -83,7 +80,6 @@ __all__ = [
     # Core types
     "AnalyticsEntity",
     "Measure",
-    "EntityModel",
     "StateField",
     "Field",
     # Sources
@@ -105,9 +101,7 @@ __all__ = [
     "FieldChanged",
     "RowDisappeared",
     "EventOccurred",
-    # Analytics
-    "StreamAnalyticsModel",
-    "StreamMetric",
+    # Analytics (legacy removed -- AnalyticsEntity replaces StreamAnalyticsModel)
     # Metrics
     "MetricsModel",
     "MetricField",

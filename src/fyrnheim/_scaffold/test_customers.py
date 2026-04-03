@@ -30,8 +30,8 @@ def test_identity_graph_defined() -> None:
     assert len(customer_identity.sources) == 1
 
 
-def test_entity_model_defined() -> None:
-    """Verify that the entity model is configured."""
+def test_analytics_entity_defined() -> None:
+    """Verify that the analytics entity is configured."""
     assert customers.name == "customers"
     assert len(customers.state_fields) >= 3
     assert len(customers.computed_fields) >= 1

@@ -1,8 +1,7 @@
 """Tests for pipeline DAG visualization."""
 
 from fyrnheim.core.activity import ActivityDefinition, RowAppeared
-from fyrnheim.core.analytics_model import StreamAnalyticsModel, StreamMetric
-from fyrnheim.core.entity_model import EntityModel, StateField
+from fyrnheim.core.analytics_entity import AnalyticsEntity, Measure, StateField
 from fyrnheim.core.identity import IdentityGraph, IdentitySource
 from fyrnheim.core.metrics_model import MetricField, MetricsModel
 from fyrnheim.core.source import EventSource, StateSource
@@ -54,28 +53,19 @@ def _make_identity_graph(
     )
 
 
-def _make_entity_model(
+def _make_analytics_entity(
     name: str = "customer",
     identity_graph: str | None = "user_graph",
-) -> EntityModel:
-    return EntityModel(
+) -> AnalyticsEntity:
+    return AnalyticsEntity(
         name=name,
         identity_graph=identity_graph,
         state_fields=[
             StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
         ],
-    )
-
-
-def _make_analytics_model(
-    name: str = "daily_metrics",
-    identity_graph: str | None = "user_graph",
-) -> StreamAnalyticsModel:
-    return StreamAnalyticsModel(
-        name=name,
-        identity_graph=identity_graph,
-        date_grain="daily",
-        metrics=[StreamMetric(name="event_count", expression="count(*)", metric_type="count")],
+        measures=[
+            Measure(name="event_count", activity="signup", aggregation="count"),
+        ],
     )
 
 
@@ -129,12 +119,14 @@ class TestIdentityGraphsAppear:
         assert "2 sources" in result
 
 
-class TestEntityModelsAppear:
-    def test_entity_models_appear_in_output(self) -> None:
-        em = _make_entity_model("customer")
-        result = generate_dag_html(entity_models=[em])
+class TestAnalyticsEntitiesAppear:
+    def test_analytics_entities_appear_in_output(self) -> None:
+        ae = _make_analytics_entity("customer")
+        result = generate_dag_html(analytics_entities=[ae])
         assert "customer" in result
-        assert "1 fields" in result
+        assert "ANALYTICS ENTITY" in result
+        assert "1 state fields" in result
+        assert "1 measures" in result
 
 
 class TestMetricsModelsAppear:
@@ -163,24 +155,17 @@ class TestEdges:
 
     def test_edges_connect_entity_to_identity(self) -> None:
         ig = _make_identity_graph("user_graph")
-        em = _make_entity_model("customer", identity_graph="user_graph")
-        result = generate_dag_html(identity_graphs=[ig], entity_models=[em])
+        ae = _make_analytics_entity("customer", identity_graph="user_graph")
+        result = generate_dag_html(identity_graphs=[ig], analytics_entities=[ae])
         assert '"from": "identity-user_graph"' in result
         assert '"to": "entity-customer"' in result
 
     def test_edges_entity_without_identity_connects_to_source(self) -> None:
         src = _make_state_source("crm_contacts")
-        em = _make_entity_model("customer", identity_graph=None)
-        result = generate_dag_html(sources=[src], entity_models=[em])
+        ae = _make_analytics_entity("customer", identity_graph=None)
+        result = generate_dag_html(sources=[src], analytics_entities=[ae])
         assert '"from": "source-crm_contacts"' in result
         assert '"to": "entity-customer"' in result
-
-    def test_edges_connect_analytics_to_identity(self) -> None:
-        ig = _make_identity_graph("user_graph")
-        am = _make_analytics_model("daily_metrics", identity_graph="user_graph")
-        result = generate_dag_html(identity_graphs=[ig], analytics_models=[am])
-        assert '"from": "identity-user_graph"' in result
-        assert '"to": "analytics-daily_metrics"' in result
 
     def test_edges_connect_metrics_to_source(self) -> None:
         src = _make_state_source("crm_contacts")
@@ -198,16 +183,14 @@ class TestFullPipeline:
         ]
         activities = [_make_activity("signup", source="crm_contacts")]
         identity_graphs = [_make_identity_graph("user_graph", ("crm_contacts", "page_views"))]
-        entity_models = [_make_entity_model("customer", identity_graph="user_graph")]
-        analytics_models = [_make_analytics_model("daily_metrics", identity_graph="user_graph")]
+        analytics_entities = [_make_analytics_entity("customer", identity_graph="user_graph")]
         metrics_models = [_make_metrics_model("revenue_metrics", source="crm_contacts")]
 
         result = generate_dag_html(
             sources=sources,
             activities=activities,
             identity_graphs=identity_graphs,
-            entity_models=entity_models,
-            analytics_models=analytics_models,
+            analytics_entities=analytics_entities,
             metrics_models=metrics_models,
         )
 
@@ -217,7 +200,6 @@ class TestFullPipeline:
         assert "signup" in result
         assert "user_graph" in result
         assert "customer" in result
-        assert "daily_metrics" in result
         assert "revenue_metrics" in result
 
         # Structure present
@@ -225,8 +207,8 @@ class TestFullPipeline:
         assert "SOURCES" in result
         assert "ACTIVITIES" in result
         assert "IDENTITY" in result
-        assert "MODELS" in result
-        assert "ANALYTICS" in result
+        assert "ENTITIES" in result
+        assert "METRICS" in result
 
         # Edges present
         assert "source-crm_contacts" in result

@@ -19,13 +19,6 @@ from .activity import (
 from .analytics_entity import (
     AnalyticsEntity as AnalyticsEntity,
     Measure as Measure,
-)
-from .analytics_model import (
-    StreamAnalyticsModel as StreamAnalyticsModel,
-    StreamMetric as StreamMetric,
-)
-from .entity_model import (
-    EntityModel as EntityModel,
     StateField as StateField,
 )
 from .identity import (

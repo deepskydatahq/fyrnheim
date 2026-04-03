@@ -1,0 +1,32 @@
+id = "M034-E001-S004"
+parent = "M034-E001"
+title = "Rewrite tests and document migration gaps"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Rewrite test_entities.py for new types. Create MIGRATION_GAPS.md documenting API gaps found."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_entities.py imports only from new API"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests validate new entity definitions (import, basic structure checks)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MIGRATION_GAPS.md exists with documented gaps"
+
+[context]
+relevant_paths = ["/home/tmo/roadtothebeach/propel/propel-data/tests/test_entities.py"]
+input_fixtures = []
+depends_on = ["M034-E001-S001", "M034-E001-S002", "M034-E001-S003"]
+
+[handoff]
+implementation_hints = """Rewrite tests to validate new types. Delete generated/ directory. Create MIGRATION_GAPS.md listing all gaps found during migration."""
+reference_files = []

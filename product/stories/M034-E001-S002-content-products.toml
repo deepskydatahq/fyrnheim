@@ -1,0 +1,39 @@
+id = "M034-E001-S002"
+parent = "M034-E001"
+title = "Migrate content_products entity (UnionSource challenge)"
+status = "brainstorm"
+created = 2026-04-02
+
+[outcome]
+description = """Rewrite content_products.py to replace UnionSource with activities-first equivalent. Document gaps."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "content_products.py imports only from new API"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "File can be imported without errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Content from 3 channels (linkedin, newsletter, youtube) is represented"
+
+[context]
+relevant_paths = ["/home/tmo/roadtothebeach/propel/propel-data/entities/content_products.py"]
+input_fixtures = []
+depends_on = ["M034-E001-S001"]
+
+[handoff]
+implementation_hints = """The UnionSource combined 3 TableSources with literal_columns and field_mappings into one entity. The new API has no UnionSource equivalent.
+
+Options:
+A) Define 3 separate StateSources. Use an EntityModel with state_fields pulling from all 3 (coalesce strategy). But EntityModel groups by canonical_id via identity graph — content products don't share IDs.
+B) Define 3 StateSources, skip EntityModel. Just define ActivityDefinitions and StreamAnalyticsModel operating on the 3 sources separately with a 'channel' dimension.
+C) Note UnionSource as a gap — the content_products entity CANNOT be directly expressed in the new API. Write a placeholder with a comment.
+
+Option B is probably closest to what the data actually is — content products are really just analytics over 3 independent event streams, grouped by channel. Go with B and document the gap."""
+reference_files = []

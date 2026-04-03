@@ -1,0 +1,90 @@
+id = "M034"
+title = "Migrate propel-data to activities-first fyrnheim API"
+status = "draft"
+created = 2026-04-02
+
+[outcome]
+description = """
+Migrate the propel-data project from the old entity-centric fyrnheim API
+(Entity, LayersConfig, PrepLayer, DimensionLayer, TableSource, DerivedSource,
+UnionSource, IdentityGraphConfig, ActivityConfig, AnalyticsLayer) to the new
+activities-first API (StateSource, EventSource, ActivityDefinition, IdentityGraph,
+EntityModel, StreamAnalyticsModel). This is the first real-world migration and
+will surface any gaps in the new API that need follow-up work in fyrnheim.
+"""
+
+user_progress = "From 'propel-data uses removed fyrnheim API' to 'propel-data runs on activities-first fyrnheim'"
+
+[scope]
+in_scope = [
+    "Migrate entities/accounts.py to StateSource + IdentityGraph + EntityModel",
+    "Migrate entities/companies.py to StateSource + EntityModel",
+    "Migrate entities/content_products.py — find activities-first equivalent for UnionSource pattern",
+    "Migrate entities/workshop_attendance.py to StateSource + ActivityDefinition",
+    "Update fyrnheim dependency to latest",
+    "Update generated/ transforms if codegen still applies",
+    "Update tests/test_entities.py for new types",
+    "Document any gaps found in the new fyrnheim API as follow-up issues",
+]
+out_of_scope = [
+    "Changing the dlt pipelines or API clients (those load raw data, unchanged)",
+    "Changing Dagster orchestration beyond what fyr CLI changes require",
+    "Fixing fyrnheim API gaps (just document them)",
+    "Production deployment (not in production yet)",
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All entity definitions use new activities-first types only",
+    "No imports of removed types (Entity, LayersConfig, PrepLayer, etc.)",
+    "Entity tests pass with new definitions",
+    "Any API gaps are documented as issues",
+]
+validator_context = [
+    "entities/",
+    "tests/test_entities.py",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+    "/home/tmo/roadtothebeach/propel/propel-data/tests/test_entities.py",
+    "/home/tmo/roadtothebeach/propel/propel-data/pyproject.toml",
+    "/home/tmo/roadtothebeach/propel/propel-data/fyrnheim.yaml",
+    "/home/tmo/roadtothebeach/propel/propel-data/CLAUDE.md",
+]
+origin = "M032 removed old API; propel-data is the first downstream consumer to migrate"
+depends_on = ["M032"]
+
+[notes]
+considerations = """
+Known migration challenges:
+
+1. UnionSource (content_products.py): Combines LinkedIn + Ghost + YouTube into one
+   entity with field_mappings and literal_columns. The new API doesn't have a direct
+   equivalent. Options: (a) keep 3 separate StateSources and merge at EntityModel level,
+   (b) add a UnionSource-like concept back to the new API, (c) handle union in a
+   pre-processing step outside fyrnheim. Likely (a) or document as gap.
+
+2. IdentityGraph with inline TableSource: The old IdentityGraphConfig allowed inline
+   TableSource definitions with prep_columns. The new IdentityGraph/IdentitySource is
+   simpler — just source name + id_field + match_key_field. The prep transforms would
+   need to move into the source definition or be handled differently.
+
+3. AnalyticsLayer metrics: propel-data has 8 account metrics and 13 content metrics.
+   These need to be translated to StreamAnalyticsModel + StreamMetric. The expressions
+   may not map 1:1.
+
+4. Quality checks: The quality module was removed in M032. propel-data uses NotNull,
+   Unique, QualityConfig. These either need to be re-added to fyrnheim or removed
+   from propel-data.
+
+5. Generated code: The old IbisCodeGenerator was removed. propel-data has generated/
+   transforms. The new architecture doesn't use codegen in the same way — the engines
+   (diff, activity, identity, projection, analytics) operate directly. The CLI and
+   runner need to be updated to work with the new pipeline.
+
+This migration will likely surface 2-4 API gaps that become follow-up fyrnheim missions.
+That's expected and valuable — real-world usage testing.
+"""

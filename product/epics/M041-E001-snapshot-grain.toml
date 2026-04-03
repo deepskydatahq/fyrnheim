@@ -1,0 +1,39 @@
+id = "M041-E001"
+parent = "M041"
+title = "Add snapshot_grain to StateSource and update snapshot store"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """Add snapshot_grain field to StateSource. Update SnapshotStore to handle
+datetime timestamps for hourly grain alongside date for daily/weekly."""
+
+[job_story]
+description = """When I define a YouTube videos source, I want to set snapshot_grain='hourly'
+so the system knows this source should be snapshotted more frequently than daily CRM data."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource accepts snapshot_grain with values hourly, daily, weekly",
+    "snapshot_grain defaults to 'daily'",
+    "SnapshotStore.save accepts datetime for hourly snapshots",
+    "SnapshotStore.get_previous works with hourly timestamps",
+    "Existing daily snapshot tests still pass",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "tests/test_state_event_source.py",
+    "tests/test_snapshot_store.py",
+]
+dependencies = []
+
+[notes]
+considerations = """Two changes: model field + store timestamp handling."""
+
+estimated_stories = 2

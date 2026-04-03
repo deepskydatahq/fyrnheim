@@ -17,7 +17,7 @@ export default defineConfig({
           label: 'Core Concepts',
           collapsed: true,
           items: [
-            { label: 'Entities', slug: 'concepts/entities' },
+            { label: 'Analytics Entities', slug: 'concepts/analytics-entities' },
             { label: 'Layers', slug: 'concepts/layers' },
             { label: 'Sources', slug: 'concepts/sources' },
             { label: 'Source Mapping', slug: 'concepts/source-mapping' },

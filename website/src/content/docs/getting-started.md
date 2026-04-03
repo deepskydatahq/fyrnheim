@@ -38,23 +38,27 @@ Created myproject/
 Open `entities/customers.py` to see a complete entity definition:
 
 ```python
-entity = Entity(
+from fyrnheim.core import AnalyticsEntity, Measure, StateField, ComputedColumn
+from fyrnheim.quality import NotNull, Unique
+
+customers = AnalyticsEntity(
     name="customers",
-    source=TableSource(..., duckdb_path="customers.parquet"),
-    layers=LayersConfig(
-        prep=PrepLayer(model_name="prep_customers", computed_columns=[
-            ComputedColumn(name="email_hash", expression=hash_email("email")),
-            ComputedColumn(name="amount_dollars", expression="t.amount_cents / 100.0"),
-        ]),
-        dimension=DimensionLayer(model_name="dim_customers", computed_columns=[
-            ComputedColumn(name="is_paying", expression="t.plan != 'free'"),
-        ]),
-    ),
-    quality=QualityConfig(checks=[NotNull("email"), Unique("email_hash")]),
+    identity_graph="customer_identity",
+    state_fields=[
+        StateField(name="email", source="crm_contacts", field="email", strategy="latest"),
+        StateField(name="plan", source="crm_contacts", field="plan", strategy="latest"),
+    ],
+    measures=[
+        Measure(name="purchase_count", activity="purchase", aggregation="count"),
+    ],
+    computed_fields=[
+        ComputedColumn(name="is_paying", expression="t.plan != 'free'"),
+    ],
+    quality_checks=[NotNull("email"), Unique("email")],
 )
 ```
 
-An entity declares its source, transformation layers, and quality rules in one place.
+An `AnalyticsEntity` combines state fields from sources, activity-derived measures, and computed fields into a single typed model.
 
 ### 3. Generate transformation code
 
@@ -86,4 +90,4 @@ Running on duckdb
 Done: 1 success, 0 errors (0.2s)
 ```
 
-Add your own entities to `entities/` and data to `data/`. See the [Core Concepts](/concepts/entities/) section to learn about entities, layers, sources, and more.
+Add your own entities to `entities/` and data to `data/`. See the [Core Concepts](/concepts/analytics-entities/) section to learn about analytics entities, measures, sources, and more.

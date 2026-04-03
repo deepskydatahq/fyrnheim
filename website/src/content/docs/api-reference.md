@@ -13,8 +13,9 @@ from fyrnheim import Entity, TableSource, PrepLayer, ...
 
 | Export | Description |
 |--------|-------------|
-| `Entity` | Pydantic model defining a business entity with source, layers, and quality |
-| `LayersConfig` | Container for all transformation layers on an entity |
+| `AnalyticsEntity` | Pydantic model combining state fields, measures, and computed fields into a single entity |
+| `Measure` | Activity-derived measure definition (count, sum, latest) |
+| `StateField` | Defines how a field is projected from a source (latest, first, coalesce) |
 | `Source` | Base type for all source types |
 | `Field` | Declares a required field with name and type on an entity |
 | `MaterializationType` | Enum for table materialization strategy (table, view, incremental) |
@@ -51,9 +52,8 @@ from fyrnheim import Entity, TableSource, PrepLayer, ...
 | `ActivityType` | Define an activity type with trigger and timestamp |
 | `AnalyticsLayer` | Date-grain metric aggregation |
 | `AnalyticsMetric` | A single metric in an analytics layer |
-| `AnalyticsModel` | Configuration for analytics model output |
-| `AnalyticsSource` | Source configuration for analytics |
-| `ComputedMetric` | A metric derived from other metrics |
+| `MetricsModel` | Configuration for snapshot-based metrics (e.g., daily deltas) |
+| `MetricField` | A single field in a MetricsModel with aggregation type |
 
 ## Source Mapping
 
@@ -66,7 +66,6 @@ from fyrnheim import Entity, TableSource, PrepLayer, ...
 | Export | Description |
 |--------|-------------|
 | `ComputedColumn` | A computed column with name and expression |
-| `Measure` | Reusable metric definition for analytics layers |
 | `LifecycleFlags` | Multi-column component producing is_active, is_churned, etc. |
 | `TimeBasedMetrics` | Multi-column component for tenure and recency |
 | `DataQualityChecks` | Bundled quality check patterns for reuse |

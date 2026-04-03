@@ -35,7 +35,7 @@ class StreamAnalyticsModel(BaseModel):
     """
 
     name: str = PydanticField(min_length=1)
-    identity_graph: str = PydanticField(min_length=1)
+    identity_graph: str | None = None
     date_grain: Literal["daily", "weekly", "monthly"]
     metrics: list[StreamMetric] = PydanticField(min_length=1)
     dimensions: list[str] = PydanticField(default_factory=list)

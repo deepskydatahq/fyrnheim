@@ -287,6 +287,118 @@ class TestSnapshotMetric:
         assert day_16["unique_customers"].iloc[0] == 4
 
 
+class TestAggregationWithoutCanonicalId:
+    """aggregate_analytics works when events have no canonical_id column."""
+
+    def test_count_metric_without_canonical_id(self):
+        events = _make_enriched_events([
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-15",
+                "event_type": "signup",
+                "payload": "{}",
+            },
+            {
+                "source": "crm",
+                "entity_id": "u2",
+                "ts": "2024-01-15",
+                "event_type": "signup",
+                "payload": "{}",
+            },
+        ])
+        model = StreamAnalyticsModel(
+            name="daily_metrics",
+            date_grain="daily",
+            metrics=[
+                StreamMetric(name="signups", expression="*", metric_type="count"),
+            ],
+        )
+        result = aggregate_analytics(events, model).execute()
+        assert len(result) == 1
+        assert result["signups"].iloc[0] == 2
+
+    def test_sum_metric_without_canonical_id(self):
+        events = _make_enriched_events([
+            {
+                "source": "billing",
+                "entity_id": "u1",
+                "ts": "2024-01-15",
+                "event_type": "purchase",
+                "payload": json.dumps({"amount": 50.0}),
+            },
+            {
+                "source": "billing",
+                "entity_id": "u2",
+                "ts": "2024-01-15",
+                "event_type": "purchase",
+                "payload": json.dumps({"amount": 75.0}),
+            },
+        ])
+        model = StreamAnalyticsModel(
+            name="daily_metrics",
+            date_grain="daily",
+            metrics=[
+                StreamMetric(
+                    name="total_amount",
+                    expression="amount",
+                    metric_type="sum",
+                    event_filter="purchase",
+                ),
+            ],
+        )
+        result = aggregate_analytics(events, model).execute()
+        assert result["total_amount"].iloc[0] == 125.0
+
+    def test_snapshot_metric_uses_entity_id_when_no_canonical_id(self):
+        events = _make_enriched_events([
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-15",
+                "event_type": "signup",
+                "payload": "{}",
+            },
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-15",
+                "event_type": "login",
+                "payload": "{}",
+            },
+            {
+                "source": "crm",
+                "entity_id": "u2",
+                "ts": "2024-01-15",
+                "event_type": "signup",
+                "payload": "{}",
+            },
+            {
+                "source": "crm",
+                "entity_id": "u3",
+                "ts": "2024-01-16",
+                "event_type": "signup",
+                "payload": "{}",
+            },
+        ])
+        model = StreamAnalyticsModel(
+            name="daily_metrics",
+            date_grain="daily",
+            metrics=[
+                StreamMetric(
+                    name="unique_entities",
+                    expression="entity_id",
+                    metric_type="snapshot",
+                ),
+            ],
+        )
+        result = aggregate_analytics(events, model).execute()
+        day_15 = result[result["_date"] == "2024-01-15"]
+        day_16 = result[result["_date"] == "2024-01-16"]
+        assert day_15["unique_entities"].iloc[0] == 2  # u1, u2
+        assert day_16["unique_entities"].iloc[0] == 3  # u1, u2, u3 cumulative
+
+
 class TestDimensions:
     """Test dimension-based grouping."""
 

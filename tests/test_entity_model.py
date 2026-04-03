@@ -95,6 +95,23 @@ class TestEntityModel:
                 state_fields=[self._make_state_field()],
             )
 
+    def test_valid_entity_model_without_identity_graph(self):
+        em = EntityModel(
+            name="companies",
+            state_fields=[self._make_state_field()],
+        )
+        assert em.name == "companies"
+        assert em.identity_graph is None
+        assert len(em.state_fields) == 1
+
+    def test_valid_entity_model_with_identity_graph(self):
+        em = EntityModel(
+            name="companies",
+            identity_graph="company_identity",
+            state_fields=[self._make_state_field()],
+        )
+        assert em.identity_graph == "company_identity"
+
     def test_empty_state_fields_raises(self):
         with pytest.raises(ValidationError):
             EntityModel(

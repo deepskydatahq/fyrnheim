@@ -102,26 +102,29 @@ def project_entity(
     """
     df = enriched_events.execute()
 
-    canonical_ids = df["canonical_id"].unique()
+    # Determine grouping key: use canonical_id if present, else entity_id
+    group_key = "canonical_id" if "canonical_id" in df.columns else "entity_id"
+
+    group_ids = df[group_key].unique()
     rows: list[dict[str, Any]] = []
 
-    for cid in canonical_ids:
-        cid_events = df[df["canonical_id"] == cid]
-        row: dict[str, Any] = {"canonical_id": cid}
+    for gid in group_ids:
+        gid_events = df[df[group_key] == gid]
+        row: dict[str, Any] = {group_key: gid}
 
         for sf in entity_model.state_fields:
             if sf.strategy == "coalesce":
-                # For coalesce, pass all events for this canonical_id
-                row[sf.name] = _resolve_field(cid_events, sf, cid_events)
+                # For coalesce, pass all events for this group
+                row[sf.name] = _resolve_field(gid_events, sf, gid_events)
             else:
                 # Filter to the specified source
-                source_events = cid_events[cid_events["source"] == sf.source]
-                row[sf.name] = _resolve_field(source_events, sf, cid_events)
+                source_events = gid_events[gid_events["source"] == sf.source]
+                row[sf.name] = _resolve_field(source_events, sf, gid_events)
 
         rows.append(row)
 
     result_df = pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["canonical_id"] + [sf.name for sf in entity_model.state_fields]
+        columns=[group_key] + [sf.name for sf in entity_model.state_fields]
     )
 
     # Evaluate computed fields

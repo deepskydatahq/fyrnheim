@@ -27,6 +27,7 @@ activity = ActivityDefinition(
     name="signup",
     source="customers",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 """
         )
@@ -51,11 +52,13 @@ activities = [
         name="signup",
         source="customers",
         trigger=RowAppeared(),
+        entity_id_field="id",
     ),
     ActivityDefinition(
         name="plan_changed",
         source="customers",
         trigger=FieldChanged(field="plan"),
+        entity_id_field="id",
     ),
 ]
 """
@@ -77,6 +80,7 @@ activity = ActivityDefinition(
     name="signup",
     source="customers",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 """
         )
@@ -103,6 +107,7 @@ activity = ActivityDefinition(
     name="signup",
     source="customers",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 """
         )
@@ -114,6 +119,7 @@ activity = ActivityDefinition(
     name="signup",
     source="orders",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 """
         )
@@ -144,6 +150,7 @@ activity = ActivityDefinition(
     name="should_not_find",
     source="customers",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 """
         )
@@ -172,6 +179,7 @@ activity = ActivityDefinition(
     name="signup",
     source="customers",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 """
         )
@@ -183,6 +191,7 @@ activity = ActivityDefinition(
     name="churned",
     source="customers",
     trigger=RowDisappeared(),
+    entity_id_field="id",
 )
 """
         )

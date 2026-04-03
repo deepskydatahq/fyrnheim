@@ -61,6 +61,7 @@ class TestRowAppearedTrigger:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             )
         ]
 
@@ -87,6 +88,7 @@ class TestRowAppearedTrigger:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             )
         ]
 
@@ -128,6 +130,7 @@ class TestFieldChangedTrigger:
                 name="plan_changed",
                 source="customers",
                 trigger=FieldChanged(field="plan"),
+                entity_id_field="id",
             )
         ]
 
@@ -168,6 +171,7 @@ class TestFieldChangedTrigger:
                 name="became_pro",
                 source="customers",
                 trigger=FieldChanged(field="plan", to_values=["pro"]),
+                entity_id_field="id",
             )
         ]
 
@@ -209,6 +213,7 @@ class TestFieldChangedTrigger:
                 name="converted_from_free",
                 source="customers",
                 trigger=FieldChanged(field="plan", from_values=["free"]),
+                entity_id_field="id",
             )
         ]
 
@@ -252,6 +257,7 @@ class TestFieldChangedTrigger:
                 trigger=FieldChanged(
                     field="plan", from_values=["free"], to_values=["pro"]
                 ),
+                entity_id_field="id",
             )
         ]
 
@@ -286,6 +292,7 @@ class TestRowDisappearedTrigger:
                 name="churned",
                 source="customers",
                 trigger=RowDisappeared(),
+                entity_id_field="id",
             )
         ]
 
@@ -328,6 +335,7 @@ class TestEventOccurredTrigger:
                 name="web_interaction",
                 source="page_events",
                 trigger=EventOccurred(),
+                entity_id_field="user_id",
             )
         ]
 
@@ -360,6 +368,7 @@ class TestEventOccurredTrigger:
                 name="viewed_page",
                 source="page_events",
                 trigger=EventOccurred(event_type="page_view"),
+                entity_id_field="user_id",
             )
         ]
 
@@ -387,6 +396,7 @@ class TestOutputEventFormat:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             )
         ]
 
@@ -413,6 +423,7 @@ class TestOutputEventFormat:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
                 include_fields=["name", "plan"],
             )
         ]
@@ -429,6 +440,7 @@ class TestOutputEventFormat:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             )
         ]
 
@@ -463,11 +475,13 @@ class TestOutputEventFormat:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             ),
             ActivityDefinition(
                 name="became_paying",
                 source="customers",
                 trigger=FieldChanged(field="plan", to_values=["pro"]),
+                entity_id_field="id",
             ),
         ]
 

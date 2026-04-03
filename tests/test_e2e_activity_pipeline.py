@@ -45,6 +45,7 @@ class TestE2EActivityPipeline:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             ),
         ]
 
@@ -94,6 +95,7 @@ class TestE2EActivityPipeline:
                 name="became_paying",
                 source="customers",
                 trigger=FieldChanged(field="plan", to_values=["pro"]),
+                entity_id_field="id",
             ),
         ]
 
@@ -144,11 +146,13 @@ class TestE2EActivityPipeline:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             ),
             ActivityDefinition(
                 name="became_paying",
                 source="customers",
                 trigger=FieldChanged(field="plan", to_values=["pro"]),
+                entity_id_field="id",
             ),
         ]
 
@@ -189,6 +193,7 @@ class TestE2EActivityPipeline:
                 name="signup",
                 source="customers",
                 trigger=RowAppeared(),
+                entity_id_field="id",
             ),
         ]
 

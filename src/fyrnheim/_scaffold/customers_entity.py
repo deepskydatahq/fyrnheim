@@ -29,12 +29,14 @@ signup = ActivityDefinition(
     name="signup",
     source="crm_contacts",
     trigger=RowAppeared(),
+    entity_id_field="id",
 )
 
 became_paying = ActivityDefinition(
     name="became_paying",
     source="crm_contacts",
     trigger=FieldChanged(field="plan", to_values=["pro", "starter", "enterprise"]),
+    entity_id_field="id",
 )
 
 # 3. Identity Graph -- cross-source identity resolution

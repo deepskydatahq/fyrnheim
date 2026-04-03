@@ -2,9 +2,9 @@
 
 import pytest
 
+from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core import AnalyticsEntity, Measure
 from fyrnheim.core.analytics_entity import StateField
-from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.quality.checks import NotNull
 
 

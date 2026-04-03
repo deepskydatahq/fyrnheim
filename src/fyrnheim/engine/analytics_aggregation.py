@@ -74,8 +74,10 @@ def _compute_metric(
         result = filtered.groupby(group_cols, as_index=False)["_metric_value"].sum()
         result = result.rename(columns={"_metric_value": metric.name})
     elif metric.metric_type == "snapshot":
-        # Cumulative distinct canonical_ids: for each date+dimension group,
-        # count all distinct canonical_ids seen up to and including that date.
+        # Cumulative distinct ids: for each date+dimension group,
+        # count all distinct ids seen up to and including that date.
+        # Use canonical_id if present, else fall back to entity_id.
+        id_col = "canonical_id" if "canonical_id" in filtered.columns else "entity_id"
         dim_cols = [c for c in group_cols if c != "_date"]
         sorted_dates = sorted(filtered["_date"].unique())
 
@@ -87,7 +89,7 @@ def _compute_metric(
                     dim_vals = (dim_vals,)
                 seen: set[str] = set()
                 for date in sorted_dates:
-                    day_ids = dim_df[dim_df["_date"] == date]["canonical_id"]
+                    day_ids = dim_df[dim_df["_date"] == date][id_col]
                     if day_ids.empty:
                         continue
                     seen.update(day_ids.tolist())
@@ -98,7 +100,7 @@ def _compute_metric(
         else:
             seen_ids: set[str] = set()
             for date in sorted_dates:
-                day_ids = filtered[filtered["_date"] == date]["canonical_id"]
+                day_ids = filtered[filtered["_date"] == date][id_col]
                 if day_ids.empty:
                     continue
                 seen_ids.update(day_ids.tolist())

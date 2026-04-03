@@ -232,6 +232,93 @@ class TestCoalesceStrategy:
         assert result.iloc[0]["email_hash"] == "billing_hash"
 
 
+class TestProjectEntityWithoutCanonicalId:
+    """project_entity works when events have no canonical_id column."""
+
+    def test_groups_by_entity_id_when_no_canonical_id(self):
+        events = _make_enriched_events([
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-01",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "alice"}),
+            },
+            {
+                "source": "crm",
+                "entity_id": "u2",
+                "ts": "2024-01-01",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "bob"}),
+            },
+        ])
+        model = EntityModel(
+            name="user",
+            state_fields=[
+                StateField(name="name", source="crm", field="name", strategy="latest"),
+            ],
+        )
+        result = project_entity(events, model).execute()
+        assert len(result) == 2
+        assert "entity_id" in result.columns
+        assert "canonical_id" not in result.columns
+        ids = set(result["entity_id"].tolist())
+        assert ids == {"u1", "u2"}
+
+    def test_latest_strategy_without_canonical_id(self):
+        events = _make_enriched_events([
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-01",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "old_name"}),
+            },
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-02",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "new_name"}),
+            },
+        ])
+        model = EntityModel(
+            name="user",
+            state_fields=[
+                StateField(name="name", source="crm", field="name", strategy="latest"),
+            ],
+        )
+        result = project_entity(events, model).execute()
+        assert len(result) == 1
+        assert result.iloc[0]["name"] == "new_name"
+
+    def test_first_strategy_without_canonical_id(self):
+        events = _make_enriched_events([
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-01",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "first_name"}),
+            },
+            {
+                "source": "crm",
+                "entity_id": "u1",
+                "ts": "2024-01-02",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "later_name"}),
+            },
+        ])
+        model = EntityModel(
+            name="user",
+            state_fields=[
+                StateField(name="name", source="crm", field="name", strategy="first"),
+            ],
+        )
+        result = project_entity(events, model).execute()
+        assert result.iloc[0]["name"] == "first_name"
+
+
 class TestComputedFields:
     """Computed fields are evaluated on top of projected state."""
 

@@ -1,0 +1,41 @@
+id = "M036-E001"
+parent = "M036"
+title = "Add computed_columns to StateSource and EventSource"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Add computed_columns: list[ComputedColumn] to StateSource and EventSource for
+source-level preparation (email.lower(), cast('date'), split('@')[1]).
+"""
+
+[job_story]
+description = """
+When I define a StateSource, I want to add computed columns like email.lower()
+that are applied at read time, so that downstream engines receive clean data.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource accepts computed_columns list of ComputedColumn",
+    "EventSource accepts computed_columns list of ComputedColumn",
+    "computed_columns defaults to empty list",
+    "Existing StateSource/EventSource without computed_columns still work",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/components/computed_column.py",
+    "tests/test_state_event_source.py",
+]
+dependencies = []
+
+[notes]
+considerations = """Minimal change — add one field to each model. Tests verify validation."""
+
+estimated_stories = 1

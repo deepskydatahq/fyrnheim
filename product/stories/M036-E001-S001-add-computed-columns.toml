@@ -1,0 +1,40 @@
+id = "M036-E001-S001"
+parent = "M036-E001"
+title = "Add computed_columns field to StateSource and EventSource"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Add computed_columns: list[ComputedColumn] = [] to both source types."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource(name='crm', project='p', dataset='d', table='t', id_field='id', computed_columns=[ComputedColumn(name='email_lower', expression='t.email.lower()')]) validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource with computed_columns validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource without computed_columns still validates (defaults to empty list)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource without computed_columns still validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/source.py", "tests/test_state_event_source.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """In source.py: import ComputedColumn from fyrnheim.components.computed_column. Add computed_columns: list[ComputedColumn] = PydanticField(default_factory=list) to both StateSource and EventSource. Add tests to test_state_event_source.py."""
+reference_files = []

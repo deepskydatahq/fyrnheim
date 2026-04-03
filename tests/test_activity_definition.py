@@ -68,7 +68,9 @@ class TestEventOccurred:
 
 class TestActivityDefinition:
     def test_with_row_appeared(self):
-        ad = ActivityDefinition(name="signup", source="crm", trigger=RowAppeared())
+        ad = ActivityDefinition(
+            name="signup", source="crm", trigger=RowAppeared(), entity_id_field="email"
+        )
         assert ad.name == "signup"
         assert ad.source == "crm"
         assert isinstance(ad.trigger, RowAppeared)
@@ -78,6 +80,7 @@ class TestActivityDefinition:
             name="upgrade",
             source="crm",
             trigger=FieldChanged(field="plan", to_values=["pro"]),
+            entity_id_field="user_id",
         )
         assert ad.name == "upgrade"
         assert isinstance(ad.trigger, FieldChanged)
@@ -85,32 +88,62 @@ class TestActivityDefinition:
 
     def test_without_name_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ActivityDefinition(source="crm", trigger=RowAppeared())  # type: ignore[call-arg]
+            ActivityDefinition(source="crm", trigger=RowAppeared(), entity_id_field="email")  # type: ignore[call-arg]
 
     def test_empty_name_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ActivityDefinition(name="", source="crm", trigger=RowAppeared())
+            ActivityDefinition(
+                name="", source="crm", trigger=RowAppeared(), entity_id_field="email"
+            )
 
     def test_without_source_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ActivityDefinition(name="signup", trigger=RowAppeared())  # type: ignore[call-arg]
+            ActivityDefinition(name="signup", trigger=RowAppeared(), entity_id_field="email")  # type: ignore[call-arg]
 
     def test_empty_source_raises_validation_error(self):
         with pytest.raises(ValidationError):
-            ActivityDefinition(name="signup", source="", trigger=RowAppeared())
+            ActivityDefinition(
+                name="signup", source="", trigger=RowAppeared(), entity_id_field="email"
+            )
 
     def test_accepts_optional_include_fields(self):
         ad = ActivityDefinition(
             name="signup",
             source="crm",
             trigger=RowAppeared(),
+            entity_id_field="email",
             include_fields=["email", "plan"],
         )
         assert ad.include_fields == ["email", "plan"]
 
     def test_include_fields_defaults_to_empty(self):
-        ad = ActivityDefinition(name="signup", source="crm", trigger=RowAppeared())
+        ad = ActivityDefinition(
+            name="signup", source="crm", trigger=RowAppeared(), entity_id_field="email"
+        )
         assert ad.include_fields == []
+
+    def test_requires_entity_id_field(self):
+        with pytest.raises(ValidationError):
+            ActivityDefinition(name="signup", source="crm", trigger=RowAppeared())  # type: ignore[call-arg]
+
+    def test_accepts_person_id_field(self):
+        ad = ActivityDefinition(
+            name="signup",
+            source="crm",
+            trigger=RowAppeared(),
+            entity_id_field="email",
+            person_id_field="email_hash",
+        )
+        assert ad.person_id_field == "email_hash"
+
+    def test_entity_id_field_must_not_be_empty(self):
+        with pytest.raises(ValidationError):
+            ActivityDefinition(
+                name="signup",
+                source="crm",
+                trigger=RowAppeared(),
+                entity_id_field="",
+            )
 
 
 class TestExports:

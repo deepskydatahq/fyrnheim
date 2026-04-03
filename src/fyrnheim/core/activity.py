@@ -48,4 +48,6 @@ class ActivityDefinition(BaseModel):
     name: str = Field(min_length=1)
     source: str = Field(min_length=1)
     trigger: TriggerType
+    entity_id_field: str = Field(min_length=1)
+    person_id_field: str | None = None
     include_fields: list[str] = Field(default_factory=list)

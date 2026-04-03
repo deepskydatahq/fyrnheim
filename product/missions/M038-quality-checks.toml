@@ -1,0 +1,48 @@
+id = "M038"
+title = "Quality checks for activities-first pipeline"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+Reintroduce declarative quality checks that work with the activities-first
+pipeline. Quality checks should attach to EntityModel and StreamAnalyticsModel
+outputs, validating projected state and aggregated metrics. Not-null, unique,
+and custom assertions.
+"""
+
+[scope]
+in_scope = [
+    "QualityCheck base model with NotNull, Unique as initial implementations",
+    "Attach quality checks to EntityModel (optional quality_checks field)",
+    "Quality runner that validates materialized entity tables",
+    "Tests with realistic quality scenarios",
+]
+out_of_scope = [
+    "Quality checks on raw events or activity streams",
+    "Complex quality rules (freshness, foreign keys, cross-entity)",
+    "Quality alerting or monitoring",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity_model.py",
+]
+origin = "M034 migration gap #1 — QualityConfig removed in M032, propel-data needs it"
+depends_on = ["M035"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EntityModel accepts optional quality_checks list",
+    "NotNull and Unique checks validate against materialized entity table",
+    "Quality runner reports pass/fail per check",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+Quality is orthogonal to the pipeline — it validates outputs, not inputs.
+Attaching checks to EntityModel (the materialized output) is the right place.
+Keep it simple: NotNull and Unique first, expand later.
+"""

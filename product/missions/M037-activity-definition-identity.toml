@@ -1,0 +1,48 @@
+id = "M037"
+title = "Add entity_id_field and person_id_field to ActivityDefinition"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+ActivityDefinition currently has name, source, trigger, and include_fields.
+It's missing entity_id_field (which field identifies the actor in the event)
+and person_id_field (optional, for cross-entity identity stitching). The
+activity engine needs these to produce correctly-keyed event streams.
+"""
+
+[scope]
+in_scope = [
+    "Add entity_id_field: str to ActivityDefinition (required)",
+    "Add person_id_field: str | None = None to ActivityDefinition (optional)",
+    "Activity engine uses entity_id_field to populate the entity_id column in output events",
+    "Tests with explicit entity_id_field",
+]
+out_of_scope = [
+    "Changing trigger types",
+    "Cross-entity activity stitching (future)",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/engine/activity_engine.py",
+]
+origin = "M034 migration gap #7 — workshop_attendance needed entity_id_field for attendee_email"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ActivityDefinition requires entity_id_field",
+    "Activity engine uses entity_id_field to populate entity_id in output events",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+The old ActivityConfig had entity_id_field and person_id_field. These are
+necessary — without them, the activity engine doesn't know which field in
+the source data identifies the actor. This is a clear gap, not an
+architectural conflict.
+"""

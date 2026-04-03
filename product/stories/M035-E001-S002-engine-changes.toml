@@ -1,0 +1,36 @@
+id = "M035-E001-S002"
+parent = "M035-E001"
+title = "Update engines to handle missing identity_graph"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Update entity_projection.py and analytics_aggregation.py to use entity_id when identity_graph is None."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "project_entity works with events that have entity_id but no canonical_id column"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "project_entity groups by entity_id when EntityModel.identity_graph is None"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "aggregate_analytics works with events that have no canonical_id column"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing tests with canonical_id still pass"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/entity_projection.py", "src/fyrnheim/engine/analytics_aggregation.py"]
+input_fixtures = []
+depends_on = ["M035-E001-S001"]
+
+[handoff]
+implementation_hints = """In entity_projection.py project_entity(): check if 'canonical_id' column exists in the events table. If not, use 'entity_id' as the grouping key. In analytics_aggregation.py: same — if no canonical_id column, group by entity_id or skip the canonical_id logic entirely. The events from diff_snapshots have entity_id but NOT canonical_id (that's added by enrich_events). When identity_graph is None, enrichment is skipped, so events only have entity_id."""
+reference_files = []

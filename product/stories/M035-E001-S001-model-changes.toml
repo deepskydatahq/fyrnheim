@@ -1,0 +1,36 @@
+id = "M035-E001-S001"
+parent = "M035-E001"
+title = "Make identity_graph optional on EntityModel and StreamAnalyticsModel"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Change identity_graph from required str to optional str | None on both models."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel(name='companies', state_fields=[StateField(name='domain', source='apollo', field='domain', strategy='latest')]) validates without identity_graph"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EntityModel(name='customers', identity_graph='customer_id', state_fields=[...]) still validates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamAnalyticsModel(name='metrics', date_grain='daily', metrics=[...]) validates without identity_graph"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StreamAnalyticsModel(name='metrics', identity_graph='customer_id', date_grain='daily', metrics=[...]) still validates"
+
+[context]
+relevant_paths = ["src/fyrnheim/core/entity_model.py", "src/fyrnheim/core/analytics_model.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """EntityModel: change identity_graph: str = Field(min_length=1) to identity_graph: str | None = None. StreamAnalyticsModel: same change. Update exports if needed."""
+reference_files = []

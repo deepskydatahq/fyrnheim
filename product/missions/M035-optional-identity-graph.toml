@@ -1,0 +1,55 @@
+id = "M035"
+title = "Make identity_graph optional on EntityModel and StreamAnalyticsModel"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+EntityModel and StreamAnalyticsModel currently require an identity_graph reference.
+This blocks single-source entities (like 'companies') and non-identity analytics
+(like content metrics). Make identity_graph optional — when absent, use entity_id
+directly as the grouping key instead of canonical_id.
+"""
+
+[scope]
+in_scope = [
+    "Make EntityModel.identity_graph optional (str | None = None)",
+    "When identity_graph is None, EntityModel projects state using entity_id from events",
+    "Make StreamAnalyticsModel.identity_graph optional (str | None = None)",
+    "When identity_graph is None, analytics aggregate raw events without identity resolution",
+    "Update entity_projection.py and analytics_aggregation.py to handle the None case",
+    "Tests for single-source EntityModel and identity-free StreamAnalyticsModel",
+]
+out_of_scope = [
+    "Changing IdentityGraph itself",
+    "Adding new resolution strategies",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity_model.py",
+    "src/fyrnheim/core/analytics_model.py",
+    "src/fyrnheim/engine/entity_projection.py",
+    "src/fyrnheim/engine/analytics_aggregation.py",
+]
+origin = "M034 migration gap #2 and #4"
+depends_on = []
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EntityModel(name='x', state_fields=[...]) validates without identity_graph",
+    "StreamAnalyticsModel(name='x', date_grain='daily', metrics=[...]) validates without identity_graph",
+    "Single-source EntityModel projects state correctly using entity_id",
+    "Identity-free StreamAnalyticsModel aggregates events correctly",
+]
+validator_context = ["tests/"]
+
+[notes]
+considerations = """
+This is architecturally sound — not every data asset needs cross-source identity.
+A companies table from Apollo doesn't need an identity graph.
+Content metrics across channels don't share canonical IDs.
+The key: when identity_graph is None, the engines skip the enrichment step
+and use entity_id as the grouping key.
+"""

@@ -1,0 +1,34 @@
+id = "M045-E002"
+parent = "M045"
+title = "Remove EntityModel, StreamAnalyticsModel, and their engines"
+status = "active"
+created = 2026-04-02
+depends_on = ["M045-E001"]
+
+[outcome]
+description = """Remove EntityModel, StateField, StreamAnalyticsModel, StreamMetric, and their engines/registries. Update exports, CLI, DAG visualization."""
+
+[job_story]
+description = """After AnalyticsEntity is built, I want the old types removed so there's one way to define entities."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EntityModel and StreamAnalyticsModel types are removed",
+    "entity_model.py, analytics_model.py, entity_projection.py, analytics_aggregation.py removed",
+    "EntityModelRegistry and AnalyticsModelRegistry removed",
+    "Exports updated (no old types)",
+    "DAG visualization uses AnalyticsEntity instead of EntityModel",
+    "CLI dag command discovers AnalyticsEntity",
+    "All remaining tests pass",
+]
+validator_context = ["tests/", "src/"]
+
+[context]
+relevant_paths = ["src/fyrnheim/core/", "src/fyrnheim/engine/", "src/fyrnheim/visualization/", "src/fyrnheim/cli.py"]
+dependencies = ["M045-E001"]
+
+[notes]
+considerations = """Big removal — same pattern as M032. Delete files, update exports, remove old tests, verify new tests pass."""
+
+estimated_stories = 2

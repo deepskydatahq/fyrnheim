@@ -1,0 +1,116 @@
+id = "M045"
+title = "Replace EntityModel and StreamAnalyticsModel with AnalyticsEntity"
+status = "planned"
+created = 2026-04-02
+
+[outcome]
+description = """
+Replace EntityModel and StreamAnalyticsModel with a single AnalyticsEntity type
+that combines state field projection with activity-derived measures. An
+AnalyticsEntity produces one row per entity with state fields (latest/first/coalesce
+from sources), measures (count/sum from activities), and computed fields.
+
+MetricsModel stays unchanged (time-grain delta aggregation for product streams).
+
+This is a cleaner model: the entity IS the analytics. You don't define a separate
+entity table and a separate metrics table — you define one AnalyticsEntity that
+has both current state and aggregated activity measures.
+"""
+
+user_progress = "From 'EntityModel (state only) + StreamAnalyticsModel (time grain)' to 'AnalyticsEntity (state + measures in one)'"
+
+[scope]
+in_scope = [
+    "Define AnalyticsEntity Pydantic model with name, identity_graph, state_fields, measures, computed_fields, quality_checks",
+    "Define Measure model with name, activity (activity name to count/sum), aggregation (count, sum, latest), field (for sum/latest)",
+    "Projection engine that produces one row per entity with state + measures",
+    "AnalyticsEntityRegistry for discovery",
+    "Remove EntityModel and StreamAnalyticsModel types",
+    "Remove entity_projection.py and analytics_aggregation.py engines",
+    "Remove EntityModelRegistry, AnalyticsModelRegistry, StreamMetric",
+    "Update core/__init__.py and __init__.py exports",
+    "Migrate propel-data to use AnalyticsEntity",
+    "Update DAG visualization for new type",
+    "Update website docs and examples",
+    "Tests for new type and engine",
+]
+out_of_scope = [
+    "Changing MetricsModel (stays as-is)",
+    "Changing IdentityGraph, ActivityDefinition, or source types",
+    "Time-grain analytics (removed — use MetricsModel for time-grain needs)",
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "AnalyticsEntity validates with state_fields and measures",
+    "Measure with aggregation='count' counts activity events per entity",
+    "Measure with aggregation='latest' returns latest value from source field",
+    "Projection engine produces one row per entity with state + measures",
+    "EntityModel and StreamAnalyticsModel are removed",
+    "propel-data uses AnalyticsEntity",
+    "DAG visualization shows AnalyticsEntity type",
+    "All tests pass",
+]
+validator_context = ["tests/", "src/fyrnheim/core/", "src/fyrnheim/engine/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/entity_model.py",
+    "src/fyrnheim/core/analytics_model.py",
+    "src/fyrnheim/engine/entity_projection.py",
+    "src/fyrnheim/engine/analytics_aggregation.py",
+    "src/fyrnheim/engine/entity_model_registry.py",
+    "src/fyrnheim/engine/analytics_model_registry.py",
+    "src/fyrnheim/visualization/dag.py",
+    "src/fyrnheim/cli.py",
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+]
+origin = "Product discussion — entity IS the analytics, not a separate thing"
+depends_on = ["M035", "M038"]
+
+[notes]
+considerations = """
+AnalyticsEntity example:
+
+```python
+AnalyticsEntity(
+    name="accounts",
+    identity_graph="accounts_identity_graph",
+    state_fields=[
+        StateField(name="email", source="mailerlite", field="email", strategy="latest"),
+        StateField(name="name", source="ghost", field="name", strategy="coalesce", priority=["ghost", "mailerlite"]),
+    ],
+    measures=[
+        Measure(name="workshop_count", activity="workshop_attended", aggregation="count"),
+        Measure(name="newsletter_subscribed", activity="newsletter_subscribed", aggregation="count"),
+    ],
+    computed_fields=[
+        ComputedColumn(name="lead_level", expression="..."),
+    ],
+    quality_checks=[NotNull("email"), Unique("email")],
+)
+```
+
+Output table: one row per canonical_id with columns:
+email, name, workshop_count, newsletter_subscribed, lead_level
+
+The measure engine needs to:
+1. For count: count events where event_type matches the activity name, per entity
+2. For sum: sum a payload field from matching events, per entity
+3. For latest: get the latest value of a payload field from matching events
+
+This replaces BOTH EntityModel (state fields) and StreamAnalyticsModel (event counting).
+The time-grain use case (daily/weekly metrics) is dropped — use MetricsModel for that.
+
+Migration for propel-data:
+- accounts EntityModel → AnalyticsEntity with measures for workshop_count etc.
+- companies EntityModel → AnalyticsEntity (no measures, just state)
+- workshop_attendance EntityModel → AnalyticsEntity (no measures)
+- Remove any StreamAnalyticsModel references
+
+Phased approach:
+E001: Define AnalyticsEntity + Measure types, build engine
+E002: Remove old types, update registries/exports/CLI/DAG
+E003: Migrate propel-data + update docs
+"""

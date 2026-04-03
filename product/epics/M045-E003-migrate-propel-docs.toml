@@ -1,0 +1,36 @@
+id = "M045-E003"
+parent = "M045"
+title = "Migrate propel-data and update docs/examples"
+status = "active"
+created = 2026-04-02
+depends_on = ["M045-E002"]
+
+[outcome]
+description = """Migrate propel-data entity definitions to AnalyticsEntity with measures. Update website docs, README examples, and scaffold."""
+
+[job_story]
+description = """When I look at propel-data or the docs, I want to see AnalyticsEntity as the way to define entities."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "propel-data entities use AnalyticsEntity",
+    "propel-data tests pass",
+    "Website concept pages describe AnalyticsEntity",
+    "Example file uses AnalyticsEntity",
+]
+validator_context = ["/home/tmo/roadtothebeach/propel/propel-data/entities/", "website/src/content/docs/"]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+    "website/src/content/docs/concepts/entity-models.md",
+    "examples/entities/customers.py",
+    "src/fyrnheim/_scaffold/",
+]
+dependencies = ["M045-E002"]
+
+[notes]
+considerations = """propel-data accounts entity gets measures for workshop_count, newsletter_subscribed. Website entity-models.md becomes analytics-entities.md."""
+
+estimated_stories = 2

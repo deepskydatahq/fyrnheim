@@ -16,6 +16,10 @@ from .activity import (
     RowAppeared as RowAppeared,
     RowDisappeared as RowDisappeared,
 )
+from .analytics_entity import (
+    AnalyticsEntity as AnalyticsEntity,
+    Measure as Measure,
+)
 from .analytics_model import (
     StreamAnalyticsModel as StreamAnalyticsModel,
     StreamMetric as StreamMetric,

@@ -3,6 +3,8 @@
 from fyrnheim.components.computed_column import ComputedColumn as ComputedColumn
 from fyrnheim.core import (
     ActivityDefinition as ActivityDefinition,
+    AnalyticsEntity as AnalyticsEntity,
+    Measure as Measure,
     BaseTableSource as BaseTableSource,
     MetricField as MetricField,
     MetricsModel as MetricsModel,
@@ -79,6 +81,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     # Core types
+    "AnalyticsEntity",
+    "Measure",
     "EntityModel",
     "StateField",
     "Field",

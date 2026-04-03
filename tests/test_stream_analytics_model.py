@@ -60,6 +60,25 @@ class TestStreamAnalyticsModel:
         assert len(model.metrics) == 1
         assert model.dimensions == []
 
+    def test_valid_model_without_identity_graph(self):
+        model = StreamAnalyticsModel(
+            name="daily_metrics",
+            date_grain="daily",
+            metrics=[self._metric()],
+        )
+        assert model.name == "daily_metrics"
+        assert model.identity_graph is None
+        assert model.date_grain == "daily"
+
+    def test_valid_model_with_identity_graph(self):
+        model = StreamAnalyticsModel(
+            name="daily_metrics",
+            identity_graph="customer",
+            date_grain="daily",
+            metrics=[self._metric()],
+        )
+        assert model.identity_graph == "customer"
+
     def test_model_without_name_raises(self):
         with pytest.raises(ValidationError):
             StreamAnalyticsModel(

@@ -27,6 +27,6 @@ class EntityModel(BaseModel):
     """Projects current state from the enriched activity stream."""
 
     name: str = Field(min_length=1)
-    identity_graph: str = Field(min_length=1)
+    identity_graph: str | None = None
     state_fields: list[StateField] = Field(min_length=1)
     computed_fields: list[ComputedColumn] = Field(default_factory=list)

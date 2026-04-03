@@ -1,0 +1,466 @@
+"""Generate a self-contained HTML page showing the pipeline DAG."""
+
+from __future__ import annotations
+
+import html
+import json
+
+from fyrnheim.core.activity import ActivityDefinition
+from fyrnheim.core.analytics_model import StreamAnalyticsModel
+from fyrnheim.core.entity_model import EntityModel
+from fyrnheim.core.identity import IdentityGraph
+from fyrnheim.core.metrics_model import MetricsModel
+from fyrnheim.core.source import EventSource, StateSource
+
+
+def _esc(text: str) -> str:
+    """HTML-escape a string."""
+    return html.escape(str(text))
+
+
+def _source_tooltip(s: StateSource | EventSource) -> str:
+    kind = "STATE" if isinstance(s, StateSource) else "EVENT"
+    lines = [
+        f"Type: {kind}",
+        f"Project: {s.project}",
+        f"Dataset: {s.dataset}",
+        f"Table: {s.table}",
+    ]
+    if isinstance(s, StateSource):
+        lines.append(f"ID Field: {s.id_field}")
+        lines.append(f"Snapshot Grain: {s.snapshot_grain}")
+        lines.append(f"Computed Columns: {len(s.computed_columns)}")
+    else:
+        lines.append(f"Entity ID Field: {s.entity_id_field}")
+        lines.append(f"Timestamp Field: {s.timestamp_field}")
+        if s.event_type:
+            lines.append(f"Event Type: {s.event_type}")
+        lines.append(f"Computed Columns: {len(s.computed_columns)}")
+    return "\n".join(lines)
+
+
+def _activity_tooltip(a: ActivityDefinition) -> str:
+    lines = [
+        f"Trigger: {a.trigger.trigger_type}",
+        f"Source: {a.source}",
+        f"Entity ID Field: {a.entity_id_field}",
+    ]
+    if a.include_fields:
+        lines.append(f"Include Fields: {', '.join(a.include_fields)}")
+    return "\n".join(lines)
+
+
+def _identity_tooltip(ig: IdentityGraph) -> str:
+    lines = [
+        f"Canonical ID: {ig.canonical_id}",
+        f"Strategy: {ig.resolution_strategy}",
+        "Sources:",
+    ]
+    for src in ig.sources:
+        lines.append(
+            f"  - {src.source} (id: {src.id_field}, match: {src.match_key_field})"
+        )
+    return "\n".join(lines)
+
+
+def _entity_tooltip(em: EntityModel) -> str:
+    lines = [
+        f"Identity Graph: {em.identity_graph or 'none'}",
+        f"State Fields ({len(em.state_fields)}):",
+    ]
+    for sf in em.state_fields:
+        lines.append(f"  - {sf.name} ({sf.strategy} from {sf.source}.{sf.field})")
+    if em.computed_fields:
+        lines.append(f"Computed Fields: {len(em.computed_fields)}")
+    if em.quality_checks:
+        lines.append(f"Quality Checks: {len(em.quality_checks)}")
+    return "\n".join(lines)
+
+
+def _analytics_tooltip(am: StreamAnalyticsModel) -> str:
+    lines = [
+        f"Date Grain: {am.date_grain}",
+        f"Identity Graph: {am.identity_graph or 'none'}",
+    ]
+    if am.dimensions:
+        lines.append(f"Dimensions: {', '.join(am.dimensions)}")
+    lines.append(f"Metrics ({len(am.metrics)}):")
+    for m in am.metrics:
+        lines.append(f"  - {m.name} ({m.metric_type})")
+    return "\n".join(lines)
+
+
+def _metrics_tooltip(mm: MetricsModel) -> str:
+    lines = [
+        f"Source: {mm.source}",
+        f"Grain: {mm.grain}",
+    ]
+    if mm.dimensions:
+        lines.append(f"Dimensions: {', '.join(mm.dimensions)}")
+    lines.append(f"Metric Fields ({len(mm.metric_fields)}):")
+    for mf in mm.metric_fields:
+        lines.append(f"  - {mf.field_name} ({mf.aggregation})")
+    return "\n".join(lines)
+
+
+def _build_edges(
+    sources: list[StateSource | EventSource],
+    activities: list[ActivityDefinition],
+    identity_graphs: list[IdentityGraph],
+    entity_models: list[EntityModel],
+    analytics_models: list[StreamAnalyticsModel],
+    metrics_models: list[MetricsModel],
+) -> list[dict[str, str]]:
+    """Build edge list as [{from_id, to_id}, ...]."""
+    source_names = {s.name for s in sources}
+    ig_names = {ig.name for ig in identity_graphs}
+    edges: list[dict[str, str]] = []
+
+    # Activity -> Source
+    for act in activities:
+        if act.source in source_names:
+            edges.append(
+                {"from": f"source-{act.source}", "to": f"activity-{act.name}"}
+            )
+
+    # IdentityGraph -> Source (via ig.sources[].source)
+    for ig in identity_graphs:
+        for ig_src in ig.sources:
+            if ig_src.source in source_names:
+                edges.append(
+                    {"from": f"source-{ig_src.source}", "to": f"identity-{ig.name}"}
+                )
+
+    # EntityModel -> IdentityGraph (when identity_graph is set)
+    for em in entity_models:
+        if em.identity_graph and em.identity_graph in ig_names:
+            edges.append(
+                {
+                    "from": f"identity-{em.identity_graph}",
+                    "to": f"entity-{em.name}",
+                }
+            )
+        elif em.identity_graph is None:
+            # Connect to sources via state_fields[].source
+            connected_sources = {sf.source for sf in em.state_fields}
+            for sf_source in connected_sources:
+                if sf_source in source_names:
+                    edges.append(
+                        {
+                            "from": f"source-{sf_source}",
+                            "to": f"entity-{em.name}",
+                        }
+                    )
+
+    # StreamAnalyticsModel -> IdentityGraph
+    for am in analytics_models:
+        if am.identity_graph and am.identity_graph in ig_names:
+            edges.append(
+                {
+                    "from": f"identity-{am.identity_graph}",
+                    "to": f"analytics-{am.name}",
+                }
+            )
+
+    # MetricsModel -> Source
+    for mm in metrics_models:
+        if mm.source in source_names:
+            edges.append(
+                {"from": f"source-{mm.source}", "to": f"metrics-{mm.name}"}
+            )
+
+    return edges
+
+
+def generate_dag_html(
+    sources: list[StateSource | EventSource] | None = None,
+    activities: list[ActivityDefinition] | None = None,
+    identity_graphs: list[IdentityGraph] | None = None,
+    entity_models: list[EntityModel] | None = None,
+    analytics_models: list[StreamAnalyticsModel] | None = None,
+    metrics_models: list[MetricsModel] | None = None,
+) -> str:
+    """Generate a self-contained HTML page showing the pipeline DAG.
+
+    Args:
+        sources: State and event sources.
+        activities: Activity definitions.
+        identity_graphs: Identity graph definitions.
+        entity_models: Entity model definitions.
+        analytics_models: Stream analytics model definitions.
+        metrics_models: Metrics model definitions.
+
+    Returns:
+        A string of self-contained HTML.
+    """
+    sources = sources or []
+    activities = activities or []
+    identity_graphs = identity_graphs or []
+    entity_models = entity_models or []
+    analytics_models = analytics_models or []
+    metrics_models = metrics_models or []
+
+    edges = _build_edges(
+        sources, activities, identity_graphs, entity_models, analytics_models,
+        metrics_models,
+    )
+
+    # Build node HTML for each layer
+    source_nodes = ""
+    for s in sources:
+        kind = "STATE" if isinstance(s, StateSource) else "EVENT"
+        grain = s.snapshot_grain if isinstance(s, StateSource) else ""
+        grain_html = f'<span class="node-detail">{_esc(grain)}</span>' if grain else ""
+        tooltip = _source_tooltip(s)
+        source_nodes += (
+            f'<div class="node source-node" id="source-{_esc(s.name)}" '
+            f'title="{_esc(tooltip)}">'
+            f'<span class="node-badge badge-{kind.lower()}">{kind}</span>'
+            f'<span class="node-name">{_esc(s.name)}</span>'
+            f"{grain_html}"
+            f"</div>\n"
+        )
+
+    activity_nodes = ""
+    for a in activities:
+        tooltip = _activity_tooltip(a)
+        activity_nodes += (
+            f'<div class="node activity-node" id="activity-{_esc(a.name)}" '
+            f'title="{_esc(tooltip)}">'
+            f'<span class="node-name">{_esc(a.name)}</span>'
+            f'<span class="node-detail">{_esc(a.trigger.trigger_type)}</span>'
+            f'<span class="node-detail">{_esc(a.source)}</span>'
+            f"</div>\n"
+        )
+
+    identity_nodes = ""
+    for ig in identity_graphs:
+        tooltip = _identity_tooltip(ig)
+        identity_nodes += (
+            f'<div class="node identity-node" id="identity-{_esc(ig.name)}" '
+            f'title="{_esc(tooltip)}">'
+            f'<span class="node-name">{_esc(ig.name)}</span>'
+            f'<span class="node-detail">{len(ig.sources)} sources</span>'
+            f"</div>\n"
+        )
+
+    entity_nodes = ""
+    for em in entity_models:
+        tooltip = _entity_tooltip(em)
+        field_count = len(em.state_fields) + len(em.computed_fields)
+        entity_nodes += (
+            f'<div class="node entity-node" id="entity-{_esc(em.name)}" '
+            f'title="{_esc(tooltip)}">'
+            f'<span class="node-name">{_esc(em.name)}</span>'
+            f'<span class="node-detail">{field_count} fields</span>'
+            f"</div>\n"
+        )
+
+    bottom_nodes = ""
+    for am in analytics_models:
+        tooltip = _analytics_tooltip(am)
+        bottom_nodes += (
+            f'<div class="node analytics-node" id="analytics-{_esc(am.name)}" '
+            f'title="{_esc(tooltip)}">'
+            f'<span class="node-name">{_esc(am.name)}</span>'
+            f'<span class="node-detail">{len(am.metrics)} metrics</span>'
+            f"</div>\n"
+        )
+    for mm in metrics_models:
+        tooltip = _metrics_tooltip(mm)
+        bottom_nodes += (
+            f'<div class="node metrics-node" id="metrics-{_esc(mm.name)}" '
+            f'title="{_esc(tooltip)}">'
+            f'<span class="node-name">{_esc(mm.name)}</span>'
+            f'<span class="node-detail">{len(mm.metric_fields)} metrics</span>'
+            f"</div>\n"
+        )
+
+    edges_json = json.dumps(edges)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fyrnheim pipeline</title>
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+  background: #0a0a0a;
+  color: #e5e5e5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  padding: 40px 20px;
+}}
+h1 {{
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  margin-bottom: 48px;
+  color: #fff;
+}}
+.dag-container {{
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+}}
+svg#edges {{
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}}
+svg#edges path {{
+  fill: none;
+  stroke: #333;
+  stroke-width: 1.5;
+  opacity: 0.6;
+}}
+.layer {{
+  position: relative;
+  z-index: 1;
+  margin-bottom: 48px;
+}}
+.layer-label {{
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 12px;
+  padding-left: 4px;
+}}
+.layer-nodes {{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}}
+.node {{
+  background: #141414;
+  border: 1.5px solid #333;
+  border-radius: 8px;
+  padding: 14px 20px;
+  min-width: 160px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}}
+.node:hover {{
+  box-shadow: 0 0 16px rgba(255,255,255,0.05);
+}}
+.source-node {{ border-color: #3b82f6; }}
+.source-node:hover {{ border-color: #60a5fa; box-shadow: 0 0 16px rgba(59,130,246,0.15); }}
+.activity-node {{ border-color: #22c55e; }}
+.activity-node:hover {{ border-color: #4ade80; box-shadow: 0 0 16px rgba(34,197,94,0.15); }}
+.identity-node {{ border-color: #a855f7; }}
+.identity-node:hover {{ border-color: #c084fc; box-shadow: 0 0 16px rgba(168,85,247,0.15); }}
+.entity-node {{ border-color: #f59e0b; }}
+.entity-node:hover {{ border-color: #fbbf24; box-shadow: 0 0 16px rgba(245,158,11,0.15); }}
+.analytics-node {{ border-color: #ef4444; }}
+.analytics-node:hover {{ border-color: #f87171; box-shadow: 0 0 16px rgba(239,68,68,0.15); }}
+.metrics-node {{ border-color: #ef4444; }}
+.metrics-node:hover {{ border-color: #f87171; box-shadow: 0 0 16px rgba(239,68,68,0.15); }}
+.node-badge {{
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}}
+.badge-state {{ background: rgba(59,130,246,0.15); color: #60a5fa; }}
+.badge-event {{ background: rgba(59,130,246,0.15); color: #93c5fd; }}
+.node-name {{
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #fff;
+}}
+.node-detail {{
+  font-size: 0.75rem;
+  color: #888;
+}}
+</style>
+</head>
+<body>
+<h1>fyrnheim pipeline</h1>
+<div class="dag-container">
+  <svg id="edges"></svg>
+
+  <div class="layer" id="layer-sources">
+    <div class="layer-label">SOURCES</div>
+    <div class="layer-nodes">{source_nodes}</div>
+  </div>
+
+  <div class="layer" id="layer-activities">
+    <div class="layer-label">ACTIVITIES</div>
+    <div class="layer-nodes">{activity_nodes}</div>
+  </div>
+
+  <div class="layer" id="layer-identity">
+    <div class="layer-label">IDENTITY</div>
+    <div class="layer-nodes">{identity_nodes}</div>
+  </div>
+
+  <div class="layer" id="layer-models">
+    <div class="layer-label">MODELS</div>
+    <div class="layer-nodes">{entity_nodes}</div>
+  </div>
+
+  <div class="layer" id="layer-analytics">
+    <div class="layer-label">ANALYTICS &amp; METRICS</div>
+    <div class="layer-nodes">{bottom_nodes}</div>
+  </div>
+</div>
+
+<script>
+(function() {{
+  var edges = {edges_json};
+  var svg = document.getElementById("edges");
+  var container = document.querySelector(".dag-container");
+
+  function drawEdges() {{
+    var rect = container.getBoundingClientRect();
+    svg.setAttribute("width", rect.width);
+    svg.setAttribute("height", rect.height);
+    svg.setAttribute("viewBox", "0 0 " + rect.width + " " + rect.height);
+    svg.innerHTML = "";
+
+    edges.forEach(function(e) {{
+      var fromEl = document.getElementById(e.from);
+      var toEl = document.getElementById(e.to);
+      if (!fromEl || !toEl) return;
+
+      var fromRect = fromEl.getBoundingClientRect();
+      var toRect = toEl.getBoundingClientRect();
+      var cRect = container.getBoundingClientRect();
+
+      var x1 = fromRect.left + fromRect.width / 2 - cRect.left;
+      var y1 = fromRect.bottom - cRect.top;
+      var x2 = toRect.left + toRect.width / 2 - cRect.left;
+      var y2 = toRect.top - cRect.top;
+
+      var midY = (y1 + y2) / 2;
+      var d = "M " + x1 + " " + y1 +
+              " C " + x1 + " " + midY + ", " + x2 + " " + midY + ", " + x2 + " " + y2;
+
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    }});
+  }}
+
+  window.addEventListener("load", drawEdges);
+  window.addEventListener("resize", drawEdges);
+}})();
+</script>
+</body>
+</html>"""

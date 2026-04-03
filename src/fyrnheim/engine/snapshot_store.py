@@ -76,9 +76,6 @@ class SnapshotStore:
         # Try datetime first (contains 'T')
         if "T" in stem:
             try:
-                # Convert hyphens in time part back to colons for parsing
-                iso_str = stem.replace("-", ":", 2)  # won't work; need targeted replace
-                # Better approach: parse with strptime
                 return datetime.datetime.strptime(stem, "%Y-%m-%dT%H-%M-%S")
             except ValueError:
                 pass

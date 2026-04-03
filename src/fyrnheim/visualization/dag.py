@@ -351,8 +351,8 @@ svg#edges path {{
   display: flex;
   flex-direction: column;
   gap: 6px;
-  cursor: default;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.2s;
 }}
 .node:hover {{
   box-shadow: 0 0 16px rgba(255,255,255,0.05);
@@ -427,6 +427,8 @@ svg#edges path {{
   var svg = document.getElementById("edges");
   var container = document.querySelector(".dag-container");
 
+  var selectedNode = null;
+
   function drawEdges() {{
     var rect = container.getBoundingClientRect();
     svg.setAttribute("width", rect.width);
@@ -454,9 +456,79 @@ svg#edges path {{
 
       var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", d);
+      path.setAttribute("data-from", e.from);
+      path.setAttribute("data-to", e.to);
       svg.appendChild(path);
     }});
+
+    applyHighlight();
   }}
+
+  function getConnected(nodeId) {{
+    var connected = new Set();
+    connected.add(nodeId);
+    // Walk all edges recursively in both directions
+    var queue = [nodeId];
+    while (queue.length > 0) {{
+      var current = queue.shift();
+      edges.forEach(function(e) {{
+        if (e.from === current && !connected.has(e.to)) {{
+          connected.add(e.to);
+          queue.push(e.to);
+        }}
+        if (e.to === current && !connected.has(e.from)) {{
+          connected.add(e.from);
+          queue.push(e.from);
+        }}
+      }});
+    }}
+    return connected;
+  }}
+
+  function applyHighlight() {{
+    var allNodes = document.querySelectorAll(".node");
+    var allPaths = svg.querySelectorAll("path");
+
+    if (!selectedNode) {{
+      allNodes.forEach(function(n) {{ n.style.opacity = "1"; }});
+      allPaths.forEach(function(p) {{ p.style.opacity = "0.15"; p.style.stroke = "#404040"; p.style.strokeWidth = "1.5"; }});
+      return;
+    }}
+
+    var connected = getConnected(selectedNode);
+
+    allNodes.forEach(function(n) {{
+      n.style.opacity = connected.has(n.id) ? "1" : "0.15";
+    }});
+
+    allPaths.forEach(function(p) {{
+      var from = p.getAttribute("data-from");
+      var to = p.getAttribute("data-to");
+      if (connected.has(from) && connected.has(to)) {{
+        p.style.opacity = "1";
+        p.style.stroke = "#f4442e";
+        p.style.strokeWidth = "2.5";
+      }} else {{
+        p.style.opacity = "0.05";
+        p.style.stroke = "#404040";
+        p.style.strokeWidth = "1.5";
+      }}
+    }});
+  }}
+
+  document.addEventListener("click", function(evt) {{
+    var node = evt.target.closest(".node");
+    if (node) {{
+      if (selectedNode === node.id) {{
+        selectedNode = null;
+      }} else {{
+        selectedNode = node.id;
+      }}
+    }} else {{
+      selectedNode = null;
+    }}
+    applyHighlight();
+  }});
 
   window.addEventListener("load", drawEdges);
   window.addEventListener("resize", drawEdges);

@@ -215,3 +215,28 @@ class TestFullPipeline:
         assert "activity-signup" in result
         assert "identity-user_graph" in result
         assert "entity-customer" in result
+
+
+class TestDetailPanel:
+    def test_html_contains_node_details_json(self) -> None:
+        src = _make_state_source("crm_contacts")
+        result = generate_dag_html(sources=[src])
+        assert "var nodeDetails" in result
+
+    def test_panel_html_exists(self) -> None:
+        result = generate_dag_html()
+        assert 'id="detail-panel"' in result
+        assert "detail-panel" in result
+
+    def test_node_details_contain_table_for_source(self) -> None:
+        import json
+
+        src = _make_state_source("crm_contacts")
+        result = generate_dag_html(sources=[src])
+        # Extract the nodeDetails JSON from the HTML
+        marker = "var nodeDetails = "
+        start = result.index(marker) + len(marker)
+        end = result.index(";", start)
+        details = json.loads(result[start:end])
+        assert "source-crm_contacts" in details
+        assert details["source-crm_contacts"]["table"] == "my_project.raw.crm_contacts"

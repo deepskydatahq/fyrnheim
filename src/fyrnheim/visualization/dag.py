@@ -152,6 +152,114 @@ def _build_edges(
     return edges
 
 
+def _build_node_details(
+    sources: list[StateSource | EventSource],
+    activities: list[ActivityDefinition],
+    identity_graphs: list[IdentityGraph],
+    analytics_entities: list[AnalyticsEntity],
+    metrics_models: list[MetricsModel],
+) -> dict[str, dict]:
+    """Build a dict mapping node IDs to their full detail metadata."""
+    details: dict[str, dict] = {}
+
+    for s in sources:
+        if isinstance(s, StateSource):
+            details[f"source-{s.name}"] = {
+                "type": "Source",
+                "subtype": "STATE",
+                "name": s.name,
+                "table": f"{s.project}.{s.dataset}.{s.table}",
+                "id_field": s.id_field,
+                "snapshot_grain": s.snapshot_grain,
+                "computed_columns": [cc.name for cc in s.computed_columns],
+                "transforms": s.transforms is not None,
+            }
+        else:
+            details[f"source-{s.name}"] = {
+                "type": "Source",
+                "subtype": "EVENT",
+                "name": s.name,
+                "table": f"{s.project}.{s.dataset}.{s.table}",
+                "entity_id_field": s.entity_id_field,
+                "timestamp_field": s.timestamp_field,
+                "computed_columns": [cc.name for cc in s.computed_columns],
+                "transforms": s.transforms is not None,
+            }
+
+    for a in activities:
+        details[f"activity-{a.name}"] = {
+            "type": "Activity",
+            "name": a.name,
+            "trigger": a.trigger.trigger_type,
+            "source": a.source,
+            "entity_id_field": a.entity_id_field,
+            "person_id_field": a.person_id_field,
+            "include_fields": a.include_fields,
+        }
+
+    for ig in identity_graphs:
+        details[f"identity-{ig.name}"] = {
+            "type": "Identity Graph",
+            "name": ig.name,
+            "canonical_id": ig.canonical_id,
+            "strategy": ig.resolution_strategy,
+            "sources": [
+                {
+                    "source": isrc.source,
+                    "id_field": isrc.id_field,
+                    "match_key_field": isrc.match_key_field,
+                }
+                for isrc in ig.sources
+            ],
+        }
+
+    for ae in analytics_entities:
+        details[f"entity-{ae.name}"] = {
+            "type": "Analytics Entity",
+            "name": ae.name,
+            "table": ae.name,
+            "identity_graph": ae.identity_graph,
+            "state_fields": [
+                {
+                    "name": sf.name,
+                    "source": sf.source,
+                    "field": sf.field,
+                    "strategy": sf.strategy,
+                }
+                for sf in ae.state_fields
+            ],
+            "measures": [
+                {
+                    "name": m.name,
+                    "activity": m.activity,
+                    "aggregation": m.aggregation,
+                }
+                for m in ae.measures
+            ],
+            "computed_fields": [cf.name for cf in ae.computed_fields],
+            "quality_checks": [str(qc) for qc in ae.quality_checks],
+        }
+
+    for mm in metrics_models:
+        details[f"metrics-{mm.name}"] = {
+            "type": "Metrics Model",
+            "name": mm.name,
+            "table": mm.name,
+            "sources": mm.sources,
+            "grain": mm.grain,
+            "dimensions": mm.dimensions,
+            "metric_fields": [
+                {
+                    "field_name": mf.field_name,
+                    "aggregation": mf.aggregation,
+                }
+                for mf in mm.metric_fields
+            ],
+        }
+
+    return details
+
+
 def generate_dag_html(
     sources: list[StateSource | EventSource] | None = None,
     activities: list[ActivityDefinition] | None = None,
@@ -178,6 +286,11 @@ def generate_dag_html(
     metrics_models = metrics_models or []
 
     edges = _build_edges(
+        sources, activities, identity_graphs, analytics_entities,
+        metrics_models,
+    )
+
+    node_details = _build_node_details(
         sources, activities, identity_graphs, analytics_entities,
         metrics_models,
     )
@@ -247,6 +360,7 @@ def generate_dag_html(
         )
 
     edges_json = json.dumps(edges)
+    node_details_json = json.dumps(node_details)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -357,6 +471,97 @@ svg#edges path {{
   font-size: 0.75rem;
   color: #888;
 }}
+.detail-panel {{
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100vh;
+  background: #111;
+  border-left: 1px solid #333;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 1000;
+  overflow-y: auto;
+  padding: 24px;
+}}
+.detail-panel.open {{
+  transform: translateX(0);
+}}
+.panel-header {{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}}
+.panel-type {{
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 4px;
+}}
+.panel-close {{
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}}
+.panel-close:hover {{ color: #fff; }}
+.panel-name {{
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+}}
+.panel-section {{
+  margin-bottom: 16px;
+}}
+.panel-section-title {{
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 6px;
+}}
+.panel-table-name {{
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: #f4442e;
+  background: rgba(244,68,46,0.08);
+  border: 1px solid rgba(244,68,46,0.2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}}
+.panel-field {{
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 0.85rem;
+}}
+.panel-field-name {{ color: #e5e5e5; }}
+.panel-field-detail {{ color: #666; font-size: 0.8rem; }}
+.panel-connection {{
+  display: inline-block;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 3px 10px;
+  margin: 3px 4px 3px 0;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: #ccc;
+}}
+.panel-connection:hover {{
+  border-color: #f4442e;
+  color: #fff;
+}}
 </style>
 </head>
 <body>
@@ -390,11 +595,24 @@ svg#edges path {{
   </div>
 </div>
 
+<div id="detail-panel" class="detail-panel">
+  <div class="panel-header">
+    <span id="panel-type" class="panel-type"></span>
+    <button id="panel-close" class="panel-close">&times;</button>
+  </div>
+  <h2 id="panel-name" class="panel-name"></h2>
+  <div id="panel-table" class="panel-section"></div>
+  <div id="panel-content" class="panel-content"></div>
+  <div id="panel-connections" class="panel-connections"></div>
+</div>
+
 <script>
 (function() {{
   var edges = {edges_json};
+  var nodeDetails = {node_details_json};
   var svg = document.getElementById("edges");
   var container = document.querySelector(".dag-container");
+  var panel = document.getElementById("detail-panel");
 
   var selectedNode = null;
 
@@ -475,16 +693,209 @@ svg#edges path {{
     }});
   }}
 
+  var typeColors = {{
+    "Source": "#3b82f6",
+    "Activity": "#22c55e",
+    "Identity Graph": "#a855f7",
+    "Analytics Entity": "#f59e0b",
+    "Metrics Model": "#ef4444"
+  }};
+
+  function esc(s) {{ var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }}
+
+  function getUpstream(nodeId) {{
+    var result = [];
+    edges.forEach(function(e) {{ if (e.to === nodeId) result.push(e.from); }});
+    return result;
+  }}
+
+  function getDownstream(nodeId) {{
+    var result = [];
+    edges.forEach(function(e) {{ if (e.from === nodeId) result.push(e.to); }});
+    return result;
+  }}
+
+  function buildFieldsHtml(items, cols) {{
+    if (!items || items.length === 0) return "";
+    var h = "";
+    items.forEach(function(item) {{
+      var parts = [];
+      cols.forEach(function(c) {{
+        if (item[c] !== undefined && item[c] !== null) parts.push(esc(String(item[c])));
+      }});
+      h += '<div class="panel-field"><span class="panel-field-name">' + parts[0] + '</span>';
+      if (parts.length > 1) h += '<span class="panel-field-detail">' + parts.slice(1).join(" / ") + '</span>';
+      h += '</div>';
+    }});
+    return h;
+  }}
+
+  function buildListHtml(items) {{
+    if (!items || items.length === 0) return "";
+    var h = "";
+    items.forEach(function(item) {{
+      h += '<div class="panel-field"><span class="panel-field-name">' + esc(String(item)) + '</span></div>';
+    }});
+    return h;
+  }}
+
+  function showPanel(nodeId) {{
+    var d = nodeDetails[nodeId];
+    if (!d) return;
+
+    var color = typeColors[d.type] || "#888";
+    var typeEl = document.getElementById("panel-type");
+    typeEl.textContent = d.subtype ? d.type + " (" + d.subtype + ")" : d.type;
+    typeEl.style.background = color.replace(")", ",0.15)").replace("rgb", "rgba");
+    typeEl.style.color = color;
+
+    document.getElementById("panel-name").textContent = d.name;
+
+    var tableDiv = document.getElementById("panel-table");
+    if (d.table) {{
+      tableDiv.innerHTML = '<div class="panel-section-title">Table</div><div class="panel-table-name">' + esc(d.table) + '</div>';
+    }} else {{
+      tableDiv.innerHTML = "";
+    }}
+
+    var content = "";
+
+    if (d.type === "Source") {{
+      if (d.subtype === "STATE") {{
+        content += '<div class="panel-section-title">Fields</div>';
+        content += '<div class="panel-field"><span class="panel-field-name">id_field</span><span class="panel-field-detail">' + esc(d.id_field) + '</span></div>';
+        content += '<div class="panel-field"><span class="panel-field-name">snapshot_grain</span><span class="panel-field-detail">' + esc(d.snapshot_grain) + '</span></div>';
+      }} else {{
+        content += '<div class="panel-section-title">Fields</div>';
+        content += '<div class="panel-field"><span class="panel-field-name">entity_id_field</span><span class="panel-field-detail">' + esc(d.entity_id_field) + '</span></div>';
+        content += '<div class="panel-field"><span class="panel-field-name">timestamp_field</span><span class="panel-field-detail">' + esc(d.timestamp_field) + '</span></div>';
+      }}
+      if (d.computed_columns && d.computed_columns.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Computed Columns</div>';
+        content += buildListHtml(d.computed_columns);
+      }}
+      if (d.transforms) {{
+        content += '<div class="panel-field" style="margin-top:8px"><span class="panel-field-name">Has transforms</span><span class="panel-field-detail">yes</span></div>';
+      }}
+    }} else if (d.type === "Activity") {{
+      content += '<div class="panel-section-title">Configuration</div>';
+      content += '<div class="panel-field"><span class="panel-field-name">trigger</span><span class="panel-field-detail">' + esc(d.trigger) + '</span></div>';
+      content += '<div class="panel-field"><span class="panel-field-name">source</span><span class="panel-field-detail">' + esc(d.source) + '</span></div>';
+      content += '<div class="panel-field"><span class="panel-field-name">entity_id_field</span><span class="panel-field-detail">' + esc(d.entity_id_field) + '</span></div>';
+      if (d.person_id_field) {{
+        content += '<div class="panel-field"><span class="panel-field-name">person_id_field</span><span class="panel-field-detail">' + esc(d.person_id_field) + '</span></div>';
+      }}
+      if (d.include_fields && d.include_fields.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Include Fields</div>';
+        content += buildListHtml(d.include_fields);
+      }}
+    }} else if (d.type === "Identity Graph") {{
+      content += '<div class="panel-section-title">Configuration</div>';
+      content += '<div class="panel-field"><span class="panel-field-name">canonical_id</span><span class="panel-field-detail">' + esc(d.canonical_id) + '</span></div>';
+      content += '<div class="panel-field"><span class="panel-field-name">strategy</span><span class="panel-field-detail">' + esc(d.strategy) + '</span></div>';
+      if (d.sources && d.sources.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Sources</div>';
+        content += buildFieldsHtml(d.sources, ["source", "id_field", "match_key_field"]);
+      }}
+    }} else if (d.type === "Analytics Entity") {{
+      if (d.identity_graph) {{
+        content += '<div class="panel-field"><span class="panel-field-name">identity_graph</span><span class="panel-field-detail">' + esc(d.identity_graph) + '</span></div>';
+      }}
+      if (d.state_fields && d.state_fields.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">State Fields</div>';
+        content += buildFieldsHtml(d.state_fields, ["name", "source", "field", "strategy"]);
+      }}
+      if (d.measures && d.measures.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Measures</div>';
+        content += buildFieldsHtml(d.measures, ["name", "activity", "aggregation"]);
+      }}
+      if (d.computed_fields && d.computed_fields.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Computed Fields</div>';
+        content += buildListHtml(d.computed_fields);
+      }}
+      if (d.quality_checks && d.quality_checks.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Quality Checks</div>';
+        content += buildListHtml(d.quality_checks);
+      }}
+    }} else if (d.type === "Metrics Model") {{
+      content += '<div class="panel-section-title">Configuration</div>';
+      content += '<div class="panel-field"><span class="panel-field-name">grain</span><span class="panel-field-detail">' + esc(d.grain) + '</span></div>';
+      if (d.sources && d.sources.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Sources</div>';
+        content += buildListHtml(d.sources);
+      }}
+      if (d.dimensions && d.dimensions.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Dimensions</div>';
+        content += buildListHtml(d.dimensions);
+      }}
+      if (d.metric_fields && d.metric_fields.length > 0) {{
+        content += '<div class="panel-section-title" style="margin-top:12px">Metric Fields</div>';
+        content += buildFieldsHtml(d.metric_fields, ["field_name", "aggregation"]);
+      }}
+    }}
+
+    document.getElementById("panel-content").innerHTML = content;
+
+    // Build connections section
+    var upstream = getUpstream(nodeId);
+    var downstream = getDownstream(nodeId);
+    var connHtml = "";
+    if (upstream.length > 0) {{
+      connHtml += '<div class="panel-section-title" style="margin-top:12px">Upstream</div>';
+      upstream.forEach(function(id) {{
+        var label = nodeDetails[id] ? nodeDetails[id].name : id;
+        connHtml += '<span class="panel-connection" data-node="' + esc(id) + '">' + esc(label) + '</span>';
+      }});
+    }}
+    if (downstream.length > 0) {{
+      connHtml += '<div class="panel-section-title" style="margin-top:12px">Downstream</div>';
+      downstream.forEach(function(id) {{
+        var label = nodeDetails[id] ? nodeDetails[id].name : id;
+        connHtml += '<span class="panel-connection" data-node="' + esc(id) + '">' + esc(label) + '</span>';
+      }});
+    }}
+    document.getElementById("panel-connections").innerHTML = connHtml;
+
+    panel.classList.add("open");
+  }}
+
+  function closePanel() {{
+    panel.classList.remove("open");
+  }}
+
+  document.getElementById("panel-close").addEventListener("click", function(evt) {{
+    evt.stopPropagation();
+    selectedNode = null;
+    closePanel();
+    applyHighlight();
+  }});
+
+  panel.addEventListener("click", function(evt) {{
+    var conn = evt.target.closest(".panel-connection");
+    if (conn) {{
+      var targetId = conn.getAttribute("data-node");
+      if (targetId && nodeDetails[targetId]) {{
+        selectedNode = targetId;
+        showPanel(targetId);
+        applyHighlight();
+      }}
+    }}
+    evt.stopPropagation();
+  }});
+
   document.addEventListener("click", function(evt) {{
     var node = evt.target.closest(".node");
     if (node) {{
       if (selectedNode === node.id) {{
         selectedNode = null;
+        closePanel();
       }} else {{
         selectedNode = node.id;
+        showPanel(node.id);
       }}
-    }} else {{
+    }} else if (!evt.target.closest(".detail-panel")) {{
       selectedNode = null;
+      closePanel();
     }}
     applyHighlight();
   }});

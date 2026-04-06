@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 
 import pandas as pd
-import pytest
 from click.testing import CliRunner
 
 from fyrnheim.cli import main

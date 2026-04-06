@@ -37,7 +37,7 @@ def _make_event_source(
 class TestLoadEventSource:
     """Tests for load_event_source()."""
 
-    def test_static_event_type(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_static_event_type(self, tmp_path: pytest.TempPathFactory) -> None:
         """Static event_type is applied to all rows."""
         parquet_file = tmp_path / "events.parquet"
         df = pd.DataFrame(
@@ -62,7 +62,7 @@ class TestLoadEventSource:
         assert all(result["source"] == "page_views")
         assert set(result["entity_id"]) == {"u1", "u2"}
 
-    def test_event_type_field(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_event_type_field(self, tmp_path: pytest.TempPathFactory) -> None:
         """event_type_field reads event type from the specified column."""
         parquet_file = tmp_path / "events.parquet"
         df = pd.DataFrame(
@@ -90,7 +90,7 @@ class TestLoadEventSource:
             assert "action" not in payload
             assert "page" in payload
 
-    def test_fallback_to_source_name(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_fallback_to_source_name(self, tmp_path: pytest.TempPathFactory) -> None:
         """Neither event_type nor event_type_field uses source name."""
         parquet_file = tmp_path / "events.parquet"
         df = pd.DataFrame(
@@ -109,7 +109,7 @@ class TestLoadEventSource:
         assert len(result) == 1
         assert result.iloc[0]["event_type"] == "page_views"
 
-    def test_entity_id_mapped(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_entity_id_mapped(self, tmp_path: pytest.TempPathFactory) -> None:
         """entity_id_field is mapped to entity_id column."""
         parquet_file = tmp_path / "events.parquet"
         df = pd.DataFrame(
@@ -134,7 +134,7 @@ class TestLoadEventSource:
         assert result.iloc[0]["entity_id"] == "c42"
         assert result.iloc[0]["ts"] == "2024-06-15"
 
-    def test_remaining_cols_in_payload(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_remaining_cols_in_payload(self, tmp_path: pytest.TempPathFactory) -> None:
         """Remaining columns (not entity_id, ts, event_type) are in payload."""
         parquet_file = tmp_path / "events.parquet"
         df = pd.DataFrame(
@@ -161,7 +161,7 @@ class TestLoadEventSource:
         assert "user_id" not in payload
         assert "viewed_at" not in payload
 
-    def test_empty_source(self, tmp_path: "pytest.TempPathFactory") -> None:
+    def test_empty_source(self, tmp_path: pytest.TempPathFactory) -> None:
         """Empty source returns empty table with correct schema."""
         parquet_file = tmp_path / "events.parquet"
         df = pd.DataFrame(

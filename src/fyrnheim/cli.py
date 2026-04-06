@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.resources
 import logging
 import shutil
+import sys
+import time
 from pathlib import Path
 
 import click
@@ -211,5 +213,94 @@ def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
             tmp_path = f.name
         click.echo(f"Opening DAG in browser: {tmp_path}")
         webbrowser.open(f"file://{tmp_path}")
+
+
+@main.command()
+@click.option(
+    "--entities-dir", default=None, help="Directory with entity definitions"
+)
+@click.option(
+    "--data-dir", default=None, help="Directory with source data files"
+)
+@click.option(
+    "--output-dir", default=None, help="Directory for pipeline output"
+)
+@click.pass_context
+def run(
+    ctx: click.Context,
+    entities_dir: str | None,
+    data_dir: str | None,
+    output_dir: str | None,
+) -> None:
+    """Run the pipeline: load sources, apply transformations, write output."""
+    from fyrnheim.config import resolve_config
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.pipeline import run_pipeline
+
+    verbose = ctx.obj.get("verbose", False)
+
+    try:
+        config = resolve_config(
+            entities_dir=entities_dir,
+            data_dir=data_dir,
+            output_dir=output_dir,
+        )
+    except Exception as exc:
+        if verbose:
+            raise
+        click.echo(f"Configuration error: {exc}", err=True)
+        sys.exit(1)
+
+    # Discover assets
+    assets = _discover_assets(config.entities_dir)
+
+    total_assets = sum(len(v) for v in assets.values())
+    if total_assets == 0:
+        click.echo(f"No assets found in {config.entities_dir}")
+        sys.exit(1)
+
+    # Print discovery summary
+    click.echo(f"Discovered: {len(assets['sources'])} sources, "
+               f"{len(assets['activities'])} activities, "
+               f"{len(assets['identity_graphs'])} identity graphs, "
+               f"{len(assets['analytics_entities'])} analytics entities, "
+               f"{len(assets['metrics_models'])} metrics models")
+
+    # Create executor and run
+    executor = IbisExecutor.duckdb()
+    start = time.monotonic()
+
+    try:
+        result = run_pipeline(assets, config, executor)
+    except Exception as exc:
+        if verbose:
+            raise
+        click.echo(f"Pipeline failed: {exc}", err=True)
+        sys.exit(1)
+
+    elapsed = time.monotonic() - start
+
+    # Print summary
+    click.echo("")
+    click.echo(f"Sources processed: {result.source_count}")
+    click.echo(f"Outputs written:   {result.output_count}")
+
+    if result.outputs:
+        click.echo("")
+        for name, row_count in result.outputs.items():
+            click.echo(f"  {name}: {row_count} rows -> {config.output_dir / name}.parquet")
+
+    click.echo(f"\nCompleted in {elapsed:.2f}s")
+
+    if result.errors:
+        click.echo("")
+        click.echo(f"Errors ({len(result.errors)}):")
+        for err in result.errors:
+            if verbose:
+                click.echo(f"  - {err}", err=True)
+            else:
+                # Show a shorter version without the full traceback
+                click.echo(f"  - {err}", err=True)
+        sys.exit(1)
 
 

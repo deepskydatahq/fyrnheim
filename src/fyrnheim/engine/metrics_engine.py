@@ -113,11 +113,12 @@ def _aggregate_state_fields(
         return []
 
     # Parse payload JSON
-    def _parse_payload(payload: str) -> dict:
+    def _parse_payload(payload: str) -> dict[str, object]:
         if isinstance(payload, dict):
             return payload
         try:
-            return json.loads(payload)
+            result: dict[str, object] = json.loads(payload)
+            return result
         except (json.JSONDecodeError, TypeError):
             return {}
 
@@ -171,11 +172,12 @@ def _aggregate_event_fields(
     """Aggregate event-type matching events for count-based metrics."""
     result_frames: list[pd.DataFrame] = []
 
-    def _parse_payload(payload: str) -> dict:
+    def _parse_payload(payload: str) -> dict[str, object]:
         if isinstance(payload, dict):
             return payload
         try:
-            return json.loads(payload)
+            result: dict[str, object] = json.loads(payload)
+            return result
         except (json.JSONDecodeError, TypeError):
             return {}
 

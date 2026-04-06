@@ -26,7 +26,7 @@ class TestFromConfig:
 
     def test_clickhouse_backend_raises_without_server(self):
         """ClickHouse connect fails without a running server, but the method exists."""
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="nonexistent-host|connection|connect|resolve"):  # noqa: B017
             IbisExecutor.from_config(
                 backend="clickhouse",
                 backend_config={"host": "nonexistent-host", "port": "9999"},

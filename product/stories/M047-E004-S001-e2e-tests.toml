@@ -1,0 +1,47 @@
+id = "M047-E004-S001"
+parent = "M047-E004"
+title = "End-to-end pipeline integration tests"
+status = "ready"
+created = 2026-04-06
+
+[outcome]
+description = """Integration tests exercising the full pipeline with temporary
+project directories, sample parquet data, and entity definitions."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "StateSource-only pipeline: creates snapshot, produces events, writes metrics parquet"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "EventSource-only pipeline: loads events, writes metrics parquet"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Mixed pipeline: both source types produce correct output"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Output parquet files contain expected columns and non-zero row counts"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "CLI test via CliRunner: fyr run exits 0 and produces output files"
+
+[context]
+relevant_paths = [
+    "tests/",
+    "src/fyrnheim/_scaffold/",
+]
+input_fixtures = []
+depends_on = ["M047-E003-S001"]
+
+[handoff]
+implementation_hints = """Create tests/test_pipeline_e2e.py. Use tmp_path fixture.
+Write sample parquet with pandas. Write entity .py files dynamically with
+Path.write_text(). Create fyrnheim.yaml pointing at tmp dirs. Test both
+the pipeline module directly and the CLI via CliRunner."""
+reference_files = ["tests/test_e2e_activity_pipeline.py"]

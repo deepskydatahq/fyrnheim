@@ -1,0 +1,49 @@
+# Epic: Integration Tests
+# End-to-end tests with mixed StateSource + EventSource pipeline
+
+id = "M047-E004"
+parent = "M047"
+title = "Integration Tests"
+status = "active"
+created = 2026-04-06
+depends_on = ["M047-E003"]
+
+[outcome]
+description = """
+Integration tests that exercise the full pipeline end-to-end using temporary
+directories with sample parquet data, entity definitions, and fyrnheim.yaml.
+Tests cover: StateSource-only pipeline, EventSource-only pipeline, mixed
+pipeline with both source types, and error handling.
+"""
+
+[job_story]
+description = """When I modify any engine component, I want integration tests
+to catch regressions in the full pipeline flow."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Integration test with StateSource data produces expected event and metrics output parquet files",
+    "Integration test with EventSource data produces expected metrics output parquet files",
+    "Integration test with mixed StateSource + EventSource pipeline succeeds",
+    "Integration test verifies output parquet files contain expected columns and row counts",
+    "All tests use temporary directories and clean up after themselves",
+    "Tests run via uv run pytest and pass",
+]
+validator_context = ["tests/"]
+
+[context]
+relevant_paths = [
+    "tests/",
+    "src/fyrnheim/_scaffold/",
+]
+dependencies = ["M047-E003"]
+
+[notes]
+considerations = """
+Use pytest tmp_path fixture for temporary directories. Create sample parquet
+files with pandas + ibis in the test fixtures. Write entity definition Python
+files dynamically. Test the full CLI flow via Click's CliRunner.
+"""
+
+estimated_stories = 2

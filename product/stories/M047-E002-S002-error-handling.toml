@@ -1,0 +1,40 @@
+id = "M047-E002-S002"
+parent = "M047-E002"
+title = "Pipeline error handling and resilience"
+status = "ready"
+created = 2026-04-06
+
+[outcome]
+description = """Pipeline catches per-source and per-model errors, records them
+in PipelineResult, and continues processing remaining items."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "If one StateSource fails to load, other sources still process"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "If one MetricsModel fails to aggregate, other models still process"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PipelineResult.errors contains descriptive error messages for each failure"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pipeline with zero sources returns empty result, not an exception"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/pipeline.py"]
+input_fixtures = []
+depends_on = ["M047-E002-S001"]
+
+[handoff]
+implementation_hints = """Add error handling to each stage of run_pipeline().
+Each source load and each model aggregation should be wrapped in try/except.
+Collect errors into the PipelineResult. This may be implemented as part of
+S001 or as a follow-up refinement."""
+reference_files = []

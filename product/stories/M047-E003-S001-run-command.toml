@@ -1,0 +1,50 @@
+id = "M047-E003-S001"
+parent = "M047-E003"
+title = "fyr run CLI command"
+status = "ready"
+created = 2026-04-06
+
+[outcome]
+description = """Add `fyr run` Click command to cli.py that discovers assets,
+creates executor, calls run_pipeline, and prints execution summary."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run appears in fyr --help output"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run --entities-dir <dir> --data-dir <dir> --output-dir <dir> executes pipeline"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr run with no args uses fyrnheim.yaml defaults"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Prints summary: sources processed, outputs written, row counts, timing"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Exit code 0 on success, 1 on pipeline errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Errors shown as user-friendly messages (not tracebacks) unless --verbose"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+]
+input_fixtures = []
+depends_on = ["M047-E002-S001"]
+
+[handoff]
+implementation_hints = """Add a @main.command() decorated run function in cli.py.
+Use resolve_config() for config. Reuse _discover_assets(). Create IbisExecutor.duckdb().
+Call run_pipeline(). Format and click.echo the PipelineResult. Use sys.exit(1) on errors."""
+reference_files = ["src/fyrnheim/cli.py", "src/fyrnheim/config.py"]

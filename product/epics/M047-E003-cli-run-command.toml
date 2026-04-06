@@ -1,0 +1,51 @@
+# Epic: fyr run CLI Command
+# Wire the pipeline orchestrator into a Click CLI command
+
+id = "M047-E003"
+parent = "M047"
+title = "fyr run CLI Command"
+status = "active"
+created = 2026-04-06
+depends_on = ["M047-E002"]
+
+[outcome]
+description = """
+A `fyr run` CLI command that discovers assets from the entities directory,
+creates a DuckDB executor, calls the pipeline orchestrator, and prints an
+execution summary. Respects fyrnheim.yaml config with CLI overrides for
+--entities-dir, --data-dir, --output-dir, and --backend.
+"""
+
+[job_story]
+description = """When I have a fyrnheim project with entity definitions and data
+files, I want to run `fyr run` to execute the full pipeline and see a summary
+of what was processed."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr run --help shows the command with all options",
+    "fyr run --entities-dir <dir> discovers and executes the pipeline",
+    "Respects fyrnheim.yaml config values as defaults",
+    "CLI options --entities-dir, --data-dir, --output-dir override config",
+    "Prints execution summary: sources processed, outputs written, row counts",
+    "Exit code 0 on success, 1 on errors",
+    "Errors are reported with useful messages, not raw tracebacks (unless --verbose)",
+]
+validator_context = ["src/fyrnheim/cli.py", "tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+]
+dependencies = ["M047-E002"]
+
+[notes]
+considerations = """
+The run command should reuse _discover_assets() from cli.py. Config resolution
+is already handled by resolve_config() in config.py. The command should create
+output_dir if it doesn't exist. Print timing information per stage.
+"""
+
+estimated_stories = 2

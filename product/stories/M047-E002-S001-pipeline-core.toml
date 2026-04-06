@@ -1,0 +1,72 @@
+id = "M047-E002-S001"
+parent = "M047-E002"
+title = "Pipeline orchestrator core"
+status = "ready"
+created = 2026-04-06
+
+[outcome]
+description = """Implement run_pipeline() that chains all engine components:
+source loading, activity definitions, identity resolution, analytics entity
+projection, and metrics aggregation. Write results to parquet."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run_pipeline() processes StateSource through SnapshotDiffPipeline and returns events"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run_pipeline() processes EventSource through event_source_loader and returns events"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Events from all sources are concatenated before downstream processing"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Activity definitions are applied to combined events"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Identity graphs resolve and enrich events when present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Analytics entities are projected when present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Metrics models aggregate events when present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Output tables are written as parquet files to output_dir"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Returns PipelineResult with source_count, output_count, errors list"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/engine/executor.py",
+]
+input_fixtures = []
+depends_on = ["M047-E001-S001"]
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/pipeline.py. The function
+takes discovered assets dict, a ResolvedConfig, and an IbisExecutor. Process
+sources sequentially, concatenate events with pd.concat + ibis.memtable.
+Wrap each stage in try/except to continue on errors. Write parquet output
+using df.to_parquet() after executing the ibis table."""
+reference_files = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/executor.py",
+]

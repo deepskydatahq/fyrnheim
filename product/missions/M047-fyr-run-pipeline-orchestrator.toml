@@ -1,0 +1,137 @@
+# Mission: fyr run Pipeline Orchestrator
+# Wire up all engine components into an executable CLI pipeline command
+
+id = "M047"
+title = "fyr run Pipeline Orchestrator"
+status = "draft"
+created = 2026-04-06
+depends_on = []
+
+[outcome]
+description = """
+A working `fyr run` CLI command that discovers all asset definitions from a
+project's entities directory, chains the engine components in the correct
+order (sources -> diff/events -> activities -> identity -> analytics entities
++ metrics), and writes results to parquet files. This restores the ability
+to execute a fyrnheim pipeline end-to-end, which was lost when the old
+Entity-based runner was removed during the activities-first architecture
+pivot. All engine components already exist and are tested individually —
+this mission is purely about orchestration and wiring.
+"""
+
+user_progress = "From 'engines work in isolation but no CLI execution' to 'fyr run executes a full pipeline and writes output'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr run --entities-dir <dir> discovers sources, activities, identity graphs, analytics entities, and metrics models from Python files",
+    "StateSource data flows through SnapshotDiffPipeline producing raw events",
+    "EventSource data is loaded and converted to standard event schema (source, entity_id, ts, event_type, payload)",
+    "Activity definitions are applied to raw events, renaming event_type to activity names",
+    "Identity graphs resolve cross-source identities and enrich events with canonical_id",
+    "Analytics entities are projected from enriched events",
+    "Metrics models aggregate events into time-grain metric tables",
+    "Output tables are written to parquet files in the output directory",
+    "Pipeline handles mixed StateSource + EventSource in the same run",
+    "CLI prints execution summary (what ran, row counts, errors)",
+    "Exit code 0 on success, 1 on errors",
+    "All existing tests continue to pass",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/",
+    "tests/test_cli.py",
+    "tests/test_cli_run.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "src/fyrnheim/_scaffold/",
+]
+
+[scope]
+in_scope = [
+    "fyr run CLI command with --entities-dir, --data-dir, --output-dir, --backend options",
+    "Pipeline orchestrator that chains engines in correct dependency order",
+    "StateSource loading via SnapshotDiffPipeline (snapshot store + diff engine)",
+    "EventSource loading: read table, convert to standard event schema (source, entity_id, ts, event_type, payload)",
+    "Activity engine integration (apply_activity_definitions on raw events)",
+    "Identity engine integration (resolve_identities + enrich_events)",
+    "Analytics entity engine integration (project_analytics_entity on enriched events)",
+    "Metrics engine integration (aggregate_metrics on events)",
+    "Output persistence: write result tables to parquet in output directory",
+    "CLI execution summary with status, row counts, timing",
+    "Error handling: catch per-source/per-model errors, report, continue pipeline",
+    "Integration tests with sample data covering full pipeline",
+]
+out_of_scope = [
+    "New backend support (BigQuery, Snowflake, ClickHouse execution)",
+    "Output push to remote warehouses (separate mission)",
+    "Code generation (removed in architecture pivot, not coming back)",
+    "fyr test / fyr check / fyr docs commands",
+    "New engine features or aggregation types",
+    "Incremental/append-only execution modes",
+    "Parallel execution of independent pipeline branches",
+]
+acceptable_breakage = [
+    "No breakage expected — new command only, all existing commands and engines unchanged",
+]
+
+[notes]
+considerations = """
+Key architectural decisions:
+
+1. ORCHESTRATION PATTERN: The pipeline is linearly composable — each engine
+   takes an Ibis table and returns an Ibis table. The orchestrator collects
+   all raw events into a single events table, then fans out to activities,
+   identity, analytics entities, and metrics. This mirrors the DAG that
+   fyr dag already visualizes.
+
+2. EVENT SOURCE LOADING: StateSource has SnapshotDiffPipeline, but EventSource
+   needs its own loading path. An EventSource defines entity_id_field,
+   timestamp_field, and event_type/event_type_field. Loading means: read the
+   table, rename columns to match the standard schema (source, entity_id, ts,
+   event_type, payload), and pack remaining columns into a JSON payload. This
+   is the main new code beyond wiring.
+
+3. EVENT ACCUMULATION: All sources produce events in the same schema. The
+   orchestrator should concatenate all event tables before passing to
+   downstream engines. Activities filter by source name, identity graphs
+   filter by source, metrics models filter by source — so mixing is safe.
+
+4. OUTPUT NAMING: Follow the pattern from the old runner — prefix output
+   tables: activity_{source}, analytics_{entity}, metrics_{model}. Write
+   as parquet to output_dir/{name}.parquet.
+
+5. EXISTING DISCOVERY: _discover_assets() in cli.py already finds all asset
+   types. The run command should reuse this rather than building a parallel
+   discovery mechanism.
+
+6. CONFIG: fyrnheim.yaml already defines entities_dir, data_dir, output_dir,
+   backend. The run command should respect these with CLI overrides.
+
+Suggested epic breakdown:
+- Epic 1: EventSource loader (read table -> standard event schema)
+- Epic 2: Pipeline orchestrator (chains all engines, accumulates events)
+- Epic 3: fyr run CLI command (config, discovery, orchestrator call, output, summary)
+- Epic 4: Integration tests with mixed StateSource + EventSource pipeline
+"""

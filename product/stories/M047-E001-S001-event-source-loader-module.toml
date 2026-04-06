@@ -1,0 +1,53 @@
+id = "M047-E001-S001"
+parent = "M047-E001"
+title = "EventSource loader function"
+status = "ready"
+created = 2026-04-06
+
+[outcome]
+description = """Implement load_event_source() that reads an EventSource table
+and converts it to the standard event schema (source, entity_id, ts, event_type,
+payload)."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source() with static event_type returns table with columns: source, entity_id, ts, event_type, payload"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source() with event_type_field reads event type from the specified column"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "entity_id_field is mapped to entity_id column"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "timestamp_field is mapped to ts column"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Remaining columns (not entity_id, ts, event_type) are packed into JSON payload"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource with neither event_type nor event_type_field uses source name as event_type"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/diff_engine.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create src/fyrnheim/engine/event_source_loader.py.
+Look at diff_engine.py for the output schema convention — all columns are strings,
+payload is a JSON string. Use pandas for the transformation (consistent with
+other engines). The function signature should be:
+load_event_source(conn: ibis.BaseBackend, event_source: EventSource) -> ibis.Table"""
+reference_files = ["src/fyrnheim/engine/diff_engine.py"]

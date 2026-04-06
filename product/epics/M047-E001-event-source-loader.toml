@@ -1,0 +1,57 @@
+# Epic: EventSource Loader
+# Convert raw EventSource tables into standard event schema
+
+id = "M047-E001"
+parent = "M047"
+title = "EventSource Loader"
+status = "active"
+created = 2026-04-06
+depends_on = []
+
+[outcome]
+description = """
+A new engine module (event_source_loader.py) that reads an EventSource table
+via Ibis and converts it to the standard event schema: (source, entity_id, ts,
+event_type, payload). Maps entity_id_field -> entity_id, timestamp_field -> ts,
+event_type or event_type_field -> event_type, and packs remaining columns into
+a JSON payload string. This is the missing piece — StateSource has
+SnapshotDiffPipeline, but EventSource has no equivalent loader.
+"""
+
+[job_story]
+description = """When I define an EventSource pointing at a table of page views or
+transactions, I want the engine to convert that table into the standard event
+schema so downstream engines (activity, metrics) can process it."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "load_event_source(conn, event_source) returns an Ibis memtable with columns: source, entity_id, ts, event_type, payload",
+    "entity_id_field is renamed to entity_id",
+    "timestamp_field is renamed to ts",
+    "Static event_type is applied when EventSource.event_type is set",
+    "Dynamic event_type_field is used when EventSource.event_type_field is set",
+    "Remaining columns are packed into a JSON payload string",
+    "Works with DuckDB backend and parquet files",
+    "Unit tests cover all EventSource configurations",
+]
+validator_context = ["src/fyrnheim/engine/", "tests/"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+EventSource has entity_id_field, timestamp_field, and either event_type (static)
+or event_type_field (column-based). The loader must handle both modes. The payload
+should contain all columns that are not mapped to source/entity_id/ts/event_type.
+Look at how diff_engine.py produces its output schema for reference on the
+standard event schema format (all string columns).
+"""
+
+estimated_stories = 2

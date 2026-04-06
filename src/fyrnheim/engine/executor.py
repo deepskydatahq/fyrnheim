@@ -57,6 +57,64 @@ class IbisExecutor:
         conn = ibis.duckdb.connect(str(db_path))
         return cls(conn=conn, backend="duckdb", generated_dir=generated_dir)
 
+    @classmethod
+    def clickhouse(
+        cls,
+        *,
+        host: str = "localhost",
+        port: int = 8123,
+        database: str = "default",
+        user: str = "default",
+        password: str = "",
+        generated_dir: str | Path | None = None,
+        **kwargs: str,
+    ) -> IbisExecutor:
+        """Create an IbisExecutor with a ClickHouse backend."""
+        conn = ibis.clickhouse.connect(
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password,
+            **kwargs,
+        )
+        return cls(conn=conn, backend="clickhouse", generated_dir=generated_dir)
+
+    @classmethod
+    def from_config(
+        cls,
+        backend: str,
+        backend_config: dict[str, str] | None = None,
+        generated_dir: str | Path | None = None,
+    ) -> IbisExecutor:
+        """Create an IbisExecutor from config values.
+
+        Args:
+            backend: Backend name ("duckdb", "clickhouse", etc.)
+            backend_config: Backend-specific connection parameters.
+            generated_dir: Optional directory for generated artifacts.
+        """
+        config = backend_config or {}
+
+        if backend == "duckdb":
+            return cls.duckdb(
+                db_path=config.get("db_path", ":memory:"),
+                generated_dir=generated_dir,
+            )
+        elif backend == "clickhouse":
+            return cls.clickhouse(
+                host=config.get("host", "localhost"),
+                port=int(config.get("port", "8123")),
+                database=config.get("database", "default"),
+                user=config.get("user", "default"),
+                password=config.get("password", ""),
+                generated_dir=generated_dir,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported backend: {backend!r}. Supported: duckdb, clickhouse"
+            )
+
     @property
     def connection(self) -> ibis.BaseBackend:
         """The underlying Ibis backend connection."""

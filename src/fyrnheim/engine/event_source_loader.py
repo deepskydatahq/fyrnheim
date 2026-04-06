@@ -19,6 +19,7 @@ def load_event_source(
     conn: ibis.BaseBackend,
     event_source: EventSource,
     data_dir: str | os.PathLike[str] | None = None,
+    backend: str = "duckdb",
 ) -> ibis.Table:
     """Read an EventSource and convert it to the standard event schema.
 
@@ -31,11 +32,12 @@ def load_event_source(
         conn: Ibis backend connection (used for read_table).
         event_source: EventSource configuration.
         data_dir: Base directory for resolving relative duckdb_path values.
+        backend: Backend name for read_table().
 
     Returns:
         Ibis table with columns: source, entity_id, ts, event_type, payload.
     """
-    table = event_source.read_table(conn, "duckdb", data_dir=data_dir)
+    table = event_source.read_table(conn, backend, data_dir=data_dir)
 
     # Apply computed columns before reading data
     if event_source.computed_columns:

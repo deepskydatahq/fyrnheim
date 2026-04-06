@@ -225,12 +225,16 @@ def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
 @click.option(
     "--output-dir", default=None, help="Directory for pipeline output"
 )
+@click.option(
+    "--backend", default=None, help="Execution backend (duckdb, clickhouse)"
+)
 @click.pass_context
 def run(
     ctx: click.Context,
     entities_dir: str | None,
     data_dir: str | None,
     output_dir: str | None,
+    backend: str | None,
 ) -> None:
     """Run the pipeline: load sources, apply transformations, write output."""
     from fyrnheim.config import resolve_config
@@ -244,6 +248,7 @@ def run(
             entities_dir=entities_dir,
             data_dir=data_dir,
             output_dir=output_dir,
+            backend=backend,
         )
     except Exception as exc:
         if verbose:
@@ -267,7 +272,10 @@ def run(
                f"{len(assets['metrics_models'])} metrics models")
 
     # Create executor and run
-    executor = IbisExecutor.duckdb()
+    executor = IbisExecutor.from_config(
+        backend=config.backend,
+        backend_config=config.backend_config,
+    )
     start = time.monotonic()
 
     try:

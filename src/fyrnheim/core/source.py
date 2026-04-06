@@ -92,7 +92,15 @@ class BaseTableSource(BaseModel):
             if data_dir and not os.path.isabs(parquet_path) and not parquet_path.startswith("~"):
                 parquet_path = os.path.join(str(data_dir), parquet_path)
             return conn.read_parquet(parquet_path)
+        elif backend == "clickhouse":
+            # ClickHouse uses database.table, not (project, dataset) catalogs.
+            # dlt-loaded sources use dataset-prefixed names: dataset___table
+            table_name = f"{self.dataset}___{self.table}"
+            return conn.table(table_name, database=self.project)
+        elif backend == "bigquery":
+            return conn.table(self.table, database=(self.project, self.dataset))
         else:
+            # Generic fallback — try BigQuery-style catalog namespace
             return conn.table(self.table, database=(self.project, self.dataset))
 
 

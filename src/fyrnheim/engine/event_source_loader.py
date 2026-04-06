@@ -54,7 +54,7 @@ def load_event_source(
         ts = str(row[ts_col])
 
         if has_static:
-            event_type = event_source.event_type  # type: ignore[assignment]
+            event_type: str = event_source.event_type  # type: ignore[assignment]
         elif has_field:
             event_type = str(row[event_source.event_type_field])  # type: ignore[index]
         else:

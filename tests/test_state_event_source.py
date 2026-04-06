@@ -227,6 +227,65 @@ class TestEventSource:
             )
 
 
+class TestReadTableDataDir:
+    """Tests for BaseTableSource.read_table() with data_dir."""
+
+    def test_relative_duckdb_path_resolved_against_data_dir(self, tmp_path):
+        data_dir = tmp_path / "mydata"
+        data_dir.mkdir()
+        parquet_file = data_dir / "customers.parquet"
+        import pandas as pd
+        pd.DataFrame({"id": [1], "name": ["Alice"]}).to_parquet(str(parquet_file))
+
+        source = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            duckdb_path="customers.parquet",
+        )
+        import ibis
+        conn = ibis.duckdb.connect()
+        result = source.read_table(conn, "duckdb", data_dir=data_dir)
+        assert result.execute().iloc[0]["name"] == "Alice"
+
+    def test_absolute_duckdb_path_ignores_data_dir(self, tmp_path):
+        parquet_file = tmp_path / "abs.parquet"
+        import pandas as pd
+        pd.DataFrame({"id": [1]}).to_parquet(str(parquet_file))
+
+        source = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            duckdb_path=str(parquet_file),
+        )
+        import ibis
+        conn = ibis.duckdb.connect()
+        # data_dir should be ignored for absolute paths
+        result = source.read_table(conn, "duckdb", data_dir="/nonexistent")
+        assert len(result.execute()) == 1
+
+    def test_no_data_dir_resolves_from_cwd(self, tmp_path):
+        """Without data_dir, relative paths resolve from CWD (existing behavior)."""
+        source = StateSource(
+            name="crm",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            duckdb_path="nonexistent_file_xyz.parquet",
+        )
+        import ibis
+        conn = ibis.duckdb.connect()
+        # DuckDB raises IOException for missing files
+        with pytest.raises(Exception, match="No files found"):  # noqa: B017
+            source.read_table(conn, "duckdb")
+
+
 class TestSourceExports:
     """Tests for public exports."""
 

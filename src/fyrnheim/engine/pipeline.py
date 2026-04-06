@@ -76,7 +76,9 @@ def run_pipeline(
             if isinstance(source, StateSource):
                 events = _load_state_source(source, config, conn)
             elif isinstance(source, EventSource):
-                events = load_event_source(conn, source, data_dir=config.data_dir)
+                events = load_event_source(
+                    conn, source, data_dir=config.data_dir, backend=config.backend,
+                )
             else:
                 continue
 

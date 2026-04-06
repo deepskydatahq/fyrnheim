@@ -1,4 +1,4 @@
-"""Metrics engine for aggregating metric deltas from field_changed events."""
+"""Metrics engine for aggregating metric deltas and event counts."""
 
 from __future__ import annotations
 
@@ -29,10 +29,20 @@ def _truncate_to_grain(ts: str, grain: str) -> str:
         return ts[:10]
 
 
+_STATE_AGGREGATIONS = {"sum_delta", "last_value", "max_value"}
+_EVENT_AGGREGATIONS = {"count", "count_distinct"}
+
+
 def aggregate_metrics(
     events: ibis.expr.types.Table, metrics_model: MetricsModel
 ) -> ibis.expr.types.Table:
-    """Aggregate field_changed events into time-grain metric tables.
+    """Aggregate events into time-grain metric tables.
+
+    Supports two families of aggregation:
+    - State-based (sum_delta, last_value, max_value): operates on field_changed events,
+      extracting old_value/new_value from the payload.
+    - Event-based (count, count_distinct): operates on events where event_type matches
+      the metric field's field_name.
 
     Args:
         events: Ibis table with columns: source, entity_id, ts, event_type, payload
@@ -44,17 +54,65 @@ def aggregate_metrics(
     # 1. Materialize to pandas
     df = events.execute()
 
-    # 2. Filter to field_changed events for the specified sources
-    df = df[
-        (df["event_type"] == "field_changed")
-        & (df["source"].isin(metrics_model.sources))
-    ].copy()
+    # Filter to the specified sources
+    source_df = df[df["source"].isin(metrics_model.sources)].copy()
 
-    if df.empty:
-        # Return empty table with correct schema
+    if source_df.empty:
         return _empty_result(metrics_model)
 
-    # 3. Parse payload JSON
+    # 2. Truncate ts to grain
+    source_df["_date"] = source_df["ts"].apply(
+        lambda t: _truncate_to_grain(str(t), metrics_model.grain)
+    )
+
+    # Determine group-by columns
+    group_cols = ["_date"]
+    if metrics_model.dimensions:
+        for dim in metrics_model.dimensions:
+            if dim in source_df.columns:
+                group_cols.append(dim)
+
+    # Separate metric fields by type
+    state_fields = [mf for mf in metrics_model.metric_fields if mf.aggregation in _STATE_AGGREGATIONS]
+    event_fields = [mf for mf in metrics_model.metric_fields if mf.aggregation in _EVENT_AGGREGATIONS]
+
+    result_frames: list[pd.DataFrame] = []
+
+    # 3. Process state-based aggregations (field_changed events)
+    if state_fields:
+        result_frames.extend(_aggregate_state_fields(source_df, state_fields, group_cols))
+
+    # 4. Process event-based aggregations (count/count_distinct)
+    if event_fields:
+        result_frames.extend(_aggregate_event_fields(source_df, event_fields, group_cols))
+
+    if not result_frames:
+        return _empty_result(metrics_model)
+
+    # 5. Merge all metric columns
+    merged = result_frames[0]
+    for frame in result_frames[1:]:
+        merged = merged.merge(frame, on=group_cols, how="outer")
+
+    # Sort by group columns
+    merged = merged.sort_values(group_cols).reset_index(drop=True)
+
+    # 6. Return as ibis.memtable
+    return ibis.memtable(merged)
+
+
+def _aggregate_state_fields(
+    source_df: pd.DataFrame,
+    state_fields: list,
+    group_cols: list[str],
+) -> list[pd.DataFrame]:
+    """Aggregate field_changed events for state-based metrics."""
+    fc_df = source_df[source_df["event_type"] == "field_changed"].copy()
+
+    if fc_df.empty:
+        return []
+
+    # Parse payload JSON
     def _parse_payload(payload: str) -> dict:
         if isinstance(payload, dict):
             return payload
@@ -63,26 +121,15 @@ def aggregate_metrics(
         except (json.JSONDecodeError, TypeError):
             return {}
 
-    parsed = df["payload"].apply(_parse_payload)
-    df["parsed_field_name"] = parsed.apply(lambda p: p.get("field_name", ""))
-    df["old_value"] = parsed.apply(lambda p: p.get("old_value", None))
-    df["new_value"] = parsed.apply(lambda p: p.get("new_value", None))
+    parsed = fc_df["payload"].apply(_parse_payload)
+    fc_df["parsed_field_name"] = parsed.apply(lambda p: p.get("field_name", ""))
+    fc_df["old_value"] = parsed.apply(lambda p: p.get("old_value", None))
+    fc_df["new_value"] = parsed.apply(lambda p: p.get("new_value", None))
 
-    # 4. Truncate ts to grain
-    df["_date"] = df["ts"].apply(lambda t: _truncate_to_grain(str(t), metrics_model.grain))
-
-    # Determine group-by columns
-    group_cols = ["_date"]
-    if metrics_model.dimensions:
-        for dim in metrics_model.dimensions:
-            if dim in df.columns:
-                group_cols.append(dim)
-
-    # 5. Compute each metric field
     result_frames: list[pd.DataFrame] = []
 
-    for mf in metrics_model.metric_fields:
-        field_df = df[df["parsed_field_name"] == mf.field_name].copy()
+    for mf in state_fields:
+        field_df = fc_df[fc_df["parsed_field_name"] == mf.field_name].copy()
 
         if field_df.empty:
             continue
@@ -98,10 +145,8 @@ def aggregate_metrics(
                 **{col_name: ("_delta", "sum")}
             )
         elif mf.aggregation == "last_value":
-            # Get the row with max ts per group
             idx = field_df.groupby(group_cols)["ts"].transform("max") == field_df["ts"]
             last_df = field_df[idx].copy()
-            # If there are ties, take the last one
             last_df = last_df.drop_duplicates(subset=group_cols, keep="last")
             agg_df = last_df[group_cols + ["new_value_f"]].rename(
                 columns={"new_value_f": col_name}
@@ -115,19 +160,52 @@ def aggregate_metrics(
 
         result_frames.append(agg_df)
 
-    if not result_frames:
-        return _empty_result(metrics_model)
+    return result_frames
 
-    # 6. Merge all metric columns
-    merged = result_frames[0]
-    for frame in result_frames[1:]:
-        merged = merged.merge(frame, on=group_cols, how="outer")
 
-    # Sort by _date
-    merged = merged.sort_values(group_cols).reset_index(drop=True)
+def _aggregate_event_fields(
+    source_df: pd.DataFrame,
+    event_fields: list,
+    group_cols: list[str],
+) -> list[pd.DataFrame]:
+    """Aggregate event-type matching events for count-based metrics."""
+    result_frames: list[pd.DataFrame] = []
 
-    # 7. Return as ibis.memtable
-    return ibis.memtable(merged)
+    def _parse_payload(payload: str) -> dict:
+        if isinstance(payload, dict):
+            return payload
+        try:
+            return json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    for mf in event_fields:
+        # Match events where event_type == field_name
+        event_df = source_df[source_df["event_type"] == mf.field_name].copy()
+
+        if event_df.empty:
+            continue
+
+        col_name = f"{mf.field_name}_{mf.aggregation}"
+
+        if mf.aggregation == "count":
+            agg_df = event_df.groupby(group_cols, as_index=False).size()
+            agg_df = agg_df.rename(columns={"size": col_name})
+        elif mf.aggregation == "count_distinct":
+            # Extract the distinct_field from payload
+            parsed = event_df["payload"].apply(_parse_payload)
+            event_df["_distinct_val"] = parsed.apply(
+                lambda p, key=mf.distinct_field: p.get(key, None)
+            )
+            agg_df = event_df.groupby(group_cols, as_index=False).agg(
+                **{col_name: ("_distinct_val", "nunique")}
+            )
+        else:
+            continue
+
+        result_frames.append(agg_df)
+
+    return result_frames
 
 
 def _empty_result(metrics_model: MetricsModel) -> ibis.expr.types.Table:

@@ -20,6 +20,32 @@ class TestMetricField:
         mf = MetricField(field_name="peak_viewers", aggregation="max_value")
         assert mf.aggregation == "max_value"
 
+    def test_valid_count(self):
+        mf = MetricField(field_name="blog_post_opened", aggregation="count")
+        assert mf.aggregation == "count"
+        assert mf.distinct_field is None
+
+    def test_valid_count_distinct(self):
+        mf = MetricField(
+            field_name="blog_post_opened",
+            aggregation="count_distinct",
+            distinct_field="data_page_path",
+        )
+        assert mf.aggregation == "count_distinct"
+        assert mf.distinct_field == "data_page_path"
+
+    def test_count_distinct_requires_distinct_field(self):
+        with pytest.raises(ValidationError):
+            MetricField(field_name="blog_post_opened", aggregation="count_distinct")
+
+    def test_distinct_field_only_for_count_distinct(self):
+        with pytest.raises(ValidationError):
+            MetricField(
+                field_name="view_count",
+                aggregation="sum_delta",
+                distinct_field="some_field",
+            )
+
     def test_invalid_aggregation(self):
         with pytest.raises(ValidationError):
             MetricField(field_name="x", aggregation="average")

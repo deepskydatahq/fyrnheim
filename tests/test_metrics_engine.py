@@ -432,3 +432,407 @@ class TestEdgeCases:
         )
         result = aggregate_metrics(events, model).execute()
         assert len(result) == 0
+
+
+class TestCount:
+    def test_basic_count_daily(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "session_1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-1"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "session_2",
+                    "ts": "2024-01-01T14:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-2"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "session_3",
+                    "ts": "2024-01-02T09:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-1"}),
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 2
+        day1 = result[result["_date"] == "2024-01-01"]
+        day2 = result[result["_date"] == "2024-01-02"]
+        assert day1["blog_post_opened_count"].iloc[0] == 2
+        assert day2["blog_post_opened_count"].iloc[0] == 1
+
+    def test_count_filters_source(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+                {
+                    "source": "other_source",
+                    "entity_id": "s2",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 1
+        assert result["blog_post_opened_count"].iloc[0] == 1
+
+    def test_count_ignores_field_changed_events(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "field_changed",
+                    "payload": _payload("view_count", "0", "100"),
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 1
+        assert result["blog_post_opened_count"].iloc[0] == 1
+
+    def test_count_with_dimensions(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "session_1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "session_2",
+                    "ts": "2024-01-01T14:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "session_1",
+                    "ts": "2024-01-01T16:00:00",
+                    "event_type": "purchase_clicked",
+                    "payload": "{}",
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+            ],
+            dimensions=["entity_id"],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 2
+        s1 = result[result["entity_id"] == "session_1"]
+        s2 = result[result["entity_id"] == "session_2"]
+        assert s1["blog_post_opened_count"].iloc[0] == 1
+        assert s2["blog_post_opened_count"].iloc[0] == 1
+
+    def test_count_empty_when_no_matching_events(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "purchase_clicked",
+                    "payload": "{}",
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 0
+
+    def test_multiple_event_types_counted(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T11:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": "{}",
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T12:00:00",
+                    "event_type": "purchase_clicked",
+                    "payload": "{}",
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+                MetricField(field_name="purchase_clicked", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 1
+        assert result["blog_post_opened_count"].iloc[0] == 2
+        assert result["purchase_clicked_count"].iloc[0] == 1
+
+
+class TestCountDistinct:
+    def test_basic_count_distinct(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-1"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s2",
+                    "ts": "2024-01-01T11:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-1"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s3",
+                    "ts": "2024-01-01T12:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-2"}),
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(
+                    field_name="blog_post_opened",
+                    aggregation="count_distinct",
+                    distinct_field="data_page_path",
+                ),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 1
+        assert result["blog_post_opened_count_distinct"].iloc[0] == 2
+
+    def test_count_distinct_across_days(self):
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_user_hash": "user_a"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s2",
+                    "ts": "2024-01-01T11:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_user_hash": "user_a"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s3",
+                    "ts": "2024-01-02T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_user_hash": "user_a"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s4",
+                    "ts": "2024-01-02T11:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_user_hash": "user_b"}),
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(
+                    field_name="blog_post_opened",
+                    aggregation="count_distinct",
+                    distinct_field="data_user_hash",
+                ),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 2
+        day1 = result[result["_date"] == "2024-01-01"]
+        day2 = result[result["_date"] == "2024-01-02"]
+        assert day1["blog_post_opened_count_distinct"].iloc[0] == 1
+        assert day2["blog_post_opened_count_distinct"].iloc[0] == 2
+
+
+class TestMixedAggregations:
+    def test_state_and_event_metrics_combined(self):
+        """Test that a single MetricsModel can combine state-based and event-based metrics."""
+        events = _make_events(
+            [
+                # State-based: field_changed events from youtube
+                {
+                    "source": "youtube",
+                    "entity_id": "video_a",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "field_changed",
+                    "payload": _payload("view_count", "100", "200"),
+                },
+                # Event-based: page view events from youtube
+                {
+                    "source": "youtube",
+                    "entity_id": "video_a",
+                    "ts": "2024-01-01T11:00:00",
+                    "event_type": "video_played",
+                    "payload": "{}",
+                },
+                {
+                    "source": "youtube",
+                    "entity_id": "video_a",
+                    "ts": "2024-01-01T12:00:00",
+                    "event_type": "video_played",
+                    "payload": "{}",
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="yt_daily",
+            sources=["youtube"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="view_count", aggregation="sum_delta"),
+                MetricField(field_name="video_played", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 1
+        assert result["view_count_sum_delta"].iloc[0] == 100.0
+        assert result["video_played_count"].iloc[0] == 2
+
+    def test_website_engagement_use_case(self):
+        """Real-world use case from the mission: website engagement daily metrics."""
+        events = _make_events(
+            [
+                {
+                    "source": "website_events",
+                    "entity_id": "s1",
+                    "ts": "2024-01-01T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-1", "data_page_type": "blog"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s2",
+                    "ts": "2024-01-01T11:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-2", "data_page_type": "blog"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s3",
+                    "ts": "2024-01-01T12:00:00",
+                    "event_type": "purchase_clicked",
+                    "payload": json.dumps({"data_link_url": "https://example.com", "data_page_type": "product"}),
+                },
+                {
+                    "source": "website_events",
+                    "entity_id": "s4",
+                    "ts": "2024-01-02T10:00:00",
+                    "event_type": "blog_post_opened",
+                    "payload": json.dumps({"data_page_path": "/blog/post-1", "data_page_type": "blog"}),
+                },
+            ]
+        )
+        model = MetricsModel(
+            name="website_engagement_daily",
+            sources=["website_events"],
+            grain="daily",
+            metric_fields=[
+                MetricField(field_name="blog_post_opened", aggregation="count"),
+                MetricField(field_name="purchase_clicked", aggregation="count"),
+            ],
+        )
+        result = aggregate_metrics(events, model).execute()
+        assert len(result) == 2
+        day1 = result[result["_date"] == "2024-01-01"]
+        day2 = result[result["_date"] == "2024-01-02"]
+        assert day1["blog_post_opened_count"].iloc[0] == 2
+        assert day1["purchase_clicked_count"].iloc[0] == 1
+        assert day2["blog_post_opened_count"].iloc[0] == 1
+        # purchase_clicked is NaN on day2 (outer join)
+        assert pd.isna(day2["purchase_clicked_count"].iloc[0])

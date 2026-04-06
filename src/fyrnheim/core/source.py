@@ -72,12 +72,15 @@ class BaseTableSource(BaseModel):
             raise ValueError("project, dataset, and table are required")
         return v
 
-    def read_table(self, conn: Any, backend: str) -> Any:
+    def read_table(self, conn: Any, backend: str, data_dir: str | os.PathLike[str] | None = None) -> Any:
         """Read table from warehouse or DuckDB based on backend.
 
         Args:
             conn: Ibis connection
             backend: "bigquery", "duckdb", etc.
+            data_dir: Base directory for resolving relative duckdb_path values.
+                If provided, relative paths are resolved against this directory.
+                Absolute paths and ~ paths are left as-is.
 
         Returns:
             Ibis table expression
@@ -86,6 +89,8 @@ class BaseTableSource(BaseModel):
             if not self.duckdb_path:
                 raise ValueError("duckdb_path is required for duckdb backend")
             parquet_path = os.path.expanduser(self.duckdb_path)
+            if data_dir and not os.path.isabs(parquet_path) and not parquet_path.startswith("~"):
+                parquet_path = os.path.join(str(data_dir), parquet_path)
             return conn.read_parquet(parquet_path)
         else:
             return conn.table(self.table, database=(self.project, self.dataset))

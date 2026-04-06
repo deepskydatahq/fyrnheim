@@ -76,7 +76,7 @@ def run_pipeline(
             if isinstance(source, StateSource):
                 events = _load_state_source(source, config, conn)
             elif isinstance(source, EventSource):
-                events = load_event_source(conn, source)
+                events = load_event_source(conn, source, data_dir=config.data_dir)
             else:
                 continue
 
@@ -154,7 +154,7 @@ def _load_state_source(
     conn: ibis.BaseBackend,
 ) -> ibis.Table:
     """Load a StateSource through SnapshotDiffPipeline."""
-    table = source.read_table(conn, config.backend)
+    table = source.read_table(conn, config.backend, data_dir=config.data_dir)
     snapshot_dir = Path(config.output_dir) / "snapshots"
     store = SnapshotStore(snapshot_dir, conn)
     pipeline = SnapshotDiffPipeline(store, conn)

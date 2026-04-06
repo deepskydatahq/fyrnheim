@@ -248,6 +248,46 @@ class TestProjectAnalyticsEntity:
         df = result.execute()
         assert df.iloc[0]["first_name"] == "Original"
 
+    def test_computed_field_with_t_proxy(self):
+        """Computed fields using t.field_name syntax should work."""
+        events = _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "alice@example.com"}},
+        ])
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(name="email", source="crm", field="email", strategy="latest"),
+            ],
+            computed_fields=[
+                ComputedColumn(name="email_domain", expression="t.email.split('@')[1]"),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        assert df.iloc[0]["email_domain"] == "example.com"
+
+    def test_computed_field_direct_column_access(self):
+        """Computed fields using direct column name access should still work."""
+        events = _make_events([
+            {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
+             "event_type": "login", "payload": {}},
+            {"source": "app", "entity_id": "X", "ts": "2024-01-02T00:00:00",
+             "event_type": "login", "payload": {}},
+        ])
+        ae = AnalyticsEntity(
+            name="users",
+            measures=[
+                Measure(name="login_count", activity="login", aggregation="count"),
+            ],
+            computed_fields=[
+                ComputedColumn(name="is_active", expression="login_count > 0"),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        assert df.iloc[0]["is_active"] == True  # noqa: E712
+
 
 # ---------------------------------------------------------------------------
 # Tests: AnalyticsEntityRegistry

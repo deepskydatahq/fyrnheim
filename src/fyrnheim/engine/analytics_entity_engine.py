@@ -11,6 +11,25 @@ import pandas as pd
 from fyrnheim.core.analytics_entity import AnalyticsEntity, Measure, StateField
 
 
+class _RowProxy:
+    """Proxy object that allows t.field_name access on a dict row.
+
+    Supports expressions like t.email.split('@')[1].lower() by returning
+    the actual value from the row dict on attribute access.
+    """
+
+    def __init__(self, row_dict: dict[str, Any]) -> None:
+        self._data = row_dict
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("_"):
+            return super().__getattribute__(name)
+        try:
+            return self._data[name]
+        except KeyError:
+            raise AttributeError(f"No field '{name}' in row") from None
+
+
 def _extract_field_value(row: pd.Series, field_name: str) -> Any:
     """Extract a field value from an enriched event row's payload.
 
@@ -182,7 +201,11 @@ def project_analytics_entity(
     # Evaluate computed fields
     for cf in analytics_entity.computed_fields:
         result_df[cf.name] = result_df.apply(
-            lambda r, expr=cf.expression: eval(expr, {"__builtins__": {}}, r.to_dict()),  # noqa: S307
+            lambda r, expr=cf.expression: eval(  # noqa: S307
+                expr,
+                {"__builtins__": {}},
+                {**r.to_dict(), "t": _RowProxy(r.to_dict())},
+            ),
             axis=1,
         )
 

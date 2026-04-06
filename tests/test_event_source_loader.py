@@ -8,6 +8,7 @@ import ibis
 import pandas as pd
 import pytest
 
+from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.source import EventSource
 from fyrnheim.engine.event_source_loader import load_event_source
 
@@ -182,3 +183,74 @@ class TestLoadEventSource:
 
         assert len(result) == 0
         assert set(result.columns) == {"source", "entity_id", "ts", "event_type", "payload"}
+
+    def test_computed_columns_applied_before_event_type_field(
+        self, tmp_path: pytest.TempPathFactory
+    ) -> None:
+        """Computed columns are evaluated before event_type_field lookup."""
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2", "u3"],
+                "viewed_at": ["2024-01-01", "2024-01-02", "2024-01-03"],
+                "event": ["page view", "link click", "page view"],
+                "data_page_type": ["post", "product", "page"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="website_events",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type_field="activity_type",
+            computed_columns=[
+                ComputedColumn(
+                    name="activity_type",
+                    expression=(
+                        "ibis.cases("
+                        "(((t.event == 'page view') & (t.data_page_type == 'post')), 'blog_post_opened'), "
+                        "else_=t.event"
+                        ")"
+                    ),
+                ),
+            ],
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 3
+        event_types = list(result["event_type"])
+        assert event_types[0] == "blog_post_opened"
+        assert event_types[1] == "link click"
+        assert event_types[2] == "page view"
+
+    def test_data_dir_resolves_relative_duckdb_path(
+        self, tmp_path: pytest.TempPathFactory
+    ) -> None:
+        """Relative duckdb_path is resolved against data_dir."""
+        data_dir = tmp_path / "mydata"
+        data_dir.mkdir()
+        parquet_file = data_dir / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "viewed_at": ["2024-01-01"],
+                "page": ["/home"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = _make_event_source(
+            event_type="page_view",
+            parquet_path="events.parquet",  # relative path
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es, data_dir=data_dir).execute()
+
+        assert len(result) == 1
+        assert result.iloc[0]["event_type"] == "page_view"

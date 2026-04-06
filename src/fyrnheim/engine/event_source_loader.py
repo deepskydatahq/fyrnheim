@@ -7,6 +7,7 @@ source, entity_id, ts, event_type, payload — all as strings.
 from __future__ import annotations
 
 import json
+import os
 
 import ibis
 import pandas as pd
@@ -17,6 +18,7 @@ from fyrnheim.core.source import EventSource
 def load_event_source(
     conn: ibis.BaseBackend,
     event_source: EventSource,
+    data_dir: str | os.PathLike[str] | None = None,
 ) -> ibis.Table:
     """Read an EventSource and convert it to the standard event schema.
 
@@ -28,11 +30,18 @@ def load_event_source(
     Args:
         conn: Ibis backend connection (used for read_table).
         event_source: EventSource configuration.
+        data_dir: Base directory for resolving relative duckdb_path values.
 
     Returns:
         Ibis table with columns: source, entity_id, ts, event_type, payload.
     """
-    table = event_source.read_table(conn, "duckdb")
+    table = event_source.read_table(conn, "duckdb", data_dir=data_dir)
+
+    # Apply computed columns before reading data
+    if event_source.computed_columns:
+        for cc in event_source.computed_columns:
+            table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+
     df = table.execute()
 
     # Map entity_id and ts

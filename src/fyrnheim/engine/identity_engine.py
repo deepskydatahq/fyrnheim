@@ -102,8 +102,25 @@ def enrich_events(
     events_df = events.execute()
     mapping_df = id_mapping.execute()
 
+    # Preserve any existing canonical_id from prior enrichments by coalescing
+    # the new mapping with the existing column. Without this, a second
+    # enrich_events call would produce canonical_id_x / canonical_id_y from
+    # pandas' suffix logic and break downstream.
+    had_existing = "canonical_id" in events_df.columns
+    if had_existing:
+        events_df = events_df.rename(columns={"canonical_id": "_existing_canonical_id"})
+
     merged = events_df.merge(mapping_df, on=["source", "entity_id"], how="left")
-    merged["canonical_id"] = merged["canonical_id"].fillna(merged["entity_id"])
+
+    if had_existing:
+        # New mapping wins where present, fall back to existing, then entity_id
+        merged["canonical_id"] = (
+            merged["canonical_id"]
+            .fillna(merged["_existing_canonical_id"])
+            .fillna(merged["entity_id"])
+        )
+    else:
+        merged["canonical_id"] = merged["canonical_id"].fillna(merged["entity_id"])
 
     result = merged[
         ["source", "entity_id", "ts", "event_type", "payload", "canonical_id"]

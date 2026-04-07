@@ -204,3 +204,55 @@ class TestEnrichEvents:
             "payload",
             "canonical_id",
         ]
+
+    def test_second_enrich_call_preserves_canonical_id(self) -> None:
+        """Calling enrich_events twice (multi-graph scenario) does not break.
+
+        Regression: pandas merge would suffix canonical_id_x/canonical_id_y on
+        the second call, causing KeyError: 'canonical_id'.
+        """
+        events_df = pd.DataFrame(
+            {
+                "source": ["crm", "billing"],
+                "entity_id": ["crm-1", "bill-1"],
+                "ts": pd.to_datetime(["2026-01-01", "2026-01-02"]),
+                "event_type": ["row_appeared", "row_appeared"],
+                "payload": ['{"email": "a@x.com"}', '{"phone": "555"}'],
+            }
+        )
+        events = ibis.memtable(events_df)
+
+        # First mapping covers crm
+        mapping1 = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "source": ["crm"],
+                    "entity_id": ["crm-1"],
+                    "canonical_id": ["CAN-EMAIL"],
+                }
+            )
+        )
+        # Second mapping covers billing
+        mapping2 = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "source": ["billing"],
+                    "entity_id": ["bill-1"],
+                    "canonical_id": ["CAN-PHONE"],
+                }
+            )
+        )
+
+        enriched = enrich_events(events, mapping1)
+        enriched = enrich_events(enriched, mapping2)
+        result_df = enriched.execute()
+
+        assert "canonical_id" in result_df.columns
+        assert "canonical_id_x" not in result_df.columns
+        assert "canonical_id_y" not in result_df.columns
+
+        crm_row = result_df[result_df["entity_id"] == "crm-1"].iloc[0]
+        bill_row = result_df[result_df["entity_id"] == "bill-1"].iloc[0]
+        # First-graph enrichment must be preserved through the second call
+        assert crm_row["canonical_id"] == "CAN-EMAIL"
+        assert bill_row["canonical_id"] == "CAN-PHONE"

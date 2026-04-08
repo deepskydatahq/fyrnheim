@@ -1,0 +1,48 @@
+id = "M033-E001-S002"
+parent = "M033-E001"
+title = "Create 5 new concept pages and update getting-started"
+status = "plan"
+created = 2026-04-02
+
+[outcome]
+description = """Create new concept pages for Sources, Activities, Identity, Entity Models, and Analytics. Rewrite Getting Started with activities-first example."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/sources.md exists and describes StateSource and EventSource"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/activities.md exists and describes SnapshotDiff, ActivityDefinition, triggers"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/identity.md exists and describes IdentityGraph, resolution, enrichment"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/entity-models.md exists and describes EntityModel, StateField, strategies"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/analytics.md exists and describes StreamAnalyticsModel, metrics, aggregation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "getting-started.md shows activities-first pipeline with code examples"
+
+[context]
+relevant_paths = [
+    "website/src/content/docs/",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+    "examples/entities/customers.py",
+]
+input_fixtures = []
+depends_on = ["M033-E001-S001"]
+
+[handoff]
+implementation_hints = """Use the design spec and examples/entities/customers.py as source material. Each concept page should have: overview paragraph, Python code example showing how to define the type, explanation of key fields/options, and how it connects to the pipeline. Keep pages concise — 50-100 lines each. Getting Started should walk through defining a source, activity, identity graph, entity model, and analytics model."""
+reference_files = []

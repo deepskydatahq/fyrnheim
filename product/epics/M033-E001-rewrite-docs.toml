@@ -1,0 +1,48 @@
+id = "M033-E001"
+parent = "M033"
+title = "Rewrite website docs for activities-first architecture"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Remove outdated concept pages, create 5 new concept pages matching the
+activities-first architecture, rewrite Getting Started, update sidebar
+navigation, and simplify API reference.
+"""
+
+[job_story]
+description = """
+When a new user visits the fyrnheim docs, I want them to learn the
+activities-first concepts (sources, activities, identity, entity models,
+analytics) instead of the removed entity-centric pipeline.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "No page references Entity, LayersConfig, PrepLayer, DimensionLayer, SnapshotLayer",
+    "No page references old ActivityConfig, ActivityType, DerivedSource, UnionSource, AggregationSource",
+    "Getting Started shows activities-first example",
+    "5 new concept pages exist: sources, activities, identity, entity-models, analytics",
+    "Sidebar navigation reflects new concept structure",
+    "Outdated pages (source-mapping, quality, components) are removed",
+]
+validator_context = ["website/src/content/docs/", "website/astro.config.mjs"]
+
+[context]
+relevant_paths = [
+    "website/src/content/docs/",
+    "website/astro.config.mjs",
+    "docs/superpowers/specs/2026-04-01-activities-first-architecture-design.md",
+    "examples/entities/customers.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Single epic — all content is interconnected through sidebar config.
+"""
+
+estimated_stories = 3

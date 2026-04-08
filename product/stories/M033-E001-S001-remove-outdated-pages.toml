@@ -1,0 +1,44 @@
+id = "M033-E001-S001"
+parent = "M033-E001"
+title = "Remove outdated concept pages"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Remove concept pages that describe removed features: source-mapping, quality, components, old entities, old layers, old sources."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/source-mapping.md is deleted"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/quality.md is deleted"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/components.md is deleted"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/entities.md is deleted"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/layers.md is deleted"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "concepts/sources.md is deleted"
+
+[context]
+relevant_paths = ["website/src/content/docs/concepts/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Delete the 6 files. These will be replaced by new pages in S002."""
+reference_files = []

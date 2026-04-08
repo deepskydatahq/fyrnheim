@@ -23,6 +23,7 @@ from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
 from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
+from fyrnheim.engine.staging_runner import materialize_staging_views
 
 log = logging.getLogger("fyrnheim.pipeline")
 
@@ -36,12 +37,16 @@ class PipelineResult:
     errors: list[str] = field(default_factory=list)
     outputs: dict[str, int] = field(default_factory=dict)  # name -> row_count
     elapsed_seconds: float = 0.0
+    staging_materialized: list[str] = field(default_factory=list)
+    staging_skipped: list[str] = field(default_factory=list)
 
 
 def run_pipeline(
     assets: dict[str, list],
     config: ResolvedConfig,
     executor: IbisExecutor,
+    *,
+    no_state: bool = False,
 ) -> PipelineResult:
     """Execute the full pipeline: sources -> events -> activities -> identity -> outputs.
 
@@ -63,6 +68,29 @@ def run_pipeline(
     identity_graphs = assets.get("identity_graphs", [])
     analytics_entities = assets.get("analytics_entities", [])
     metrics_models = assets.get("metrics_models", [])
+    staging_views = assets.get("staging_views", [])
+
+    # --- Phase 0: Materialize staging views (in-warehouse derived sources) ---
+    if staging_views:
+        # A staging view is "fixture-shadowed" when a source with a local
+        # duckdb_path shares its name. In that case we skip materialization
+        # since the source will load the fixture directly.
+        fixture_names: set[str] = set()
+        for src in sources:
+            if getattr(src, "duckdb_path", None):
+                fixture_names.add(src.name)
+        try:
+            staging_summary = materialize_staging_views(
+                executor,
+                list(staging_views),
+                no_state=no_state,
+                source_fixture_names=fixture_names,
+            )
+            result.staging_materialized = staging_summary.materialized
+            result.staging_skipped = staging_summary.skipped
+        except Exception as exc:
+            result.errors.append(f"Staging views: {exc}")
+            log.warning("Failed to materialize staging views: %s", exc)
 
     if not sources:
         result.elapsed_seconds = time.monotonic() - start

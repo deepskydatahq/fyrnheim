@@ -109,6 +109,7 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
     from fyrnheim.core.identity import IdentityGraph
     from fyrnheim.core.metrics_model import MetricsModel
     from fyrnheim.core.source import EventSource, StateSource
+    from fyrnheim.core.staging_view import StagingView
 
     assets: dict[str, list] = {
         "sources": [],
@@ -116,6 +117,7 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
         "identity_graphs": [],
         "analytics_entities": [],
         "metrics_models": [],
+        "staging_views": [],
     }
 
     if not entities_dir.is_dir():
@@ -128,6 +130,7 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
         IdentityGraph: ("identity_graphs", False),
         AnalyticsEntity: ("analytics_entities", False),
         MetricsModel: ("metrics_models", False),
+        StagingView: ("staging_views", False),
     }
 
     for py_file in sorted(entities_dir.glob("*.py")):

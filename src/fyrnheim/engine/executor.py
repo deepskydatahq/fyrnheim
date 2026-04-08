@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import ibis
 
@@ -81,6 +83,42 @@ class IbisExecutor:
         return cls(conn=conn, backend="clickhouse", generated_dir=generated_dir)
 
     @classmethod
+    def bigquery(
+        cls,
+        project_id: str,
+        *,
+        dataset_id: str | None = None,
+        credentials_path: str | None = None,
+        location: str | None = None,
+        generated_dir: str | Path | None = None,
+    ) -> IbisExecutor:
+        """Create an IbisExecutor with a BigQuery backend.
+
+        Credentials resolution order:
+          1. Explicit credentials_path argument
+          2. GOOGLE_APPLICATION_CREDENTIALS environment variable
+          3. Application Default Credentials (gcloud auth application-default login)
+
+        Args:
+            project_id: GCP project ID containing the BigQuery datasets.
+            dataset_id: Optional default dataset for the connection.
+            credentials_path: Optional path to a service account JSON file.
+            location: Optional BigQuery location (e.g. "EU", "US").
+            generated_dir: Optional directory for generated artifacts.
+        """
+        if credentials_path:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+
+        kwargs: dict[str, Any] = {"project_id": project_id}
+        if dataset_id:
+            kwargs["dataset_id"] = dataset_id
+        if location:
+            kwargs["location"] = location
+
+        conn = ibis.bigquery.connect(**kwargs)
+        return cls(conn=conn, backend="bigquery", generated_dir=generated_dir)
+
+    @classmethod
     def from_config(
         cls,
         backend: str,
@@ -110,9 +148,22 @@ class IbisExecutor:
                 password=config.get("password", ""),
                 generated_dir=generated_dir,
             )
+        elif backend == "bigquery":
+            if "project_id" not in config:
+                raise ValueError(
+                    "bigquery backend requires 'project_id' in backend_config"
+                )
+            return cls.bigquery(
+                project_id=config["project_id"],
+                dataset_id=config.get("dataset_id"),
+                credentials_path=config.get("credentials_path"),
+                location=config.get("location"),
+                generated_dir=generated_dir,
+            )
         else:
             raise ValueError(
-                f"Unsupported backend: {backend!r}. Supported: duckdb, clickhouse"
+                f"Unsupported backend: {backend!r}. "
+                "Supported: duckdb, clickhouse, bigquery"
             )
 
     @property

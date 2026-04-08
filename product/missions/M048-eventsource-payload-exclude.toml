@@ -1,0 +1,102 @@
+# Mission: EventSource payload_exclude
+# Let users drop large nested columns from the JSON payload without a staging view
+
+id = "M048"
+title = "EventSource payload_exclude"
+status = "draft"
+created = 2026-04-08
+depends_on = []
+
+[outcome]
+description = """
+Add an optional payload_exclude field to EventSource that lists column names
+to drop when packing the JSON payload. Today, after the array-serialization
+fix, GA4-shaped sources load successfully but produce large opaque payload
+blobs containing every REPEATED RECORD column (event_params, user_properties,
+items). Users can already drop them by building a flattening view in the
+warehouse, but the loader should support a one-line opt-out so a fresh
+EventSource is usable against raw analytics exports without staging.
+
+This is the natural follow-up to PR #81 (array serialization fix).
+"""
+
+user_progress = "From 'GA4 events load but produce 50KB opaque payloads' to 'one line on EventSource drops the noisy columns'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EventSource accepts an optional payload_exclude: list[str] field, defaulting to empty",
+    "load_event_source honors payload_exclude: named columns do not appear in any row's payload JSON",
+    "payload_exclude is additive to the existing entity_id_field / timestamp_field / event_type_field exclusions",
+    "Excluding a non-existent column is a no-op (no error) — same forgiving behavior as the existing exclude logic",
+    "Existing EventSource definitions without payload_exclude continue to work unchanged",
+    "Unit test on the model accepts and round-trips payload_exclude",
+    "Loader integration test verifies named columns are absent from packed payload, while other columns remain",
+    "All existing tests continue to pass",
+]
+
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/test_state_event_source.py",
+    "tests/test_event_source_loader.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/test_state_event_source.py",
+    "tests/test_event_source_loader.py",
+]
+
+[scope]
+in_scope = [
+    "Add payload_exclude: list[str] (default empty) to EventSource Pydantic model",
+    "Extend exclude_cols set in load_event_source with payload_exclude entries",
+    "Unit test for the model field (default, accepts list, round-trips)",
+    "Integration test for the loader confirming exclusion behavior",
+    "Brief docstring update on EventSource explaining the field",
+]
+out_of_scope = [
+    "payload_columns allow-list (could be added later if requested)",
+    "Wildcard or pattern matching (e.g. 'event_params*')",
+    "Validating that excluded column names exist in the source schema",
+    "Schema-level projection — we still read the full row from the warehouse",
+    "Equivalent field on StateSource (different code path, not requested)",
+    "Migration tooling for existing EventSource definitions",
+]
+acceptable_breakage = [
+    "None — purely additive field with default empty list",
+]
+
+[notes]
+considerations = """
+The change is small and surgical. The entire diff is roughly:
+
+1. src/fyrnheim/core/source.py — add to EventSource:
+       payload_exclude: list[str] = PydanticField(default_factory=list)
+
+2. src/fyrnheim/engine/event_source_loader.py — after building exclude_cols:
+       exclude_cols.update(event_source.payload_exclude)
+
+3. Tests in test_state_event_source.py and test_event_source_loader.py.
+
+Design decisions made during planning:
+- Exclude-list, not allow-list: opt-in additive behavior is the safest default
+  and keeps existing EventSources unchanged. An allow-list would force users
+  to enumerate every column they want, which is brittle and easy to forget.
+  We can add payload_columns later if a real use case appears.
+- No schema validation: keep the loader forgiving — if a user lists a column
+  that doesn't exist (typo, schema drift), the existing code path silently
+  ignores it. We don't want a hard failure here because schemas evolve.
+- No StateSource equivalent: StateSource flows through the diff engine, which
+  emits field_changed events with field-level granularity rather than packing
+  the whole row. The use case (drop noisy columns) doesn't apply the same way.
+
+Single epic, single story. No dependencies. Probably 30 minutes of work.
+"""

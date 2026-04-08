@@ -147,6 +147,10 @@ class EventSource(BaseTableSource):
     Requires entity_id_field (foreign key to entity) and timestamp_field.
     Optionally, set event_type (static string) or event_type_field (column name)
     to classify events, but not both.
+
+    payload_exclude lists column names to drop from the packed JSON payload —
+    useful for skipping noisy nested columns (e.g. GA4 event_params,
+    user_properties) without building a flattening view in the warehouse.
     """
     name: str = PydanticField(min_length=1)
     entity_id_field: str = PydanticField(min_length=1)
@@ -156,6 +160,7 @@ class EventSource(BaseTableSource):
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
     computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)
+    payload_exclude: list[str] = PydanticField(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_event_type_exclusivity(self) -> "EventSource":

@@ -293,6 +293,109 @@ class TestSerializeValue:
         assert json.loads(result) == [1, 2]
 
 
+class TestPayloadExclude:
+    """Tests for EventSource.payload_exclude in load_event_source."""
+
+    def test_excluded_column_not_in_payload(self, tmp_path):
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                "page": ["/home", "/about"],
+                "event_params": [
+                    [{"key": "k", "value": "v"}],
+                    [{"key": "k", "value": "v2"}],
+                ],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="ga4_events",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+            payload_exclude=["event_params"],
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 2
+        for payload_str in result["payload"]:
+            payload = json.loads(payload_str)
+            assert "event_params" not in payload
+            assert "page" in payload
+
+    def test_multiple_columns_excluded(self, tmp_path):
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "viewed_at": ["2024-01-01"],
+                "page": ["/home"],
+                "event_params": [[{"k": "v"}]],
+                "user_properties": [[{"k": "v"}]],
+                "items": [[{"id": 1}]],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="ga4_events",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+            payload_exclude=["event_params", "user_properties", "items"],
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        payload = json.loads(result.iloc[0]["payload"])
+        assert "event_params" not in payload
+        assert "user_properties" not in payload
+        assert "items" not in payload
+        assert "page" in payload
+
+    def test_excluding_nonexistent_column_is_noop(self, tmp_path):
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "viewed_at": ["2024-01-01"],
+                "page": ["/home"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="page_views",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+            payload_exclude=["does_not_exist", "also_missing"],
+        )
+        conn = ibis.duckdb.connect()
+        # Should not raise
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 1
+        payload = json.loads(result.iloc[0]["payload"])
+        assert payload["page"] == "/home"
+
+
 class TestLoadEventSourceWithArrayColumns:
     """Regression test: array columns must not crash payload packing."""
 

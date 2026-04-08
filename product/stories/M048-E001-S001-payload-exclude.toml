@@ -1,0 +1,49 @@
+id = "M048-E001-S001"
+parent = "M048-E001"
+title = "Add payload_exclude to EventSource and loader"
+status = "ready"
+created = 2026-04-08
+
+[outcome]
+description = """Add payload_exclude: list[str] field to EventSource and
+extend load_event_source's exclude_cols set with its entries."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource(payload_exclude=['x']) round-trips the value"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource() defaults payload_exclude to empty list"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source drops columns named in payload_exclude from each row's payload"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Other columns (not in exclude list, not entity_id/ts/event_type) are still packed in payload"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Excluding a column that doesn't exist in source is a no-op (no error)"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+1. Add to EventSource (after computed_columns):
+   payload_exclude: list[str] = PydanticField(default_factory=list)
+2. In load_event_source, after building exclude_cols:
+   exclude_cols.update(event_source.payload_exclude)
+"""
+reference_files = []

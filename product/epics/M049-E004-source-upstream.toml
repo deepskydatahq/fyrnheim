@@ -1,0 +1,56 @@
+# Epic: Source upstream= field
+# Sources can derive their warehouse coordinates from a StagingView.
+
+id = "M049-E004"
+parent = "M049"
+title = "Optional upstream= field on Source primitives"
+status = "active"
+created = 2026-04-08
+depends_on = ["M049-E001"]
+
+[outcome]
+description = """
+Add an optional upstream field to BaseTableSource in src/fyrnheim/core/source.py
+that accepts a StagingView instance. When upstream is set, project/dataset/table
+become optional and are resolved from the staging view at source-load time. When
+upstream is unset, sources behave exactly as today (full backward compat).
+"""
+
+[job_story]
+description = """When my EventSource depends on a flattened GA4 view, I want to
+write upstream=ga4_marketing_view instead of repeating the project/dataset/table
+coordinates so the source and the view stay in sync."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "BaseTableSource accepts an optional upstream: StagingView | None = None field",
+    "When upstream is set, project/dataset/table on the source default to the staging view's coordinates",
+    "When upstream is unset, the existing required project/dataset/table behavior is preserved",
+    "StateSource(upstream=sv, ...) and EventSource(upstream=sv, ...) both work end to end",
+    "read_table on a source with upstream= resolves to the staging view's coordinates",
+    "Existing source definitions without upstream= continue to work unchanged (no test regressions)",
+    "Unit tests cover both with-upstream and without-upstream resolution paths",
+    "ruff + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/staging_view.py",
+]
+dependencies = ["M049-E001"]
+
+[notes]
+considerations = """
+Pure backward-compatible addition. Validation: if upstream is set AND
+project/dataset/table are also set, prefer explicit values but warn (or error
+— pick one and document). Recommendation: explicit values win, no warning,
+matches Python kwargs intuition.
+"""
+
+estimated_stories = 1

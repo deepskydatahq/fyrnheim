@@ -1,0 +1,58 @@
+id = "M049-E002-S001"
+parent = "M049-E002"
+title = "Add materialize_view / view_exists / drop_view to IbisExecutor"
+status = "ready"
+created = 2026-04-08
+
+[outcome]
+description = """Add three new methods to IbisExecutor for backend-agnostic
+view management, with BigQuery and DuckDB implementations."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.materialize_view(project, dataset, name, sql) on duckdb creates a queryable view"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.view_exists returns True after materialize_view, False after drop_view"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDB schema is created if missing before view creation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "BigQuery branch executes CREATE OR REPLACE VIEW `{project}.{dataset}.{name}` AS {sql} via mocked client (mirror test_executor.py BigQuery patterns)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ClickHouse and Postgres backends raise NotImplementedError mentioning v1 scope"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDB end-to-end smoke test: materialize view from 'SELECT 1 AS x', query returns 1, drop, view_exists returns False"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_executor.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+- Detect backend via self.connection.name (ibis backend identifier: 'duckdb', 'bigquery', 'clickhouse', 'postgres').
+- DuckDB: use self.connection.raw_sql(f'CREATE SCHEMA IF NOT EXISTS \"{dataset}\"') then CREATE OR REPLACE VIEW. Quote identifiers.
+- BigQuery: use self.connection.raw_sql with backticked fully qualified name.
+- view_exists: ibis backends expose .list_tables(database=...). For BigQuery use (project, dataset) tuple, for duckdb use schema name.
+- drop_view: backend-specific DROP VIEW IF EXISTS.
+- Add tests in tests/test_executor.py under a new TestMaterializeView class.
+"""
+reference_files = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_executor.py",
+]

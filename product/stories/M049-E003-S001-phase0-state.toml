@@ -1,0 +1,71 @@
+id = "M049-E003-S001"
+parent = "M049-E003"
+title = "Implement Phase 0 staging runner with fyrnheim_state idempotency"
+status = "ready"
+created = 2026-04-08
+
+[outcome]
+description = """Create engine/staging_runner.py with topo-sort, hash-based skip,
+fyrnheim_state CRUD. Wire it into pipeline.run_pipeline as Phase 0. Add
+--no-state flag to fyr run."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "topological_sort(views) returns staging views in dependency order; cycles raise StagingCycleError"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "First run materializes all views and inserts rows into fyrnheim_state"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Second run with unchanged views skips materialization (Phase 0 reports skipped count)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Modified SQL triggers re-materialization and updates the hash row"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "--no-state flag bypasses state lookup and always materializes"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Phase 0 is a no-op when zero StagingView instances are discovered (no state table created)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "On duckdb backend, when downstream source has duckdb_path fixture, the staging view for that source is skipped without error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyrnheim_state table schema has columns name, hash, materialized_at, sql_excerpt, fyrnheim_version"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_staging_view.py",
+]
+input_fixtures = []
+depends_on = ["M049-E001-S001", "M049-E002-S001"]
+
+[handoff]
+implementation_hints = """
+- New module src/fyrnheim/engine/staging_runner.py exposes:
+    materialize_staging_views(executor, views, *, no_state=False, source_fixture_names=None) -> StagingRunSummary
+- StagingRunSummary holds materialized: list[str], skipped: list[str].
+- State table coordinates: read project/dataset from any staging view (assume they share — error if mixed and no explicit config). Acceptable v1 simplification.
+- Hash storage: SELECT name, hash FROM {project}.{dataset}.fyrnheim_state. If table missing -> CREATE. If --no-state, skip lookup AND skip writes.
+- Pipeline integration: in run_pipeline, after asset discovery, if assets['staging_views'] is non-empty, call materialize_staging_views(executor, ...) before existing Phase 1.
+- CLI: add @click.option('--no-state', is_flag=True) to the run command and thread it through.
+- DuckDB fixture skip: pass set of source.duckdb_path-bearing source names; skip any staging view referenced by those sources.
+"""
+reference_files = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/executor.py",
+]

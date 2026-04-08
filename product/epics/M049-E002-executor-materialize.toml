@@ -1,0 +1,60 @@
+# Epic: Executor materialize_view methods (BigQuery + DuckDB)
+# Add backend-agnostic view materialization to IbisExecutor.
+
+id = "M049-E002"
+parent = "M049"
+title = "IbisExecutor materialize_view / view_exists / drop_view"
+status = "active"
+created = 2026-04-08
+depends_on = []
+
+[outcome]
+description = """
+Add three new methods to IbisExecutor in src/fyrnheim/engine/executor.py:
+materialize_view(project, dataset, name, sql), view_exists(project, dataset, name),
+and drop_view(project, dataset, name). Implement them for the BigQuery backend
+(CREATE OR REPLACE VIEW via the underlying ibis.bigquery connection) and the
+DuckDB backend (CREATE OR REPLACE VIEW with project arg ignored, dataset becomes
+a duckdb schema). ClickHouse and Postgres backends raise NotImplementedError with
+a clear message pointing at the BigQuery/DuckDB v1 scope.
+"""
+
+[job_story]
+description = """When the pipeline needs to materialize a staging view, I want
+the executor to handle the dialect-specific SQL so the rest of the codebase
+stays backend-agnostic."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "IbisExecutor.materialize_view(project, dataset, name, sql) creates or replaces a view on the active backend",
+    "IbisExecutor.view_exists(project, dataset, name) returns True/False correctly",
+    "IbisExecutor.drop_view(project, dataset, name) removes a managed view",
+    "DuckDB implementation uses CREATE OR REPLACE VIEW {schema}.{name} AS {sql}, creating the schema if needed",
+    "BigQuery implementation uses CREATE OR REPLACE VIEW `{project}.{dataset}.{name}` AS {sql} via the underlying connection",
+    "Unsupported backends (ClickHouse, Postgres) raise NotImplementedError with a clear message",
+    "DuckDB in-memory smoke test: materialize a view from SELECT 1 AS x, view_exists returns True, query the view, drop it, view_exists returns False",
+    "BigQuery branch is unit-tested with mocks following the existing test_executor.py:43-106 pattern",
+    "All tests pass, ruff + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_executor.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_executor.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Independent of E001 — methods take raw SQL strings, no StagingView coupling.
+Mirror the existing per-backend dispatch pattern in IbisExecutor.from_config.
+The methods should branch on the connection backend type using the existing
+ibis backend identifiers.
+"""
+
+estimated_stories = 1

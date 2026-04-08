@@ -104,3 +104,94 @@ class TestBigQueryBackend:
             )
         # Existing env var is untouched (falls through to ADC behavior)
         assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == "/preset/path.json"
+
+
+class TestMaterializeView:
+    """Tests for materialize_view / view_exists / drop_view."""
+
+    def test_duckdb_end_to_end(self):
+        executor = IbisExecutor.duckdb()
+        try:
+            executor.materialize_view(
+                project="ignored",
+                dataset="staging",
+                name="v_one",
+                sql="SELECT 1 AS x",
+            )
+            assert executor.view_exists("ignored", "staging", "v_one") is True
+            result = executor.connection.table("v_one", database="staging").execute()
+            assert result["x"].tolist() == [1]
+
+            # Replacing works
+            executor.materialize_view(
+                project="ignored",
+                dataset="staging",
+                name="v_one",
+                sql="SELECT 2 AS x",
+            )
+            result = executor.connection.table("v_one", database="staging").execute()
+            assert result["x"].tolist() == [2]
+
+            executor.drop_view("ignored", "staging", "v_one")
+            assert executor.view_exists("ignored", "staging", "v_one") is False
+        finally:
+            executor.close()
+
+    def test_bigquery_materialize_view_uses_raw_sql(self):
+        fake_conn = MagicMock(name="bigquery_connection")
+        fake_conn.name = "bigquery"
+        executor = IbisExecutor(conn=fake_conn, backend="bigquery")
+        executor.materialize_view(
+            project="my-proj",
+            dataset="staging",
+            name="v_one",
+            sql="SELECT 1 AS x",
+        )
+        fake_conn.raw_sql.assert_called_once_with(
+            "CREATE OR REPLACE VIEW `my-proj.staging.v_one` AS SELECT 1 AS x"
+        )
+
+    def test_bigquery_drop_view_uses_raw_sql(self):
+        fake_conn = MagicMock(name="bigquery_connection")
+        fake_conn.name = "bigquery"
+        executor = IbisExecutor(conn=fake_conn, backend="bigquery")
+        executor.drop_view(project="my-proj", dataset="staging", name="v_one")
+        fake_conn.raw_sql.assert_called_once_with(
+            "DROP VIEW IF EXISTS `my-proj.staging.v_one`"
+        )
+
+    def test_bigquery_view_exists_true(self):
+        fake_conn = MagicMock(name="bigquery_connection")
+        fake_conn.name = "bigquery"
+        fake_conn.list_tables.return_value = ["v_one", "other"]
+        executor = IbisExecutor(conn=fake_conn, backend="bigquery")
+        assert executor.view_exists("my-proj", "staging", "v_one") is True
+        fake_conn.list_tables.assert_called_once_with(database="my-proj.staging")
+
+    def test_bigquery_view_exists_false_on_error(self):
+        fake_conn = MagicMock(name="bigquery_connection")
+        fake_conn.name = "bigquery"
+        fake_conn.list_tables.side_effect = Exception("dataset not found")
+        executor = IbisExecutor(conn=fake_conn, backend="bigquery")
+        assert executor.view_exists("my-proj", "missing", "v_one") is False
+
+    def test_clickhouse_materialize_view_raises_not_implemented(self):
+        fake_conn = MagicMock(name="clickhouse_connection")
+        fake_conn.name = "clickhouse"
+        executor = IbisExecutor(conn=fake_conn, backend="clickhouse")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.materialize_view("p", "d", "n", "SELECT 1")
+
+    def test_postgres_view_exists_raises_not_implemented(self):
+        fake_conn = MagicMock(name="postgres_connection")
+        fake_conn.name = "postgres"
+        executor = IbisExecutor(conn=fake_conn, backend="postgres")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.view_exists("p", "d", "n")
+
+    def test_postgres_drop_view_raises_not_implemented(self):
+        fake_conn = MagicMock(name="postgres_connection")
+        fake_conn.name = "postgres"
+        executor = IbisExecutor(conn=fake_conn, backend="postgres")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.drop_view("p", "d", "n")

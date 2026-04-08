@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 
 import ibis
+import numpy as np
 import pandas as pd
 import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.source import EventSource
-from fyrnheim.engine.event_source_loader import load_event_source
+from fyrnheim.engine.event_source_loader import _serialize_value, load_event_source
 
 
 def _make_event_source(
@@ -254,3 +255,81 @@ class TestLoadEventSource:
 
         assert len(result) == 1
         assert result.iloc[0]["event_type"] == "page_view"
+
+
+class TestSerializeValue:
+    """Unit tests for the _serialize_value helper."""
+
+    def test_numpy_array_returns_json(self):
+        result = _serialize_value(np.array([1, 2, 3]))
+        assert json.loads(result) == [1, 2, 3]
+
+    def test_list_of_dicts_returns_json(self):
+        result = _serialize_value([{"a": 1}, {"a": 2}])
+        assert json.loads(result) == [{"a": 1}, {"a": 2}]
+
+    def test_tuple_returns_json(self):
+        result = _serialize_value(("x", "y"))
+        assert json.loads(result) == ["x", "y"]
+
+    def test_empty_list_returns_json(self):
+        assert _serialize_value([]) == "[]"
+
+    def test_nan_returns_null(self):
+        assert _serialize_value(np.nan) == "null"
+
+    def test_none_returns_null(self):
+        assert _serialize_value(None) == "null"
+
+    def test_string_passthrough(self):
+        assert _serialize_value("hello") == "hello"
+
+    def test_int_passthrough(self):
+        assert _serialize_value(42) == "42"
+
+    def test_array_with_non_json_values_falls_back_to_str(self):
+        # default=str handles non-serializable items
+        result = _serialize_value(np.array([1, 2], dtype=np.int64))
+        assert json.loads(result) == [1, 2]
+
+
+class TestLoadEventSourceWithArrayColumns:
+    """Regression test: array columns must not crash payload packing."""
+
+    def test_array_column_packed_into_payload(self, tmp_path):
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                # Array-shaped column simulating GA4 event_params / REPEATED
+                "event_params": [
+                    [{"key": "page", "value": "/home"}],
+                    [{"key": "page", "value": "/about"}],
+                ],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="ga4_events",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+        )
+        conn = ibis.duckdb.connect()
+        # This must not raise the numpy "ambiguous truth value" ValueError
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 2
+        # event_params should round-trip through the JSON payload
+        payload_0 = json.loads(result.iloc[0]["payload"])
+        assert "event_params" in payload_0
+        # The array column was JSON-encoded as a string within the payload
+        nested = json.loads(payload_0["event_params"])
+        assert nested[0]["key"] == "page"
+        assert nested[0]["value"] == "/home"

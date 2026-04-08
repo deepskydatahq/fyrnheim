@@ -10,6 +10,7 @@ import json
 import os
 
 import ibis
+import numpy as np
 import pandas as pd
 
 from fyrnheim.core.source import EventSource
@@ -104,7 +105,29 @@ def load_event_source(
 
 
 def _serialize_value(v: object) -> str:
-    """Convert a value to a JSON-safe string representation."""
-    if pd.isna(v):
-        return "null"
+    """Convert a value to a JSON-safe string representation.
+
+    Handles three cases:
+      - Array-like values (numpy arrays, lists, tuples): JSON-encode the
+        contents. Covers BigQuery REPEATED fields, jsonb arrays, etc.
+      - Scalar NaN / None / NaT: serialize as JSON 'null'.
+      - Everything else: stringify.
+    """
+    # Order matters: check array-likes BEFORE pd.isna, because pd.isna on
+    # an ndarray returns an ndarray, not a bool, and breaks `if`.
+    if isinstance(v, (list, tuple, np.ndarray)):
+        try:
+            seq = v.tolist() if hasattr(v, "tolist") else list(v)
+            return json.dumps(seq, default=str)
+        except (TypeError, ValueError):
+            return str(v)
+
+    # Scalar branch
+    try:
+        if pd.isna(v):
+            return "null"
+    except (TypeError, ValueError):
+        # pd.isna can still raise on exotic types; fall through to str()
+        pass
+
     return str(v)

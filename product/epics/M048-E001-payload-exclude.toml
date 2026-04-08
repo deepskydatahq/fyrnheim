@@ -1,0 +1,48 @@
+# Epic: payload_exclude field
+# Add the field to EventSource and honor it in the loader
+
+id = "M048-E001"
+parent = "M048"
+title = "payload_exclude field on EventSource"
+status = "active"
+created = 2026-04-08
+depends_on = []
+
+[outcome]
+description = """
+Add an optional payload_exclude: list[str] field to EventSource and have
+load_event_source extend its exclude_cols set with the configured names so
+those columns don't appear in the packed JSON payload.
+"""
+
+[job_story]
+description = """When I point an EventSource at a GA4 export with REPEATED
+RECORD columns, I want a one-line opt-out that drops the noisy columns from
+the payload so I don't have to build a flattening view first."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EventSource accepts payload_exclude with default empty list",
+    "load_event_source omits payload_exclude entries from each row's payload",
+    "Existing EventSource definitions without payload_exclude still work",
+    "All tests pass, lint + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Single story epic. Pure addition with no API breakage.
+"""
+
+estimated_stories = 1

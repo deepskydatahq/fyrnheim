@@ -59,6 +59,8 @@ def load_event_source(
     exclude_cols = {entity_id_col, ts_col}
     if has_field and event_source.event_type_field is not None:
         exclude_cols.add(event_source.event_type_field)
+    # User-configured exclusions for noisy/large columns (e.g. GA4 event_params)
+    exclude_cols.update(event_source.payload_exclude)
 
     events: list[dict[str, str]] = []
     for _, row in df.iterrows():

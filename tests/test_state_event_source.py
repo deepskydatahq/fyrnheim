@@ -340,6 +340,33 @@ class TestStateSourceComputedColumns:
         assert len(src.computed_columns) == 2
 
 
+class TestEventSourcePayloadExclude:
+    """Tests for EventSource.payload_exclude field."""
+
+    def test_default_is_empty_list(self):
+        es = EventSource(
+            name="views",
+            project="p",
+            dataset="d",
+            table="t",
+            entity_id_field="user_id",
+            timestamp_field="ts",
+        )
+        assert es.payload_exclude == []
+
+    def test_accepts_list_of_column_names(self):
+        es = EventSource(
+            name="ga4_events",
+            project="p",
+            dataset="d",
+            table="t",
+            entity_id_field="user_pseudo_id",
+            timestamp_field="event_timestamp",
+            payload_exclude=["event_params", "user_properties", "items"],
+        )
+        assert es.payload_exclude == ["event_params", "user_properties", "items"]
+
+
 class TestEventSourceComputedColumns:
     """Tests for EventSource.computed_columns field."""
 

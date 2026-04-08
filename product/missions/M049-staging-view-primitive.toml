@@ -1,0 +1,208 @@
+# Mission: StagingView Primitive
+# First-class declaration of derived warehouse objects (views) that materialize before sources load.
+
+id = "M049"
+title = "StagingView Primitive for In-Warehouse Derived Sources"
+status = "draft"
+created = 2026-04-08
+depends_on = []
+
+[outcome]
+description = """
+Today Fyrnheim's StateSource and EventSource can only read tables that already exist
+in the warehouse. Anything upstream — a GA4 flattening view, a unioned wildcard view,
+a placeholder schema, a column projection — has to be built outside Fyrnheim with no
+link back to the source that depends on it. Every real-world Fyrnheim project ends up
+maintaining a parallel out-of-band setup script (e.g. scripts/setup_bigquery_views.py
+in the client-flowable engagement) that drifts from the source definitions it feeds.
+
+This mission introduces a StagingView primitive that declares a derived warehouse
+object as a first-class part of the model. fyr run materializes staging views in a
+new Phase 0 (before source loading) with content-hash idempotency, topological
+ordering by depends_on, and a backend-agnostic abstraction sitting on the existing
+IbisExecutor. Sources gain an optional upstream= field so they can resolve their
+warehouse coordinates from a StagingView instead of declaring project/dataset/table
+themselves.
+
+After this mission, scripts/setup_bigquery_views.py and its equivalents in any
+Fyrnheim project can be deleted: a fresh clone runs `uv sync && uv run fyr run` and
+gets a working pipeline with no extra steps. v1 ships materialization="view" only
+across BigQuery + DuckDB; incremental tables, sqlglot dialect translation, and a
+Test primitive are explicit non-goals (deferred to future missions including M020).
+"""
+
+user_progress = "From 'maintain a parallel setup script per project to build the views my sources depend on' to 'declare a StagingView next to my source and fyr run materializes it idempotently'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StagingView class exists in src/fyrnheim/core/staging_view.py with required fields (name, project, dataset, sql) and optional fields (materialization, sql_params, depends_on, description, tags)",
+    "StagingView is auto-discovered by cli.py _discover_assets via the type_map mechanism, identical to how StateSource/EventSource are discovered",
+    "BaseTableSource accepts an optional upstream= field; when set, project/dataset/table are derived from the StagingView and become optional on the source",
+    "IbisExecutor exposes materialize_view(project, dataset, name, sql), view_exists(project, dataset, name), and drop_view(project, dataset, name) methods",
+    "BigQuery executor backend implements all three methods using CREATE OR REPLACE VIEW",
+    "DuckDB executor backend implements all three methods (project arg ignored, dataset becomes a duckdb schema)",
+    "pipeline.py run_pipeline gains a Phase 0 that discovers staging views, topologically sorts them by depends_on, computes a content hash per view (sql + params + materialization + dataset), skips unchanged views, and materializes changed ones",
+    "Phase 0 is a no-op when a project declares zero StagingView instances (zero overhead, fully backward compatible)",
+    "A fyrnheim_state table is created in the warehouse on first run, storing (name, hash, materialized_at, sql_excerpt) per managed object",
+    "fyr run accepts --no-state flag that skips state lookup and always materializes",
+    "On the duckdb backend, when a downstream source has a duckdb_path fixture, Phase 0 skips that source's StagingView (the fixture is the materialized result) and the run still succeeds — this is the documented v1 escape hatch",
+    "fyr materialize subcommand runs only Phase 0 with no source loading; supports --view <name> to materialize a single view",
+    "fyr drop --view <name> removes a managed view and its row from fyrnheim_state",
+    "fyr list staging shows all StagingView instances with name, dataset, hash freshness",
+    "sql field accepts both inline strings and pathlib.Path to a .sql file; sql_params dict is rendered into the SQL via jinja2 with clear errors on missing parameters",
+    "tests/test_staging_view.py exists and covers: definition validation, deterministic hashing (whitespace-normalized), duckdb in-memory smoke test (CREATE VIEW + SELECT), source upstream= resolution (with and without), skip-when-unchanged on second materialize, topological order via depends_on, end-to-end fyr run discovering a StagingView and a downstream source reading from it",
+    "All existing tests still pass (additive feature, no behavioral regressions for projects without StagingView instances)",
+    "jinja2 added to pyproject.toml core dependencies",
+    "Existing StateSource/EventSource definitions without upstream= continue to work unchanged",
+]
+
+validator_context = [
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_staging_view.py",
+    "tests/test_executor.py",
+    "tests/test_e2e_activity_pipeline.py",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/",
+    "src/fyrnheim/components/computed_column.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_executor.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "New StagingView primitive in src/fyrnheim/core/staging_view.py with materialization='view' only",
+    "Optional upstream= field on BaseTableSource (StateSource and EventSource inherit)",
+    "materialize_view, view_exists, drop_view methods on IbisExecutor",
+    "BigQuery and DuckDB backend implementations of those three methods",
+    "Phase 0 (materialization) in pipeline.run_pipeline with topological ordering and content-hash idempotency",
+    "fyrnheim_state warehouse table for hash storage",
+    "--no-state CLI flag on fyr run to bypass state lookup",
+    "fyr materialize, fyr drop, fyr list staging CLI subcommands",
+    "jinja2 templating for sql_params rendering",
+    "Path-based and inline SQL support for the sql field",
+    "DuckDB fixture-skip escape hatch when downstream source has duckdb_path",
+    "tests/test_staging_view.py covering all eight test cases listed in the proposal",
+    "Auto-discovery of StagingView via cli.py type_map (one-line addition)",
+]
+out_of_scope = [
+    "materialization='table' (deferred — straightforward follow-up but adds testing surface)",
+    "materialization='incremental' (M020 territory — needs merge keys and partition awareness)",
+    "sqlglot or any cross-dialect SQL translation",
+    "ClickHouse and Postgres backend implementations of materialize_view (add when a real project needs them)",
+    "A Test primitive for asserting view contents (separate mission)",
+    "Schema drift detection between StagingView output columns and downstream Source expectations",
+    "fyr docs / documentation generation for staging views",
+    "A Model primitive that reads one source and writes another (Fyrnheim-absorbs-dbt territory — explicitly out)",
+    "Auto-translation of BigQuery SQL to DuckDB SQL for local runs (the fixture-skip escape hatch is the v1 answer)",
+]
+acceptable_breakage = [
+    "None — this is a purely additive feature. Projects with no StagingView instances are unaffected. No existing field is removed or changed in meaning.",
+]
+
+[notes]
+considerations = """
+## Architecture grounding from Phase 2 exploration
+
+**Discovery is the easiest part.** cli.py:99-177 `_discover_assets` walks
+entities_dir/*.py and matches module-level instances against a `type_map` dict.
+Adding StagingView is one line in that map plus a corresponding key in the
+returned assets dict. The same loop handles deduplication by `name`.
+
+**Executor is well-shaped for extension.** IbisExecutor at
+src/fyrnheim/engine/executor.py:30-206 already has clean per-backend factory
+dispatch (`duckdb()`, `bigquery()`, `clickhouse()`, `from_config()`). Adding
+materialize_view/view_exists/drop_view as instance methods that branch on
+`self.connection` backend type fits the existing pattern naturally — no
+refactoring needed.
+
+**Phase 0 inserts cleanly.** pipeline.py:41-150 `run_pipeline` has explicit
+phases (sources → activities → identity → analytics → metrics). Phase 0
+hooks in immediately after asset discovery, before line 71 (current source
+loading). Sources with `upstream=` resolve their coordinates from the
+materialized staging view at load time.
+
+**State storage is greenfield.** No prior fyrnheim_state table, no .fyrnheim/
+dir, no manifest concept exists. SnapshotStore writes parquets per source but
+that's a different concern. We get to design fyrnheim_state from scratch:
+recommend a single warehouse table with (name, hash, materialized_at,
+sql_excerpt, fyrnheim_version) and a `--no-state` escape hatch for CI.
+
+**jinja2 is a new dep.** pyproject.toml has no templating library today.
+Adding jinja2 to core deps is a small but real ask. Alternative: simple
+{name} substitution via str.format with a custom error wrapper. Recommend
+jinja2 for future-proofing (conditionals, loops will inevitably be requested
+once users have the primitive).
+
+## Sequencing recommendation for epic breakdown
+
+Five natural epics, mostly parallelizable after Epic 1:
+
+1. **Epic 1: StagingView core + discovery** — staging_view.py module, type_map
+   registration, validation, hashing, jinja2 sql_params rendering, unit tests
+   for definition/hashing. Unblocks all other epics.
+
+2. **Epic 2: Executor methods (BigQuery + DuckDB)** — materialize_view,
+   view_exists, drop_view on IbisExecutor with both backends. Mockable tests
+   for BigQuery (mirror test_executor.py:43-106 patterns), real in-memory
+   duckdb smoke tests.
+
+3. **Epic 3: Pipeline Phase 0 + state table** — topological sort, content-hash
+   skip-when-unchanged, fyrnheim_state CRUD, --no-state flag. Depends on
+   Epics 1 + 2.
+
+4. **Epic 4: Source upstream= field** — additive change to BaseTableSource,
+   resolution at source-load time, backward-compat tests. Can run in parallel
+   with Epic 3.
+
+5. **Epic 5: CLI subcommands + e2e** — fyr materialize, fyr drop, fyr list
+   staging, end-to-end test where fyr run discovers a StagingView and a
+   downstream source reads from it. Depends on Epics 3 + 4.
+
+## Risk areas and mitigations
+
+- **Topo sort + circular deps**: A StagingView depends_on another StagingView
+  via name. Detect cycles and raise a clear error during Phase 0 sort.
+- **Hash determinism with whitespace**: Normalize SQL (collapse runs of
+  whitespace, strip trailing) before hashing so cosmetic edits don't trigger
+  re-materialization. Document the normalization rule.
+- **First-run write permission**: fyrnheim_state CREATE TABLE may fail in
+  read-only environments. The --no-state flag is the escape hatch; document
+  it in the error message when CREATE fails.
+- **DuckDB fixture-skip surprise**: When a source has neither a duckdb_path
+  fixture nor a duckdb-compatible SQL, Phase 0 must error clearly with a
+  pointer to the fixture pattern. Don't silently skip and let downstream
+  source loading fail with a confusing message.
+- **Adjacent missions**: M020 (incremental-materialization), M025
+  (derived-source-join-mode), M040 (multi-source-union-pattern) all touch
+  nearby concepts. This mission deliberately stays out of their lanes —
+  StagingView is the substrate they will eventually build on. Coordinate
+  naming choices (StagingView vs Materialized vs DerivedSource) so M020 can
+  add materialization='incremental' without an awkward rename.
+
+## Naming decision pending
+
+Proposal floats StagingView, Materialized, WarehouseView, DerivedSource. The
+TOML uses StagingView as the working name. Worth a final call during Epic 1
+implementation. StagingView reads naturally and matches dbt terminology
+that target users will recognize. If we later add materialization='table',
+the name still fits ("staging" is about pipeline position, not storage shape).
+"""

@@ -1,0 +1,60 @@
+# Epic: StagingView core primitive + discovery
+# The pydantic model, hashing, sql_params rendering, and cli.py type_map registration.
+
+id = "M049-E001"
+parent = "M049"
+title = "StagingView core primitive and discovery"
+status = "active"
+created = 2026-04-08
+depends_on = []
+
+[outcome]
+description = """
+Introduce src/fyrnheim/core/staging_view.py with the StagingView pydantic model
+(name, project, dataset, sql, optional materialization/sql_params/depends_on/
+description/tags), deterministic SQL hashing with whitespace normalization, and
+jinja2 sql_params rendering. Register StagingView in cli.py _discover_assets
+type_map so user projects auto-discover instances exactly like StateSource.
+Add jinja2 to pyproject.toml core deps.
+"""
+
+[job_story]
+description = """When I declare a StagingView in my entities directory, I want fyr
+to discover it automatically and produce a deterministic content hash so that
+unchanged views can be skipped on subsequent runs."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StagingView class exists with required fields name, project, dataset, sql and optional materialization (default 'view'), sql_params, depends_on, description, tags",
+    "sql accepts both inline str and pathlib.Path; Path is read at validation time",
+    "sql_params dict is rendered into the SQL via jinja2; missing parameters raise a clear error",
+    "Hashing is deterministic: same SQL+params -> same hash; whitespace-only changes -> same hash; semantic changes -> different hash",
+    "StagingView is included in cli.py _discover_assets type_map so user-defined instances are picked up",
+    "jinja2 added to pyproject.toml core dependencies",
+    "All new code has unit tests; existing tests still pass; ruff + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/cli.py",
+    "pyproject.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Foundation epic — unblocks E002, E003, E004. Pure addition with no API breakage.
+Uses pydantic v2 patterns matching the rest of core/source.py. Hashing
+normalization: collapse runs of whitespace to single space, strip trailing
+whitespace, then sha256.
+"""
+
+estimated_stories = 1

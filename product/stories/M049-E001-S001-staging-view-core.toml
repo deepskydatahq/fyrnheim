@@ -1,0 +1,70 @@
+id = "M049-E001-S001"
+parent = "M049-E001"
+title = "Implement StagingView model, hashing, jinja2 rendering, discovery"
+status = "ready"
+created = 2026-04-08
+
+[outcome]
+description = """Create src/fyrnheim/core/staging_view.py with the StagingView pydantic
+model, deterministic SQL hashing, jinja2 sql_params rendering, and register the
+type in cli.py _discover_assets."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StagingView(name='v', project='p', dataset='d', sql='SELECT 1') constructs successfully"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StagingView with sql=Path('file.sql') reads the file contents at validation time"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StagingView(sql='SELECT {{ x }}', sql_params={'x': 1}).rendered_sql returns 'SELECT 1'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Missing jinja parameter in sql_params raises a clear error mentioning the parameter name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "content_hash() is deterministic: same sql+params -> same hash; whitespace-only diff -> same hash; semantic change -> different hash"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "materialization defaults to 'view'; depends_on/tags default to empty list; description defaults to None"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "cli.py _discover_assets picks up StagingView instances defined in entities directory modules"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "jinja2 is listed in pyproject.toml core dependencies"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/cli.py",
+    "pyproject.toml",
+    "tests/test_staging_view.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+- Mirror pydantic v2 patterns from src/fyrnheim/core/source.py (BaseTableSource).
+- content_hash: normalize SQL by collapsing whitespace runs to single space and stripping trailing whitespace, concatenate with materialization + dataset, then sha256 hexdigest.
+- sql field validator: if value is a Path, read it; store the resulting string. Add a `_sql_source` private attr for debugging if helpful.
+- jinja2 rendering: use jinja2.Environment(undefined=jinja2.StrictUndefined) so missing params raise UndefinedError; catch and re-raise with the param name.
+- cli.py: in _discover_assets type_map, add StagingView and an assets["staging_views"] list.
+- pyproject.toml: add jinja2>=3.1 to [project] dependencies.
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/cli.py",
+]

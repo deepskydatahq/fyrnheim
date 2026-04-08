@@ -1,0 +1,57 @@
+# Epic: CLI subcommands and end-to-end test
+# fyr materialize, fyr drop, fyr list staging, plus an integration test.
+
+id = "M049-E005"
+parent = "M049"
+title = "fyr materialize / drop / list-staging CLI + e2e test"
+status = "active"
+created = 2026-04-08
+depends_on = ["M049-E003", "M049-E004"]
+
+[outcome]
+description = """
+Add three CLI subcommands to src/fyrnheim/cli.py: `fyr materialize` (run only
+Phase 0, optionally for a single --view), `fyr drop --view <name>` (drop a
+managed view and delete its row from fyrnheim_state), and `fyr list staging`
+(list discovered StagingView instances with name, dataset, freshness from
+state table). Add an end-to-end test where fyr run discovers a StagingView,
+materializes it on duckdb, and a downstream StateSource reads from it.
+"""
+
+[job_story]
+description = """When I want to set up my warehouse without running the full
+pipeline, I want fyr materialize to do just that, and fyr list staging to show
+me what's defined and whether it's fresh."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "fyr materialize subcommand runs Phase 0 only (no source loading or downstream phases)",
+    "fyr materialize --view <name> materializes a single view by name",
+    "fyr drop --view <name> drops the view from the warehouse and removes its row from fyrnheim_state",
+    "fyr list staging shows all discovered StagingView instances with name, dataset, and freshness indicator",
+    "End-to-end test: a fixture entities directory contains a StagingView and a downstream StateSource with upstream=that_view; running run_pipeline on duckdb materializes the view, the source loads from it, and the test asserts expected rows",
+    "All tests pass, ruff + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "tests/test_staging_view.py",
+    "tests/test_e2e_activity_pipeline.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/",
+]
+dependencies = ["M049-E003", "M049-E004"]
+
+[notes]
+considerations = """
+Final integration epic. fyr list staging output format: simple table via click
+echo (matches existing CLI style), no rich/tabulate dep. The e2e test is the
+single most valuable test in the mission — it's the regression guard.
+"""
+
+estimated_stories = 2

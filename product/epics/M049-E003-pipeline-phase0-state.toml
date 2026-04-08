@@ -1,0 +1,62 @@
+# Epic: Pipeline Phase 0 + fyrnheim_state idempotency
+# Topo-sort staging views, hash-skip unchanged ones, persist hashes to a state table.
+
+id = "M049-E003"
+parent = "M049"
+title = "Pipeline Phase 0 materialization with state-table idempotency"
+status = "active"
+created = 2026-04-08
+depends_on = ["M049-E001", "M049-E002"]
+
+[outcome]
+description = """
+Insert a Phase 0 into pipeline.run_pipeline (src/fyrnheim/engine/pipeline.py)
+that runs before source loading. Phase 0: discover all StagingView instances,
+topologically sort them by depends_on (raise on cycles), compute the content
+hash for each, look up the previous hash in a fyrnheim_state table on the
+warehouse, skip unchanged views, materialize changed ones via the executor,
+and update the state table. Adds a --no-state flag to fyr run that bypasses
+state lookup and always materializes.
+"""
+
+[job_story]
+description = """When I run fyr run a second time without changing any staging
+view definitions, I want Phase 0 to skip materialization entirely so my pipeline
+runs faster and avoids unnecessary warehouse work."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pipeline.run_pipeline runs a Phase 0 before existing source loading when StagingView instances are discovered",
+    "Phase 0 is a no-op (zero overhead) when zero StagingView instances are present — backward compat",
+    "Staging views are topologically sorted by depends_on; cycles raise a clear error",
+    "fyrnheim_state table is created in the configured dataset on first run with columns (name, hash, materialized_at, sql_excerpt, fyrnheim_version)",
+    "Second materialization of the same unchanged view is a no-op and reports 'skipped' in the run summary",
+    "Modified SQL triggers re-materialization and the new hash is stored",
+    "fyr run --no-state flag bypasses state lookup and always materializes",
+    "On the duckdb backend, when a downstream source has a duckdb_path fixture, Phase 0 skips that StagingView (fixture is the materialized result) and the run still succeeds",
+    "Phase 0 reports 'materialized: N, skipped: M' in the run summary",
+    "All tests pass, ruff + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_staging_view.py",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/cli.py",
+]
+dependencies = ["M049-E001", "M049-E002"]
+
+[notes]
+considerations = """
+Recommend extracting the Phase 0 logic into a small staging_runner.py module
+under engine/ to keep pipeline.py readable. State table CRUD goes there too.
+First-run CREATE TABLE failure should produce an error pointing at --no-state.
+"""
+
+estimated_stories = 2

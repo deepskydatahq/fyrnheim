@@ -1,0 +1,55 @@
+id = "M049-E005-S001"
+parent = "M049-E005"
+title = "Add fyr materialize / drop / list-staging subcommands and e2e test"
+status = "ready"
+created = 2026-04-08
+
+[outcome]
+description = """Add three new CLI subcommands to fyr and a single end-to-end
+test that exercises StagingView discovery, Phase 0 materialization on duckdb,
+and a downstream StateSource reading from the materialized view."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr materialize runs only Phase 0 (no source loading) and reports materialized/skipped counts"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr materialize --view <name> materializes a single view by name; unknown name errors clearly"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr drop --view <name> calls executor.drop_view and removes the row from fyrnheim_state"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "fyr list staging prints all discovered StagingView instances with name, dataset, and freshness column"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "End-to-end test: fixture entities dir contains a StagingView('v', sql='SELECT 1 AS id, \\'a\\' AS name') and a StateSource(upstream=v, id_field='id'); run_pipeline on duckdb materializes v, source loads from v, asserted row count > 0"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_staging_view.py",
+]
+input_fixtures = []
+depends_on = ["M049-E003-S001", "M049-E004-S001"]
+
+[handoff]
+implementation_hints = """
+- 'fyr list staging' is a subcommand of an existing or new 'list' group. Match cli.py's existing pattern.
+- Use click.echo for table output; do not add tabulate/rich.
+- For materialize/drop, reuse the entities-dir discovery from the run command (factor out if needed).
+- E2E test uses tempfile.TemporaryDirectory + writes a small entities .py file + invokes run_pipeline directly (don't shell out).
+"""
+reference_files = [
+    "src/fyrnheim/cli.py",
+    "tests/test_e2e_activity_pipeline.py",
+]

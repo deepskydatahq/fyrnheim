@@ -1,0 +1,62 @@
+id = "M049-E004-S001"
+parent = "M049-E004"
+title = "Add optional upstream= field to BaseTableSource"
+status = "ready"
+created = 2026-04-08
+
+[outcome]
+description = """Add an optional upstream: StagingView | None field to
+BaseTableSource. When set, the source's project/dataset/table default to the
+staging view's coordinates. Without upstream, current behavior is preserved."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "BaseTableSource has new optional field upstream: StagingView | None = None"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When upstream is set and project/dataset/table are not provided, source.project/dataset/table return the staging view's coordinates"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When upstream is set AND explicit project/dataset/table are also given, the explicit values win (no warning, no error)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource(upstream=sv, id_field='id', snapshot_grain='day') constructs successfully without explicit project/dataset/table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource(upstream=sv, entity_id_field='uid', timestamp_field='ts', event_type_field='ev') constructs successfully"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "read_table on a source with upstream= resolves to the staging view's project/dataset/name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing source tests still pass without modification"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/staging_view.py",
+    "tests/",
+]
+input_fixtures = []
+depends_on = ["M049-E001-S001"]
+
+[handoff]
+implementation_hints = """
+- Make project/dataset/table on BaseTableSource Optional with default None.
+- Add a model_validator(mode='after') that fills in coordinates from upstream when fields are None and upstream is set.
+- Validator must error if both upstream is None AND project/dataset/table are missing.
+- 'table' resolves from staging view's 'name' field.
+- Avoid forward-ref import cycles: import StagingView lazily or use TYPE_CHECKING + string annotation.
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+]

@@ -8,10 +8,14 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 
 from fyrnheim import __version__
+
+if TYPE_CHECKING:
+    from fyrnheim.config import ResolvedConfig
 
 _SCAFFOLD_PKG = "fyrnheim._scaffold"
 
@@ -325,5 +329,217 @@ def run(
                 # Show a shorter version without the full traceback
                 click.echo(f"  - {err}", err=True)
         sys.exit(1)
+
+
+def _resolve_and_discover(
+    ctx: click.Context,
+    entities_dir: str | None,
+    data_dir: str | None = None,
+    output_dir: str | None = None,
+    backend: str | None = None,
+) -> tuple[ResolvedConfig, dict[str, list]]:
+    """Shared helper: resolve config + discover assets, or exit(1) on error."""
+    from fyrnheim.config import resolve_config
+
+    verbose = ctx.obj.get("verbose", False)
+    try:
+        config = resolve_config(
+            entities_dir=entities_dir,
+            data_dir=data_dir,
+            output_dir=output_dir,
+            backend=backend,
+        )
+    except Exception as exc:
+        if verbose:
+            raise
+        click.echo(f"Configuration error: {exc}", err=True)
+        sys.exit(1)
+
+    assets = _discover_assets(config.entities_dir)
+    return config, assets
+
+
+@main.command()
+@click.option("--entities-dir", default=None, help="Directory with entity definitions")
+@click.option("--backend", default=None, help="Execution backend (duckdb, bigquery)")
+@click.option("--view", default=None, help="Materialize only the named StagingView")
+@click.option(
+    "--no-state",
+    is_flag=True,
+    default=False,
+    help="Bypass fyrnheim_state: always re-materialize and skip state writes.",
+)
+@click.pass_context
+def materialize(
+    ctx: click.Context,
+    entities_dir: str | None,
+    backend: str | None,
+    view: str | None,
+    no_state: bool,
+) -> None:
+    """Run Phase 0 only: materialize StagingView instances."""
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.staging_runner import materialize_staging_views
+
+    verbose = ctx.obj.get("verbose", False)
+    config, assets = _resolve_and_discover(ctx, entities_dir, backend=backend)
+
+    staging_views = list(assets.get("staging_views", []))
+    if not staging_views:
+        click.echo(f"No staging views found in {config.entities_dir}")
+        sys.exit(1)
+
+    if view is not None:
+        matching = [v for v in staging_views if v.name == view]
+        if not matching:
+            names = ", ".join(sorted(v.name for v in staging_views))
+            click.echo(
+                f"Unknown staging view: {view!r}. Available: {names}", err=True
+            )
+            sys.exit(1)
+        staging_views = matching
+
+    executor = IbisExecutor.from_config(
+        backend=config.backend,
+        backend_config=config.backend_config,
+    )
+
+    try:
+        summary = materialize_staging_views(
+            executor, staging_views, no_state=no_state
+        )
+    except Exception as exc:
+        if verbose:
+            raise
+        click.echo(f"Materialization failed: {exc}", err=True)
+        sys.exit(1)
+
+    click.echo(
+        f"Staging views: {len(summary.materialized)} materialized, "
+        f"{len(summary.skipped)} skipped"
+    )
+    for name in summary.materialized:
+        click.echo(f"  materialized  {name}")
+    for name in summary.skipped:
+        click.echo(f"  skipped       {name}")
+
+
+@main.command()
+@click.option("--entities-dir", default=None, help="Directory with entity definitions")
+@click.option("--backend", default=None, help="Execution backend (duckdb, bigquery)")
+@click.option("--view", "view", required=True, help="Name of the StagingView to drop")
+@click.pass_context
+def drop(
+    ctx: click.Context,
+    entities_dir: str | None,
+    backend: str | None,
+    view: str,
+) -> None:
+    """Drop a StagingView and remove its row from fyrnheim_state."""
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.staging_runner import (
+        STATE_TABLE_NAME,
+        _qualify_state_table,
+    )
+
+    verbose = ctx.obj.get("verbose", False)
+    config, assets = _resolve_and_discover(ctx, entities_dir, backend=backend)
+
+    staging_views = list(assets.get("staging_views", []))
+    matching = [v for v in staging_views if v.name == view]
+    if not matching:
+        names = ", ".join(sorted(v.name for v in staging_views)) or "(none)"
+        click.echo(
+            f"Unknown staging view: {view!r}. Available: {names}", err=True
+        )
+        sys.exit(1)
+    target = matching[0]
+
+    executor = IbisExecutor.from_config(
+        backend=config.backend,
+        backend_config=config.backend_config,
+    )
+
+    try:
+        executor.drop_view(target.project, target.dataset, target.name)
+        # Best-effort: remove state row if the state table exists.
+        qualified = _qualify_state_table(executor, target.project, target.dataset)
+        escaped = target.name.replace("'", "''")
+        try:
+            executor.connection.raw_sql(
+                f"DELETE FROM {qualified} WHERE name = '{escaped}'"
+            )
+        except Exception as state_exc:
+            log = logging.getLogger("fyrnheim")
+            log.debug(
+                "State row delete skipped for %s (table missing?): %s",
+                target.name,
+                state_exc,
+            )
+    except Exception as exc:
+        if verbose:
+            raise
+        click.echo(f"Drop failed: {exc}", err=True)
+        sys.exit(1)
+
+    click.echo(
+        f"Dropped view {target.name} ({target.project}.{target.dataset}); "
+        f"removed state row from {STATE_TABLE_NAME}"
+    )
+
+
+@main.command("list-staging")
+@click.option("--entities-dir", default=None, help="Directory with entity definitions")
+@click.option("--backend", default=None, help="Execution backend (duckdb, bigquery)")
+@click.pass_context
+def list_staging(
+    ctx: click.Context,
+    entities_dir: str | None,
+    backend: str | None,
+) -> None:
+    """List discovered StagingView instances with freshness."""
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.staging_runner import _load_state
+
+    config, assets = _resolve_and_discover(ctx, entities_dir, backend=backend)
+    staging_views = list(assets.get("staging_views", []))
+
+    if not staging_views:
+        click.echo(f"No staging views found in {config.entities_dir}")
+        return
+
+    # Try to read state per (project, dataset). Treat errors as "no state".
+    executor = IbisExecutor.from_config(
+        backend=config.backend,
+        backend_config=config.backend_config,
+    )
+    state_by_key: dict[tuple[str, str], dict[str, str]] = {}
+    for v in staging_views:
+        key = (v.project, v.dataset)
+        if key in state_by_key:
+            continue
+        try:
+            state_by_key[key] = _load_state(executor, v.project, v.dataset)
+        except Exception:
+            state_by_key[key] = {}
+
+    rows = []
+    for v in staging_views:
+        stored = state_by_key.get((v.project, v.dataset), {}).get(v.name)
+        if stored is None:
+            freshness = "unmaterialized"
+        elif stored == v.content_hash():
+            freshness = "fresh"
+        else:
+            freshness = "stale"
+        rows.append((v.name, v.dataset, freshness))
+
+    name_w = max(len("NAME"), max(len(r[0]) for r in rows))
+    ds_w = max(len("DATASET"), max(len(r[1]) for r in rows))
+    fr_w = max(len("FRESHNESS"), max(len(r[2]) for r in rows))
+
+    click.echo(f"{'NAME':<{name_w}}  {'DATASET':<{ds_w}}  {'FRESHNESS':<{fr_w}}")
+    for name, ds, fr in rows:
+        click.echo(f"{name:<{name_w}}  {ds:<{ds_w}}  {fr:<{fr_w}}")
 
 

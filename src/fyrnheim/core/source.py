@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field as PydanticField, field_validator, model_validator
 
 from fyrnheim.components.computed_column import ComputedColumn
+from fyrnheim.core.staging_view import StagingView
 
 
 class Field(BaseModel):
@@ -59,18 +60,47 @@ class BaseTableSource(BaseModel):
     Provides common fields for sources that read from a warehouse table
     or local parquet files (via duckdb_path).
     """
-    project: str = PydanticField(min_length=1)
-    dataset: str = PydanticField(min_length=1)
-    table: str = PydanticField(min_length=1)
+    project: str | None = None
+    dataset: str | None = None
+    table: str | None = None
     duckdb_path: str | None = None
+    upstream: StagingView | None = None
 
     @field_validator("project", "dataset", "table")
     @classmethod
-    def validate_not_empty(cls, v: str) -> str:
-        """Reject empty strings for required location fields."""
-        if not v:
-            raise ValueError("project, dataset, and table are required")
+    def validate_not_empty(cls, v: str | None) -> str | None:
+        """Reject empty strings for location fields when explicitly set."""
+        if v is not None and not v:
+            raise ValueError("project, dataset, and table cannot be empty strings")
         return v
+
+    @model_validator(mode="after")
+    def _resolve_upstream_coords(self) -> "BaseTableSource":
+        """Fill missing project/dataset/table from upstream StagingView if set.
+
+        Explicit values always win. If upstream is None and any coord is
+        missing, raise a validation error.
+        """
+        if self.upstream is not None:
+            if self.project is None:
+                self.project = self.upstream.project
+            if self.dataset is None:
+                self.dataset = self.upstream.dataset
+            if self.table is None:
+                self.table = self.upstream.name
+        missing = [
+            n for n, v in (
+                ("project", self.project),
+                ("dataset", self.dataset),
+                ("table", self.table),
+            ) if v is None
+        ]
+        if missing:
+            raise ValueError(
+                f"project, dataset, and table are required "
+                f"(missing: {', '.join(missing)}); set them explicitly or pass upstream="
+            )
+        return self
 
     def read_table(self, conn: Any, backend: str, data_dir: str | os.PathLike[str] | None = None) -> Any:
         """Read table from warehouse or DuckDB based on backend.

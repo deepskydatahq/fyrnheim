@@ -301,6 +301,11 @@ def run(
     # Print summary
     click.echo("")
     click.echo(f"Sources processed: {result.source_count}")
+    if len(result.staging_materialized) + len(result.staging_skipped) > 0:
+        click.echo(
+            f"Staging views: {len(result.staging_materialized)} materialized, "
+            f"{len(result.staging_skipped)} skipped"
+        )
     click.echo(f"Outputs written:   {result.output_count}")
 
     if result.outputs:

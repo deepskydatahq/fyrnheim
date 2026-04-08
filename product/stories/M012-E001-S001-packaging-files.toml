@@ -1,0 +1,43 @@
+id = "M012-E001-S001"
+parent = "M012-E001"
+title = "Create LICENSE, CHANGELOG.md, and fix wheel build config"
+status = "ready"
+created = "2026-03-04"
+
+[outcome]
+description = """LICENSE file with MIT text, CHANGELOG.md with v0.1.0 entry, and
+pyproject.toml updated to include _scaffold/ data files in the wheel."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "LICENSE file exists at repo root with MIT license text including author 'Timo Dechau'"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "CHANGELOG.md exists with a v0.1.0 section"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "pyproject.toml [tool.hatch.build] includes _scaffold/*.parquet and _scaffold/*.yaml"
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "uv build succeeds and wheel contains fyrnheim/_scaffold/customers.parquet"
+
+[context]
+relevant_paths = ["pyproject.toml", "src/fyrnheim/_scaffold/"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Create LICENSE with MIT text (year 2026, author Timo Dechau).
+Create CHANGELOG.md with ## [0.1.0] - 2026-03-04 and initial feature summary.
+Add to pyproject.toml under [tool.hatch.build]:
+  include = ["src/fyrnheim/**/*.py", "src/fyrnheim/py.typed",
+             "src/fyrnheim/_scaffold/customers.parquet",
+             "src/fyrnheim/_scaffold/fyrnheim.yaml"]
+Verify with: uv build && unzip -l dist/*.whl | grep _scaffold"""
+reference_files = ["pyproject.toml"]

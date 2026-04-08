@@ -1,0 +1,38 @@
+id = "M012-E002-S001"
+parent = "M012-E002"
+title = "Fix all ruff lint errors"
+status = "ready"
+created = "2026-03-04"
+
+[outcome]
+description = """All 8 ruff lint errors fixed: B904 in executor.py, B905 in test_e2e,
+F401/F841/I001 in test_engine_runner, C408 in test_ibis_code_generator."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "verify"
+description = "uv run ruff check src/ tests/ exits 0 with no errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests still pass"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_e2e_ibis_executor.py",
+    "tests/test_engine_runner.py",
+    "tests/test_ibis_code_generator.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Run uv run ruff check src/ tests/ to see current errors.
+executor.py B904: add 'from err' to raise statements in except blocks (lines ~221, ~295).
+test_e2e B905: add strict=True or strict=False to zip() call.
+test_engine_runner: remove unused imports and variables, fix import sorting.
+test_ibis_code_generator: replace dict() with {} literal."""
+reference_files = []

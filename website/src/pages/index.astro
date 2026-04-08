@@ -4,17 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fyrnheim — Define typed Python entities, generate transformations, run anywhere</title>
+  <title>fyrnheim — Define typed Python entities, generate transformations, run anywhere</title>
   <meta name="description" content="A Python-native dbt alternative built on Pydantic + Ibis. Define typed entities, generate transformations, run on any backend." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Skranji:wght@400;700&display=swap" rel="stylesheet" />
 </head>
 <body>
   <!-- Navigation -->
   <nav class="nav">
     <div class="nav-inner">
-      <a href="/" class="nav-logo">Fyrnheim</a>
+      <a href="/" class="nav-logo">fyrnheim</a>
       <div class="nav-links">
         <a href="/getting-started/introduction/">Docs</a>
         <a href="https://github.com/deepskydatahq/fyrnheim" target="_blank" rel="noopener">GitHub</a>
@@ -26,8 +26,9 @@
   <section class="hero">
     <div class="hero-bg"></div>
     <div class="hero-overlay"></div>
+    <canvas id="sparks" class="hero-sparks"></canvas>
     <div class="hero-content">
-      <h1 class="hero-title">Create data entities<br />from raw sources</h1>
+      <h1 class="hero-title">Forge Data Entities<br />from Raw Sources</h1>
       <p class="hero-subtitle">Forge typed entities from raw data. A Python-native dbt alternative built on Pydantic + Ibis. No SQL, no Jinja, no vendor lock-in.</p>
       <div class="hero-install">
         <code>pip install fyrnheim[duckdb]</code>
@@ -103,7 +104,7 @@ Created myproject/
         <div class="step">
           <div class="step-header">
             <span class="step-number">2</span>
-            <h3>Define an entity</h3>
+            <h3>Define an Entity as Pydantic Object</h3>
           </div>
           <div class="code-block">
             <div class="code-bar"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-label">entities/customers.py</span></div>
@@ -175,14 +176,14 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
   <!-- Comparison Table -->
   <section class="comparison">
     <div class="container">
-      <h2 class="section-title">Why Fyrnheim over dbt?</h2>
+      <h2 class="section-title">Why <span class="brand-name">fyrnheim</span> over dbt?</h2>
       <div class="table-wrapper">
         <table class="comparison-table">
           <thead>
             <tr>
               <th></th>
               <th>dbt</th>
-              <th class="highlight-col">Fyrnheim</th>
+              <th class="highlight-col"><span class="brand-name">fyrnheim</span></th>
             </tr>
           </thead>
           <tbody>
@@ -198,7 +199,7 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
             </tr>
             <tr>
               <td class="row-label">Local dev</td>
-              <td>Requires warehouse connection</td>
+              <td>Needs multi-source config</td>
               <td class="highlight-col">DuckDB on local parquet files</td>
             </tr>
             <tr>
@@ -226,10 +227,20 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
               <td>Manual UNION ALL</td>
               <td class="highlight-col">UnionSource with field mapping</td>
             </tr>
+            <tr>
+              <td class="row-label">AI agents</td>
+              <td>Limited with data models</td>
+              <td class="highlight-col">Love typed objects</td>
+            </tr>
           </tbody>
         </table>
       </div>
     </div>
+  </section>
+
+  <!-- Bottom Illustration -->
+  <section class="bottom-illustration">
+    <img src="/fyrnheim_bottom.png" alt="Fyrnheim volcanic forge illustration" />
   </section>
 
   <!-- Footer CTA -->
@@ -237,14 +248,14 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
     <div class="container">
       <div class="footer-cta">
         <h2>Ready to forge your data entities?</h2>
-        <p>Get started with Fyrnheim in minutes. Define entities in Python, run locally on DuckDB, deploy anywhere.</p>
+        <p>Get started with <span class="brand-name">fyrnheim</span> in minutes. Define entities in Python, run locally on DuckDB, deploy anywhere.</p>
         <div class="footer-actions">
           <a href="/getting-started/introduction/" class="btn btn-primary">Get Started</a>
           <a href="https://github.com/deepskydatahq/fyrnheim" class="btn btn-secondary" target="_blank" rel="noopener">GitHub Repository</a>
         </div>
       </div>
       <div class="footer-bottom">
-        <p>Fyrnheim is open source under the MIT License.</p>
+        <p><span class="brand-name">fyrnheim</span> is open source under the MIT License.</p>
       </div>
     </div>
   </footer>
@@ -296,21 +307,30 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
     margin: 0 auto;
     padding: 1rem 2rem;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
+    position: relative;
   }
 
   .nav-logo {
+    font-family: 'Skranji', cursive;
     font-size: 1.5rem;
-    font-weight: 700;
-    color: #f59e0b;
+    font-weight: 400;
+    color: #f4442e;
     text-decoration: none;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.05em;
+  }
+
+  .brand-name {
+    font-family: 'Skranji', cursive;
+    letter-spacing: 0.05em;
   }
 
   .nav-links {
     display: flex;
     gap: 2rem;
+    position: absolute;
+    right: 2rem;
   }
 
   .nav-links a {
@@ -322,7 +342,7 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
   }
 
   .nav-links a:hover {
-    color: #f59e0b;
+    color: #f4442e;
   }
 
   /* Hero */
@@ -343,6 +363,13 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+  }
+
+  .hero-sparks {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
   }
 
   .hero-overlay {
@@ -393,7 +420,7 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
   }
 
   .hero-install code {
-    color: #f59e0b;
+    color: #f4442e;
     font-size: 1.05rem;
   }
 
@@ -417,12 +444,12 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
   }
 
   .btn-primary {
-    background: #f59e0b;
+    background: #f4442e;
     color: #0a0a0a;
   }
 
   .btn-primary:hover {
-    background: #d97706;
+    background: #d63520;
     transform: translateY(-1px);
     box-shadow: 0 4px 24px rgba(245, 158, 11, 0.3);
   }
@@ -435,7 +462,7 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
 
   .btn-secondary:hover {
     border-color: rgba(245, 158, 11, 0.5);
-    color: #f59e0b;
+    color: #f4442e;
   }
 
   /* Features */
@@ -462,34 +489,97 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
   }
 
   .feature-card {
+    position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
     padding: 2rem;
-    transition: all 0.3s;
+    transition: all 0.4s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 16px;
+    padding: 1px;
+    background: linear-gradient(
+      160deg,
+      rgba(244, 68, 46, 0.0) 0%,
+      rgba(244, 68, 46, 0.06) 50%,
+      rgba(244, 68, 46, 0.0) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    transition: all 0.4s ease;
+  }
+
+  .feature-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    background: radial-gradient(
+      ellipse at 50% 100%,
+      rgba(244, 68, 46, 0.12) 0%,
+      rgba(255, 107, 53, 0.06) 40%,
+      transparent 70%
+    );
+    pointer-events: none;
   }
 
   .feature-card:hover {
-    border-color: rgba(245, 158, 11, 0.3);
-    background: rgba(245, 158, 11, 0.03);
-    transform: translateY(-2px);
+    border-color: rgba(244, 68, 46, 0.25);
+    background: rgba(255, 255, 255, 0.04);
+    transform: translateY(-4px);
+    box-shadow:
+      0 0 20px rgba(244, 68, 46, 0.1),
+      0 0 60px rgba(244, 68, 46, 0.05),
+      0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .feature-card:hover::before {
+    background: linear-gradient(
+      160deg,
+      rgba(244, 68, 46, 0.3) 0%,
+      rgba(255, 140, 66, 0.15) 30%,
+      rgba(244, 68, 46, 0.3) 60%,
+      rgba(255, 107, 53, 0.1) 100%
+    );
+  }
+
+  .feature-card:hover::after {
+    opacity: 1;
   }
 
   .feature-icon {
-    color: #f59e0b;
-    margin-bottom: 1rem;
+    color: #f4442e;
+    margin-bottom: 0.25rem;
+    position: relative;
+    z-index: 1;
   }
 
   .feature-card h3 {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     font-weight: 600;
-    margin-bottom: 0.75rem;
+    position: relative;
+    z-index: 1;
   }
 
   .feature-card p {
     color: #a3a3a3;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     line-height: 1.6;
+    position: relative;
+    z-index: 1;
   }
 
   /* Walkthrough */
@@ -521,7 +611,7 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
     height: 36px;
     border-radius: 50%;
     background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
+    color: #f4442e;
     font-weight: 700;
     font-size: 1rem;
     flex-shrink: 0;
@@ -608,11 +698,11 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
 
   .comparison-table .highlight-col {
     background: rgba(245, 158, 11, 0.05);
-    color: #fde68a;
+    color: #fca5a5;
   }
 
   .comparison-table thead .highlight-col {
-    color: #f59e0b;
+    color: #f4442e;
   }
 
   .comparison-table .row-label {
@@ -623,6 +713,29 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
 
   .comparison-table td:not(.row-label):not(.highlight-col) {
     color: #a3a3a3;
+  }
+
+  /* Bottom Illustration */
+  .bottom-illustration {
+    background: #0a0a0a;
+    text-align: center;
+    padding: 0;
+    margin: 0;
+    line-height: 0;
+  }
+
+  .bottom-illustration img {
+    max-width: 420px;
+    width: 100%;
+    height: auto;
+    opacity: 0.85;
+    transition: opacity 0.4s ease, filter 0.4s ease;
+    filter: drop-shadow(0 0 0px transparent);
+  }
+
+  .bottom-illustration img:hover {
+    opacity: 1;
+    filter: drop-shadow(0 0 20px rgba(244, 68, 46, 0.5)) drop-shadow(0 0 60px rgba(245, 158, 11, 0.3));
   }
 
   /* Footer */
@@ -694,3 +807,114 @@ Done: 1 success, 0 errors (0.2s)</code></pre>
     }
   }
 </style>
+
+<script>
+  const canvas = document.getElementById('sparks') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d')!;
+  const hero = canvas.parentElement!;
+
+  function resize() {
+    canvas.width = hero.offsetWidth;
+    canvas.height = hero.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  interface Spark {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    life: number;
+    maxLife: number;
+    flicker: number;
+  }
+
+  const sparks: Spark[] = [];
+
+  function spawn() {
+    sparks.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height + 4,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: -(0.3 + Math.random() * 1.2),
+      size: 1 + Math.random() * 2.5,
+      life: 0,
+      maxLife: 120 + Math.random() * 180,
+      flicker: Math.random() * Math.PI * 2,
+    });
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (sparks.length < 60) {
+      spawn();
+      if (Math.random() > 0.5) spawn();
+    }
+
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx + Math.sin(s.life * 0.02) * 0.3;
+      s.y += s.vy;
+      s.life++;
+      s.flicker += 0.15;
+
+      const progress = s.life / s.maxLife;
+      const alpha = progress < 0.1
+        ? progress * 10
+        : 1 - ((progress - 0.1) / 0.9);
+
+      if (s.life >= s.maxLife) {
+        sparks.splice(i, 1);
+        continue;
+      }
+
+      const flick = 0.7 + Math.sin(s.flicker) * 0.3;
+      const coreSize = s.size * (1 - progress * 0.5);
+
+      // Outer flame glow (large, soft)
+      const g3 = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, coreSize * 8);
+      g3.addColorStop(0, `rgba(244, 68, 46, ${alpha * flick * 0.08})`);
+      g3.addColorStop(1, 'rgba(244, 68, 46, 0)');
+      ctx.fillStyle = g3;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, coreSize * 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Mid glow (warm orange)
+      const g2 = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, coreSize * 4);
+      g2.addColorStop(0, `rgba(255, 140, 66, ${alpha * flick * 0.25})`);
+      g2.addColorStop(0.5, `rgba(255, 107, 53, ${alpha * flick * 0.1})`);
+      g2.addColorStop(1, 'rgba(255, 107, 53, 0)');
+      ctx.fillStyle = g2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, coreSize * 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner glow (bright)
+      const g1 = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, coreSize * 2);
+      g1.addColorStop(0, `rgba(255, 224, 178, ${alpha * flick * 0.6})`);
+      g1.addColorStop(0.4, `rgba(255, 173, 96, ${alpha * flick * 0.3})`);
+      g1.addColorStop(1, 'rgba(244, 68, 46, 0)');
+      ctx.fillStyle = g1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, coreSize * 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hot white core
+      const g0 = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, coreSize);
+      g0.addColorStop(0, `rgba(255, 255, 240, ${alpha * flick * 0.9})`);
+      g0.addColorStop(1, `rgba(255, 200, 150, ${alpha * flick * 0.4})`);
+      ctx.fillStyle = g0;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, coreSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+</script>

@@ -192,6 +192,69 @@ class IbisExecutor:
         self._registered_sources[name] = path
         log.debug("Registered source: %s -> %s", name, path)
 
+    def materialize_view(
+        self, project: str, dataset: str, name: str, sql: str
+    ) -> None:
+        """Create or replace a view on the active backend.
+
+        Args:
+            project: GCP project (BigQuery) or ignored for DuckDB.
+            dataset: Dataset/schema name.
+            name: View name.
+            sql: SELECT statement forming the view body.
+        """
+        backend = self._conn.name
+        if backend == "duckdb":
+            self._conn.raw_sql(f'CREATE SCHEMA IF NOT EXISTS "{dataset}"')
+            self._conn.raw_sql(
+                f'CREATE OR REPLACE VIEW "{dataset}"."{name}" AS {sql}'
+            )
+        elif backend == "bigquery":
+            self._conn.raw_sql(
+                f"CREATE OR REPLACE VIEW `{project}.{dataset}.{name}` AS {sql}"
+            )
+        else:
+            raise NotImplementedError(
+                f"materialize_view not supported for backend {backend!r}; "
+                "v1 supports BigQuery and DuckDB"
+            )
+
+    def view_exists(self, project: str, dataset: str, name: str) -> bool:
+        """Return True if the given view exists in the backend."""
+        backend = self._conn.name
+        if backend == "duckdb":
+            try:
+                tables = self._conn.list_tables(database=dataset)
+            except Exception:
+                return False
+            return name in tables
+        elif backend == "bigquery":
+            try:
+                tables = self._conn.list_tables(database=f"{project}.{dataset}")
+            except Exception:
+                return False
+            return name in tables
+        else:
+            raise NotImplementedError(
+                f"view_exists not supported for backend {backend!r}; "
+                "v1 supports BigQuery and DuckDB"
+            )
+
+    def drop_view(self, project: str, dataset: str, name: str) -> None:
+        """Drop a view if it exists on the active backend."""
+        backend = self._conn.name
+        if backend == "duckdb":
+            self._conn.raw_sql(f'DROP VIEW IF EXISTS "{dataset}"."{name}"')
+        elif backend == "bigquery":
+            self._conn.raw_sql(
+                f"DROP VIEW IF EXISTS `{project}.{dataset}.{name}`"
+            )
+        else:
+            raise NotImplementedError(
+                f"drop_view not supported for backend {backend!r}; "
+                "v1 supports BigQuery and DuckDB"
+            )
+
     def close(self) -> None:
         """Close the backend connection."""
         if self._conn is not None:

@@ -178,3 +178,52 @@ class TestFyrRunCommand:
         assert result.exit_code == 0, f"Output: {result.output}"
         assert "Discovered:" in result.output
         assert "sources" in result.output
+
+    def test_run_without_staging_views_omits_line(self, tmp_path: Path) -> None:
+        """When no staging views are defined, the staging summary line is absent."""
+        _setup_project(tmp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "run",
+                "--entities-dir", str(tmp_path / "entities"),
+                "--data-dir", str(tmp_path / "data"),
+                "--output-dir", str(tmp_path / "output"),
+            ],
+        )
+
+        assert result.exit_code == 0, f"Output: {result.output}"
+        assert "Staging views:" not in result.output
+
+    def test_run_with_staging_views_prints_counts(self, tmp_path: Path) -> None:
+        """When staging views exist, the summary prints materialized/skipped counts."""
+        _setup_project(tmp_path)
+
+        # Append a StagingView definition to the entities module
+        extra = (
+            "\nfrom fyrnheim.core.staging_view import StagingView\n"
+            "stg_example = StagingView(\n"
+            "    name='stg_example',\n"
+            "    project='test',\n"
+            "    dataset='test',\n"
+            "    sql='SELECT 1 AS id',\n"
+            ")\n"
+        )
+        with (tmp_path / "entities" / "page_views.py").open("a") as f:
+            f.write(extra)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "run",
+                "--entities-dir", str(tmp_path / "entities"),
+                "--data-dir", str(tmp_path / "data"),
+                "--output-dir", str(tmp_path / "output"),
+            ],
+        )
+
+        assert result.exit_code == 0, f"Output: {result.output}"
+        assert "Staging views: 1 materialized, 0 skipped" in result.output

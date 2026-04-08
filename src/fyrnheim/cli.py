@@ -231,6 +231,12 @@ def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
 @click.option(
     "--backend", default=None, help="Execution backend (duckdb, clickhouse)"
 )
+@click.option(
+    "--no-state",
+    is_flag=True,
+    default=False,
+    help="Bypass fyrnheim_state table: always re-materialize staging views and skip state writes.",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -238,6 +244,7 @@ def run(
     data_dir: str | None,
     output_dir: str | None,
     backend: str | None,
+    no_state: bool,
 ) -> None:
     """Run the pipeline: load sources, apply transformations, write output."""
     from fyrnheim.config import resolve_config
@@ -282,7 +289,7 @@ def run(
     start = time.monotonic()
 
     try:
-        result = run_pipeline(assets, config, executor)
+        result = run_pipeline(assets, config, executor, no_state=no_state)
     except Exception as exc:
         if verbose:
             raise
@@ -294,6 +301,11 @@ def run(
     # Print summary
     click.echo("")
     click.echo(f"Sources processed: {result.source_count}")
+    if len(result.staging_materialized) + len(result.staging_skipped) > 0:
+        click.echo(
+            f"Staging views: {len(result.staging_materialized)} materialized, "
+            f"{len(result.staging_skipped)} skipped"
+        )
     click.echo(f"Outputs written:   {result.output_count}")
 
     if result.outputs:

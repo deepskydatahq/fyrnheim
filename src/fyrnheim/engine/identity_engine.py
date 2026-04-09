@@ -41,9 +41,14 @@ def resolve_identities(
     source_names = {s.source for s in identity_graph.sources}
     source_match_keys = {s.source: s.match_key_field for s in identity_graph.sources}
 
-    # Filter to row_appeared events from graph sources
+    # Filter to events from graph sources whose payload supports a direct
+    # column lookup. row_appeared events (StateSource snapshots) and
+    # EventSource events both have flat payloads keyed by source columns.
+    # field_changed events have a different shape ({field_name, old_value,
+    # new_value}) and would silently grab new_value if the field happened to
+    # match -- exclude them.
     mask = (events_df["source"].isin(source_names)) & (
-        events_df["event_type"] == "row_appeared"
+        events_df["event_type"] != "field_changed"
     )
     relevant = events_df[mask]
 
@@ -60,6 +65,12 @@ def resolve_identities(
             continue
 
         match_key_value = payload_data.get(match_key_field)
+        if match_key_value is None:
+            # SnapshotDiff strips the source's id_field from row_appeared
+            # payloads (it lives as the top-level entity_id column). When the
+            # IdentitySource's match_key_field equals the source's id_field,
+            # fall back to entity_id so identity resolution still works.
+            match_key_value = entity_id
         if match_key_value is None:
             continue
 

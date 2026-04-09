@@ -41,3 +41,4 @@ from .source import (
     TableSource as TableSource,
     TypeCast as TypeCast,
 )
+from .staging_view import StagingView as StagingView

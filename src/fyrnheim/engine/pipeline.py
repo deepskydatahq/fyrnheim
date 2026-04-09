@@ -76,9 +76,12 @@ def run_pipeline(
         # duckdb_path shares its name. In that case we skip materialization
         # since the source will load the fixture directly.
         fixture_names: set[str] = set()
-        for src in sources:
-            if getattr(src, "duckdb_path", None):
-                fixture_names.add(src.name)
+        if config.backend == "duckdb":
+            for src in sources:
+                if getattr(src, "duckdb_path", None):
+                    upstream = getattr(src, "upstream", None)
+                    if upstream is not None:
+                        fixture_names.add(upstream.name)
         try:
             staging_summary = materialize_staging_views(
                 executor,

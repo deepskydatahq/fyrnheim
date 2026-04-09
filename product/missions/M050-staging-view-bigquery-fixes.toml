@@ -1,0 +1,140 @@
+# Mission: StagingView v0.4.1 — BigQuery correctness + fixture-shadow contract
+# Three blocker bugs and two polish items found during the first real-project
+# adoption of StagingView on BigQuery (client-flowable / mission M004).
+
+id = "M050"
+title = "StagingView v0.4.1 BigQuery correctness + fixture-shadow fix"
+status = "draft"
+created = 2026-04-09
+depends_on = ["M049"]
+
+[outcome]
+description = """
+v0.4.0 shipped the StagingView primitive with the right shape but three real
+bugs and two polish gaps that block any project using the suggested patterns
+on BigQuery. This mission ships v0.4.1 with all five fixes.
+
+Bugs:
+1. `hash` is a reserved keyword in BigQuery DDL — _ensure_state_table, _load_state,
+   _write_state_row all emit unquoted `hash`. First run fails with
+   'Expected ")" or "," but got keyword HASH'. Fix: backtick-quote in all three.
+2. _escape only handles single quotes; BigQuery rejects raw newlines, tabs,
+   carriage returns, and backslashes in single-quoted literals. Any multi-line
+   view excerpt crashes _write_state_row with 'Unclosed string literal'.
+   Fix: extend _escape to cover \\\\, \\n, \\r, \\t (backslash first to avoid
+   double-escape). Follow-up ticket for parameterized-query rewrite.
+3. Fixture-shadow contract is doubly broken in pipeline.py Phase 0 setup:
+   (a) compares source.name against view.name instead of source.upstream.name,
+   and (b) applies the skip on every backend instead of only on duckdb.
+   Projects where a view and its consuming source share a name silently drop
+   the view on bigquery, then 404 on source loading. Fix: gate on backend ==
+   'duckdb' AND compare against source.upstream.name.
+
+Polish:
+4. StagingView is not re-exported from fyrnheim or fyrnheim.core; users must
+   import from fyrnheim.core.staging_view. Add re-export.
+5. sql field accepts only str, not str | Path. v0.4.0 release note example
+   used Path explicitly. Add field_validator mode='before' that reads Path.
+
+After v0.4.1, the client-flowable M004 migration runs uv sync && uv run fyr run
+--backend bigquery end-to-end with no local patches: cold run materializes 6
+views, warm run reports 0 materialized + 6 skipped via the state cache.
+"""
+
+user_progress = "From 'StagingView works on duckdb but needs 5 local patches for BigQuery' to 'fresh install runs end-to-end on BigQuery with no modifications'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "_ensure_state_table emits `hash` (backtick-quoted) on the bigquery branch; duckdb branch unchanged",
+    "_load_state SELECT uses `hash` backtick-quoted on the bigquery branch",
+    "_write_state_row INSERT uses `hash` backtick-quoted on the bigquery branch",
+    "Unit test verifies the bigquery state-table DDL string contains `hash` and no unquoted ' hash ' occurrence",
+    "_escape escapes backslash first, then single quote, newline, carriage return, and tab — order matters so other replacements' added backslashes don't get re-escaped",
+    "Unit test: _escape('WITH base AS (\\n  SELECT 1,\\n  \\'(not set)\\'\\n)') contains no literal newline and properly doubles the single quotes",
+    "End-to-end test: materialize a StagingView whose rendered SQL contains newlines, tabs, backslashes, AND single quotes on duckdb; state row is written and readable via _load_state",
+    "pipeline.py Phase 0 setup: fixture_names set is built only when config.backend == 'duckdb'",
+    "pipeline.py Phase 0 setup: fixture_names is populated from source.upstream.name (when upstream is not None AND source has non-None duckdb_path), not from source.name",
+    "Test: a StagingView named 'salesforce_accounts' feeding a StateSource(name='salesforce_accounts', upstream=that_view, duckdb_path='sf.parquet') is materialized (not shadow-skipped) when backend is bigquery",
+    "Test: on duckdb backend, a source whose name coincidentally equals an UNRELATED view's name does NOT cause that view to be shadowed; only the view matching the source's upstream is shadowed",
+    "Test: happy path — on duckdb, source with duckdb_path and upstream=view causes view to be shadow-skipped (v0.4.0 behavior preserved for correct case)",
+    "StagingView importable as `from fyrnheim import StagingView` (re-exported from src/fyrnheim/__init__.py and added to __all__)",
+    "StagingView.sql field accepts pathlib.Path via a field_validator(mode='before') that calls v.read_text() when v is a Path; inline str still works",
+    "Test: StagingView(name='v', project='p', dataset='d', sql=Path('/tmp/view.sql')) reads the file and stores the string",
+    "All existing tests still pass (414 -> 414+ new); ruff + mypy clean",
+    "pyproject.toml version bumped to 0.4.1",
+]
+
+validator_context = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/core/__init__.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = ["VISION.md"]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/core/__init__.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "Backtick-quote `hash` in all three bigquery DDL/DML sites in staging_runner.py",
+    "Extend _escape to cover \\\\, \\n, \\r, \\t (order-sensitive)",
+    "Gate fixture-shadow fixture_names build on config.backend == 'duckdb'",
+    "Fix fixture-shadow to compare against source.upstream.name (not source.name)",
+    "Re-export StagingView from fyrnheim.__init__ and fyrnheim.core.__init__",
+    "Add field_validator(mode='before') on StagingView.sql to read pathlib.Path",
+    "Unit + integration tests for all five items",
+    "Version bump 0.4.0 -> 0.4.1",
+]
+out_of_scope = [
+    "Parameterized-query rewrite of _write_state_row / _load_state (tracked as follow-up; v0.4.1 ships the minimal _escape fix)",
+    "Real BigQuery integration test gated on FYRNHEIM_BQ_TEST_PROJECT (worth doing, separate ticket)",
+    "Any behavioral change to the fixture-shadow contract itself (the feature stays; the bugs are fixed to match documented behavior)",
+    "Any changes to the v0.4.0 StagingView public API beyond the sql Path support and __init__ re-export",
+]
+acceptable_breakage = [
+    "None — all five changes are bugfixes or backward-compatible additions. No v0.4.0 usage breaks.",
+]
+
+[notes]
+considerations = """
+## Source material
+Full paste-ready bug report from the client-flowable M004 migration is the
+authoritative spec for this mission. It includes reproduction steps, exact
+error strings, proposed fixes with code snippets, and test skeletons for each
+of the five items. Implementation should mirror the report closely — the
+reporter has already validated the fixes locally and round-tripped the whole
+flow on BigQuery.
+
+## Sequencing within the single epic
+Report-recommended order (each builds on green tests):
+1. Polish 2 (sql Path support) — no risk, and makes Bug 3 tests cleaner
+2. Bug 1 (hash quoting) — three edits, unblocks BigQuery first run
+3. Bug 2 minimal (_escape extension) — unblocks first state row write
+4. Bug 3 (fixture-shadow gate + upstream.name) — ~10 lines in pipeline.py
+5. Polish 1 (StagingView re-export) — last, so new tests use the top-level import
+
+## Risk areas
+- Order in _escape: backslash replacement MUST come first. Test with a payload
+  that contains both backslash and newline to catch accidental double-escape.
+- Bug 3 pipeline.py edit is the most invasive. The runner side (materialize_staging_views)
+  already does the right thing given a correct fixture_names set — don't touch it.
+- Re-export ordering: add StagingView to __all__ alphabetically to match the
+  existing convention in src/fyrnheim/__init__.py.
+
+## Release shape
+Bugfix release, no feature flags. Version bumps 0.4.0 -> 0.4.1. Ships via
+release PR per the project's release-flow convention (no direct pushes to main).
+"""

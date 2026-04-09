@@ -1,0 +1,126 @@
+id = "M050-E001-S001"
+parent = "M050-E001"
+title = "Implement all five v0.4.1 fixes in report-recommended order"
+status = "ready"
+created = 2026-04-09
+
+[outcome]
+description = """Land all five v0.4.1 items: hash-quoting, _escape extension,
+fixture-shadow contract fix, StagingView re-export, and sql Path support. Plus
+regression tests for each and a version bump to 0.4.1."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StagingView(sql=Path('/tmp/v.sql')) reads the file via field_validator(mode='before')"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "bigquery branch of _ensure_state_table emits backtick-quoted `hash` in the CREATE TABLE DDL"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_load_state and _write_state_row use backtick-quoted `hash` on the bigquery branch"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_escape escapes backslash FIRST, then single quote, then newline, carriage return, and tab"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_escape('WITH base AS (\\n  SELECT 1,\\n  \\'(not set)\\'\\n)') contains no literal newline and contains ''(not set)'' (doubled quotes)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "End-to-end on duckdb: StagingView with multi-line SQL containing newlines + tabs + backslashes + single quotes materializes and state row round-trips via _load_state"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pipeline.py Phase 0: fixture_names set is empty when config.backend != 'duckdb'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pipeline.py Phase 0: on duckdb, fixture_names collects source.upstream.name (not source.name) for sources with non-None duckdb_path and non-None upstream"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression: StagingView(name='x') feeding a source(name='x', upstream=view, duckdb_path=...) is MATERIALIZED on bigquery (not shadow-skipped)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression: on duckdb, a source whose name coincidentally matches an unrelated view's name does NOT cause that unrelated view to be shadowed"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Happy path preserved: on duckdb, source with duckdb_path and upstream=view causes view to be shadow-skipped (v0.4.0 behavior)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`from fyrnheim import StagingView` works; StagingView is in fyrnheim.__all__"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`from fyrnheim.core import StagingView` also works"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version == '0.4.1'"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/core/__init__.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Paste-ready bug report is the authoritative spec — follow it closely. Report-
+recommended implementation order:
+
+1. Polish 2 (sql Path support): add field_validator(mode='before') on
+   StagingView.sql that returns v.read_text() when isinstance(v, Path).
+
+2. Bug 1 (hash quoting): in staging_runner.py, change three sites:
+   - _ensure_state_table bigquery branch: '`hash` STRING' (backtick-quoted)
+   - _load_state: 'SELECT name, `hash` FROM {qualified}'
+   - _write_state_row: 'INSERT INTO ... (name, `hash`, materialized_at, ...)'
+   Leave the duckdb branches alone — duckdb is happy with unquoted hash.
+
+3. Bug 2 (_escape extension): order matters.
+     return (value
+         .replace('\\\\', '\\\\\\\\')
+         .replace("'", "''")
+         .replace('\\n', '\\\\n')
+         .replace('\\r', '\\\\r')
+         .replace('\\t', '\\\\t'))
+   Test with a payload containing both backslash and newline to catch accidental
+   double-escape.
+
+4. Bug 3 (fixture-shadow): in pipeline.py Phase 0 setup, wrap the fixture_names
+   build in `if config.backend == 'duckdb':` and change the inner loop to use
+   src.upstream.name (guarding upstream is not None) instead of src.name. The
+   runner side (staging_runner.materialize_staging_views) does not need changes.
+
+5. Polish 1 (re-export): add `from fyrnheim.core.staging_view import StagingView`
+   to src/fyrnheim/__init__.py and src/fyrnheim/core/__init__.py. Add to __all__
+   alphabetically.
+
+6. Version bump in pyproject.toml: "0.4.0" -> "0.4.1", then `uv lock`.
+
+Tests go in tests/test_staging_view.py extending the existing file.
+"""
+reference_files = [
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/__init__.py",
+]

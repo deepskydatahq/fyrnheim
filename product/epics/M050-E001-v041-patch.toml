@@ -1,0 +1,63 @@
+# Epic: v0.4.1 patch bundle
+# All three bugs and both polish items land in a single epic / single story.
+
+id = "M050-E001"
+parent = "M050"
+title = "StagingView v0.4.1 patch bundle"
+status = "active"
+created = 2026-04-09
+depends_on = []
+
+[outcome]
+description = """
+Ship all five v0.4.1 fixes in a single coherent bugfix release: backtick-quote
+`hash` in BigQuery DDL/DML, extend _escape to handle newlines/tabs/backslashes,
+fix the fixture-shadow contract (gate on duckdb, compare on upstream.name),
+re-export StagingView from the top-level package, and accept pathlib.Path in
+the StagingView.sql field.
+"""
+
+[job_story]
+description = """When I clone a Fyrnheim project that uses StagingView and run
+`uv sync && uv run fyr run --backend bigquery`, I want Phase 0 to materialize
+all my views correctly on the first try so I don't have to apply local patches
+to make the primitive work."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 17 testing criteria from M050 mission TOML pass",
+    "414+ tests passing (v0.4.0 baseline + new regression tests for all 5 items)",
+    "ruff + mypy clean",
+    "pyproject.toml version = 0.4.1",
+]
+validator_context = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/core/__init__.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/core/__init__.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Single story bundling all five items — they're small, orthogonal, and land
+in the same release. The full paste-ready bug report is the authoritative
+implementation spec; the story hints reference it directly.
+"""
+
+estimated_stories = 1

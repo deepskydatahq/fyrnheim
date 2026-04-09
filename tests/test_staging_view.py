@@ -479,6 +479,72 @@ def test_fixture_shadow_uses_upstream_name_not_source_name(tmp_path):
     assert "real_upstream" not in result.staging_materialized
 
 
+def test_escape_single_quote_backslash_escape_on_bigquery():
+    # BigQuery rejects '' doubling; _escape must emit \' instead.
+    payload = "a'b"
+    assert _escape(payload, "bigquery") == "a\\'b"
+    # DuckDB still uses SQL-standard doubling.
+    assert _escape(payload, "duckdb") == "a''b"
+
+
+def test_escape_backslash_and_quote_ordering():
+    # Walk through: a\b'c → backslash first → a\\b'c → quote → a\\b\'c
+    payload = "a\\b'c"
+    assert _escape(payload, "bigquery") == "a\\\\b\\'c"
+    assert _escape(payload, "duckdb") == "a\\\\b''c"
+
+
+def test_bigquery_write_state_row_uses_backslash_quote_escape():
+    import fyrnheim.engine.staging_runner as sr
+
+    captured: list[str] = []
+
+    class FakeConn:
+        name = "bigquery"
+
+        def raw_sql(self, sql):
+            captured.append(sql)
+
+            class C:
+                def fetchall(self_inner):
+                    return []
+            return C()
+
+    class FakeExec:
+        connection = FakeConn()
+
+    sv = StagingView(
+        name="stg_q",
+        project="proj",
+        dataset="dset",
+        # Single quote in first 500 chars (mirrors the #98 reproducer).
+        sql="-- CONCAT(x, '-', y)\nSELECT 1 AS id",
+    )
+    sr._write_state_row(FakeExec(), "proj", "dset", sv, "deadbeef")  # type: ignore[arg-type]
+    insert_sql = captured[-1]
+    # The excerpt contained a single quote; assert it was backslash-escaped
+    # and did NOT use the SQL-standard doubling form.
+    assert "\\'" in insert_sql
+    assert "''" not in insert_sql
+
+
+def test_duckdb_write_state_row_roundtrips_quotes_newlines_backslashes(tmp_path):
+    sv = StagingView(
+        name="quoted",
+        project="proj",
+        dataset="analytics",
+        # Single quote AND newline AND backslash, all inside first 500 chars.
+        sql="SELECT\n 'a''b\\c' AS val",
+    )
+    db = tmp_path / "t.db"
+    with IbisExecutor.duckdb(db_path=str(db)) as ex:
+        summary = materialize_staging_views(ex, [sv])
+        assert summary.materialized == ["quoted"]
+        state = _load_state(ex, "proj", "analytics")
+        assert "quoted" in state
+        assert state["quoted"] == sv.content_hash()
+
+
 def test_fixture_shadow_happy_path_preserved(tmp_path):
     view = _sv("my_view")
     src = _FakeSourceWithUpstream(

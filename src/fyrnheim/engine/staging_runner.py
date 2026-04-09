@@ -175,11 +175,19 @@ def _load_state(
     return {row[0]: row[1] for row in rows}
 
 
-def _escape(value: str) -> str:
+def _escape(value: str, backend: str = "duckdb") -> str:
+    # Order matters: double backslashes FIRST, then handle single quotes.
+    # Otherwise the backslash introduced by the quote-escape step on BigQuery
+    # would be re-processed and corrupted.
+    value = value.replace("\\", "\\\\")
+    if backend == "bigquery":
+        # BigQuery standard SQL rejects SQL-standard quote doubling ('')
+        # inside string literals; use backslash escape instead.
+        value = value.replace("'", "\\'")
+    else:
+        value = value.replace("'", "''")
     return (
-        value.replace("\\", "\\\\")
-        .replace("'", "''")
-        .replace("\n", "\\n")
+        value.replace("\n", "\\n")
         .replace("\r", "\\r")
         .replace("\t", "\\t")
     )
@@ -196,10 +204,11 @@ def _write_state_row(
     qualified = _qualify_state_table(executor, project, dataset)
     excerpt = view.rendered_sql[:500]
     ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-    name_s = _escape(view.name)
-    hash_s = _escape(content_hash)
-    excerpt_s = _escape(excerpt)
-    version_s = _escape(_FYR_VERSION)
+    backend = executor.connection.name
+    name_s = _escape(view.name, backend)
+    hash_s = _escape(content_hash, backend)
+    excerpt_s = _escape(excerpt, backend)
+    version_s = _escape(_FYR_VERSION, backend)
 
     executor.connection.raw_sql(
         f"DELETE FROM {qualified} WHERE name = '{name_s}'"

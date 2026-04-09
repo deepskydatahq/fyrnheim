@@ -33,8 +33,22 @@ class _RowProxy:
 def _extract_field_value(row: pd.Series, field_name: str) -> Any:
     """Extract a field value from an enriched event row's payload.
 
-    For row_appeared events, the payload is a JSON object with field values.
-    For field_changed events, the payload has field_name, old_value, new_value.
+    Three event-shape paths:
+
+    1. row_appeared (StateSource snapshot insert): payload is a flat dict of
+       column → value from the source row. Direct lookup.
+    2. field_changed (StateSource snapshot update): payload is
+       {field_name, old_value, new_value}. Return new_value only if
+       field_name matches.
+    3. Anything else (EventSource events, OR row_appeared events that have
+       been rewritten by apply_activity_definitions to carry the activity
+       name as event_type): the payload is still a flat dict of column →
+       value, since activity rewriting preserves the original payload.
+       Fall back to a direct lookup.
+
+    Without case (3), state_fields silently return None for any entity
+    whose events flow through apply_activity_definitions, because the
+    rewrite changes event_type away from 'row_appeared'.
     """
     try:
         payload = json.loads(row["payload"]) if isinstance(row["payload"], str) else row["payload"]
@@ -44,10 +58,16 @@ def _extract_field_value(row: pd.Series, field_name: str) -> Any:
     event_type = row["event_type"]
 
     if event_type == "row_appeared":
-        return payload.get(field_name)
-    elif event_type == "field_changed":
-        if payload.get("field_name") == field_name:
+        return payload.get(field_name) if isinstance(payload, dict) else None
+    if event_type == "field_changed":
+        if isinstance(payload, dict) and payload.get("field_name") == field_name:
             return payload.get("new_value")
+        return None
+
+    # Fallback: flat payload lookup for activity-rewritten events and
+    # EventSource events.
+    if isinstance(payload, dict):
+        return payload.get(field_name)
     return None
 
 

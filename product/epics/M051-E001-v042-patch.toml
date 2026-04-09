@@ -1,0 +1,61 @@
+# Epic: v0.4.2 patch bundle
+# All four issue fixes + event_source_loader alignment + regression tests.
+
+id = "M051-E001"
+parent = "M051"
+title = "v0.4.2 identity / projection / null-handling patch bundle"
+status = "active"
+created = 2026-04-09
+depends_on = []
+
+[outcome]
+description = """
+Ship all four issue fixes (#91, #92, #93, #94) plus the event_source_loader
+alignment in a single coherent bugfix release, with regression tests mapped
+1:1 to the issues and one end-to-end test mirroring the M006 reproducer.
+"""
+
+[job_story]
+description = """When I put state fields on an entity whose identity graph
+spans a StateSource and an EventSource, I want the state fields to correctly
+project values across both sources — including for columns containing nulls —
+so I don't get silent None results everywhere."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 15 testing criteria from the M051 mission TOML pass",
+    "Issues #91, #92, #93, #94 referenced in the release PR body with Fixes: keyword so they auto-close on merge",
+    "Test count increases (baseline + 4 regression + 1 e2e = 5+ new tests)",
+    "ruff + mypy clean",
+    "pyproject.toml version == 0.4.2",
+]
+validator_context = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/",
+    "pyproject.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Single story bundling all four issues. Implementation is mostly done in the
+user's local worktree — the agent's first step is `git apply` of the saved
+patch file, then layer the event_source_loader alignment and the tests on
+top.
+"""
+
+estimated_stories = 1

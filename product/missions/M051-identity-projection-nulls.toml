@@ -1,0 +1,164 @@
+# Mission: StagingView v0.4.2 — identity / projection / null handling fixes
+# Four interrelated silent-failure bugs in identity resolution, state-field
+# projection, and null serialization, surfaced by the client-flowable M006
+# engagement (mixed StateSource + EventSource identity graphs with state fields).
+
+id = "M051"
+title = "v0.4.2 identity, projection, and null-handling fixes"
+status = "draft"
+created = 2026-04-09
+depends_on = ["M050"]
+
+[outcome]
+description = """
+Four silent-failure bugs in the identity/projection path, all discovered while
+landing client-flowable mission M006 (anon user attributes on an entity whose
+identity graph spans EventSource + StateSource). Each bug independently
+produces None / empty results with no error and no log line; together they
+make state fields unusable for any realistic mixed-source entity.
+
+1. identity_engine.resolve_identities (#91): returns empty mapping when
+   `match_key_field == id_field`, because SnapshotDiff strips id_field from
+   row_appeared payloads and the lookup becomes None. Fix: fall back to the
+   entity_id column when the payload lookup is None.
+
+2. identity_engine.resolve_identities (#92): filters events on
+   `event_type == "row_appeared"`, excluding 100% of EventSource events.
+   Fix: change the mask to `!= "field_changed"` so EventSource events and
+   row_appeared events both pass through (field_changed is still excluded
+   because its payload has a different shape that would accidentally match
+   on new_value).
+
+3. diff_engine._serialize_value (#93): returns the literal string "null" for
+   None/NaN/NaT, causing _resolve_latest's "first non-null" semantics to
+   return the string "null" as a present value, masking real data in earlier
+   rows. Also stringifies every value, losing type information.
+   Fix: return Python None for NaN; preserve typed primitives (str, int,
+   float, bool); only str() exotic types.
+
+4. analytics_entity_engine._extract_field_value (#94): only handles
+   event_type == "row_appeared" and "field_changed"; falls through to None
+   for every other event type, including (a) EventSource events with their
+   original event_name and (b) row_appeared events rewritten by
+   apply_activity_definitions to carry the activity's name as event_type.
+   Fix: add a third case that treats any non-field_changed payload as a flat
+   dict and returns payload.get(field_name).
+
+Plus a related occurrence of bug #93 in event_source_loader._serialize_value,
+which has its own copy of the same "null" string pattern. Align it with the
+diff_engine fix, preserving the array-handling branch that's load-bearing for
+BigQuery REPEATED fields.
+
+All four fixes are already validated locally against the client-flowable M006
+data — the user applied them by hand during the debugging session and filed
+these issues after the fact. This mission transfers the patches to an
+isolated branch, adds regression tests for each bug, and ships v0.4.2.
+
+Out of scope (reporter flagged as separate ticket): the deeper design
+question of whether apply_activity_definitions should DROP events from
+sources with no matching activity (current behavior) or PRESERVE them as
+passthrough. That's a contract change worth its own mission.
+"""
+
+user_progress = "From 'state fields silently return None for any mixed-source entity' to 'state fields correctly project values across StateSource + EventSource identity graphs'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "identity_engine: when match_key_field equals the source's id_field and the payload does not contain that key, resolve_identities falls back to the entity_id column and produces a non-empty mapping with canonical_id = sha256(entity_id)[:16]",
+    "identity_engine: the event mask in resolve_identities excludes only field_changed events (EventSource events with arbitrary event_name values participate in identity resolution)",
+    "Regression test #91: StateSource + IdentitySource(match_key_field=id_field) produces one mapping row per source row, not an empty DataFrame",
+    "Regression test #92: EventSource events (event_type='session_start' etc.) appear in the identity mapping when the EventSource is declared in the IdentityGraph",
+    "diff_engine: _serialize_value returns Python None for None/NaN/NaT, not the string 'null'",
+    "diff_engine: _serialize_value preserves Python int/float/bool/str types (does not stringify them)",
+    "diff_engine: _serialize_value stringifies 'exotic' types (datetimes, UUIDs, etc.) via str()",
+    "event_source_loader: _serialize_value is aligned with diff_engine's null/primitive handling while preserving the array-handling branch for BigQuery REPEATED fields",
+    "Regression test #93: a row with None column values serializes with JSON null (not the string 'null'), and _resolve_latest correctly falls through to the next non-None row",
+    "analytics_entity_engine: _extract_field_value returns payload.get(field_name) for any event whose event_type is not 'field_changed' (covers EventSource native event types, activity-rewritten row_appeared events, and the original row_appeared path)",
+    "Regression test #94: an event whose event_type is an arbitrary string (e.g. 'anon_attrs_loaded' from activity rewrite, or 'session_start' from GA4) with a flat-dict payload returns the field value via _extract_field_value",
+    "End-to-end test reflecting the M006 reproducer: mixed StateSource + EventSource IdentityGraph with a state field on a column containing nulls — verifies identity resolution spans both sources, state field resolves to the correct non-null value, and no literal 'null' strings leak into the output",
+    "All existing tests still pass",
+    "ruff + mypy clean",
+    "pyproject.toml version bumped to 0.4.2",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = ["VISION.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "Transfer the validated local patches for identity_engine, diff_engine, and analytics_entity_engine to an isolated branch",
+    "Align event_source_loader._serialize_value with diff_engine's null/primitive handling; keep the array-handling branch intact",
+    "Regression tests mapped 1:1 to issues #91, #92, #93, #94",
+    "One end-to-end integration test mirroring the M006 reproducer (mixed identity graph + state fields + nulls)",
+    "Version bump 0.4.1 -> 0.4.2",
+]
+out_of_scope = [
+    "apply_activity_definitions drop-vs-preserve design question (separate mission — reporter explicitly flagged this)",
+    "Any changes to the identity or projection public APIs",
+    "Schema changes to state table or payload format",
+    "Backend-specific integration tests (continue to rely on duckdb in-memory for regression)",
+]
+acceptable_breakage = [
+    "None — all four fixes correct silent-wrong-answer bugs. Any existing test asserting the buggy behavior (e.g. that resolve_identities returns empty for the #91 case) will need updating and should be counted as a correction, not a regression.",
+]
+
+[notes]
+considerations = """
+## Source of truth
+
+Four GitHub issues — deepskydatahq/fyrnheim#91, #92, #93, #94 — contain the
+full reproduction, root cause, and proposed fix for each bug. Those issues
+are the authoritative spec. Close them on merge with 'Fixes #91 #92 #93 #94'
+in the release PR body.
+
+## Implementation is partially done
+
+The patches for #91, #92, #93, #94 are already applied in the user's primary
+worktree as uncommitted local modifications — validated against real
+client-flowable M006 data. The diff is saved at /tmp/m051-local-patches.diff
+(3 files, 108 lines). The agent's first job is to transfer these to an
+isolated branch via `git apply`, then layer the additional
+event_source_loader fix and the regression tests on top.
+
+## event_source_loader alignment
+
+event_source_loader.py has its own _serialize_value with the same "null"
+string pattern plus an array-handling branch for BigQuery REPEATED fields.
+Align with diff_engine (return None for NaN, preserve primitives, str() for
+exotic types) but KEEP the array-handling branch intact — that branch is
+the v0.3.0 fix for BigQuery REPEATED columns and is load-bearing.
+
+Return type changes from `-> str` to `-> object`. The caller immediately
+wraps the result in `json.dumps(payload)` which handles all JSON-native
+Python types, so no callers need updating.
+
+## Test fixture patterns
+
+Existing tests in tests/test_identity_engine.py, tests/test_diff_engine.py,
+tests/test_analytics_entity.py, and tests/test_event_source_loader.py are
+the pattern templates. Reuse ibis.memtable + pandas DataFrame fixture shapes
+that already exist in those files rather than inventing new harnesses.
+
+## Release shape
+
+Bugfix release. Version 0.4.1 -> 0.4.2. Release-PR flow per the memory:
+release/v0.4.2 branch → PR → green CI → merge → tag → publish.
+"""

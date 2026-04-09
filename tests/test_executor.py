@@ -273,3 +273,120 @@ class TestWriteTable:
         executor = IbisExecutor(conn=fake_conn, backend="postgres")
         with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
             executor.write_table("p", "d", "n", pd.DataFrame({"x": [1]}))
+
+
+class TestExecuteParameterized:
+    def test_duckdb_simple(self):
+        with IbisExecutor.duckdb() as ex:
+            rows = ex.execute_parameterized("SELECT @x AS x", {"x": 1})
+            assert rows == [(1,)]
+
+    def test_duckdb_roundtrips_sql_hostile_chars(self):
+        payload = "it's a \\ backslash\nnewline\ttab\rcr"
+        with IbisExecutor.duckdb() as ex:
+            rows = ex.execute_parameterized(
+                "SELECT @v AS v", {"v": payload}
+            )
+            assert rows is not None
+            assert rows[0][0] == payload
+
+    def test_duckdb_handles_python_types(self):
+        import datetime as dt
+        with IbisExecutor.duckdb() as ex:
+            rows = ex.execute_parameterized(
+                "SELECT @a, @b, @c, @d, @e, @f",
+                {
+                    "a": None,
+                    "b": 42,
+                    "c": 3.5,
+                    "d": True,
+                    "e": "hi",
+                    "f": dt.datetime(2026, 1, 1, 12, 0, 0),
+                },
+            )
+            assert rows is not None
+            assert rows[0][1] == 42
+            assert rows[0][2] == 3.5
+            assert rows[0][3] is True
+            assert rows[0][4] == "hi"
+
+    def test_duckdb_ddl_and_dml_roundtrip(self):
+        """DDL/DML statements always return a list (per the contract).
+        DuckDB includes a row-count row for DML, which the contract allows —
+        callers of execute_parameterized for DDL/DML ignore the return value.
+        The meaningful assertion is the round-trip: after CREATE + INSERT,
+        a SELECT returns the data we just wrote."""
+        with IbisExecutor.duckdb() as ex:
+            # Result value is implementation-defined for DDL/DML — we only
+            # assert the contract that it returns a list (no exceptions).
+            result = ex.execute_parameterized(
+                "CREATE TABLE t_ddl (x INTEGER)", {}
+            )
+            assert isinstance(result, list)
+            result2 = ex.execute_parameterized(
+                "INSERT INTO t_ddl VALUES (@x)", {"x": 1}
+            )
+            assert isinstance(result2, list)
+            # Round-trip: the meaningful check
+            rows = ex.execute_parameterized("SELECT x FROM t_ddl", {})
+            assert rows == [(1,)]
+
+    def test_bigquery_constructs_scalar_params(self):
+        """Verify execute_parameterized on BigQuery constructs ScalarQueryParameter
+        objects with the correct names/types/values and passes them via
+        QueryJobConfig.query_parameters."""
+        import datetime as dt
+        from unittest.mock import MagicMock
+
+        # Real google.cloud.bigquery is imported by the executor at call time;
+        # it's installed as a test dependency so ScalarQueryParameter and
+        # QueryJobConfig build real objects we can introspect.
+        from google.cloud import bigquery as bq
+
+        fake_conn = MagicMock(name="bigquery_connection")
+        fake_conn.name = "bigquery"
+        fake_client = MagicMock(name="bq_client")
+        fake_conn.client = fake_client
+
+        fake_job = MagicMock(name="query_job")
+        fake_job.result.return_value = iter([])  # empty result iterator
+        fake_client.query.return_value = fake_job
+
+        executor = IbisExecutor(conn=fake_conn, backend="bigquery")
+        result = executor.execute_parameterized(
+            "SELECT @name, @n, @ts",
+            {
+                "name": "hello",
+                "n": 42,
+                "ts": dt.datetime(2026, 1, 1, 12, 0, 0),
+            },
+        )
+        assert result == []
+        fake_client.query.assert_called_once()
+        call_args = fake_client.query.call_args
+        assert call_args[0][0] == "SELECT @name, @n, @ts"
+        job_config = call_args.kwargs["job_config"]
+        assert isinstance(job_config, bq.QueryJobConfig)
+        params = list(job_config.query_parameters)
+        names = {p.name: p for p in params}
+        assert names["name"].type_ == "STRING"
+        assert names["name"].value == "hello"
+        assert names["n"].type_ == "INT64"
+        assert names["n"].value == 42
+        assert names["ts"].type_ == "TIMESTAMP"
+
+    def test_clickhouse_raises_not_implemented(self):
+        from unittest.mock import MagicMock
+        fake_conn = MagicMock(name="clickhouse_connection")
+        fake_conn.name = "clickhouse"
+        executor = IbisExecutor(conn=fake_conn, backend="clickhouse")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.execute_parameterized("SELECT 1", {})
+
+    def test_postgres_raises_not_implemented(self):
+        from unittest.mock import MagicMock
+        fake_conn = MagicMock(name="postgres_connection")
+        fake_conn.name = "postgres"
+        executor = IbisExecutor(conn=fake_conn, backend="postgres")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.execute_parameterized("SELECT 1", {})

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-09
+
+### Changed (internal)
+
+- State-table I/O (`_write_state_row`, `_load_state`, `fyr drop`) now uses
+  parameterized queries via a new `IbisExecutor.execute_parameterized` method
+  instead of f-string interpolation with a backend-aware `_escape` helper.
+  The `_escape` function has been deleted. This is a purely internal refactor
+  — no user-facing API changes — that structurally eliminates the class of
+  SQL escape bugs (e.g. #98) that required manual dialect patches in v0.4.1
+  and v0.5.1. BigQuery uses `ScalarQueryParameter` via `QueryJobConfig`;
+  DuckDB uses native `$name` placeholders (the executor translates `@name`
+  to `$name` transparently, so callers write BigQuery-style templates
+  everywhere).
+
 ## [0.6.0] - 2026-04-09
 
 ### Added

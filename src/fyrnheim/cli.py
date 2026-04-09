@@ -467,10 +467,10 @@ def drop(
         executor.drop_view(target.project, target.dataset, target.name)
         # Best-effort: remove state row if the state table exists.
         qualified = _qualify_state_table(executor, target.project, target.dataset)
-        escaped = target.name.replace("'", "''")
         try:
-            executor.connection.raw_sql(
-                f"DELETE FROM {qualified} WHERE name = '{escaped}'"
+            executor.execute_parameterized(
+                f"DELETE FROM {qualified} WHERE name = @name",
+                {"name": target.name},
             )
         except Exception as state_exc:
             log = logging.getLogger("fyrnheim")

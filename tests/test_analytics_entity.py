@@ -230,3 +230,64 @@ class TestM051ExtractFieldValue:
         assert _extract_field_value(row, "company_name") == "New"
         # Non-matching field name returns None (not new_value by accident)
         assert _extract_field_value(row, "other") is None
+
+
+class TestMaterializationField:
+    """Tests for the materialization / project / dataset / table fields."""
+
+    def _make_measure(self):
+        return Measure(name="n", activity="a", aggregation="count")
+
+    def test_materialization_defaults_to_parquet(self):
+        ae = AnalyticsEntity(name="users", measures=[self._make_measure()])
+        assert ae.materialization == "parquet"
+        assert ae.project is None
+        assert ae.dataset is None
+        assert ae.table is None
+
+    def test_materialization_parquet_no_coords_required(self):
+        ae = AnalyticsEntity(
+            name="users",
+            measures=[self._make_measure()],
+            materialization="parquet",
+        )
+        assert ae.materialization == "parquet"
+
+    def test_materialization_table_requires_project(self):
+        with pytest.raises(ValueError, match="project"):
+            AnalyticsEntity(
+                name="users",
+                measures=[self._make_measure()],
+                materialization="table",
+                dataset="marts",
+            )
+
+    def test_materialization_table_requires_dataset(self):
+        with pytest.raises(ValueError, match="dataset"):
+            AnalyticsEntity(
+                name="users",
+                measures=[self._make_measure()],
+                materialization="table",
+                project="my-proj",
+            )
+
+    def test_materialization_table_defaults_table_to_name(self):
+        ae = AnalyticsEntity(
+            name="users",
+            measures=[self._make_measure()],
+            materialization="table",
+            project="my-proj",
+            dataset="marts",
+        )
+        assert ae.table == "users"
+
+    def test_materialization_table_with_explicit_table_name(self):
+        ae = AnalyticsEntity(
+            name="users",
+            measures=[self._make_measure()],
+            materialization="table",
+            project="my-proj",
+            dataset="marts",
+            table="dim_users",
+        )
+        assert ae.table == "dim_users"

@@ -57,6 +57,10 @@ class AnalyticsEntity(BaseModel):
     measures: list[Measure] = Field(default_factory=list)
     computed_fields: list[ComputedColumn] = Field(default_factory=list)
     quality_checks: list[QualityCheck] = Field(default_factory=list)
+    materialization: Literal["parquet", "table"] = "parquet"
+    project: str | None = None
+    dataset: str | None = None
+    table: str | None = None
 
     @model_validator(mode="after")
     def _require_at_least_one_field_or_measure(self) -> "AnalyticsEntity":
@@ -64,4 +68,21 @@ class AnalyticsEntity(BaseModel):
             raise ValueError(
                 "AnalyticsEntity requires at least one state_field or measure"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_materialization_coordinates(self) -> "AnalyticsEntity":
+        if self.materialization == "table":
+            missing = [
+                name
+                for name, value in (("project", self.project), ("dataset", self.dataset))
+                if value is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"AnalyticsEntity '{self.name}' materialization='table' requires "
+                    f"fields: {', '.join(missing)}"
+                )
+            if self.table is None:
+                self.table = self.name
         return self

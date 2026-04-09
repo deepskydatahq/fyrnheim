@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import ibis
+import pandas as pd
 
 from fyrnheim.engine.errors import SourceNotFoundError
 
@@ -216,6 +217,46 @@ class IbisExecutor:
         else:
             raise NotImplementedError(
                 f"materialize_view not supported for backend {backend!r}; "
+                "v1 supports BigQuery and DuckDB"
+            )
+
+    def write_table(
+        self, project: str, dataset: str, name: str, df: pd.DataFrame
+    ) -> None:
+        """Write a pandas DataFrame to a warehouse table on the active backend.
+
+        Uses WRITE_TRUNCATE / CREATE OR REPLACE semantics — existing tables
+        are overwritten, no duplication on re-run.
+
+        Args:
+            project: GCP project (BigQuery) or ignored for DuckDB.
+            dataset: Dataset/schema name. Created if it doesn't exist.
+            name: Destination table name.
+            df: Pandas DataFrame to write.
+        """
+        backend = self._conn.name
+        if backend == "duckdb":
+            self._conn.raw_sql(f'CREATE SCHEMA IF NOT EXISTS "{dataset}"')
+            self._conn.create_table(name, df, database=dataset, overwrite=True)
+        elif backend == "bigquery":
+            from google.cloud import bigquery as bq
+
+            client = getattr(self._conn, "client", None)
+            if client is None:
+                client = getattr(self._conn, "_client", None)
+            if client is None:
+                raise RuntimeError(
+                    "Could not obtain underlying google.cloud.bigquery.Client "
+                    "from the ibis bigquery connection"
+                )
+            job_config = bq.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
+            fqn = f"{project}.{dataset}.{name}"
+            client.load_table_from_dataframe(
+                df, fqn, job_config=job_config
+            ).result()
+        else:
+            raise NotImplementedError(
+                f"write_table not supported for backend {backend!r}; "
                 "v1 supports BigQuery and DuckDB"
             )
 

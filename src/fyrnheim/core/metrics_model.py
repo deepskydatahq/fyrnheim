@@ -38,3 +38,24 @@ class MetricsModel(BaseModel):
     grain: Literal["hourly", "daily", "weekly", "monthly"]
     metric_fields: list[MetricField] = Field(min_length=1)
     dimensions: list[str] = Field(default_factory=list)
+    materialization: Literal["parquet", "table"] = "parquet"
+    project: str | None = None
+    dataset: str | None = None
+    table: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_materialization_coordinates(self) -> "MetricsModel":
+        if self.materialization == "table":
+            missing = [
+                name
+                for name, value in (("project", self.project), ("dataset", self.dataset))
+                if value is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"MetricsModel '{self.name}' materialization='table' requires "
+                    f"fields: {', '.join(missing)}"
+                )
+            if self.table is None:
+                self.table = self.name
+        return self

@@ -36,6 +36,7 @@ class PipelineResult:
     output_count: int = 0
     errors: list[str] = field(default_factory=list)
     outputs: dict[str, int] = field(default_factory=dict)  # name -> row_count
+    output_destinations: dict[str, str] = field(default_factory=dict)  # name -> destination
     elapsed_seconds: float = 0.0
     staging_materialized: list[str] = field(default_factory=list)
     staging_skipped: list[str] = field(default_factory=list)
@@ -153,12 +154,26 @@ def run_pipeline(
     for ae in analytics_entities:
         try:
             projected = project_analytics_entity(enriched_events, ae)
-            out_path = output_dir / f"{ae.name}.parquet"
             df = projected.execute()
-            df.to_parquet(str(out_path))
+            if ae.materialization == "table":
+                table_name = ae.table or ae.name
+                executor.write_table(ae.project, ae.dataset, table_name, df)
+                destination = (
+                    f"{config.backend}:{ae.project}.{ae.dataset}.{table_name}"
+                )
+                log.info(
+                    "Wrote analytics entity to warehouse: %s (%d rows)",
+                    destination,
+                    len(df),
+                )
+            else:
+                out_path = output_dir / f"{ae.name}.parquet"
+                df.to_parquet(str(out_path))
+                destination = f"parquet:{out_path}"
+                log.info("Wrote analytics entity: %s (%d rows)", ae.name, len(df))
             result.outputs[ae.name] = len(df)
+            result.output_destinations[ae.name] = destination
             result.output_count += 1
-            log.info("Wrote analytics entity: %s (%d rows)", ae.name, len(df))
         except Exception as exc:
             result.errors.append(f"Analytics entity '{ae.name}': {exc}")
             log.warning("Failed analytics entity '%s': %s", ae.name, exc)
@@ -167,12 +182,26 @@ def run_pipeline(
     for mm in metrics_models:
         try:
             aggregated = aggregate_metrics(enriched_events, mm)
-            out_path = output_dir / f"{mm.name}.parquet"
             df = aggregated.execute()
-            df.to_parquet(str(out_path))
+            if mm.materialization == "table":
+                table_name = mm.table or mm.name
+                executor.write_table(mm.project, mm.dataset, table_name, df)
+                destination = (
+                    f"{config.backend}:{mm.project}.{mm.dataset}.{table_name}"
+                )
+                log.info(
+                    "Wrote metrics model to warehouse: %s (%d rows)",
+                    destination,
+                    len(df),
+                )
+            else:
+                out_path = output_dir / f"{mm.name}.parquet"
+                df.to_parquet(str(out_path))
+                destination = f"parquet:{out_path}"
+                log.info("Wrote metrics model: %s (%d rows)", mm.name, len(df))
             result.outputs[mm.name] = len(df)
+            result.output_destinations[mm.name] = destination
             result.output_count += 1
-            log.info("Wrote metrics model: %s (%d rows)", mm.name, len(df))
         except Exception as exc:
             result.errors.append(f"Metrics model '{mm.name}': {exc}")
             log.warning("Failed metrics model '%s': %s", mm.name, exc)

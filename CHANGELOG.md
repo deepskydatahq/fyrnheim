@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-09
+
+### Added
+
+- `AnalyticsEntity` and `MetricsModel` now support `materialization="table"`
+  to write outputs directly to the active backend (BigQuery or DuckDB)
+  instead of local parquet. The new `project`, `dataset`, and `table`
+  fields (the latter defaulting to the entity's `name`) specify the
+  warehouse destination. Default `materialization="parquet"` preserves
+  existing behavior — projects without the new fields are unaffected.
+  Mirrors the `StagingView` primitive's shape, so entity outputs become
+  first-class warehouse artifacts (#99).
+
+- `IbisExecutor.write_table(project, dataset, name, df)` — new backend-
+  agnostic method for writing a pandas DataFrame to a warehouse table.
+  BigQuery implementation uses `load_table_from_dataframe` with
+  `WRITE_TRUNCATE`; DuckDB implementation uses `CREATE OR REPLACE TABLE`
+  with automatic schema creation. ClickHouse and Postgres raise
+  `NotImplementedError` — add them when a real project needs them.
+
+- Run summary now reports each output's destination (parquet path or
+  warehouse FQN) so you can see at a glance where your entities landed.
+
 ## [0.5.1] - 2026-04-09
 
 ### Fixed

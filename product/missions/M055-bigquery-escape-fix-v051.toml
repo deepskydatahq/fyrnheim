@@ -1,0 +1,169 @@
+# Mission: v0.5.1 — BigQuery _escape backslash fix
+# Fix the v0.4.1 _escape helper that silently produces malformed SQL on BigQuery
+# when a StagingView's first 500 chars contain a single quote.
+
+id = "M055"
+title = "v0.5.1 — BigQuery _escape backslash fix"
+status = "draft"
+created = 2026-04-09
+depends_on = ["M051"]
+
+[outcome]
+description = """
+Fix the BigQuery quote-escaping bug in `_escape` reported as issue #98. The
+v0.4.1 _escape fix added backslash/newline/tab/CR handling and used SQL
+standard quote doubling (`'` → `''`) for single quotes. DuckDB accepts that;
+BigQuery's standard SQL dialect does not — it requires backslash escaping
+(`'` → `\\'`). When a StagingView's rendered SQL contains a single quote in
+its first 500 characters (the sql_excerpt cutoff), `_write_state_row` builds
+an INSERT with doubled quotes that BigQuery rejects:
+
+    400 Syntax error: concatenated string literals must be separated by
+    whitespace or comments at [1:N]
+
+The worst part of the failure mode is that the CREATE OR REPLACE VIEW
+SUCCEEDS before the state row write fails. Phase 0 reports "Materialized
+StagingView 'X'" then aborts in the state write, and downstream sources
+fail with 404 because the rollback path skipped state but the views did
+materialize. The error message points at an INSERT Fyrnheim built, not at
+the user's SQL, so the first instinct is to debug user code that's fine.
+
+This mission ships the minimal backend-aware _escape fix in a v0.5.1 patch
+release. The deeper parameterized-query rewrite (which would make this and
+every future escape bug structurally impossible) is tracked as a separate
+follow-up.
+
+Latent since v0.4.0. Surfaced during client-flowable M007 when
+sql/ga4_sessions.sql added a comment mentioning `CONCAT(user_pseudo_id,
+'-', ga_session_id)` — a single quote at character ~118.
+"""
+
+user_progress = "From 'my StagingView materializes but Phase 0 aborts with a cryptic BigQuery string-literal error the moment my SQL has a single quote in the first 500 chars' to 'single quotes in StagingView SQL Just Work on BigQuery'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "_escape on the bigquery code path replaces single quotes with backslash-escape (`\\'`), not SQL-standard doubling (`''`)",
+    "_escape on the duckdb code path continues to use whatever DuckDB accepts (preserving current behavior — SQL standard doubling is fine for DuckDB)",
+    "The bigquery backslash escape is ordered AFTER the backslash-to-double-backslash replacement so that the escape's own backslash isn't re-escaped",
+    "BigQuery round-trip test (mocked): _escape applied to 'foo\\'bar' produces a string that, when wrapped in single quotes and sent as raw SQL, BigQuery would parse as 'foo\\'bar' (mock assertion on the SQL string sent to raw_sql)",
+    "DuckDB round-trip test (in-memory): materialize a StagingView whose rendered SQL contains a single-quoted string literal AND a backslash AND a newline; _write_state_row succeeds; _load_state reads back the row; sql_excerpt round-trips with the single quote preserved",
+    "End-to-end regression: a StagingView whose first 500 chars contain `'-'` (the exact client-flowable M007 reproducer) materializes AND has its state row written without error on duckdb (bigquery covered by mock)",
+    "Existing _escape tests still pass",
+    "pyproject.toml version bumped to 0.5.1; uv.lock updated",
+    "CHANGELOG.md entry: 'v0.5.1 — Fixed: BigQuery _escape now uses backslash escape for single quotes (#98)'",
+    "ruff + mypy clean; all tests pass",
+    "Release PR body references issue #98 with Fixes: keyword so it auto-closes on merge",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = []
+relevant_paths = [
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "Backend-aware _escape: single quote replacement branches on the active backend (bigquery → backslash, others → doubling)",
+    "Order-of-operations verified: backslash-to-double-backslash happens BEFORE the single-quote backslash escape so the escape's own `\\'` isn't corrupted",
+    "Regression tests for both bigquery (mocked) and duckdb (in-memory)",
+    "Version bump 0.5.0 → 0.5.1 + uv lock",
+    "CHANGELOG entry",
+    "Release via the release-PR flow per the saved memory",
+]
+out_of_scope = [
+    "Parameterized-query rewrite of _write_state_row / _load_state (tracked as a separate follow-up mission — the right long-term fix, but bigger scope than a v0.5.1 patch)",
+    "Changes to _ensure_state_table or any other SQL-building sites in staging_runner (only _escape and its caller are touched)",
+    "Any changes to apply_activity_definitions, project_analytics_entity, or unrelated files",
+    "Any changes to the 500-char sql_excerpt cutoff (a different tuning knob, not the bug)",
+    "Fixing the error-reporting UX so the wrong-file-pointing error message gets better (separate UX issue)",
+]
+acceptable_breakage = [
+    "None — purely a correctness fix on the BigQuery code path. DuckDB behavior is unchanged.",
+]
+
+[notes]
+considerations = """
+## Authoritative source
+
+GitHub issue #98 — https://github.com/deepskydatahq/fyrnheim/issues/98 —
+has the full bug report, root cause, reproduction, and BigQuery minimal
+reproducer. Fix is pre-validated against real client-flowable M007 data
+(the reporter worked around it by rewriting the comment to avoid single
+quotes; the test suite here codifies the original failing case as a
+regression guard).
+
+## The fix
+
+Two options:
+
+**Option 1 (minimal):** change `_escape` to take a `backend: str` argument
+and branch the single-quote replacement:
+
+```python
+def _escape(value: str, backend: str) -> str:
+    value = value.replace("\\\\", "\\\\\\\\")  # backslash FIRST
+    if backend == "bigquery":
+        value = value.replace("'", "\\\\'")  # backslash escape
+    else:
+        value = value.replace("'", "''")     # SQL standard
+    return (
+        value.replace("\\n", "\\\\n")
+        .replace("\\r", "\\\\r")
+        .replace("\\t", "\\\\t")
+    )
+```
+
+Caller in `_write_state_row` passes `executor.connection.name` as the
+backend argument. Tests exercise both branches.
+
+**Option 2 (also acceptable):** always use backslash escape (BigQuery
+and DuckDB both accept it, if verified). Simpler, no branch. Before
+choosing this path, verify DuckDB accepts backslash escape in its SQL
+string literals by running a small check locally — the issue report
+doesn't confirm this. If DuckDB accepts backslash, Option 2 is cleaner.
+If not, Option 1 is correct.
+
+**Recommendation:** start with Option 1 (known-safe). If the implementer
+verifies DuckDB accepts backslash during the first read, switch to
+Option 2 for simplicity. Either is acceptable.
+
+## Order matters
+
+Whatever the implementation, the backslash-to-double-backslash step must
+happen BEFORE the single-quote replacement on any branch. Otherwise, the
+`\\'` that Option 1 produces would be re-processed by the backslash step
+and become `\\\\'` — broken. Test explicitly with a payload containing
+both a backslash and a single quote (e.g. `"a\\\\b'c"`) to catch this.
+
+## Separately: parameterized queries follow-up
+
+The reporter's note at the end of #98 calls out the deeper issue:
+
+> Inline string interpolation for SQL is fragile and the dialect-specific
+> differences are exactly the kind of thing parameterized queries handle
+> correctly out of the box.
+
+This is true and is the right long-term fix. But it's bigger than a v0.5.1
+patch — it touches `_write_state_row`, `_load_state`, and possibly
+`_ensure_state_table`, changes the `raw_sql` calls to use each backend's
+parameter binding mechanism, and would likely need a small abstraction over
+the two backends' parameter shapes. File as M056 or later, target v0.6.0.
+
+Do not fold into this patch. v0.5.1 should be the minimal correctness fix
+and nothing more, so it can ship same-day as a bug report.
+
+## Release shape
+
+v0.5.1 patch. Release-PR flow per the saved memory:
+release/v0.5.1 branch → PR → green CI → merge → tag → publish.
+"""

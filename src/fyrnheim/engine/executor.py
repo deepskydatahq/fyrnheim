@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,29 @@ import pandas as pd
 from fyrnheim.engine.errors import SourceNotFoundError
 
 log = logging.getLogger("fyrnheim.engine")
+
+_AT_NAME_RE = re.compile(r"@(\w+)")
+
+
+def _infer_bq_type(value: Any) -> str:
+    """Map a Python value to a BigQuery ScalarQueryParameter type string.
+
+    Order matters: bool must be checked before int (bool is a subclass of int).
+    None defaults to STRING (a NULL STRING works in most state-table contexts).
+    """
+    if value is None:
+        return "STRING"
+    if isinstance(value, bool):
+        return "BOOL"
+    if isinstance(value, int):
+        return "INT64"
+    if isinstance(value, float):
+        return "FLOAT64"
+    if isinstance(value, _dt.datetime):
+        return "TIMESTAMP"
+    if isinstance(value, _dt.date):
+        return "DATE"
+    return "STRING"
 
 
 @dataclass(frozen=True)
@@ -258,6 +283,64 @@ class IbisExecutor:
             raise NotImplementedError(
                 f"write_table not supported for backend {backend!r}; "
                 "v1 supports BigQuery and DuckDB"
+            )
+
+    def execute_parameterized(
+        self,
+        sql: str,
+        params: dict[str, Any],
+    ) -> list[tuple[Any, ...]]:
+        """Execute a parameterized SQL statement on the active backend.
+
+        The sql template uses @name placeholders (BigQuery-native style).
+        On DuckDB, @name is converted to $name at execution time.
+
+        params maps placeholder name (without the @) to the Python value.
+        Native Python types (str, int, float, bool, datetime, None) are
+        supported — no escaping required.
+
+        Always returns a list of tuples. SELECT statements return their rows;
+        DDL/DML and zero-row queries return an empty list.
+        """
+        backend = self._conn.name
+        if backend == "duckdb":
+            duckdb_sql = _AT_NAME_RE.sub(r"$\1", sql)
+            raw = getattr(self._conn, "con", None)
+            if raw is None:
+                raise RuntimeError(
+                    "Could not obtain raw duckdb connection from the ibis "
+                    "duckdb backend (expected attribute 'con')"
+                )
+            cursor = raw.execute(duckdb_sql, params or {})
+            try:
+                rows = cursor.fetchall()
+            except Exception:
+                return []
+            return [tuple(r) for r in rows]
+        elif backend == "bigquery":
+            from google.cloud import bigquery as bq
+
+            client = getattr(self._conn, "client", None)
+            if client is None:
+                client = getattr(self._conn, "_client", None)
+            if client is None:
+                raise RuntimeError(
+                    "Could not obtain underlying google.cloud.bigquery.Client "
+                    "from the ibis bigquery connection"
+                )
+            bq_params = [
+                bq.ScalarQueryParameter(name, _infer_bq_type(value), value)
+                for name, value in params.items()
+            ]
+            job = client.query(
+                sql, job_config=bq.QueryJobConfig(query_parameters=bq_params)
+            )
+            result = job.result()
+            return [tuple(row.values()) for row in result]
+        else:
+            raise NotImplementedError(
+                f"execute_parameterized is not supported for backend "
+                f"{backend!r}. v1 supports BigQuery and DuckDB."
             )
 
     def view_exists(self, project: str, dataset: str, name: str) -> bool:

@@ -165,32 +165,11 @@ def _load_state(
     """Return {name: hash} from the state table."""
     qualified = _qualify_state_table(executor, project, dataset)
     hash_col = "`hash`" if executor.connection.name == "bigquery" else "hash"
-    cursor = executor.connection.raw_sql(
-        f"SELECT name, {hash_col} FROM {qualified}"
+    rows = executor.execute_parameterized(
+        f"SELECT name, {hash_col} FROM {qualified}",
+        {},
     )
-    try:
-        rows = list(cursor.fetchall())  # type: ignore[union-attr]
-    except AttributeError:
-        rows = list(cursor)
-    return {row[0]: row[1] for row in rows}
-
-
-def _escape(value: str, backend: str = "duckdb") -> str:
-    # Order matters: double backslashes FIRST, then handle single quotes.
-    # Otherwise the backslash introduced by the quote-escape step on BigQuery
-    # would be re-processed and corrupted.
-    value = value.replace("\\", "\\\\")
-    if backend == "bigquery":
-        # BigQuery standard SQL rejects SQL-standard quote doubling ('')
-        # inside string literals; use backslash escape instead.
-        value = value.replace("'", "\\'")
-    else:
-        value = value.replace("'", "''")
-    return (
-        value.replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-    )
+    return {row[0]: row[1] for row in rows} if rows else {}
 
 
 def _write_state_row(
@@ -203,22 +182,25 @@ def _write_state_row(
     """Upsert a row in the state table for the given view (DELETE+INSERT)."""
     qualified = _qualify_state_table(executor, project, dataset)
     excerpt = view.rendered_sql[:500]
-    ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now(UTC)
     backend = executor.connection.name
-    name_s = _escape(view.name, backend)
-    hash_s = _escape(content_hash, backend)
-    excerpt_s = _escape(excerpt, backend)
-    version_s = _escape(_FYR_VERSION, backend)
+    hash_col = "`hash`" if backend == "bigquery" else "hash"
 
-    executor.connection.raw_sql(
-        f"DELETE FROM {qualified} WHERE name = '{name_s}'"
+    executor.execute_parameterized(
+        f"DELETE FROM {qualified} WHERE name = @name",
+        {"name": view.name},
     )
-    hash_col = "`hash`" if executor.connection.name == "bigquery" else "hash"
-    executor.connection.raw_sql(
+    executor.execute_parameterized(
         f"INSERT INTO {qualified} "
-        f"(name, {hash_col}, materialized_at, sql_excerpt, fyrnheim_version) VALUES ("
-        f"'{name_s}', '{hash_s}', TIMESTAMP '{ts}', "
-        f"'{excerpt_s}', '{version_s}')"
+        f"(name, {hash_col}, materialized_at, sql_excerpt, fyrnheim_version) "
+        f"VALUES (@name, @hash, @ts, @excerpt, @version)",
+        {
+            "name": view.name,
+            "hash": content_hash,
+            "ts": ts,
+            "excerpt": excerpt,
+            "version": _FYR_VERSION,
+        },
     )
 
 

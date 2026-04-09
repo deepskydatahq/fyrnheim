@@ -325,7 +325,6 @@ class TestSummaryType:
 # =========================================================================
 
 from fyrnheim.engine.staging_runner import (  # noqa: E402
-    _escape,
     _load_state,
 )
 
@@ -373,22 +372,6 @@ def test_state_table_ddl_quotes_hash_column_for_bigquery():
     assert "`hash`" in ddl
     # no unquoted `hash ` column reference
     assert not _re.search(r"(?<!`)\bhash\b(?!`)", ddl)
-
-
-def test_escape_handles_multiline_sql():
-    payload = "line1\nline2 with ' quote"
-    escaped = _escape(payload)
-    assert "\n" not in escaped
-    assert "''" in escaped
-    assert "\\n" in escaped
-
-
-def test_escape_backslash_then_newline_no_double_escape():
-    payload = "a\\b\nc"
-    escaped = _escape(payload)
-    # backslash becomes \\; newline becomes \n (a literal backslash + n)
-    # order matters: if newline ran first we'd get \\\\n for the escaped NL
-    assert escaped == "a\\\\b\\nc"
 
 
 def test_write_state_row_with_multiline_excerpt(tmp_path):
@@ -479,39 +462,23 @@ def test_fixture_shadow_uses_upstream_name_not_source_name(tmp_path):
     assert "real_upstream" not in result.staging_materialized
 
 
-def test_escape_single_quote_backslash_escape_on_bigquery():
-    # BigQuery rejects '' doubling; _escape must emit \' instead.
-    payload = "a'b"
-    assert _escape(payload, "bigquery") == "a\\'b"
-    # DuckDB still uses SQL-standard doubling.
-    assert _escape(payload, "duckdb") == "a''b"
-
-
-def test_escape_backslash_and_quote_ordering():
-    # Walk through: a\b'c → backslash first → a\\b'c → quote → a\\b\'c
-    payload = "a\\b'c"
-    assert _escape(payload, "bigquery") == "a\\\\b\\'c"
-    assert _escape(payload, "duckdb") == "a\\\\b''c"
-
-
-def test_bigquery_write_state_row_uses_backslash_quote_escape():
+def test_bigquery_write_state_row_uses_parameterized_queries():
+    """After M056, _write_state_row calls execute_parameterized instead of
+    raw_sql with f-string interpolation. Assert the SQL templates contain
+    @name placeholders and the params dict has the expected values."""
     import fyrnheim.engine.staging_runner as sr
 
-    captured: list[str] = []
+    calls: list[tuple[str, dict]] = []
 
     class FakeConn:
         name = "bigquery"
 
-        def raw_sql(self, sql):
-            captured.append(sql)
-
-            class C:
-                def fetchall(self_inner):
-                    return []
-            return C()
-
     class FakeExec:
         connection = FakeConn()
+
+        def execute_parameterized(self, sql, params):
+            calls.append((sql, params))
+            return None
 
     sv = StagingView(
         name="stg_q",
@@ -521,11 +488,40 @@ def test_bigquery_write_state_row_uses_backslash_quote_escape():
         sql="-- CONCAT(x, '-', y)\nSELECT 1 AS id",
     )
     sr._write_state_row(FakeExec(), "proj", "dset", sv, "deadbeef")  # type: ignore[arg-type]
-    insert_sql = captured[-1]
-    # The excerpt contained a single quote; assert it was backslash-escaped
-    # and did NOT use the SQL-standard doubling form.
-    assert "\\'" in insert_sql
-    assert "''" not in insert_sql
+    assert len(calls) == 2
+    delete_sql, delete_params = calls[0]
+    insert_sql, insert_params = calls[1]
+    assert "DELETE FROM" in delete_sql
+    assert "@name" in delete_sql
+    assert delete_params == {"name": "stg_q"}
+    assert "INSERT INTO" in insert_sql
+    assert "`hash`" in insert_sql
+    assert "@name" in insert_sql and "@hash" in insert_sql
+    assert "@ts" in insert_sql and "@excerpt" in insert_sql
+    assert "@version" in insert_sql
+    # The excerpt still contains the raw single quote — no escaping applied.
+    assert "'" in insert_params["excerpt"]
+    assert insert_params["name"] == "stg_q"
+    assert insert_params["hash"] == "deadbeef"
+
+
+def test_state_table_io_roundtrips_sql_hostile_characters(tmp_path):
+    """Structural regression guard for the class of bugs #98 was an instance
+    of: a StagingView whose rendered SQL contains quote + backslash + newline
+    + tab + CR in the first 500 chars must round-trip via _write_state_row
+    and _load_state on DuckDB with no escaping special-case."""
+    sv = StagingView(
+        name="hostile",
+        project="proj",
+        dataset="analytics",
+        sql="SELECT '\\t' || '\r' || 'it''s' AS val\n-- note",
+    )
+    db = tmp_path / "hostile.db"
+    with IbisExecutor.duckdb(db_path=str(db)) as ex:
+        summary = materialize_staging_views(ex, [sv])
+        assert summary.materialized == ["hostile"]
+        state = _load_state(ex, "proj", "analytics")
+        assert state.get("hostile") == sv.content_hash()
 
 
 def test_duckdb_write_state_row_roundtrips_quotes_newlines_backslashes(tmp_path):

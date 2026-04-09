@@ -1,0 +1,192 @@
+# Mission: apply_activity_definitions drop-vs-preserve semantics
+# Design mission — decide the contract, don't implement yet.
+
+id = "M052"
+title = "Design: apply_activity_definitions drop-vs-preserve semantics"
+status = "draft"
+created = 2026-04-09
+depends_on = []
+
+[outcome]
+description = """
+`apply_activity_definitions` in `src/fyrnheim/engine/activity_engine.py`
+currently returns ONLY events matched by at least one ActivityDefinition,
+dropping every other event from the stream. This is confirmed at
+activity_engine.py:43-61 — the function builds `all_matched` from per-
+definition matches and returns just that, never unioning with the raw input.
+
+This contract has a silent, load-bearing consequence for any project that
+mixes ActivityDefinitions with state fields on an AnalyticsEntity: events
+from sources with no matching definition vanish in Phase 2, so Phase 4 state
+field projection never sees them. The client-flowable M006 mission hit this
+and worked around it by adding a no-op pass-through ActivityDefinition per
+source just to keep the events alive. That workaround is the direct cause of
+bug #94 (since fixed in v0.4.2): the pass-through rewrites event_type from
+`row_appeared` to the activity name, which the state-field projection then
+didn't know how to read.
+
+v0.4.2 fixed the projection-side symptom, but the underlying contract
+question is unresolved: should Phase 2 DROP unmatched events (current
+behavior, requires passthrough workaround) or PRESERVE them (union of
+matched + unmatched, passthrough unneeded)? Both have trade-offs. This
+mission is a DESIGN mission — decide the contract, write it up, then file
+a follow-up implementation mission if the decision is to change.
+
+Out of scope: any code changes. This mission produces a decision doc, not
+a patch.
+"""
+
+user_progress = "From 'users must add no-op passthrough activities to keep events alive for state fields' to 'the contract is explicit and documented, and passthrough is either unnecessary or the recommended idiom'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "A decision doc lives somewhere in the repo (e.g. docs/decisions/ or as an ADR) capturing: (a) the current behavior at activity_engine.py:43-61, (b) the two options with pros/cons, (c) the chosen option, (d) the rationale",
+    "The chosen option is one of: DROP (keep current), PRESERVE (union matched + unmatched), or HYBRID (e.g. preserve by default, drop on explicit opt-in)",
+    "If the chosen option differs from current behavior, a follow-up implementation mission is filed (M053 or later) with the scope of the change",
+    "If the chosen option IS to keep current behavior, the 'passthrough activity' idiom is documented as the recommended pattern (with a note about the v0.4.2 fix that made it safe)",
+    "The activity_engine.py module docstring or function docstring is updated to explicitly state the semantics",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "docs/",
+    "product/missions/",
+]
+
+[context]
+related_docs = ["VISION.md", "VALUES.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+]
+
+[scope]
+in_scope = [
+    "Analyze the current behavior end-to-end (Phase 2 through Phase 4)",
+    "Enumerate the trade-offs of DROP vs PRESERVE vs HYBRID",
+    "Survey existing user-facing docs and examples for implicit assumptions about the contract",
+    "Make a decision and document it",
+    "Update activity_engine docstrings to state the chosen semantics",
+    "File a follow-up implementation mission if the decision changes behavior",
+]
+out_of_scope = [
+    "Any code changes to activity_engine.py beyond docstring updates",
+    "Any code changes to pipeline.py",
+    "Implementing the chosen behavior (that's a follow-up mission, if needed)",
+    "Benchmarking or performance analysis (this is a semantics question, not a performance one)",
+]
+acceptable_breakage = [
+    "None — this mission writes docs and updates a docstring. Code behavior is unchanged.",
+]
+
+[notes]
+considerations = """
+## Background
+
+Bug #94 (v0.4.2) fixed `_extract_field_value` to handle events whose
+event_type is an arbitrary string — including events rewritten by
+`apply_activity_definitions`. The fix unblocked client-flowable M006, but
+the reason M006 hit #94 at all is that the user had added a no-op
+pass-through ActivityDefinition to keep StateSource events alive in the
+stream past Phase 2. That pass-through was itself a workaround for the
+current DROP behavior of `apply_activity_definitions`.
+
+So there are two layers here, now fully decoupled:
+
+- **v0.4.2 (shipped):** state-field projection handles any event_type,
+  including activity-rewritten ones. This is the right long-term behavior
+  regardless of how Phase 2 treats unmatched events.
+- **M052 (this mission):** decide what Phase 2 should do with unmatched
+  events. The outcome of this mission determines whether the passthrough
+  idiom is a supported pattern, an anti-pattern, or unnecessary entirely.
+
+## Current behavior (grounded in code)
+
+`activity_engine.py:23-61` — `apply_activity_definitions` returns
+`ibis.memtable(pd.DataFrame(all_matched))` where `all_matched` contains
+only events that matched at least one ActivityDefinition. Events from
+sources with no definition, or events from a defined source that didn't
+match the trigger, are silently dropped from the stream before Phase 3
+(identity resolution) and Phase 4 (analytics entity projection) see them.
+
+## The three options
+
+### Option A — DROP (keep current)
+
+**Pros:**
+- No code change; current users of activities-only projects get no surprise
+- The output of Phase 2 is semantically "the set of named activities" —
+  a clean abstraction if you only care about activities
+- Forces users to be explicit about what events should flow downstream
+
+**Cons:**
+- Users with mixed activity + state-field projects must add no-op
+  passthrough activities per source — an obscure, undocumented workaround
+- The passthrough idiom rewrites `event_type`, which was the direct cause
+  of bug #94 (now fixed but cognitively load-bearing)
+- The "you need a no-op activity" lesson is invisible until state fields
+  silently produce None and someone traces the pipeline
+
+### Option B — PRESERVE (union matched + unmatched)
+
+**Pros:**
+- Mixed activity + state-field projects just work with no workaround
+- Phase 2 semantics become "annotate the stream with activity names
+  where applicable" rather than "filter the stream to activities"
+- Matches user intuition: adding an activity shouldn't remove events
+- Passthrough idiom disappears
+
+**Cons:**
+- Projects that currently rely on DROP semantics (if any exist) would see
+  a behavioral change — potentially large — and need to add explicit
+  filtering downstream
+- Phase 2 output is noisier for pure-activity consumers (they get events
+  they didn't ask for)
+- Passthrough idiom is already in the wild in at least one project
+  (client-flowable); those passthrough definitions become redundant
+
+### Option C — HYBRID (preserve by default, opt-in drop)
+
+For example: Phase 2 returns the union by default, and
+`apply_activity_definitions(..., drop_unmatched=True)` restores the
+current behavior. Or a Pipeline-level config flag.
+
+**Pros:**
+- Preserves backward compatibility for existing drop-reliant consumers
+- Ships the better default for new users
+- Migration path is obvious
+
+**Cons:**
+- Adds a configuration surface to the pipeline (small tax on every user)
+- Two code paths to maintain and test
+- Defers the "just make it work" judgment call
+
+## Decision criteria
+
+- How many existing Fyrnheim projects (if any) depend on DROP semantics for
+  correctness? Survey: search for ActivityDefinition usage in open-fyrnheim
+  and any known downstream projects.
+- Does the VISION/VALUES guidance have a preference for "principle of least
+  surprise" vs "explicit over implicit"?
+- What does the pipeline phase model say about Phase 2's role? Is it a
+  filter or an annotator?
+
+## Recommended format for the decision doc
+
+A short Architecture Decision Record (ADR) in docs/decisions/ or similar,
+modeled on the industry-standard ADR format. ~1-2 pages. The agent running
+this mission should pick the location that matches the project's existing
+conventions (read the docs/ tree first).
+
+## Why this is a design mission, not an implementation mission
+
+Options B and C both touch load-bearing pipeline behavior and could affect
+every downstream Fyrnheim project. That's a decision worth making
+deliberately, with the options enumerated and the rationale written down,
+rather than inside an implementation PR. If the decision is to keep DROP
+(Option A), the "code change" is just a docstring update — no separate
+implementation mission needed. If it's B or C, a follow-up mission files
+the implementation.
+"""

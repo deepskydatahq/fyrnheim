@@ -318,3 +318,179 @@ class TestSummaryType:
         s = StagingRunSummary()
         assert s.materialized == []
         assert s.skipped == []
+
+
+# =========================================================================
+# v0.4.1 regression tests
+# =========================================================================
+
+from fyrnheim.engine.staging_runner import (  # noqa: E402
+    _escape,
+    _load_state,
+)
+
+
+def test_staging_view_accepts_path_for_sql(tmp_path: Path):
+    sql_file = tmp_path / "q.sql"
+    sql_file.write_text("SELECT id, name FROM users", encoding="utf-8")
+    sv = StagingView(
+        name="v", project="p", dataset="d", sql=sql_file
+    )
+    assert sv.sql == "SELECT id, name FROM users"
+
+
+def test_staging_view_importable_from_top_level():
+    import fyrnheim
+    from fyrnheim import StagingView as TopStagingView
+
+    assert TopStagingView is StagingView
+    assert "StagingView" in fyrnheim.__all__
+
+
+def test_state_table_ddl_quotes_hash_column_for_bigquery():
+    import re as _re
+
+    import fyrnheim.engine.staging_runner as sr
+
+    captured: list[str] = []
+
+    class FakeConn:
+        name = "bigquery"
+
+        def raw_sql(self, sql):
+            captured.append(sql)
+
+            class C:
+                def fetchall(self_inner):
+                    return []
+            return C()
+
+    class FakeExec:
+        connection = FakeConn()
+
+    sr._ensure_state_table(FakeExec(), "proj", "dset")  # type: ignore[arg-type]
+    ddl = captured[-1]
+    assert "`hash`" in ddl
+    # no unquoted `hash ` column reference
+    assert not _re.search(r"(?<!`)\bhash\b(?!`)", ddl)
+
+
+def test_escape_handles_multiline_sql():
+    payload = "line1\nline2 with ' quote"
+    escaped = _escape(payload)
+    assert "\n" not in escaped
+    assert "''" in escaped
+    assert "\\n" in escaped
+
+
+def test_escape_backslash_then_newline_no_double_escape():
+    payload = "a\\b\nc"
+    escaped = _escape(payload)
+    # backslash becomes \\; newline becomes \n (a literal backslash + n)
+    # order matters: if newline ran first we'd get \\\\n for the escaped NL
+    assert escaped == "a\\\\b\\nc"
+
+
+def test_write_state_row_with_multiline_excerpt(tmp_path):
+    sv = StagingView(
+        name="multi",
+        project="proj",
+        dataset="analytics",
+        sql="SELECT\n\t'a''b\\c' AS\nval",
+    )
+    db = tmp_path / "t.db"
+    with IbisExecutor.duckdb(db_path=str(db)) as ex:
+        summary = materialize_staging_views(ex, [sv])
+        assert summary.materialized == ["multi"]
+        state = _load_state(ex, "proj", "analytics")
+        assert "multi" in state
+        assert state["multi"] == sv.content_hash()
+
+
+class _FakeUpstream:
+    def __init__(self, name):
+        self.name = name
+
+
+class _FakeSourceWithUpstream:
+    def __init__(self, name, duckdb_path, upstream_name):
+        self.name = name
+        self.duckdb_path = duckdb_path
+        self.upstream = _FakeUpstream(upstream_name)
+
+
+def _run_phase0(assets, backend, tmp_path):
+    from fyrnheim.config import ResolvedConfig
+    from fyrnheim.engine.pipeline import run_pipeline
+
+    config = ResolvedConfig(
+        project_root=tmp_path,
+        entities_dir=tmp_path / "entities",
+        data_dir=tmp_path / "data",
+        output_dir=tmp_path / "out",
+        backend=backend,
+        backend_config={},
+    )
+    (tmp_path / "out").mkdir(parents=True, exist_ok=True)
+    with IbisExecutor.duckdb() as ex:
+        return run_pipeline(assets, config, ex)
+
+
+def test_fixture_shadow_only_applies_on_duckdb_backend(tmp_path):
+    view = _sv("shared_name")
+    src = _FakeSourceWithUpstream(
+        name="shared_name", duckdb_path="x.db", upstream_name="shared_name"
+    )
+    assets = {
+        "sources": [src],
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": [],
+        "metrics_models": [],
+        "staging_views": [view],
+    }
+    # Backend=bigquery: fixture shadow MUST NOT fire; view should be materialized
+    # (we still run executor as duckdb to avoid real BQ; the gate is config.backend)
+    result = _run_phase0(assets, backend="bigquery", tmp_path=tmp_path)
+    assert "shared_name" in result.staging_materialized
+
+
+def test_fixture_shadow_uses_upstream_name_not_source_name(tmp_path):
+    unrelated = _sv("unrelated_view")
+    src_upstream_view = _sv("real_upstream")
+    # source name coincides with unrelated view, but its upstream points elsewhere
+    src = _FakeSourceWithUpstream(
+        name="unrelated_view",
+        duckdb_path="x.db",
+        upstream_name="real_upstream",
+    )
+    assets = {
+        "sources": [src],
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": [],
+        "metrics_models": [],
+        "staging_views": [unrelated, src_upstream_view],
+    }
+    result = _run_phase0(assets, backend="duckdb", tmp_path=tmp_path)
+    # Unrelated view should be materialized (NOT shadowed by source name)
+    assert "unrelated_view" in result.staging_materialized
+    # real_upstream should be shadow-skipped
+    assert "real_upstream" not in result.staging_materialized
+
+
+def test_fixture_shadow_happy_path_preserved(tmp_path):
+    view = _sv("my_view")
+    src = _FakeSourceWithUpstream(
+        name="src", duckdb_path="x.db", upstream_name="my_view"
+    )
+    assets = {
+        "sources": [src],
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": [],
+        "metrics_models": [],
+        "staging_views": [view],
+    }
+    result = _run_phase0(assets, backend="duckdb", tmp_path=tmp_path)
+    assert "my_view" not in result.staging_materialized

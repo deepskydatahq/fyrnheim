@@ -25,6 +25,7 @@ from fyrnheim.core import (
     TableSource as TableSource,
     TypeCast as TypeCast,
 )
+from fyrnheim.core.staging_view import StagingView as StagingView
 from fyrnheim.primitives import (
     account_id_from_domain as account_id_from_domain,
     any_value as any_value,
@@ -88,6 +89,7 @@ __all__ = [
     "EventSource",
     "StateSource",
     "SourceTransforms",
+    "StagingView",
     "TypeCast",
     "Rename",
     "Divide",

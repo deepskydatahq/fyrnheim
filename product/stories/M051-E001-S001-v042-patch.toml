@@ -1,0 +1,109 @@
+id = "M051-E001-S001"
+parent = "M051-E001"
+title = "Transfer local patches, align event_source_loader, add regression tests, bump to 0.4.2"
+status = "ready"
+created = 2026-04-09
+
+[outcome]
+description = """Apply the validated local patches for issues #91/#92/#93/#94,
+align event_source_loader._serialize_value, add 4 regression tests (one per
+issue) plus one end-to-end M006 reproducer test, and bump version to 0.4.2."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#91 regression: StateSource + IdentitySource(match_key_field=id_field) produces non-empty mapping with canonical_id = sha256(entity_id)[:16]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#92 regression: events with event_type='session_start' (EventSource shape) appear in identity resolution mapping when EventSource is declared in IdentityGraph"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#92 safeguard: field_changed events are still excluded from identity resolution"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#93 regression: diff_engine._serialize_value(None) returns Python None, not the string 'null'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#93 regression: diff_engine._serialize_value preserves int, float, bool, str (no stringification of primitives)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#93 regression: _resolve_latest correctly falls through a None-bearing row to the next row with a real value (no string 'null' leakage)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "event_source_loader._serialize_value(None) returns Python None; preserves primitives; keeps array-branch (list/tuple/ndarray -> JSON array) intact"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#94 regression: _extract_field_value returns payload.get(field_name) for an event whose event_type is an arbitrary string (e.g. 'anon_attrs_loaded' or 'session_start') with a flat-dict payload"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "#94 safeguard: field_changed events still return new_value only when payload.field_name matches the requested field"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "End-to-end: mixed StateSource + EventSource IdentityGraph; a state field on a column with null values resolves to the correct non-null value across the cross-source canonical_id; no literal 'null' strings appear in the output"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version == '0.4.2', uv.lock updated"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/",
+    "pyproject.toml",
+]
+input_fixtures = ["/tmp/m051-local-patches.diff"]
+depends_on = []
+
+[handoff]
+implementation_hints = """
+Step 1 — Apply local patches. The user's pre-validated fixes for #91/#92/#93/#94
+are saved at /tmp/m051-local-patches.diff (108 lines, 3 files). In the
+isolated worktree: `git apply /tmp/m051-local-patches.diff`. Verify the diff
+matches what's documented in issues #91/#92/#93/#94 (not #94's analytics_entity_engine
+case — analytics_entity_engine IS in the diff; all three touched files are).
+
+Step 2 — event_source_loader._serialize_value alignment. Open
+src/fyrnheim/engine/event_source_loader.py around line 109. Change the signature
+return type from `-> str` to `-> object`. Restructure:
+- Keep the array branch FIRST (list/tuple/np.ndarray -> json.dumps with default=str)
+- NaN/None branch: return None (not 'null')
+- Preserve primitives: if isinstance(v, (str, int, float, bool)): return v
+- Everything else: return str(v)
+Ensure order: array-check before pd.isna (the existing comment explains why).
+
+Step 3 — Regression tests. Add to the appropriate existing test files:
+- tests/test_identity_engine.py: two tests for #91 and #92
+- tests/test_diff_engine.py: two tests for #93 (None->None, primitives preserved) +
+  one test for _resolve_latest null fallthrough
+- tests/test_event_source_loader.py: one test for the _serialize_value alignment
+  including an array-branch regression
+- tests/test_analytics_entity.py: one test for #94 (arbitrary event_type,
+  flat-dict payload, returns value) + a field_changed safeguard test
+- tests/test_e2e_identity_projection.py (new file): the M006 reproducer e2e
+  test. Mixed StateSource + EventSource identity graph, at least one column
+  with null values, state field, verify correct resolution and no 'null' strings.
+
+Step 4 — version bump. pyproject.toml 0.4.1 -> 0.4.2, run `uv lock`.
+
+Step 5 — run: pytest, ruff, mypy. Fix any issues. Commit and push.
+"""
+reference_files = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+]

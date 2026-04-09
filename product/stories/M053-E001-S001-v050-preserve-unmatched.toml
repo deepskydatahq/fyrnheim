@@ -1,0 +1,160 @@
+id = "M053-E001-S001"
+parent = "M053-E001"
+title = "Preserve unmatched events in apply_activity_definitions; ship v0.5.0"
+status = "ready"
+created = 2026-04-09
+
+[outcome]
+description = """Change apply_activity_definitions to the d1 semantics from
+ADR-0001; add 4 new unit tests + 1 updated test + 1 e2e regression test;
+fix the EventOccurred typo in customers.py (issue #100); bump to 0.5.0."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_unmatched_events_pass_through: 3 raw events, 1 matches signup, 2 don't → output has 1 renamed + 2 raw (len == 3)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_unmatched_events_preserve_original_event_type: pass-through rows' event_type is the original string (row_appeared, field_changed, etc.)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_unmatched_events_preserve_original_payload: pass-through payload is byte-identical to the input (not touched by include_fields on any definition)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_mixed_matched_unmatched_in_same_source: same source has both a matched and an unmatched event; output contains both with correct semantics"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_does_not_match_other_sources updated: now asserts len(result) == 1 (the pass-through) with a comment referencing ADR-0001"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing test_multiple_definitions_produce_union still passes (matched events still produce one row per matching definition)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing test_empty_result_returns_correct_schema still passes (empty input returns empty memtable with correct schema)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "test_e2e_customers_example_state_fields_stay_fresh: crm_contacts StateSource with row_appeared + field_changed(email), signup activity on RowAppeared, StateField email strategy='latest' → resolved email equals the post-field_changed value (would fail on main, passes after change)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "apply_activity_definitions docstring states the new d1 contract explicitly; references ADR-0001"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "examples/entities/customers.py: EventOccurred(event_types=['purchase']) corrected to EventOccurred(event_type='purchase') (issue #100)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version == '0.5.0'; uv.lock updated"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Release notes / CHANGELOG entry added: 'Breaking: activity definitions now preserve unmatched events' with the three-line migration guide"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/test_activity_engine.py",
+    "examples/entities/customers.py",
+    "docs/decisions/0001-activity-definitions-drop-vs-preserve.md",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+docs/decisions/0001-activity-definitions-drop-vs-preserve.md — read before writing code.
+
+## Implementation sketch (from the ADR)
+
+Change the outer loop of `apply_activity_definitions`:
+
+1. Execute the raw_events to a DataFrame (as today).
+2. Track a `set[int]` of matched indices. Populate it inside the per-definition
+   loop, using the original DataFrame indices (not the filtered subset indices).
+   Easiest: have _apply_single_definition return BOTH the built output rows AND
+   the set of source indices it matched; or, have it return just the rows and
+   recompute matched indices in the outer loop by filter matching.
+3. After the per-definition loop, iterate the raw DataFrame and append rows
+   whose index is not in matched. Use the same dict shape as the output
+   (source, entity_id, ts, event_type, payload) pulled from the raw row.
+4. Build `all_rows = all_matched + unmatched_passthrough` and return
+   `ibis.memtable(pd.DataFrame(all_rows))`. Empty-input path unchanged.
+
+Row ordering within the output doesn't matter — downstream doesn't care.
+
+## Signature change option
+
+If passing matched indices out of `_apply_single_definition` is awkward,
+an alternative is to compute matched indices in the outer loop by running
+the same filter logic (or by comparing the matched output rows back to
+the raw input by entity_id+ts — fragile if duplicates exist). The cleanest
+approach is to change `_apply_single_definition` to return
+`tuple[list[dict], set[int]]` or a small dataclass. Pick whichever keeps
+the code readable.
+
+## Test naming
+
+Match the existing test_activity_engine.py class structure. Put the 4 new
+tests in a new `TestUnmatchedPreserved` class (or extend TestOutputEventFormat
+if that reads cleaner).
+
+## e2e test location
+
+Add `test_e2e_customers_example_state_fields_stay_fresh` to a new file
+`tests/test_e2e_activity_preserve.py` or extend an existing e2e test file
+(e.g., test_e2e_activity_pipeline.py). Read the existing e2e file first to
+match its fixture patterns — don't invent a new harness.
+
+## customers.py typo fix
+
+In examples/entities/customers.py line ~56, change:
+  trigger=EventOccurred(event_types=["purchase"]),
+to:
+  trigger=EventOccurred(event_type="purchase"),
+
+Only that one line. Don't "improve" anything else in the example.
+
+## Version bump
+
+pyproject.toml: 0.4.2 -> 0.5.0, then `uv lock`.
+
+## Release notes
+
+Add/update CHANGELOG.md or similar (check the repo; if there's no CHANGELOG,
+put the entry in the release PR body only). Format:
+
+```
+## v0.5.0 — Breaking: activity definitions preserve unmatched events
+
+apply_activity_definitions now preserves events from sources whose raw event
+no ActivityDefinition matched. Previously these events were silently dropped,
+causing state fields on those sources to return stale values. See ADR-0001
+(docs/decisions/0001-activity-definitions-drop-vs-preserve.md) for the full
+rationale.
+
+### Migration
+- If your project only uses activities (no state fields): no action needed.
+- If you use state fields on sources that also have activity definitions:
+  remove any no-op passthrough activities you added as a workaround.
+- If you relied on drop semantics for downstream correctness: filter
+  explicitly via `events.filter(event_type.isin([...activity_names...]))`.
+```
+"""
+reference_files = [
+    "docs/decisions/0001-activity-definitions-drop-vs-preserve.md",
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/test_activity_engine.py",
+    "examples/entities/customers.py",
+]

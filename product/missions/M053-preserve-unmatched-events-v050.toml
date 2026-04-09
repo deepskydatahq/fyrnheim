@@ -1,0 +1,147 @@
+# Mission: Implement ADR-0001 — preserve unmatched events in Phase 2 (v0.5.0)
+# Breaking change implementing the decision from M052 / ADR-0001.
+
+id = "M053"
+title = "v0.5.0 — preserve unmatched events in apply_activity_definitions"
+status = "draft"
+created = 2026-04-09
+depends_on = ["M052"]
+
+[outcome]
+description = """
+Implement ADR-0001 (docs/decisions/0001-activity-definitions-drop-vs-preserve.md).
+Change apply_activity_definitions in src/fyrnheim/engine/activity_engine.py to
+preserve unmatched events (d1 semantics): activities annotate where they apply,
+and every raw event that no definition matched passes through unchanged.
+
+Ships as a breaking change in v0.5.0. The change is surgically localized to
+the outer loop of apply_activity_definitions plus a docstring rewrite; Phase 3
+(resolve_identities) and Phase 4 (_extract_field_value) were already fixed in
+v0.4.2 to handle mixed event_type streams, so no downstream consumer changes
+are needed.
+
+After this mission:
+- The flagship examples/entities/customers.py example works correctly without
+  modification: state fields on email, name, first_seen see field_changed
+  events and strategy='latest' returns actual latest values (currently
+  returns stale at-signup values, silent wrong answer).
+- Mixed ActivityDefinition + StateField projects on the same source work
+  with no workaround. The no-op passthrough idiom becomes unnecessary.
+- One existing test is updated to assert the new contract.
+
+Also includes the small fix from issue #100: the EventOccurred typo in
+customers.py (event_types plural -> event_type singular) so the example
+actually loads.
+"""
+
+user_progress = "From 'mixed activity + state-field projects silently drop events and produce stale state fields' to 'mixed projects just work; activities annotate and unmatched events flow through'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "apply_activity_definitions preserves unmatched events: for each raw event matched by zero ActivityDefinitions, the raw event appears unchanged in the output (same source, entity_id, ts, event_type, payload)",
+    "apply_activity_definitions preserves current multi-match behavior: a raw event matched by N definitions still produces N output rows with the respective activity names",
+    "apply_activity_definitions: matched events do NOT also appear in raw form (d1 not d2 — no duplication for matched rows)",
+    "apply_activity_definitions: empty input still returns an empty memtable with the correct schema",
+    "Pass-through event_type and payload are byte-identical to the input (not filtered through include_fields on any definition)",
+    "New unit test test_unmatched_events_pass_through: 3 raw events, 1 matches a definition, 2 don't → output is 1 renamed + 2 raw",
+    "New unit test test_unmatched_events_preserve_original_event_type: pass-through rows keep their original event_type string (row_appeared, field_changed, arbitrary EventSource types)",
+    "New unit test test_unmatched_events_preserve_original_payload: pass-through payload is byte-identical to input",
+    "New unit test test_mixed_matched_unmatched_in_same_source: same source has both matched and unmatched events; both appear correctly",
+    "Updated existing test test_does_not_match_other_sources: assertion changed from len(result) == 0 to len(result) == 1 (the pass-through row) with a comment referencing ADR-0001",
+    "New e2e regression test test_e2e_customers_example_state_fields_stay_fresh: mirrors customers.py; a row_appeared + a field_changed on email, signup activity on RowAppeared, StateField email strategy='latest'; asserts resolved email equals the post-field_changed value (fails on main, passes after change)",
+    "examples/entities/customers.py: fix EventOccurred(event_types=['purchase']) -> EventOccurred(event_type='purchase') (issue #100)",
+    "apply_activity_definitions docstring rewritten to state the new contract explicitly",
+    "Version bump 0.4.2 -> 0.5.0; uv.lock updated",
+    "Release notes entry titled 'Breaking: activity definitions now preserve unmatched events' with the three-line migration guide from ADR-0001",
+    "All existing tests pass (minus the one intentionally updated); ruff + mypy clean",
+    "PR body references ADR-0001 and issue #100",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/test_activity_engine.py",
+    "examples/entities/customers.py",
+    "docs/decisions/0001-activity-definitions-drop-vs-preserve.md",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = [
+    "docs/decisions/0001-activity-definitions-drop-vs-preserve.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/test_activity_engine.py",
+    "examples/entities/customers.py",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "Change apply_activity_definitions in activity_engine.py to preserve unmatched events (d1 semantics)",
+    "Rewrite apply_activity_definitions docstring to state the new contract",
+    "4 new unit tests in tests/test_activity_engine.py",
+    "Update 1 existing test (test_does_not_match_other_sources) with an ADR-0001 comment",
+    "1 new e2e regression test mirroring customers.py",
+    "Fix EventOccurred typo in examples/entities/customers.py (issue #100)",
+    "Version bump 0.4.2 -> 0.5.0 + uv lock",
+    "Release notes / CHANGELOG entry with the migration guide",
+]
+out_of_scope = [
+    "Any drop_unmatched=True opt-in flag (explicitly rejected in ADR-0001)",
+    "Changes to ActivityDefinition shape or new trigger types",
+    "Changes to _apply_single_definition, _match_field_changed, _match_event_occurred, _filter_payload",
+    "Changes to pipeline.py, resolve_identities, _extract_field_value (already handle mixed streams post-v0.4.2)",
+    "Backport to v0.4.x",
+    "Any other changes to customers.py beyond the EventOccurred typo fix",
+]
+acceptable_breakage = [
+    "One existing test (test_does_not_match_other_sources) is intentionally updated — this is a contract correction, documented and linked to ADR-0001, not a regression",
+    "Any user code reaching into apply_activity_definitions output expecting only activity-named events will see mixed event_type values. Release notes document the one-line filter migration.",
+]
+
+[notes]
+considerations = """
+## Authoritative spec
+
+docs/decisions/0001-activity-definitions-drop-vs-preserve.md is the full
+decision document. It contains:
+- Precise new rule (the d1 quote)
+- Alternatives considered and rejection rationale
+- Consequences and migration story
+- Implementation sketch (high-level, not prescriptive)
+- Testing strategy with specific test names and shapes
+
+Any ambiguity during implementation should be resolved by rereading the ADR.
+Do not add scope beyond what the ADR and this mission TOML specify.
+
+## Implementation approach
+
+Surgically localized to the outer loop of apply_activity_definitions. Track
+which raw event indices were matched during the per-definition loop; after
+the loop, append rows for indices that were never matched. Preserve the
+empty-input memtable schema path. Do not modify _apply_single_definition.
+
+## Why this is safe to ship as one commit
+
+Phase 3 and Phase 4 consumers were already made flexible in v0.4.2:
+- resolve_identities (identity_engine.py) uses `!= 'field_changed'` mask (#92)
+- _extract_field_value (analytics_entity_engine.py) handles arbitrary
+  event_type with flat-dict payloads (#94)
+- _serialize_value (diff_engine.py + event_source_loader.py) handles nulls
+  correctly (#93)
+
+The only code that needs to change for d1 semantics is apply_activity_definitions
+itself. Every downstream consumer already handles what this change produces.
+
+## Release shape
+
+Bugfix-shaped mission but with a minor version bump due to the semantic
+change. Release-PR flow per the release-flow memory:
+release/v0.5.0 branch -> PR -> green CI -> merge -> tag -> publish.
+
+Issue #100 (EventOccurred typo in customers.py) is folded in because it's
+a one-line fix to a file we're already touching and blocks the canonical
+example from loading at all.
+"""

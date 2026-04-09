@@ -315,7 +315,10 @@ def run(
     if result.outputs:
         click.echo("")
         for name, row_count in result.outputs.items():
-            click.echo(f"  {name}: {row_count} rows -> {config.output_dir / name}.parquet")
+            destination = result.output_destinations.get(name)
+            if destination is None:
+                destination = f"parquet:{config.output_dir / name}.parquet"
+            click.echo(f"  {name}: {row_count} rows -> {destination}")
 
     click.echo(f"\nCompleted in {elapsed:.2f}s")
 

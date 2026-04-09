@@ -163,3 +163,53 @@ class TestMetricsModelImport:
 
         assert MetricField is not None
         assert MetricsModel is not None
+
+
+class TestMaterializationField:
+    """Tests for the materialization / project / dataset / table fields on MetricsModel."""
+
+    def _kwargs(self, **overrides):
+        base = {
+            "name": "daily_metrics",
+            "sources": ["src"],
+            "grain": "daily",
+            "metric_fields": [
+                MetricField(field_name="views", aggregation="sum_delta")
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def test_materialization_defaults_to_parquet(self):
+        mm = MetricsModel(**self._kwargs())
+        assert mm.materialization == "parquet"
+        assert mm.project is None
+        assert mm.dataset is None
+        assert mm.table is None
+
+    def test_materialization_parquet_no_coords_required(self):
+        mm = MetricsModel(**self._kwargs(materialization="parquet"))
+        assert mm.materialization == "parquet"
+
+    def test_materialization_table_requires_project(self):
+        with pytest.raises(ValidationError, match="project"):
+            MetricsModel(**self._kwargs(materialization="table", dataset="marts"))
+
+    def test_materialization_table_requires_dataset(self):
+        with pytest.raises(ValidationError, match="dataset"):
+            MetricsModel(**self._kwargs(materialization="table", project="my-proj"))
+
+    def test_materialization_table_defaults_table_to_name(self):
+        mm = MetricsModel(**self._kwargs(
+            materialization="table", project="my-proj", dataset="marts",
+        ))
+        assert mm.table == "daily_metrics"
+
+    def test_materialization_table_with_explicit_table_name(self):
+        mm = MetricsModel(**self._kwargs(
+            materialization="table",
+            project="my-proj",
+            dataset="marts",
+            table="fct_daily",
+        ))
+        assert mm.table == "fct_daily"

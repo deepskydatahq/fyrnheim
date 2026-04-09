@@ -195,3 +195,81 @@ class TestMaterializeView:
         executor = IbisExecutor(conn=fake_conn, backend="postgres")
         with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
             executor.drop_view("p", "d", "n")
+
+
+class TestWriteTable:
+    """Tests for write_table across backends."""
+
+    def test_duckdb_end_to_end(self):
+        import pandas as pd
+        executor = IbisExecutor.duckdb()
+        try:
+            df = pd.DataFrame({"id": [1, 2, 3], "name": ["a", "b", "c"]})
+            executor.write_table("ignored", "marts", "users", df)
+            result = executor.connection.table("users", database="marts").execute()
+            assert sorted(result["id"].tolist()) == [1, 2, 3]
+            assert sorted(result["name"].tolist()) == ["a", "b", "c"]
+        finally:
+            executor.close()
+
+    def test_duckdb_overwrite(self):
+        import pandas as pd
+        executor = IbisExecutor.duckdb()
+        try:
+            df1 = pd.DataFrame({"id": [1, 2, 3], "name": ["a", "b", "c"]})
+            executor.write_table("ignored", "marts", "users", df1)
+            df2 = pd.DataFrame({"id": [99], "name": ["z"]})
+            executor.write_table("ignored", "marts", "users", df2)
+            result = executor.connection.table("users", database="marts").execute()
+            assert result["id"].tolist() == [99]
+            assert result["name"].tolist() == ["z"]
+        finally:
+            executor.close()
+
+    def test_duckdb_creates_schema(self):
+        import pandas as pd
+        executor = IbisExecutor.duckdb()
+        try:
+            df = pd.DataFrame({"x": [1]})
+            executor.write_table("ignored", "brand_new_schema", "t", df)
+            result = executor.connection.table("t", database="brand_new_schema").execute()
+            assert result["x"].tolist() == [1]
+        finally:
+            executor.close()
+
+    def test_bigquery_mocked(self):
+        import pandas as pd
+        fake_conn = MagicMock(name="bigquery_connection")
+        fake_conn.name = "bigquery"
+        fake_client = MagicMock(name="bq_client")
+        fake_conn.client = fake_client
+        fake_job = MagicMock()
+        fake_client.load_table_from_dataframe.return_value = fake_job
+
+        executor = IbisExecutor(conn=fake_conn, backend="bigquery")
+        df = pd.DataFrame({"a": [1]})
+        executor.write_table("my-proj", "marts", "users", df)
+
+        fake_client.load_table_from_dataframe.assert_called_once()
+        args, kwargs = fake_client.load_table_from_dataframe.call_args
+        # df, fqn positional
+        assert args[1] == "my-proj.marts.users"
+        job_config = kwargs["job_config"]
+        assert job_config.write_disposition == "WRITE_TRUNCATE"
+        fake_job.result.assert_called_once()
+
+    def test_clickhouse_raises_not_implemented(self):
+        import pandas as pd
+        fake_conn = MagicMock(name="clickhouse_connection")
+        fake_conn.name = "clickhouse"
+        executor = IbisExecutor(conn=fake_conn, backend="clickhouse")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.write_table("p", "d", "n", pd.DataFrame({"x": [1]}))
+
+    def test_postgres_raises_not_implemented(self):
+        import pandas as pd
+        fake_conn = MagicMock(name="postgres_connection")
+        fake_conn.name = "postgres"
+        executor = IbisExecutor(conn=fake_conn, backend="postgres")
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+            executor.write_table("p", "d", "n", pd.DataFrame({"x": [1]}))

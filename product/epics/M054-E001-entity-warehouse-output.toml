@@ -1,0 +1,65 @@
+# Epic: entity warehouse output
+# Single epic for the full M054 scope: primitive fields, executor method,
+# pipeline dispatch, run summary, tests.
+
+id = "M054-E001"
+parent = "M054"
+title = "AnalyticsEntity + MetricsModel warehouse output"
+status = "active"
+created = 2026-04-09
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M054 scope: add optional
+materialization/project/dataset/table fields to AnalyticsEntity and
+MetricsModel; add IbisExecutor.write_table (BigQuery + DuckDB); dispatch in
+pipeline.py Phase 4 and Phase 5; update the run summary; tests.
+"""
+
+[job_story]
+description = """When I declare an AnalyticsEntity with
+materialization='table' in a project running against BigQuery, I want
+`fyr run` to populate <project>.<dataset>.<entity.name> in BigQuery
+automatically so downstream consumers (Looker Studio, BigQuery ad-hoc
+queries) can see the materialized output without me uploading anything
+by hand."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 15 testing criteria from the M054 mission TOML pass",
+    "Issue #99 referenced in the release PR body with Fixes: keyword",
+    "Test count increases (baseline 445 + new validator tests + new write_table tests + e2e)",
+    "ruff + mypy clean",
+    "pyproject.toml version == 0.6.0",
+]
+validator_context = [
+    "src/fyrnheim/core/analytics_entity.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/analytics_entity.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/",
+    "pyproject.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Single story bundle. Implementation sketch in M054 mission notes. The
+authoritative design choice (Option C — materialization primitive mirroring
+StagingView) is locked in the mission TOML; do not revisit during
+implementation.
+"""
+
+estimated_stories = 1

@@ -1,0 +1,219 @@
+# Mission: Write AnalyticsEntity (and MetricsModel) outputs to the active backend
+# Close the "outputs only on operator's laptop" gap for warehouse-backed projects.
+
+id = "M054"
+title = "Write AnalyticsEntity outputs back to the warehouse"
+status = "draft"
+created = 2026-04-09
+depends_on = ["M049"]
+
+[outcome]
+description = """
+Today pipeline.py lines 150-172 write every AnalyticsEntity and MetricsModel
+output to a local parquet file at config.output_dir/<name>.parquet, regardless
+of the active backend. For any project running against a warehouse, this
+leaves a real gap: inputs (sources, staging views) live in the warehouse, the
+pipeline reads from the warehouse, but outputs end up only on the operator's
+local filesystem. Downstream consumers (Looker Studio, BigQuery ad-hoc,
+anyone who isn't the operator) can't see materialized entities without the
+operator re-running locally and uploading by hand.
+
+Issue #99 surfaced this during the client-flowable M008 mission, where the
+workaround is a 50-line scripts/upload_marts.py that uploads each generated
+parquet to a flowable_marts BigQuery dataset. That script is the kind of
+boilerplate every Fyrnheim project running against a warehouse will end up
+writing — which is the signal that it belongs upstream.
+
+This mission adds warehouse-output support to AnalyticsEntity and MetricsModel
+following the same shape StagingView already uses for its inputs: entities
+gain optional materialization/project/dataset/table fields, and when set,
+pipeline Phase 4 dispatches to a new IbisExecutor.write_table method instead
+of the local parquet path. Backends supported in v1: BigQuery and DuckDB,
+matching the StagingView matrix. Default behavior (unset materialization)
+preserves exact current semantics — zero impact on existing projects.
+
+This is the architectural choice that mirrors StagingView (reporter's
+"Option C") rather than a global config-only flip ("Option A") or a per-entity
+output block ("Option B"). Rationale captured below.
+"""
+
+user_progress = "From 'my pipeline reads from BigQuery but my materialized entities only exist on my laptop' to 'fyr run --backend bigquery populates <project>.<dataset>.sessions automatically, and Looker Studio can see it without me'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "AnalyticsEntity gains optional materialization: Literal['parquet', 'table'] = 'parquet' (v1 — 'view' deferred)",
+    "AnalyticsEntity gains optional project: str | None, dataset: str | None, table: str | None fields; validators require project+dataset when materialization != 'parquet' on a project-scoped backend",
+    "table defaults to entity.name when materialization='table' and table is not explicitly set",
+    "MetricsModel gains the same four fields with the same validators",
+    "IbisExecutor.write_table(project, dataset, name, df) method added; BigQuery implementation uses load_table_from_dataframe with WRITE_TRUNCATE; DuckDB implementation registers the DataFrame and runs CREATE OR REPLACE TABLE {schema}.{name} AS SELECT * FROM tmp (schema auto-created)",
+    "Unsupported backends (clickhouse, postgres) raise NotImplementedError with a clear v1-scope message (mirroring materialize_view)",
+    "pipeline.py Phase 4: when ae.materialization == 'table', dispatch to executor.write_table and skip the parquet write; when materialization == 'parquet' (default), keep current local parquet behavior exactly",
+    "pipeline.py Phase 5 (metrics): same dispatch logic",
+    "Run summary reports warehouse destinations alongside parquet destinations: 'Outputs: 2 parquet, 2 tables (<project>.<dataset>.sessions, <project>.<dataset>.anon_users)'",
+    "Idempotency: re-running fyr run with materialization='table' overwrites the previous output (WRITE_TRUNCATE / CREATE OR REPLACE) — never produces duplicates",
+    "Schema evolution: adding a new StateField to an entity and re-running does not error; the new column appears in the output table",
+    "Backward compat: projects with no materialization set behave exactly as today (parquet output); all existing tests pass unchanged",
+    "Unit tests: AnalyticsEntity field validators; IbisExecutor.write_table on DuckDB (in-memory smoke test); BigQuery branch mocked mirroring existing executor test patterns",
+    "End-to-end test: a small pipeline with one AnalyticsEntity(materialization='table') on duckdb materializes the table, a follow-up query reads it back with the expected rows",
+    "issue #99 referenced in the release PR body with Fixes: keyword",
+]
+
+validator_context = [
+    "src/fyrnheim/core/analytics_entity.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_analytics_entity.py",
+    "tests/test_executor.py",
+    "tests/",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/analytics_entity.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+]
+
+[scope]
+in_scope = [
+    "materialization: Literal['parquet', 'table'] field on AnalyticsEntity (default 'parquet') with optional project/dataset/table coordinates",
+    "Same fields on MetricsModel (metrics outputs travel to the warehouse by the same mechanism)",
+    "pydantic model validators ensuring coordinates are set when materialization='table'",
+    "IbisExecutor.write_table(project, dataset, name, df) — new method alongside materialize_view",
+    "BigQuery and DuckDB implementations of write_table (ClickHouse/Postgres raise NotImplementedError)",
+    "pipeline.py Phase 4 and Phase 5 dispatch based on materialization",
+    "Run summary updated to report warehouse destinations",
+    "Unit tests + e2e regression on duckdb",
+    "Reuse fyrnheim_state for entity output hash-skipping? — defer to implementation; the simpler v1 is always-overwrite (WRITE_TRUNCATE)",
+]
+out_of_scope = [
+    "materialization='view' for entities (deferred — entities are computed ibis tables, view materialization would need a SQL round-trip that's non-trivial)",
+    "materialization='incremental' / merge keys / partition awareness (follow-up, overlaps with M020)",
+    "Entity-as-input to other entities (explicitly flagged in #99 as 'the door is open but not opened in v1')",
+    "Cross-dialect schema translation (BigQuery types ↔ DuckDB types) — each backend writes native types",
+    "IAM / access provisioning helpers (project setup, not Fyrnheim's job per #99)",
+    "Streaming inserts (batch only)",
+    "ClickHouse and Postgres write_table implementations (add when a real project needs them)",
+    "Content-hash skip-when-unchanged for entity outputs (StagingView has this; worth deferring until someone asks)",
+]
+acceptable_breakage = [
+    "None — all changes are additive. Projects without materialization set keep writing parquet exactly as today.",
+]
+
+[notes]
+considerations = """
+## Authoritative source
+
+GitHub issue #99 (https://github.com/deepskydatahq/fyrnheim/issues/99) is
+the full context: concrete use case (client-flowable Looker Studio
+dashboards), three suggested shapes with trade-offs, expected behaviors,
+and the why-Fyrnheim-not-per-project-script argument. The reporter has
+already validated the need against real BigQuery data in the client-flowable
+engagement.
+
+## Option choice: C (materialization primitive on the entity)
+
+The issue suggested three shapes. This mission picks Option C —
+materialization/project/dataset/table as first-class fields on
+AnalyticsEntity — over Options A (global config field) and B (per-entity
+output block).
+
+### Why C over A
+Option A (global output_target config) is the smallest API change but
+doesn't scale: different entities routinely want to land in different
+datasets (e.g. a sensitive entity in a PII-restricted dataset, public
+entities in the marts dataset). Forcing a single global target means
+projects either create multiple fyrnheim configs or accept the wrong
+granularity. C handles both the simple case (all entities to one dataset,
+via per-entity config with the same values) and the granular case naturally.
+
+### Why C over B
+Option B (per-entity output=BigQueryOutput(...) block) is cleaner in some
+ways but introduces a new primitive type (BigQueryOutput, DuckDBOutput, ...)
+when the existing StagingView primitive already models exactly the same
+shape with flat project/dataset/name fields. Matching StagingView's
+conventions means less for users to learn.
+
+### Why C over both
+Option C makes entity outputs first-class warehouse artifacts the same way
+staging views are. This sets up the follow-up feature — entity outputs
+being inputs to other entities (upstream=sessions on an enriched_sessions
+entity) — as a natural additive change rather than a primitive rewrite.
+The issue's own "out of scope" section flags this as future work.
+
+### Global default still possible later
+A pipeline-level "default_output_dataset" in fyrnheim.yaml can be added
+later as a convenience (filling in any entity's unspecified project/dataset).
+That's Option A bolted on top of C, not in conflict with it. Defer until
+someone asks.
+
+## Implementation sketch (non-prescriptive)
+
+1. **Primitive changes (src/fyrnheim/core/analytics_entity.py + metrics_model.py)**
+   Add optional materialization (Literal, default 'parquet'), project, dataset,
+   table. Add @model_validator(mode='after') that requires project+dataset when
+   materialization='table'. table defaults to self.name.
+
+2. **Executor (src/fyrnheim/engine/executor.py)**
+   New method write_table(self, project, dataset, name, df). Branch on
+   self.connection.name the same way materialize_view does.
+   - duckdb: self.connection.create_table(name, df, database=dataset, overwrite=True)
+     or raw_sql(CREATE SCHEMA IF NOT EXISTS + CREATE OR REPLACE TABLE AS SELECT *
+     FROM registered df)
+   - bigquery: get the underlying google.cloud.bigquery.Client from the ibis
+     connection, construct LoadJobConfig(write_disposition=WRITE_TRUNCATE),
+     call client.load_table_from_dataframe(df, fqn, job_config=...).result()
+   - clickhouse/postgres: raise NotImplementedError with the same message
+     pattern materialize_view uses
+
+3. **Pipeline dispatch (src/fyrnheim/engine/pipeline.py lines 150-172)**
+   Before calling df.to_parquet, check ae.materialization. If 'table', call
+   executor.write_table(ae.project, ae.dataset, ae.table or ae.name, df)
+   and skip the parquet write (or write both, if we want a local copy for
+   debugging — decide during implementation). Same for metrics models.
+
+4. **Run summary**
+   result.outputs is currently a dict[str, int] (name → row count). Add a
+   parallel result.output_destinations: dict[str, str] (name → 'parquet:...' or
+   'bigquery:project.dataset.table'). Print in the CLI summary.
+
+5. **Tests**
+   - tests/test_analytics_entity.py: new validator tests (materialization='table'
+     requires project+dataset; table defaults to name)
+   - tests/test_executor.py: new TestWriteTable class with duckdb in-memory smoke
+     test + mocked bigquery test
+   - tests/test_e2e_entity_output.py (new): end-to-end pipeline with one
+     AnalyticsEntity(materialization='table') on duckdb; assert the table
+     exists and is queryable post-run
+
+## Sequencing within the single epic
+
+Three logical chunks that could be one story or split by file:
+1. Primitive + validator changes (core/analytics_entity.py, core/metrics_model.py, tests)
+2. Executor write_table method (engine/executor.py, tests)
+3. Pipeline dispatch + run summary (engine/pipeline.py, tests, e2e)
+
+Small enough to bundle into one story. Recommend single-story shape.
+
+## Release shape
+
+Additive feature in v0.6.0 (not a bugfix). No breaking changes. Default
+parquet behavior preserved. Release-PR flow per the saved memory.
+
+## Separately: issue #98
+
+GitHub issue #98 reports a bug in the v0.4.1 _escape fix: BigQuery's
+standard SQL doesn't accept SQL-standard quote-doubling ('' for ') inside
+some contexts — it requires backslash escaping (\\'). This is a correctness
+bug on code we just shipped. Worth a separate small mission (M055?) rather
+than folding into M054, because the fix is independent and should ship in
+a v0.5.1 patch rather than waiting for v0.6.0. Flagged here so it doesn't
+get lost.
+"""

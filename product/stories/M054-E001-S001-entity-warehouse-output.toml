@@ -1,0 +1,211 @@
+id = "M054-E001-S001"
+parent = "M054-E001"
+title = "Add materialization field + write_table + pipeline dispatch; ship v0.6.0"
+status = "ready"
+created = 2026-04-09
+
+[outcome]
+description = """Add the materialization/project/dataset/table fields to
+AnalyticsEntity and MetricsModel, implement IbisExecutor.write_table for
+BigQuery and DuckDB, wire up pipeline.py Phase 4/5 dispatch, update the
+run summary, add tests, bump to 0.6.0."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsEntity has optional materialization: Literal['parquet', 'table'] = 'parquet' field"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsEntity has optional project, dataset, table: str | None fields (all default None)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsEntity model_validator(mode='after') raises a clear error when materialization='table' and project or dataset is None"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsEntity: when materialization='table' and table is None, table resolves to entity.name"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "AnalyticsEntity(materialization='parquet') (default) constructs without requiring project/dataset/table — full backward compat"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "MetricsModel has the same four fields with the same validator behavior"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.write_table(project, dataset, name, df) exists with correct signature"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.write_table on duckdb: creates the schema if missing, writes the DataFrame via CREATE OR REPLACE TABLE (overwrites on re-run, no duplicates)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.write_table on bigquery (mocked): calls load_table_from_dataframe on the underlying google.cloud.bigquery.Client with WRITE_TRUNCATE disposition and fully-qualified table id"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.write_table on clickhouse or postgres raises NotImplementedError with a clear v1-scope message"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pipeline.py Phase 4: when ae.materialization == 'table', calls executor.write_table and does NOT write parquet; when == 'parquet' (default), keeps current local parquet behavior unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pipeline.py Phase 5 (metrics): same dispatch logic for MetricsModel"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Run summary lists warehouse destinations alongside parquet destinations; format includes either the parquet path or 'bigquery:project.dataset.table' / 'duckdb:dataset.table'"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "End-to-end on duckdb: a pipeline with one AnalyticsEntity(materialization='table', project='default', dataset='marts', table='users') materializes the table, a follow-up query against the same duckdb connection reads it back with the expected rows"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "End-to-end idempotency: running the pipeline twice produces the same table contents (no duplication, no error)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All existing tests pass unchanged (projects without materialization set behave exactly as today)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version == '0.6.0'; uv.lock updated; CHANGELOG entry added"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/analytics_entity.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_analytics_entity.py",
+    "tests/test_executor.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M054-entity-output-to-warehouse.toml — read the [notes]
+section for the full implementation sketch. Option C (materialization
+primitive mirroring StagingView) is LOCKED; do not revisit.
+
+## Three logical chunks (bundle in one story, one commit)
+
+### Chunk 1 — Primitive changes
+
+src/fyrnheim/core/analytics_entity.py:
+- Add `materialization: Literal["parquet", "table"] = "parquet"`
+- Add `project: str | None = None`, `dataset: str | None = None`, `table: str | None = None`
+- Add `@model_validator(mode='after')`:
+    - If materialization == 'table' and (project is None or dataset is None):
+        raise a clear ValueError pointing at the fields
+    - If materialization == 'table' and table is None: self.table = self.name
+    - If materialization == 'parquet' (default): no requirements, no changes
+
+Same changes to src/fyrnheim/core/metrics_model.py.
+
+### Chunk 2 — IbisExecutor.write_table
+
+src/fyrnheim/engine/executor.py:
+- New method: `def write_table(self, project: str, dataset: str, name: str, df: pd.DataFrame) -> None`
+- Branch on self.connection.name the same way materialize_view does:
+    - 'duckdb': create schema if missing, register df as a temp table, CREATE OR REPLACE TABLE {schema}.{name} AS SELECT * FROM tmp. Alternative: use `self.connection.create_table(name, df, database=dataset, overwrite=True)` if ibis duckdb backend supports it — check ibis docs or try both.
+    - 'bigquery': grab the underlying google.cloud.bigquery.Client (ibis exposes it via `self.connection.client` or similar — verify), construct a LoadJobConfig(write_disposition='WRITE_TRUNCATE'), call client.load_table_from_dataframe(df, f'{project}.{dataset}.{name}', job_config=...).result()
+    - 'clickhouse' / 'postgres': raise NotImplementedError with the same message pattern materialize_view uses
+
+### Chunk 3 — Pipeline dispatch + run summary
+
+src/fyrnheim/engine/pipeline.py lines 150-172:
+
+Current shape:
+```python
+projected = project_analytics_entity(enriched_events, ae)
+out_path = output_dir / f"{ae.name}.parquet"
+df = projected.execute()
+df.to_parquet(str(out_path))
+result.outputs[ae.name] = len(df)
+```
+
+New shape:
+```python
+projected = project_analytics_entity(enriched_events, ae)
+df = projected.execute()
+if ae.materialization == "table":
+    executor.write_table(ae.project, ae.dataset, ae.table or ae.name, df)
+    destination = f"{config.backend}:{ae.project}.{ae.dataset}.{ae.table or ae.name}"
+else:
+    out_path = output_dir / f"{ae.name}.parquet"
+    df.to_parquet(str(out_path))
+    destination = f"parquet:{out_path}"
+result.outputs[ae.name] = len(df)
+result.output_destinations[ae.name] = destination  # NEW
+```
+
+Add `output_destinations: dict[str, str]` to the result dataclass (find it in engine/pipeline.py or wherever PipelineResult is defined — could be in engine/pipeline.py itself). Same dispatch for metrics models in Phase 5.
+
+Update the CLI run summary in src/fyrnheim/cli.py to print the destinations. Current summary format is around the area that prints "Sources processed: N" and "Outputs written: N" — extend it to print either "parquet:..." or "bigquery:..." per entity.
+
+## Tests
+
+### tests/test_analytics_entity.py
+
+New tests in a TestMaterializationField class:
+- `test_materialization_defaults_to_parquet`
+- `test_materialization_parquet_no_coords_required` (backward compat)
+- `test_materialization_table_requires_project_and_dataset` (validator error)
+- `test_materialization_table_defaults_table_to_name`
+- `test_materialization_table_with_explicit_table_name`
+
+Same class in tests/test_metrics_model.py (or wherever MetricsModel tests live; if no file, create tests/test_metrics_model.py with the same pattern).
+
+### tests/test_executor.py
+
+New `TestWriteTable` class:
+- `test_write_table_duckdb_end_to_end` — in-memory duckdb; write a small pandas DataFrame; query it back; assert contents match.
+- `test_write_table_duckdb_overwrite` — write, write again with different data, assert second write replaces (no duplication).
+- `test_write_table_duckdb_creates_schema` — write to a schema that doesn't exist yet; assert it gets created.
+- `test_write_table_bigquery_mocked` — mirror the existing test_executor.py BigQuery mock pattern. Verify load_table_from_dataframe is called with the right fqn and WRITE_TRUNCATE disposition.
+- `test_write_table_unsupported_backends_raise` — clickhouse + postgres raise NotImplementedError.
+
+### tests/test_e2e_entity_output.py (new file)
+
+End-to-end pipeline test on in-memory duckdb:
+- Set up a small fixture: one StateSource (or construct the enriched_events DataFrame directly, whichever is simpler), one AnalyticsEntity with materialization='table', project='main', dataset='marts', table='users', one state field.
+- Run the relevant pipeline phases (or call run_pipeline directly if the fixture setup isn't too heavy).
+- Query the materialized table and assert the row count matches.
+- Run the pipeline a second time and assert the count is the same (idempotency).
+
+## Version bump + CHANGELOG
+
+- pyproject.toml: 0.5.1 -> 0.6.0
+- uv lock
+- CHANGELOG.md: add `## [0.6.0] - 2026-04-09` entry with an "Added" section describing the materialization field and write_table method, referencing issue #99.
+
+## Rules
+
+- Do NOT rewrite anything else in pipeline.py / executor.py / analytics_entity.py / metrics_model.py beyond what this story requires.
+- Do NOT add drop_unmatched or similar flags.
+- Do NOT implement materialization='view' for entities (out of scope).
+- Do NOT implement incremental materialization (out of scope, overlaps with M020).
+- Do NOT implement ClickHouse or Postgres write_table (NotImplementedError only).
+- Do NOT touch the StagingView code or fyrnheim_state table.
+"""
+reference_files = [
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "product/missions/M054-entity-output-to-warehouse.toml",
+]

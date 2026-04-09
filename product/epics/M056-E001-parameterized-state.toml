@@ -1,0 +1,58 @@
+# Epic: Parameterized state-table queries
+# Single epic: new executor method + three rewrites + _escape deletion + tests.
+
+id = "M056-E001"
+parent = "M056"
+title = "Retire _escape; parameterized state-table I/O"
+status = "active"
+created = 2026-04-09
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M056 scope: add
+IbisExecutor.execute_parameterized (BigQuery + DuckDB), rewrite the three
+state-table I/O sites to use it, delete _escape, update tests, ship v0.6.1.
+"""
+
+[job_story]
+description = """When the next dialect-specific SQL escape quirk surfaces in
+someone's StagingView, I want Fyrnheim to never have had a chance to get it
+wrong because the underlying code uses parameterized queries instead of
+string concatenation."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 16 testing criteria from the M056 mission TOML pass",
+    "_escape function no longer exists in staging_runner.py",
+    "No call sites interpolate user values into SQL f-strings in staging_runner.py or the fyr drop path",
+    "Test count holds or increases; any _escape-specific tests are replaced with execute_parameterized tests covering the same character classes",
+    "ruff + mypy clean; pyproject.toml version == 0.6.1",
+]
+validator_context = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_executor.py",
+    "tests/test_staging_view.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Internal refactor. No user-facing API changes. Implementation sketch and
+dialect mapping details are in the M056 mission TOML [notes] section.
+Read that first.
+"""
+
+estimated_stories = 1

@@ -1,0 +1,196 @@
+id = "M056-E001-S001"
+parent = "M056-E001"
+title = "execute_parameterized + rewrite state I/O + delete _escape; ship v0.6.1"
+status = "ready"
+created = 2026-04-09
+
+[outcome]
+description = """Add IbisExecutor.execute_parameterized with BigQuery and
+DuckDB support. Rewrite _write_state_row, _load_state, and the fyr drop
+DELETE to use it. Delete _escape. Update tests. Bump to 0.6.1."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor.execute_parameterized(sql, params) exists with the documented signature"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDB: execute_parameterized('SELECT @x AS x', {'x': 1}) returns [(1,)]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDB: execute_parameterized round-trips a string containing single quote, backslash, newline, tab, and carriage return without any escaping logic in the caller"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "DuckDB: execute_parameterized handles None, int, float, bool, str, and datetime values"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "BigQuery (mocked): execute_parameterized constructs ScalarQueryParameter objects with correct names/types/values and passes them via QueryJobConfig.query_parameters"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ClickHouse and Postgres: execute_parameterized raises NotImplementedError with the same v1-scope message pattern as materialize_view / write_table"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_write_state_row no longer calls _escape; uses execute_parameterized for both the DELETE and the INSERT"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_load_state uses execute_parameterized (even though it has no params, to go through the same path)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "cli.py fyr drop --view DELETE uses execute_parameterized for the name WHERE clause"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The _escape function is deleted from staging_runner.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No production code (src/) imports or calls _escape"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "DuckDB end-to-end: create fyrnheim_state table, materialize a StagingView with SQL containing single quote + backslash + newline in the first 500 chars, call _write_state_row, call _load_state, verify the stored hash matches the view's content_hash"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Previously-passing tests that asserted on the raw_sql string content (e.g. test_bigquery_write_state_row_uses_backslash_quote_escape) are replaced or updated to assert on the parameterized query shape instead — cover the same intent"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "All non-state-table tests still pass unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version == 0.6.1; uv.lock updated; CHANGELOG entry added"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check clean; mypy check clean"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_executor.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M056-parameterized-state-queries.toml — read the [notes]
+section for the full implementation sketch including code fragments for
+both backends and concrete before/after snippets for each rewrite site.
+
+## Critical verification step before writing code
+
+Probe DuckDB's named-parameter support. Open a Python shell:
+
+```python
+import duckdb
+conn = duckdb.connect()
+# Does DuckDB accept $name named parameters via the Python client?
+result = conn.execute("SELECT $name AS x", {"name": "hello'world"}).fetchone()
+print(result)
+```
+
+- If this works → use `$name` placeholders. Convert `@name` → `$name` via regex.
+- If it doesn't work → fall back to positional `?` placeholders with an ordered
+  params list built from the params dict. Slightly uglier but also valid.
+
+Document the choice in your commit message.
+
+## Getting the BigQuery client from ibis
+
+Pattern established in write_table (v0.6.0): `client = getattr(self._conn, "client", None) or getattr(self._conn, "_client", None)`. Reuse the same getter.
+
+## BigQuery parameter type inference
+
+BigQuery requires the parameter TYPE even when the value is provided. Simple mapping:
+
+```python
+def _infer_bq_type(value: Any) -> str:
+    import datetime
+    if value is None:
+        return "STRING"  # v1: default NULL to STRING; caller can pre-cast if needed
+    if isinstance(value, bool):
+        return "BOOL"
+    if isinstance(value, int):
+        return "INT64"
+    if isinstance(value, float):
+        return "FLOAT64"
+    if isinstance(value, datetime.datetime):
+        return "TIMESTAMP"
+    if isinstance(value, datetime.date):
+        return "DATE"
+    return "STRING"  # fallback — str and anything else
+```
+
+Put this as a module-level helper in executor.py (private, `_infer_bq_type`).
+
+## Order of work
+
+1. Probe DuckDB as described
+2. Implement execute_parameterized with both backends
+3. Write executor tests (duckdb in-memory + bigquery mocked + NotImplementedError for clickhouse/postgres)
+4. Rewrite _write_state_row (careful: ts changes from a string to a datetime)
+5. Rewrite _load_state
+6. Rewrite cli.py fyr drop DELETE
+7. Delete _escape from staging_runner.py
+8. Run full test suite — fix anything that broke
+9. Update test_staging_view.py tests that asserted on raw_sql string content:
+   - test_bigquery_write_state_row_uses_backslash_quote_escape: replace with
+     a test that asserts execute_parameterized was called with the right
+     SQL template and params dict (mock executor.execute_parameterized)
+   - Any test that directly called _escape: delete or convert to
+     execute_parameterized-based equivalent
+10. Version bump + CHANGELOG
+11. Full suite green, ruff + mypy clean
+12. Commit + push
+
+## Do NOT
+
+- Parameterize `_ensure_state_table` — that DDL interpolates identifiers
+  (column/table names), which parameters cannot substitute in any dialect
+- Touch materialize_view — the SQL there is user-authored, not machine-concatenated
+- Add any new public API surface — execute_parameterized is the only new
+  IbisExecutor method
+- Break backward compatibility — this is an internal refactor
+
+## CHANGELOG entry
+
+```
+## [0.6.1] - 2026-04-09
+
+### Changed (internal)
+
+- State-table I/O (_write_state_row, _load_state, fyr drop) now uses
+  parameterized queries via a new IbisExecutor.execute_parameterized method
+  instead of f-string interpolation with a backend-aware _escape helper.
+  The _escape function has been deleted. This is a purely internal refactor
+  — no user-facing API changes — that structurally eliminates the class of
+  SQL escape bugs (e.g. #98) that required manual dialect patches in v0.4.1
+  and v0.5.1. BigQuery uses ScalarQueryParameter; DuckDB uses native named
+  parameters.
+```
+"""
+reference_files = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "product/missions/M056-parameterized-state-queries.toml",
+]

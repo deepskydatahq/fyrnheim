@@ -174,3 +174,59 @@ class TestImports:
         from fyrnheim import AnalyticsEntity, Measure
         assert AnalyticsEntity is not None
         assert Measure is not None
+
+
+# ---------------------------------------------------------------------------
+# M051 regression tests (issue #94)
+# ---------------------------------------------------------------------------
+
+
+class TestM051ExtractFieldValue:
+    """Issue #94: _extract_field_value must handle arbitrary event types,
+    not just row_appeared and field_changed. EventSource events and
+    activity-rewritten events carry flat payloads under different types."""
+
+    def test_extract_field_value_handles_arbitrary_event_type_with_flat_payload(
+        self,
+    ) -> None:
+        import json as _json
+
+        import pandas as pd
+
+        from fyrnheim.engine.analytics_entity_engine import _extract_field_value
+
+        row = pd.Series(
+            {
+                "event_type": "anon_attrs_loaded",
+                "payload": _json.dumps(
+                    {"company_name": "Northwind Bank", "region": "EU"}
+                ),
+            }
+        )
+        assert _extract_field_value(row, "company_name") == "Northwind Bank"
+        assert _extract_field_value(row, "region") == "EU"
+        assert _extract_field_value(row, "missing") is None
+
+    def test_extract_field_value_still_handles_field_changed(self) -> None:
+        import json as _json
+
+        import pandas as pd
+
+        from fyrnheim.engine.analytics_entity_engine import _extract_field_value
+
+        row = pd.Series(
+            {
+                "event_type": "field_changed",
+                "payload": _json.dumps(
+                    {
+                        "field_name": "company_name",
+                        "old_value": "Old",
+                        "new_value": "New",
+                    }
+                ),
+            }
+        )
+        # Matching field name returns new_value
+        assert _extract_field_value(row, "company_name") == "New"
+        # Non-matching field name returns None (not new_value by accident)
+        assert _extract_field_value(row, "other") is None

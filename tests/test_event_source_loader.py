@@ -276,16 +276,28 @@ class TestSerializeValue:
         assert _serialize_value([]) == "[]"
 
     def test_nan_returns_null(self):
-        assert _serialize_value(np.nan) == "null"
+        # Issue #93/M051: NaN round-trips as Python None, not the string "null"
+        assert _serialize_value(np.nan) is None
 
     def test_none_returns_null(self):
-        assert _serialize_value(None) == "null"
+        # Issue #93/M051: None stays None
+        assert _serialize_value(None) is None
+
+    def test_nat_returns_none(self):
+        assert _serialize_value(pd.NaT) is None
 
     def test_string_passthrough(self):
         assert _serialize_value("hello") == "hello"
 
     def test_int_passthrough(self):
-        assert _serialize_value(42) == "42"
+        # Issue #93/M051: primitives preserved as-is, not stringified
+        assert _serialize_value(42) == 42
+
+    def test_float_passthrough(self):
+        assert _serialize_value(3.14) == 3.14
+
+    def test_bool_passthrough(self):
+        assert _serialize_value(True) is True
 
     def test_array_with_non_json_values_falls_back_to_str(self):
         # default=str handles non-serializable items

@@ -106,30 +106,30 @@ def load_event_source(
     return ibis.memtable(pd.DataFrame(events))
 
 
-def _serialize_value(v: object) -> str:
-    """Convert a value to a JSON-safe string representation.
+def _serialize_value(v: object) -> object:
+    """Convert a value to a JSON-safe representation that round-trips
+    through json.dumps / json.loads with the right Python type.
 
-    Handles three cases:
-      - Array-like values (numpy arrays, lists, tuples): JSON-encode the
-        contents. Covers BigQuery REPEATED fields, jsonb arrays, etc.
-      - Scalar NaN / None / NaT: serialize as JSON 'null'.
-      - Everything else: stringify.
+    - Array-like values (list, tuple, np.ndarray) are JSON-encoded to
+      preserve them as JSON arrays for BigQuery REPEATED fields.
+    - None / NaN / NaT round-trips as Python None.
+    - Primitives (str, int, float, bool) are preserved.
+    - Exotic types are stringified via str().
+
+    Order matters: the array check must come BEFORE pd.isna, because
+    pd.isna on an ndarray returns an ndarray (not a bool) and breaks `if`.
     """
-    # Order matters: check array-likes BEFORE pd.isna, because pd.isna on
-    # an ndarray returns an ndarray, not a bool, and breaks `if`.
     if isinstance(v, (list, tuple, np.ndarray)):
         try:
             seq = v.tolist() if hasattr(v, "tolist") else list(v)
             return json.dumps(seq, default=str)
         except (TypeError, ValueError):
             return str(v)
-
-    # Scalar branch
     try:
         if pd.isna(v):
-            return "null"
+            return None
     except (TypeError, ValueError):
-        # pd.isna can still raise on exotic types; fall through to str()
         pass
-
+    if isinstance(v, (str, int, float, bool)):
+        return v
     return str(v)

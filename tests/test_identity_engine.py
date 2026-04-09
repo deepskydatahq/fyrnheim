@@ -256,3 +256,126 @@ class TestEnrichEvents:
         # First-graph enrichment must be preserved through the second call
         assert crm_row["canonical_id"] == "CAN-EMAIL"
         assert bill_row["canonical_id"] == "CAN-PHONE"
+
+
+# ---------------------------------------------------------------------------
+# M051 regression tests (issues #91, #92)
+# ---------------------------------------------------------------------------
+
+
+class TestM051RegressionEntityIdFallback:
+    """Issue #91: resolve_identities must fall back to entity_id when
+    match_key_field == id_field (SnapshotDiff strips id_field from payload)."""
+
+    def test_resolve_identities_falls_back_to_entity_id_when_match_key_equals_id_field(
+        self,
+    ) -> None:
+        graph = IdentityGraph(
+            name="g",
+            canonical_id="canonical",
+            sources=[
+                IdentitySource(
+                    source="users", id_field="user_id", match_key_field="user_id"
+                ),
+                IdentitySource(
+                    source="other", id_field="other_id", match_key_field="user_id"
+                ),
+            ],
+        )
+        # Payload does NOT contain user_id (stripped by SnapshotDiff).
+        events = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "source": ["users", "users"],
+                    "entity_id": ["u1", "u2"],
+                    "ts": ["2026-04-01", "2026-04-01"],
+                    "event_type": ["row_appeared", "row_appeared"],
+                    "payload": ['{"name": "alice"}', '{"name": "bob"}'],
+                }
+            )
+        )
+        result = resolve_identities(events, graph).execute()
+        assert len(result) == 2
+        expected_u1 = hashlib.sha256(b"u1").hexdigest()[:16]
+        expected_u2 = hashlib.sha256(b"u2").hexdigest()[:16]
+        row_u1 = result[result["entity_id"] == "u1"].iloc[0]
+        row_u2 = result[result["entity_id"] == "u2"].iloc[0]
+        assert row_u1["canonical_id"] == expected_u1
+        assert row_u2["canonical_id"] == expected_u2
+
+
+class TestM051RegressionEventSourceEvents:
+    """Issue #92: resolve_identities must include EventSource events (any
+    non-field_changed event_type), not just row_appeared."""
+
+    def test_resolve_identities_includes_event_source_events(self) -> None:
+        graph = IdentityGraph(
+            name="g",
+            canonical_id="canonical",
+            sources=[
+                IdentitySource(
+                    source="ga4", id_field="event_id", match_key_field="user_pseudo_id"
+                ),
+                IdentitySource(
+                    source="crm", id_field="crm_id", match_key_field="user_pseudo_id"
+                ),
+            ],
+        )
+        events = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "source": ["ga4", "ga4"],
+                    "entity_id": ["e1", "e2"],
+                    "ts": ["2026-04-01", "2026-04-01"],
+                    "event_type": ["session_start", "form_submit"],
+                    "payload": [
+                        '{"user_pseudo_id": "pseudo-abc"}',
+                        '{"user_pseudo_id": "pseudo-def"}',
+                    ],
+                }
+            )
+        )
+        result = resolve_identities(events, graph).execute()
+        assert len(result) == 2
+        assert set(result["entity_id"]) == {"e1", "e2"}
+        expected_abc = hashlib.sha256(b"pseudo-abc").hexdigest()[:16]
+        assert (
+            result[result["entity_id"] == "e1"].iloc[0]["canonical_id"]
+            == expected_abc
+        )
+
+    def test_resolve_identities_still_excludes_field_changed_events(self) -> None:
+        """Safeguard: field_changed events must NOT contribute to the mapping
+        (their payload shape is {field_name, old_value, new_value})."""
+        graph = IdentityGraph(
+            name="g",
+            canonical_id="canonical",
+            sources=[
+                IdentitySource(
+                    source="crm", id_field="crm_id", match_key_field="email_hash"
+                ),
+                IdentitySource(
+                    source="billing",
+                    id_field="billing_id",
+                    match_key_field="email_hash",
+                ),
+            ],
+        )
+        events = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "source": ["crm", "crm"],
+                    "entity_id": ["c1", "c2"],
+                    "ts": ["2026-04-01", "2026-04-01"],
+                    "event_type": ["row_appeared", "field_changed"],
+                    "payload": [
+                        '{"email_hash": "abc"}',
+                        '{"field_name": "email_hash", "old_value": "old", "new_value": "new"}',
+                    ],
+                }
+            )
+        )
+        result = resolve_identities(events, graph).execute()
+        # Only the row_appeared event contributes
+        assert len(result) == 1
+        assert result.iloc[0]["entity_id"] == "c1"

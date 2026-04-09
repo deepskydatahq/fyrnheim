@@ -223,7 +223,8 @@ class TestUniversalEventSchema:
         assert row["ts"] == "2026-03-30"
         assert row["event_type"] == "row_appeared"
         payload = json.loads(row["payload"])
-        assert payload == {"name": "alice", "age": "30"}
+        # Issue #93: primitives preserved as native JSON types (int stays int)
+        assert payload == {"name": "alice", "age": 30}
 
     def test_field_changed_schema(self) -> None:
         current = ibis.memtable({"id": [1], "name": ["bob"]})
@@ -290,3 +291,71 @@ class TestUniversalEventSchema:
 
         # Verify we can do Ibis operations on the unified table
         assert result.count().execute() == 3
+
+
+# ---------------------------------------------------------------------------
+# M051 regression tests (issue #93)
+# ---------------------------------------------------------------------------
+
+
+class TestM051SerializeValue:
+    """Issue #93: _serialize_value must return Python None for NaN and
+    preserve primitives as-is so _resolve_latest's null-aware logic works."""
+
+    def test_serialize_value_returns_none_for_nan(self) -> None:
+        import pandas as pd
+
+        from fyrnheim.engine.diff_engine import _serialize_value
+
+        assert _serialize_value(None) is None
+        assert _serialize_value(float("nan")) is None
+        assert _serialize_value(pd.NaT) is None
+
+    def test_serialize_value_preserves_primitives(self) -> None:
+        from fyrnheim.engine.diff_engine import _serialize_value
+
+        assert _serialize_value(42) == 42
+        assert _serialize_value(3.14) == 3.14
+        assert _serialize_value(True) is True
+        assert _serialize_value("hi") == "hi"
+
+    def test_serialize_value_stringifies_exotic_types(self) -> None:
+        import uuid
+
+        from fyrnheim.engine.diff_engine import _serialize_value
+
+        u = uuid.UUID("12345678-1234-5678-1234-567812345678")
+        result = _serialize_value(u)
+        assert isinstance(result, str)
+        assert result == str(u)
+
+
+class TestM051ResolveLatestFallsThroughNone:
+    """Issue #93: _resolve_latest must skip None rows instead of returning
+    the string 'null' as a present value."""
+
+    def test_resolve_latest_falls_through_none_rows(self) -> None:
+        import pandas as pd
+
+        from fyrnheim.engine.analytics_entity_engine import _resolve_latest
+
+        events = pd.DataFrame(
+            [
+                {
+                    "source": "crm",
+                    "entity_id": "u1",
+                    "ts": "2026-01-01",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"company": "Acme"}),
+                },
+                {
+                    "source": "crm",
+                    "entity_id": "u1",
+                    "ts": "2026-01-02",
+                    "event_type": "row_appeared",
+                    "payload": json.dumps({"company": None}),
+                },
+            ]
+        )
+        # Latest row has None; must fall through to the earlier real value.
+        assert _resolve_latest(events, "company") == "Acme"

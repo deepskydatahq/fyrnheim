@@ -206,8 +206,17 @@ def _values_differ(a: object, b: object) -> bool:
     return a != b
 
 
-def _serialize_value(v: object) -> str:
-    """Convert a value to a JSON-safe string representation."""
+def _serialize_value(v: object) -> object:
+    """Convert a value to a JSON-safe representation that round-trips through
+    json.dumps / json.loads with the right Python type.
+
+    Critically: None / NaN / NaT must round-trip as Python None (so downstream
+    consumers can use 'is None' or 'pd.isna' checks). Returning the string
+    "null" instead made downstream null-aware logic (e.g. _resolve_latest's
+    "first non-null" semantics) treat missing data as present.
+    """
     if pd.isna(v):
-        return "null"
+        return None
+    if isinstance(v, (str, int, float, bool)):
+        return v
     return str(v)

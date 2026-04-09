@@ -24,10 +24,19 @@ def apply_activity_definitions(
     raw_events: ibis.Table,
     definitions: list[ActivityDefinition],
 ) -> ibis.Table:
-    """Apply activity definitions to a raw event table and produce named events.
+    """Apply activity definitions to a raw event table and produce a stream of
+    annotated + pass-through events.
 
-    For each definition, filters raw events by source and trigger type,
-    then renames the event_type to the activity definition name.
+    For each raw event in the input:
+    - If one or more ActivityDefinitions match it, emit one renamed copy per
+      matching definition (with the activity's name as event_type and,
+      optionally, payload filtered via include_fields).
+    - If no ActivityDefinition matches it, emit the raw event unchanged.
+
+    No raw event is ever silently dropped. This is a change from pre-v0.5.0
+    behavior, where unmatched events were dropped — see ADR-0001
+    (docs/decisions/0001-activity-definitions-drop-vs-preserve.md) for the
+    decision rationale.
 
     Args:
         raw_events: Ibis table with columns: source, entity_id, ts,
@@ -35,18 +44,39 @@ def apply_activity_definitions(
         definitions: List of ActivityDefinition instances to apply.
 
     Returns:
-        Ibis table with the same schema, where event_type is replaced
-        by the activity definition name for matching events.
+        Ibis table with the same schema. Matched events have their
+        event_type replaced by the activity definition name; unmatched
+        events pass through with their original event_type and payload.
     """
     events_df = raw_events.execute()
 
     all_matched: list[dict[str, str]] = []
+    matched_indices: set[int] = set()
 
     for defn in definitions:
-        matched = _apply_single_definition(events_df, defn)
+        matched, indices = _apply_single_definition(events_df, defn)
         all_matched.extend(matched)
+        matched_indices.update(indices)
 
-    if not all_matched:
+    # Pass through any raw events that no definition matched.
+    passthrough: list[dict[str, str]] = []
+    for idx in events_df.index:
+        if idx in matched_indices:
+            continue
+        row = events_df.loc[idx]
+        passthrough.append(
+            {
+                "source": row["source"],
+                "entity_id": row["entity_id"],
+                "ts": row["ts"],
+                "event_type": row["event_type"],
+                "payload": row["payload"],
+            }
+        )
+
+    all_rows = all_matched + passthrough
+
+    if not all_rows:
         empty_schema = ibis.schema(
             {
                 "source": "string",
@@ -58,14 +88,19 @@ def apply_activity_definitions(
         )
         return ibis.memtable([], schema=empty_schema)
 
-    return ibis.memtable(pd.DataFrame(all_matched))
+    return ibis.memtable(pd.DataFrame(all_rows))
 
 
 def _apply_single_definition(
     events_df: pd.DataFrame,
     defn: ActivityDefinition,
-) -> list[dict[str, str]]:
-    """Apply a single ActivityDefinition to events and return matching rows."""
+) -> tuple[list[dict[str, str]], set[int]]:
+    """Apply a single ActivityDefinition to events.
+
+    Returns:
+        A tuple of (output rows, set of original DataFrame indices that
+        were matched by this definition).
+    """
     # Filter by source
     source_mask = events_df["source"] == defn.source
     filtered = events_df[source_mask]
@@ -81,11 +116,11 @@ def _apply_single_definition(
     elif isinstance(trigger, EventOccurred):
         matched = _match_event_occurred(filtered, trigger)
     else:
-        return []
+        return [], set()
 
     # Build output events
     results: list[dict[str, str]] = []
-    for _, row in matched.iterrows():
+    for _idx, row in matched.iterrows():
         payload_str = row["payload"]
         if defn.include_fields:
             payload_str = _filter_payload(payload_str, defn.include_fields)
@@ -100,7 +135,7 @@ def _apply_single_definition(
             }
         )
 
-    return results
+    return results, set(matched.index)
 
 
 def _match_field_changed(

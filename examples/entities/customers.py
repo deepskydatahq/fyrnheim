@@ -53,7 +53,7 @@ became_paying = ActivityDefinition(
 purchase = ActivityDefinition(
     name="purchase",
     source="billing_events",
-    trigger=EventOccurred(event_types=["purchase"]),
+    trigger=EventOccurred(event_type="purchase"),
 )
 
 # 3. Identity Graph

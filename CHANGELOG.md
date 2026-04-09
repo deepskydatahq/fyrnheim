@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-08
+
+### Changed (BREAKING)
+
+- `apply_activity_definitions` now preserves events from sources whose raw
+  event no `ActivityDefinition` matched. Previously these events were
+  silently dropped, causing state fields on those sources to return stale
+  values. See ADR-0001
+  (`docs/decisions/0001-activity-definitions-drop-vs-preserve.md`) for the
+  full rationale.
+
+#### Migration
+
+- If your project only uses activities (no state fields): no action needed.
+- If you use state fields on sources that also have activity definitions:
+  remove any no-op passthrough activities you added as a workaround.
+- If you relied on drop semantics for downstream correctness: filter
+  explicitly via `events.filter(event_type.isin([...activity_names...]))`.
+
+### Fixed
+
+- `examples/entities/customers.py`: corrected `EventOccurred(event_types=...)`
+  to `EventOccurred(event_type=...)` (#100).
+
 ## [0.3.0] - 2026-03-09
 
 ### Added

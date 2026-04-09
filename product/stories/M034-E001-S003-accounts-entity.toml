@@ -1,0 +1,43 @@
+id = "M034-E001-S003"
+parent = "M034-E001"
+title = "Migrate accounts entity (IdentityGraph challenge)"
+status = "brainstorm"
+created = 2026-04-02
+
+[outcome]
+description = """Rewrite accounts.py to use new IdentityGraph + EntityModel. Document gaps with inline sources and prep_columns."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "accounts.py imports only from new API"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "File can be imported without errors"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Identity graph references 3 sources (mailerlite, ghost, workshops)"
+
+[context]
+relevant_paths = ["/home/tmo/roadtothebeach/propel/propel-data/entities/accounts.py"]
+input_fixtures = []
+depends_on = ["M034-E001-S001"]
+
+[handoff]
+implementation_hints = """The old accounts entity used DerivedSource with IdentityGraphConfig containing inline TableSources with prep_columns. The new API:
+- Define 3 StateSources (mailerlite, ghost, workshops) as module-level variables
+- Define IdentityGraph with 3 IdentitySource entries referencing those sources by name
+- Define EntityModel with state_fields mapping fields from each source
+- DimensionLayer computed_columns → EntityModel computed_fields
+- AnalyticsLayer → StreamAnalyticsModel
+
+Key gaps to document:
+- prep_columns (email lowercasing, date casting) have no equivalent in StateSource — SourceTransforms only supports renames/casts/divides, not arbitrary expressions
+- Inline source definitions no longer supported — sources must be defined separately
+- Field selection/mapping (the 'fields' dict on IdentityGraphSource) not in new API
+- Analytics expressions reference Ibis table columns directly — StreamMetric only has simple count/sum/snapshot"""
+reference_files = []

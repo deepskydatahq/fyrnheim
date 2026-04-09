@@ -1,0 +1,56 @@
+id = "M034-E001"
+parent = "M034"
+title = "Migrate all propel-data entity definitions and tests"
+status = "active"
+created = 2026-04-02
+depends_on = []
+
+[outcome]
+description = """
+Rewrite all 4 entity definitions in propel-data to use the activities-first
+fyrnheim API. Rewrite entity tests. Remove generated/ directory (no longer
+applicable). Document any API gaps discovered during migration.
+"""
+
+[job_story]
+description = """
+When I update fyrnheim to the latest version, I want propel-data's entity
+definitions to work with the new activities-first API so the project can
+continue to build on current fyrnheim.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All entity definitions import only from new activities-first API",
+    "No imports of Entity, LayersConfig, PrepLayer, DimensionLayer, DerivedSource, UnionSource, IdentityGraphConfig, IdentityGraphSource, ActivityConfig, ActivityType, AnalyticsLayer, AnalyticsMetric, QualityConfig, NotNull, Unique",
+    "Entity definition files can be imported without errors",
+    "Tests validate the new definitions correctly",
+    "API gaps are documented in a MIGRATION_GAPS.md file",
+]
+validator_context = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+    "/home/tmo/roadtothebeach/propel/propel-data/tests/test_entities.py",
+]
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/",
+    "/home/tmo/roadtothebeach/propel/propel-data/tests/test_entities.py",
+    "/home/tmo/roadtothebeach/propel/propel-data/pyproject.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Migration order matters due to dependencies:
+1. companies.py (simplest, standalone)
+2. workshop_attendance.py (standalone, activity pattern)
+3. content_products.py (union source — needs workaround)
+4. accounts.py (identity graph referencing other sources — most complex)
+5. tests + cleanup
+
+The agent works in the propel-data repo, NOT in fyrnheim.
+"""
+
+estimated_stories = 4

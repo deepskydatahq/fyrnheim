@@ -1,0 +1,47 @@
+id = "M034-E001-S001"
+parent = "M034-E001"
+title = "Migrate companies and workshop_attendance entities"
+status = "ready"
+created = 2026-04-02
+
+[outcome]
+description = """Rewrite companies.py (TableSource→StateSource+EntityModel) and workshop_attendance.py (TableSource+ActivityConfig→StateSource+ActivityDefinition)."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "companies.py imports only from new API (StateSource, EntityModel, etc.)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "workshop_attendance.py imports only from new API (StateSource, ActivityDefinition, RowAppeared)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Both files can be imported without errors"
+
+[context]
+relevant_paths = [
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/companies.py",
+    "/home/tmo/roadtothebeach/propel/propel-data/entities/workshop_attendance.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Work in /home/tmo/roadtothebeach/propel/propel-data/.
+
+companies.py migration:
+- TableSource → StateSource(name='apollo_enrichment', ..., id_field='domain')
+- PrepLayer computed_columns + DimensionLayer computed_columns → EntityModel computed_fields
+- QualityConfig → remove (quality module removed, document as gap)
+- The entity exported as module-level variables (state_source, entity_model, etc.)
+
+workshop_attendance.py migration:
+- TableSource → StateSource(name='workshop_attendees', ..., id_field='attendee_email')
+- PrepLayer computed_columns → SourceTransforms or note as gap
+- ActivityConfig/ActivityType → ActivityDefinition with RowAppeared trigger
+- Export as module-level variables"""
+reference_files = []

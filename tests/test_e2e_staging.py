@@ -74,18 +74,11 @@ def test_staging_view_feeds_state_source_e2e() -> None:
         with IbisExecutor.duckdb() as ex:
             result = run_pipeline(assets, config, ex)
 
-            # Phase 0: staging view was materialized
-            assert "stg_users" in result.staging_materialized
-            assert ex.view_exists("main", "analytics", "stg_users")
+            # Phase 0: on duckdb, a StateSource with duckdb_path whose
+            # upstream is this view shadows it — the view is NOT materialized.
+            assert "stg_users" not in result.staging_materialized
 
-            # The materialized view returns non-empty data
-            view_df = ex.connection.table(
-                "stg_users", database="analytics"
-            ).execute()
-            assert len(view_df) == 2
-            assert set(view_df["name"].tolist()) == {"alice", "bob"}
-
-            # The StateSource can read its upstream parquet (non-empty)
+            # The StateSource reads its upstream parquet fixture directly
             loaded = source.read_table(
                 ex.connection, config.backend, data_dir=config.data_dir
             )

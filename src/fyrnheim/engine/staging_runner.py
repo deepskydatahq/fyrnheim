@@ -147,7 +147,7 @@ def _ensure_state_table(executor: IbisExecutor, project: str, dataset: str) -> N
         executor.connection.raw_sql(
             f"CREATE TABLE IF NOT EXISTS {qualified} ("
             "name STRING NOT NULL, "
-            "hash STRING, "
+            "`hash` STRING, "
             "materialized_at TIMESTAMP, "
             "sql_excerpt STRING, "
             "fyrnheim_version STRING"
@@ -164,7 +164,10 @@ def _load_state(
 ) -> dict[str, str]:
     """Return {name: hash} from the state table."""
     qualified = _qualify_state_table(executor, project, dataset)
-    cursor = executor.connection.raw_sql(f"SELECT name, hash FROM {qualified}")
+    hash_col = "`hash`" if executor.connection.name == "bigquery" else "hash"
+    cursor = executor.connection.raw_sql(
+        f"SELECT name, {hash_col} FROM {qualified}"
+    )
     try:
         rows = list(cursor.fetchall())  # type: ignore[union-attr]
     except AttributeError:
@@ -173,7 +176,13 @@ def _load_state(
 
 
 def _escape(value: str) -> str:
-    return value.replace("'", "''")
+    return (
+        value.replace("\\", "\\\\")
+        .replace("'", "''")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
 
 
 def _write_state_row(
@@ -195,9 +204,10 @@ def _write_state_row(
     executor.connection.raw_sql(
         f"DELETE FROM {qualified} WHERE name = '{name_s}'"
     )
+    hash_col = "`hash`" if executor.connection.name == "bigquery" else "hash"
     executor.connection.raw_sql(
         f"INSERT INTO {qualified} "
-        "(name, hash, materialized_at, sql_excerpt, fyrnheim_version) VALUES ("
+        f"(name, {hash_col}, materialized_at, sql_excerpt, fyrnheim_version) VALUES ("
         f"'{name_s}', '{hash_s}', TIMESTAMP '{ts}', "
         f"'{excerpt_s}', '{version_s}')"
     )

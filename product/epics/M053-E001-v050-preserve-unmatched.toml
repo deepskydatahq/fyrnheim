@@ -1,0 +1,58 @@
+# Epic: v0.5.0 preserve unmatched events
+# Surgical change to apply_activity_definitions + tests + example fix + version bump.
+
+id = "M053-E001"
+parent = "M053"
+title = "Implement ADR-0001 and ship v0.5.0"
+status = "active"
+created = 2026-04-09
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M053 scope: engine change, docstring rewrite,
+4 new unit tests, 1 updated unit test, 1 e2e regression test, customers.py
+typo fix (issue #100), version bump to 0.5.0, release notes entry.
+"""
+
+[job_story]
+description = """When I define state fields on a source that also has
+activity definitions, I want those state fields to see all events from
+that source — including events no activity definition matched — so I get
+correct latest values instead of silent stale data."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 17 testing criteria from M053 mission TOML pass",
+    "ADR-0001 referenced in the release PR body; issue #100 closed via Fixes: keyword",
+    "Test count increases by 5 (4 new unit + 1 new e2e); 1 existing test updated; no test count decreases",
+    "ruff + mypy clean",
+    "pyproject.toml version == 0.5.0",
+]
+validator_context = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/test_activity_engine.py",
+    "examples/entities/customers.py",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/test_activity_engine.py",
+    "examples/entities/customers.py",
+    "docs/decisions/0001-activity-definitions-drop-vs-preserve.md",
+    "pyproject.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Tight scope. Single story. Authoritative spec is ADR-0001 in
+docs/decisions/. The implementation sketch in the ADR is intentionally
+non-prescriptive — pick the simplest control flow that satisfies the new
+contract.
+"""
+
+estimated_stories = 1

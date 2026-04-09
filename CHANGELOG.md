@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-04-09
+
+### Fixed
+
+- `staging_runner._escape` now uses backslash escape for single quotes on
+  BigQuery, which rejects SQL-standard quote doubling. A StagingView whose
+  rendered SQL contained a single quote in the first 500 characters would
+  previously abort Phase 0 with a cryptic "concatenated string literals"
+  error from the state row write, even though the view itself had already
+  materialized (#98).
+
 ## [0.5.0] - 2026-04-08
 
 ### Changed (BREAKING)

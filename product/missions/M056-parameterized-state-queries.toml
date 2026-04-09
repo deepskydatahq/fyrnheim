@@ -1,0 +1,304 @@
+# Mission: Parameterized state-table queries
+# Structural fix for the class of SQL escape bugs that #98 was an instance of.
+# Rewrites _write_state_row / _load_state to use parameterized queries,
+# deletes the _escape helper and its dialect quirks.
+
+id = "M056"
+title = "v0.6.1 — parameterized state-table queries (retire _escape)"
+status = "draft"
+created = 2026-04-09
+depends_on = ["M055"]
+
+[outcome]
+description = """
+`_write_state_row`, `_load_state`, and the `fyr drop --view` DELETE in cli.py
+currently build SQL by inlining user-controlled values (view name, content
+hash, rendered_sql excerpt, fyrnheim version, etc.) into f-strings and
+escaping them through a backend-aware `_escape` helper. That helper has
+already been patched twice:
+
+- v0.4.1 added backslash/newline/tab/CR handling (bugs discovered during
+  client-flowable M006)
+- v0.5.1 made it backend-aware so BigQuery gets backslash-quote escape
+  instead of SQL-standard doubling (#98, bug discovered during M007)
+
+The reporter of #98 explicitly flagged this in the "Note on a related
+concern" section: inline string interpolation for SQL is fragile, every
+dialect has its own escape idiosyncrasies, and the right long-term fix is
+parameterized queries. Both BigQuery and DuckDB support parameterized
+queries natively — BigQuery via `ScalarQueryParameter` in a `QueryJobConfig`,
+DuckDB via `$name` placeholders with a params dict.
+
+This mission replaces every inline-interpolation + `_escape` site in the
+state-table I/O path with a single backend-agnostic method on IbisExecutor:
+
+    executor.execute_parameterized(sql_template, params) -> rows | None
+
+The template uses `@name` placeholders (BigQuery-native). The method
+translates for DuckDB (`@name` → `$name`) and passes the params dict through
+to the backend's native parameter binding. `_escape` is deleted entirely.
+
+This is an internal refactor — no user-facing API changes, no breaking
+changes. The whole class of SQL escape bugs disappears structurally. Ships
+as v0.6.1 (maintenance release) rather than v0.7.0 because nothing
+user-visible changes.
+"""
+
+user_progress = "From '_escape has been patched twice and will get patched again the next time someone files a dialect quirk' to '_escape does not exist; SQL values are passed to the backend as typed parameters and the whole class of bugs is structurally impossible'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "New IbisExecutor.execute_parameterized(sql: str, params: dict[str, Any]) -> list[tuple] | None method exists",
+    "The sql_template uses @name placeholders (BigQuery-native syntax) for parameter references",
+    "BigQuery implementation: constructs ScalarQueryParameter list from params dict, passes via QueryJobConfig to client.query, returns the result rows as list of tuples",
+    "DuckDB implementation: converts @name to $name and calls connection.execute(sql, params).fetchall() (or equivalent); schema inference handles None / int / float / bool / str / datetime without any escaping logic",
+    "ClickHouse and Postgres backends: raise NotImplementedError with the same v1-scope message pattern used by materialize_view / write_table",
+    "_write_state_row is rewritten to use execute_parameterized for the DELETE + INSERT; no more f-string interpolation, no more _escape calls",
+    "_load_state is rewritten to use execute_parameterized for the SELECT",
+    "The DELETE FROM fyrnheim_state in cli.py (fyr drop --view path) is rewritten to use execute_parameterized",
+    "The _escape helper is DELETED from staging_runner.py; no callers remain",
+    "Regression: the #98 reproducer (StagingView with rendered SQL containing `'-'` in the first 500 chars) round-trips via _write_state_row + _load_state on DuckDB without any escaping special-case",
+    "Regression: a StagingView with rendered SQL containing single quote + backslash + newline + tab + carriage return all in the first 500 chars round-trips correctly",
+    "Regression: view name, content hash, and fyrnheim_version values containing SQL-special characters (quotes, backslashes) round-trip without corruption",
+    "BigQuery branch tested via mocks mirroring the existing bigquery mock pattern in test_executor.py — assert ScalarQueryParameter objects are constructed with the right names/types/values",
+    "All existing staging_view + state-table tests still pass (the one regression-guard test for the M055 _escape fix must be updated to reflect that _escape no longer exists — update it to exercise execute_parameterized instead)",
+    "Version bumped to 0.6.1; uv.lock updated; CHANGELOG entry added",
+    "ruff + mypy clean",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_executor.py",
+    "tests/test_staging_view.py",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = []
+relevant_paths = [
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_executor.py",
+    "tests/test_staging_view.py",
+]
+
+[scope]
+in_scope = [
+    "New IbisExecutor.execute_parameterized(sql, params) method with BigQuery + DuckDB support",
+    "Rewrite of _write_state_row, _load_state, and the fyr drop DELETE to use execute_parameterized",
+    "Deletion of the _escape helper",
+    "Regression tests covering the #98 payload and additional SQL-hostile characters",
+    "Update of any existing tests that referenced _escape directly",
+    "Version bump 0.6.0 → 0.6.1 + CHANGELOG entry",
+]
+out_of_scope = [
+    "Parameterizing DDL (_ensure_state_table stays as-is — it interpolates table/column NAMES, not user values)",
+    "Parameterizing StagingView materialization SQL (raw_sql for CREATE OR REPLACE VIEW is fine — the SQL is user-authored, not machine-concatenated)",
+    "Any changes to the fyrnheim_state table schema",
+    "Any changes to user-facing APIs",
+    "ClickHouse or Postgres implementations of execute_parameterized (NotImplementedError only)",
+    "Parameterizing other f-string SQL sites in the codebase beyond the state table (separate audit worth doing later)",
+]
+acceptable_breakage = [
+    "None — purely internal refactor. No user-facing behavior changes except that previously-impossible-to-hit escape edge cases now work correctly.",
+]
+
+[notes]
+considerations = """
+## Why this matters
+
+The `_escape` helper has been patched twice (v0.4.1 for backslash/newline/
+tab/CR, v0.5.1 for BigQuery backslash-quote vs SQL doubling). Each patch
+was a correct response to a real bug that surfaced in client-flowable
+missions. But the underlying pattern — building SQL with f-strings and
+escaping user values through a dialect-aware helper — is a treadmill. Every
+new SQL-hostile character class is a new patch. Parameterized queries end
+the treadmill: the backend's native parameter binding handles every case
+correctly without Fyrnheim writing escape logic.
+
+## The abstraction
+
+Single new method on IbisExecutor:
+
+```python
+def execute_parameterized(
+    self,
+    sql: str,
+    params: dict[str, Any],
+) -> list[tuple[Any, ...]] | None:
+    \"\"\"Execute a parameterized SQL statement on the active backend.
+
+    The sql template uses @name placeholders (BigQuery-native style).
+    On DuckDB, @name is converted to $name at execution time.
+
+    params maps placeholder name (without the @) to the Python value.
+    Native Python types (str, int, float, bool, datetime, None) are
+    supported — no escaping required.
+
+    Returns the result rows as a list of tuples for SELECT statements,
+    or None for DDL/DML statements that don't produce rows.
+    \"\"\"
+```
+
+### BigQuery implementation
+
+```python
+if self.connection.name == "bigquery":
+    client = getattr(self._conn, "client", None) or getattr(self._conn, "_client", None)
+    from google.cloud import bigquery as bq
+
+    bq_params = [
+        bq.ScalarQueryParameter(name, _infer_bq_type(value), value)
+        for name, value in params.items()
+    ]
+    job = client.query(sql, job_config=bq.QueryJobConfig(query_parameters=bq_params))
+    result = job.result()
+    # result is a RowIterator; convert to list of tuples
+    return [tuple(row.values()) for row in result] if result.total_rows else None
+```
+
+`_infer_bq_type` maps Python types to BigQuery param types:
+- str → "STRING"
+- int → "INT64"
+- float → "FLOAT64"
+- bool → "BOOL"
+- datetime → "TIMESTAMP"
+- None → ??? (BigQuery requires an explicit type even for NULL — take the type from a separate signature hint, or default to STRING if value is None; this is a v1 edge case)
+
+### DuckDB implementation
+
+```python
+if self.connection.name == "duckdb":
+    # Convert @name placeholders to $name (DuckDB native named params)
+    import re
+    duckdb_sql = re.sub(r"@(\\w+)", r"$\\1", sql)
+    cursor = self._conn.con.execute(duckdb_sql, params)  # or self.connection.execute
+    try:
+        rows = cursor.fetchall()
+    except Exception:
+        rows = None
+    return rows if rows else None
+```
+
+Verify the `@name` → `$name` conversion works by probing duckdb's execute
+with a named-param query during implementation. If DuckDB doesn't support
+named params in the Python client for the ibis-exposed connection, fall
+back to converting to positional `?` placeholders with an ordered params
+list. Document the path chosen in the PR body.
+
+## Rewrites required
+
+### _write_state_row (staging_runner.py)
+
+Before (current):
+```python
+excerpt = view.rendered_sql[:500]
+ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+backend = executor.connection.name
+name_s = _escape(view.name, backend)
+hash_s = _escape(content_hash, backend)
+excerpt_s = _escape(excerpt, backend)
+version_s = _escape(_FYR_VERSION, backend)
+
+executor.connection.raw_sql(
+    f"DELETE FROM {qualified} WHERE name = '{name_s}'"
+)
+hash_col = "`hash`" if backend == "bigquery" else "hash"
+executor.connection.raw_sql(
+    f"INSERT INTO {qualified} "
+    f"(name, {hash_col}, materialized_at, sql_excerpt, fyrnheim_version) VALUES ("
+    f"'{name_s}', '{hash_s}', TIMESTAMP '{ts}', "
+    f"'{excerpt_s}', '{version_s}')"
+)
+```
+
+After:
+```python
+excerpt = view.rendered_sql[:500]
+ts = datetime.now(UTC)  # pass as datetime, not string
+backend = executor.connection.name
+hash_col = "`hash`" if backend == "bigquery" else "hash"
+
+executor.execute_parameterized(
+    f"DELETE FROM {qualified} WHERE name = @name",
+    {"name": view.name},
+)
+executor.execute_parameterized(
+    f"INSERT INTO {qualified} "
+    f"(name, {hash_col}, materialized_at, sql_excerpt, fyrnheim_version) "
+    f"VALUES (@name, @hash, @ts, @excerpt, @version)",
+    {
+        "name": view.name,
+        "hash": content_hash,
+        "ts": ts,
+        "excerpt": excerpt,
+        "version": _FYR_VERSION,
+    },
+)
+```
+
+Note that {qualified} and {hash_col} are still f-string interpolated —
+those are IDENTIFIERS, not values, and SQL parameters don't substitute
+identifiers in any dialect. They come from trusted Fyrnheim code, not
+user input, so interpolation is safe. The bug class we're eliminating is
+VALUE interpolation, not identifier interpolation.
+
+### _load_state (staging_runner.py)
+
+Before:
+```python
+hash_col = "`hash`" if executor.connection.name == "bigquery" else "hash"
+cursor = executor.connection.raw_sql(
+    f"SELECT name, {hash_col} FROM {qualified}"
+)
+try:
+    rows = list(cursor.fetchall())
+except AttributeError:
+    rows = list(cursor)
+return {row[0]: row[1] for row in rows}
+```
+
+After:
+```python
+hash_col = "`hash`" if executor.connection.name == "bigquery" else "hash"
+rows = executor.execute_parameterized(
+    f"SELECT name, {hash_col} FROM {qualified}",
+    {},  # no parameters
+)
+return {row[0]: row[1] for row in rows} if rows else {}
+```
+
+### fyr drop DELETE (cli.py)
+
+Before: a direct raw_sql f-string with _escape(name).
+After: executor.execute_parameterized("DELETE FROM ... WHERE name = @name", {"name": name}).
+
+### Delete _escape
+
+After the above rewrites, `_escape` has no callers in the codebase. Remove
+the function from staging_runner.py entirely. Update any tests that
+exercised _escape directly — they should be deleted or replaced with
+execute_parameterized regression tests that cover the same character classes.
+
+## Test rewrites
+
+- Tests that tested `_escape` directly (test_escape_*): delete them, or
+  convert to test_execute_parameterized_handles_<char_class> tests that
+  exercise the same character classes through the new path.
+- tests/test_executor.py: new TestExecuteParameterized class with duckdb
+  in-memory tests + bigquery mocked tests.
+- tests/test_staging_view.py: the BigQuery-branch regression tests for
+  _write_state_row should still pass (they were asserting on the raw_sql
+  string — they now need to assert on the execute_parameterized call shape
+  instead, or be replaced with higher-level "write and read back" tests).
+
+## Release shape
+
+v0.6.1 maintenance release. No user-facing API changes. Internal refactor
+that eliminates a class of latent bugs. Release-PR flow per the saved
+memory.
+"""

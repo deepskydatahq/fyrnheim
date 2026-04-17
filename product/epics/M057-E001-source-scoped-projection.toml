@@ -1,0 +1,68 @@
+# Epic: Source-scoped analytics-entity projection
+# Single epic covering the full M057 scope: add the relevance filter, add
+# regression tests, bump 0.6.1 -> 0.6.2, CHANGELOG entry.
+
+id = "M057-E001"
+parent = "M057"
+title = "Scope project_analytics_entity to the entity's sources + ship v0.6.2"
+status = "active"
+created = 2026-04-17
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M057 scope. Add a relevance filter to
+project_analytics_entity in src/fyrnheim/engine/analytics_entity_engine.py
+so the outer id loop iterates only ids with at least one event from a
+state_field source (including coalesce.priority) OR an event whose
+event_type matches a measure.activity. Add 5 regression tests. Bump
+0.6.1 -> 0.6.2 with a CHANGELOG entry.
+"""
+
+[job_story]
+description = """When I project an AnalyticsEntity over enriched events that
+span multiple sources, I want the output to contain only ids that have
+events relevant to that entity, so my row counts reflect reality and my
+pipeline doesn't spend 14 minutes iterating ids that will be NULL for the
+entity anyway."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 13 testing criteria from the M057 mission TOML pass",
+    "project_analytics_entity narrows df to relevant rows before the outer id loop using the union predicate (state_field sources ∪ coalesce.priority sources ∪ measure.activity event_types)",
+    "5 new regression tests exist in tests/test_analytics_entity_engine.py with the names specified in the mission TOML",
+    "All previously-passing tests in tests/test_analytics_entity_engine.py, tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py still pass",
+    "ruff + mypy clean; pyproject.toml version == 0.6.2; CHANGELOG entry added",
+]
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Correctness + performance bugfix. No public API change. The mission TOML
+[notes] section contains the precise filter predicate and gotchas
+(Measure has no `source` attribute; coalesce strategy uses `priority`
+list). Read that first.
+"""
+
+estimated_stories = 1

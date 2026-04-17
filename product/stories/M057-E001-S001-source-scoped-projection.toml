@@ -1,0 +1,180 @@
+id = "M057-E001-S001"
+parent = "M057-E001"
+title = "Relevance filter in project_analytics_entity + 5 regression tests + v0.6.2"
+status = "ready"
+created = 2026-04-17
+
+[outcome]
+description = """Add a source/activity relevance filter in
+project_analytics_entity that narrows enriched_events before the outer id
+loop. Add 5 regression tests. Bump pyproject.toml to 0.6.2 and add a
+CHANGELOG entry."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "project_analytics_entity (src/fyrnheim/engine/analytics_entity_engine.py) computes the set of relevant sources from analytics_entity.state_fields (sf.source for non-coalesce; every element of sf.priority for coalesce) and the set of relevant activities from analytics_entity.measures (m.activity), then applies mask = df['source'].isin(relevant_sources) | df['event_type'].isin(relevant_activities) BEFORE deriving group_ids"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "If state_fields is empty AND measures is non-empty, the filter uses only the activity predicate (rows kept iff event_type ∈ measure activities)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "If measures is empty AND state_fields is non-empty, the filter uses only the source predicate"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_projection_scopes_to_state_field_sources: enriched_events with sources 'A' and 'B'; AnalyticsEntity has state_fields only on source 'A'; entity ids that appear only in source 'B' rows are NOT present in the output; ids in 'A' are present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_projection_scopes_to_measure_activities: enriched_events with event_types 'X', 'Y', 'Z'; AnalyticsEntity has one measure with activity='X'; entity ids with only 'Y'/'Z' events are NOT present; ids with 'X' events are present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_projection_scopes_to_coalesce_priority_sources: StateField strategy='coalesce' with priority=['A','B']; entity ids appearing only in source 'C' are NOT present; ids in 'A' or 'B' are present"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_projection_union_state_and_measure_relevance: entity has a StateField on source 'A' AND a measure with activity='X'; an id whose only event is event_type='X' from source='app' (not in state_fields) IS still present — the measure makes it relevant"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_projection_empty_after_filter_preserves_schema: the filter removes every row for a given entity; output is an empty memtable whose columns are exactly [group_key] + [sf.name for sf in state_fields] + [m.name for m in measures] + [cf.name for cf in computed_fields]"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests in tests/test_analytics_entity_engine.py continue to pass unchanged (no assertions relaxed, no existing cases deleted)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "tests/test_e2e_entity_output.py and tests/test_e2e_identity_projection.py continue to pass"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version == 0.6.2"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock is regenerated (run `uv lock` after the version bump); the lockfile's recorded project version is 0.6.2"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new '## [0.6.2] - 2026-04-17' section placed above the 0.6.1 entry, describing the bug, the fix, and the observed row-count / perf impact"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ is clean; mypy src/ is clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No changes to Measure, StateField, or AnalyticsEntity Pydantic models in src/fyrnheim/core/analytics_entity.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No changes to pipeline.py or any other consumer of project_analytics_entity (call sites are unchanged)"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M057-analytics-entity-source-scoping.toml — read the
+[notes] section for the full filter-predicate sketch and the two gotchas
+(Measure has no `source`; coalesce uses `priority`).
+
+## Exact implementation sketch
+
+In project_analytics_entity, immediately after `df = enriched_events.execute()`
+and BEFORE `group_key = ...` / `group_ids = df[group_key].unique()`:
+
+```python
+relevant_sources: set[str] = set()
+for sf in analytics_entity.state_fields:
+    if sf.strategy == "coalesce":
+        relevant_sources.update(sf.priority or [])
+    else:
+        relevant_sources.add(sf.source)
+relevant_activities = {m.activity for m in analytics_entity.measures}
+
+if relevant_sources or relevant_activities:
+    mask = df["source"].isin(relevant_sources) | df["event_type"].isin(relevant_activities)
+    df = df[mask]
+```
+
+The `if relevant_sources or relevant_activities` guard handles the edge
+case of an AnalyticsEntity with neither (which Pydantic already rejects —
+see _require_at_least_one_field_or_measure — but keeps the code robust).
+
+## Empty-after-filter path
+
+If the filter empties df, the existing empty-rows path at the end of
+project_analytics_entity (the `pd.DataFrame(rows) if rows else pd.DataFrame(columns=all_columns)`
+line) already handles it correctly. Verify with the empty-after-filter
+regression test.
+
+## Test file structure
+
+Existing file tests/test_analytics_entity_engine.py already has a
+_make_events helper and a TestProjectAnalyticsEntity class pattern.
+Reuse that shape for the 5 new tests — do not invent new fixtures.
+
+## Release & commit shape
+
+Follow the M056 pattern: single commit (or small series) on a release
+branch named `release/v0.6.2`. Commit message for the main commit:
+
+    fix(M057): scope analytics-entity projection to entity's sources (v0.6.2)
+
+The CHANGELOG entry (append above the 0.6.1 section in CHANGELOG.md):
+
+```
+## [0.6.2] - 2026-04-17
+
+### Fixed
+
+- `project_analytics_entity` now only emits rows for ids that have at
+  least one event from a source referenced by the entity's
+  `state_fields` (including `coalesce` strategy `priority` lists) OR an
+  event whose `event_type` matches one of the entity's `measures`
+  activity names. Previously, every AnalyticsEntity emitted one row per
+  unique id in the global enriched-events stream — most rows entirely
+  NULL for the entity in question. On the timo-data-stack pipeline this
+  reduced per-entity row counts from 76,762 (global unique-id count) to
+  the correct per-entity subset, and materially cut full-pipeline runtime
+  by shrinking the outer loop's iteration space.
+```
+
+## Do NOT
+
+- Touch the Measure / StateField / AnalyticsEntity Pydantic models in
+  src/fyrnheim/core/analytics_entity.py
+- Vectorize the outer id loop (explicitly out of scope for v0.6.2)
+- Push the source filter down into Ibis before df = enriched_events.execute()
+  (out of scope; the post-execute filter is sufficient for the patch)
+- Change pipeline.py or any caller of project_analytics_entity
+- Skip the uv lock regeneration step
+"""
+reference_files = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "product/missions/M057-analytics-entity-source-scoping.toml",
+    "CHANGELOG.md",
+    "pyproject.toml",
+]

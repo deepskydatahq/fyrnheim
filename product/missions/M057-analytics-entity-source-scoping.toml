@@ -1,0 +1,168 @@
+# Mission: v0.6.2 — scope analytics-entity projection to the entity's own sources
+# Correctness + performance bugfix in project_analytics_entity: the outer loop
+# iterates every unique id in the global enriched-events stream, not only ids
+# that actually have events relevant to the entity being projected.
+
+id = "M057"
+title = "v0.6.2 — scope analytics-entity projection to the entity's sources"
+status = "draft"
+created = 2026-04-17
+depends_on = []
+
+[outcome]
+description = """
+project_analytics_entity in src/fyrnheim/engine/analytics_entity_engine.py
+currently receives the full enriched_events table (all sources concatenated)
+and groups by every unique canonical_id / entity_id in that table. It emits
+one row per unique id regardless of whether that id has any events relevant
+to the entity being projected.
+
+Observed symptom on the timo-data-stack pipeline: all 4 analytics entities
+(accounts, anon_users, persons, sessions) each output 76,762 rows — the
+global unique-id count — with most rows entirely NULL for the entity in
+question. Full pipeline run takes ~14 minutes because the Python outer loop
+iterates ~307k id×entity combinations, each doing DataFrame filtering; the
+sessions entity with 22 state fields + measures is the worst offender.
+
+After this mission: each AnalyticsEntity emits rows only for ids that have
+at least one event from a source its state_fields reference OR an event
+whose event_type matches one of its measures' activity names. Row counts
+drop to the correct per-entity subset; the outer loop iterates a much
+smaller id space; per-iteration filtering runs over a smaller df. Ships as
+a patch release (v0.6.1 -> v0.6.2).
+
+Note on the bug report's suggested fix: Measure has NO `source` attribute
+(only name/activity/aggregation/field — see src/fyrnheim/core/analytics_entity.py).
+Measures are matched to events via event_type == measure.activity. The
+filter predicate must therefore combine (a) state_field sources, (b) coalesce
+strategy `priority` source lists, and (c) measure activities matched against
+event_type. The one-liner in the report (`{m.source for m in measures ...}`)
+would always produce an empty set and is silently wrong.
+"""
+
+user_progress = "From 'every analytics entity emits one row per global unique id, mostly NULL, and a full run takes 14 min' to 'each entity emits rows only for ids with events relevant to it, and runs materially faster'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "project_analytics_entity filters enriched_events before the outer id loop to only rows that are relevant to the given AnalyticsEntity",
+    "Relevance rule: a row is relevant iff (row.source is in the set of sources referenced by any StateField — sf.source for non-coalesce fields, and every element of sf.priority for coalesce fields) OR (row.event_type equals some measure.activity in analytics_entity.measures)",
+    "Group key derivation (canonical_id if present else entity_id) runs on the filtered df, so group_ids no longer contains ids with zero relevant events",
+    "Regression test test_projection_scopes_to_state_field_sources: enriched_events with sources A and B; AnalyticsEntity has state_fields only on source A; ids that appear only in B events are NOT present in the output; ids in A are present",
+    "Regression test test_projection_scopes_to_measure_activities: enriched_events with event_types X, Y, Z; AnalyticsEntity has one measure with activity='X'; ids that only have Y/Z events are NOT present in the output",
+    "Regression test test_projection_scopes_to_coalesce_priority_sources: StateField with strategy='coalesce' and priority=['A','B']; ids appearing only in source C are NOT present; ids in A or B are present",
+    "Regression test test_projection_union_state_and_measure_relevance: entity has a StateField on source A AND a measure with activity='X'; an id whose only event is event_type='X' from source='app' (source not in state_fields) IS still present because the measure makes it relevant",
+    "Regression test test_projection_empty_after_filter_preserves_schema: the filter removes every row for a given entity; output is an empty memtable with exactly [group_key] + state_field names + measure names + computed_field names as columns (same contract as the existing empty-input path)",
+    "All existing tests in tests/test_analytics_entity_engine.py continue to pass unchanged (the fix is subtractive — removes spurious rows — so any existing assertion that an id's row is NOT present cannot regress; assertions over specific ids' values are preserved because those ids are relevant by construction in the fixtures)",
+    "tests/test_e2e_entity_output.py and tests/test_e2e_identity_projection.py continue to pass",
+    "Version bump 0.6.1 -> 0.6.2 in pyproject.toml; uv.lock updated",
+    "CHANGELOG / release notes entry naming the bug and the row-count / perf impact",
+    "ruff + mypy clean",
+    "Release-PR flow: release/v0.6.2 branch -> PR -> green CI -> merge -> tag -> publish (per release-flow memory)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+]
+
+[scope]
+in_scope = [
+    "Add a relevance filter in project_analytics_entity that narrows df to rows whose source is referenced by any state_field (including coalesce.priority) OR whose event_type matches any measure.activity, before the group_ids loop",
+    "5 new regression tests in tests/test_analytics_entity_engine.py covering: state-field-source scoping, measure-activity scoping, coalesce-priority scoping, union of state+measure relevance, empty-after-filter schema",
+    "Version bump 0.6.1 -> 0.6.2 + uv lock",
+    "CHANGELOG / release notes entry",
+]
+out_of_scope = [
+    "Vectorizing the outer id loop (replacing the Python for-loop with pandas groupby / Ibis aggregations) — tracked separately; this mission only shrinks the iteration space",
+    "Pushing the source filter down into Ibis before df = enriched_events.execute() — valid future optimization but out of scope for the patch release",
+    "Changes to _extract_field_value, _compute_measure, _resolve_* helpers",
+    "Changes to Measure / StateField / AnalyticsEntity Pydantic models (e.g. adding a Measure.source field) — the activity-based filter is sufficient and avoids a model change",
+    "Changes to pipeline.py or any callsite",
+    "Re-running / re-benchmarking the timo-data-stack pipeline as part of the mission CI — that validation happens post-merge against the user's real data",
+]
+acceptable_breakage = [
+    "None — this is a correctness fix that removes rows which were NULL-only for the entity in question. Any downstream code depending on the presence of those NULL rows (there is none in-repo) would need updating; documented in release notes.",
+]
+
+[notes]
+considerations = """
+## Source of truth
+
+The bug is documented inline in the mission description and in the chat
+thread that produced this TOML. There is no separate GitHub issue yet; open
+one on mission kickoff and reference it in the release PR.
+
+## Correct relevance predicate (important)
+
+The bug report's suggested one-liner is:
+  relevant_sources = {sf.source for sf in state_fields if sf.source}
+  relevant_sources |= {m.source for m in measures if hasattr(m, 'source') and m.source}
+  df = df[df["source"].isin(relevant_sources)]
+
+This is WRONG in two ways:
+  1. Measure has no `source` attribute — see src/fyrnheim/core/analytics_entity.py
+     lines 11-23. Measures bind to events via `activity`, which is matched
+     against event_type (see _compute_measure, engine/analytics_entity_engine.py:138).
+     The `{m.source for m in measures ...}` set is always empty.
+  2. StateField with strategy='coalesce' carries a `priority: list[str]` of
+     source names; those sources are also relevant but are not in sf.source.
+
+Correct predicate:
+
+  relevant_sources: set[str] = set()
+  for sf in analytics_entity.state_fields:
+      if sf.strategy == "coalesce":
+          relevant_sources.update(sf.priority or [])
+      else:
+          relevant_sources.add(sf.source)
+  relevant_activities = {m.activity for m in analytics_entity.measures}
+
+  mask = df["source"].isin(relevant_sources) | df["event_type"].isin(relevant_activities)
+  df = df[mask]
+
+Implementer: prefer this shape. If you diverge, document why in the PR body.
+
+## Empty-after-filter path
+
+The existing empty-input path at line 212-219 builds a DataFrame with the
+correct columns when rows is empty. The filter can produce an empty df for
+entities whose relevant sources / activities happen to not intersect the
+stream; the existing empty path handles that correctly as long as we still
+fall through to it when rows == []. Verify with the empty-after-filter test.
+
+## Computed fields
+
+computed_fields (lines 222-230) apply result_df.apply over the projected rows.
+Unaffected by the filter — they run after the loop. The empty-after-filter
+test must still assert computed-field columns appear in the output schema.
+
+## Why no vectorization in this mission
+
+Replacing the Python for-loop with pandas groupby is the larger perf win but
+also the riskier change (strategy='latest'/'first' over arbitrary payloads,
+coalesce across sources, activity-type-filtered measures — each needs its
+own vectorized form). Shipping correctness first lets us measure the actual
+post-filter runtime before deciding whether vectorization is still worth the
+risk.
+
+## Release shape
+
+Patch release. 0.6.1 -> 0.6.2. Release-PR flow per the release-flow memory:
+release/v0.6.2 branch -> PR -> green CI -> merge -> tag -> publish.
+"""

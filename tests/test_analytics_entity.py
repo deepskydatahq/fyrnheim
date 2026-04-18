@@ -182,54 +182,130 @@ class TestImports:
 
 
 class TestM051ExtractFieldValue:
-    """Issue #94: _extract_field_value must handle arbitrary event types,
+    """Issue #94: state-field extraction must handle arbitrary event types,
     not just row_appeared and field_changed. EventSource events and
-    activity-rewritten events carry flat payloads under different types."""
+    activity-rewritten events carry flat payloads under different types.
+
+    M060 note: these used to exercise the private helper
+    ``_extract_field_value``. The Ibis push-down rewrite in M060 replaces
+    that helper with a ``CASE WHEN`` inside the aggregation expression, so
+    these tests now exercise the same invariant end-to-end through
+    ``project_analytics_entity``.
+    """
 
     def test_extract_field_value_handles_arbitrary_event_type_with_flat_payload(
         self,
     ) -> None:
         import json as _json
 
+        import ibis
         import pandas as pd
 
-        from fyrnheim.engine.analytics_entity_engine import _extract_field_value
-
-        row = pd.Series(
-            {
-                "event_type": "anon_attrs_loaded",
-                "payload": _json.dumps(
-                    {"company_name": "Northwind Bank", "region": "EU"}
-                ),
-            }
+        from fyrnheim.core.analytics_entity import AnalyticsEntity, StateField
+        from fyrnheim.engine.analytics_entity_engine import (
+            project_analytics_entity,
         )
-        assert _extract_field_value(row, "company_name") == "Northwind Bank"
-        assert _extract_field_value(row, "region") == "EU"
-        assert _extract_field_value(row, "missing") is None
+
+        events = ibis.memtable(
+            pd.DataFrame(
+                [
+                    {
+                        "source": "attrs",
+                        "entity_id": "u1",
+                        "ts": "2024-01-01T00:00:00",
+                        "event_type": "anon_attrs_loaded",
+                        "payload": _json.dumps(
+                            {"company_name": "Northwind Bank", "region": "EU"}
+                        ),
+                    }
+                ]
+            )
+        )
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(
+                    name="company_name",
+                    source="attrs",
+                    field="company_name",
+                    strategy="latest",
+                ),
+                StateField(
+                    name="region",
+                    source="attrs",
+                    field="region",
+                    strategy="latest",
+                ),
+                StateField(
+                    name="missing",
+                    source="attrs",
+                    field="missing",
+                    strategy="latest",
+                ),
+            ],
+        )
+        df = project_analytics_entity(events, ae).execute()
+        row = df.iloc[0]
+        assert row["company_name"] == "Northwind Bank"
+        assert row["region"] == "EU"
+        assert pd.isna(row["missing"])
 
     def test_extract_field_value_still_handles_field_changed(self) -> None:
         import json as _json
 
+        import ibis
         import pandas as pd
 
-        from fyrnheim.engine.analytics_entity_engine import _extract_field_value
-
-        row = pd.Series(
-            {
-                "event_type": "field_changed",
-                "payload": _json.dumps(
-                    {
-                        "field_name": "company_name",
-                        "old_value": "Old",
-                        "new_value": "New",
-                    }
-                ),
-            }
+        from fyrnheim.core.analytics_entity import AnalyticsEntity, StateField
+        from fyrnheim.engine.analytics_entity_engine import (
+            project_analytics_entity,
         )
+
+        events = ibis.memtable(
+            pd.DataFrame(
+                [
+                    {
+                        "source": "crm",
+                        "entity_id": "u1",
+                        "ts": "2024-01-01T00:00:00",
+                        "event_type": "field_changed",
+                        "payload": _json.dumps(
+                            {
+                                "field_name": "company_name",
+                                "old_value": "Old",
+                                "new_value": "New",
+                            }
+                        ),
+                    }
+                ]
+            )
+        )
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(
+                    name="company_name",
+                    source="crm",
+                    field="company_name",
+                    strategy="latest",
+                ),
+                # ``field_changed`` events only carry a single field's
+                # new_value; a state field for a non-matching key must
+                # not pick up new_value by accident.
+                StateField(
+                    name="other",
+                    source="crm",
+                    field="other",
+                    strategy="latest",
+                ),
+            ],
+        )
+        df = project_analytics_entity(events, ae).execute()
+        row = df.iloc[0]
         # Matching field name returns new_value
-        assert _extract_field_value(row, "company_name") == "New"
-        # Non-matching field name returns None (not new_value by accident)
-        assert _extract_field_value(row, "other") is None
+        assert row["company_name"] == "New"
+        # Non-matching field name returns None/NaN (not new_value by accident)
+        assert pd.isna(row["other"])
 
 
 class TestMaterializationField:

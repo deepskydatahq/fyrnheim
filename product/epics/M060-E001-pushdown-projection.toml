@@ -1,0 +1,87 @@
+# Epic: Push-down project_analytics_entity to Ibis
+# Single epic covering the full M060 scope — rewrite project_analytics_entity
+# to return an Ibis expression so backends do the groupby+agg server-side.
+
+id = "M060-E001"
+parent = "M060"
+title = "Rewrite project_analytics_entity to return an Ibis expression"
+status = "active"
+created = 2026-04-18
+depends_on = ["M058"]
+
+[outcome]
+description = """
+Single epic covering the full M060 scope. Replace the Python for-loop and
+pandas DataFrame in project_analytics_entity (src/fyrnheim/engine/analytics_entity_engine.py)
+with an Ibis expression composed of groupby + aggregation primitives over
+JSON payload extracts. The backend (DuckDB in tests, BigQuery in prod)
+executes the projection; only final per-entity rows land on the client.
+
+Preserve byte-identical output against the v0.6.2 implementation via a
+parameterized equivalence-test harness that vendors the pandas
+implementation temporarily as a test helper and runs both against every
+existing fixture.
+
+Preserve computed_fields evaluation in Python over the (now small)
+post-aggregation DataFrame — translating those to Ibis is out of scope.
+Preserve the M057 relevance filter as an Ibis `.filter(...)` at the start
+of the expression.
+"""
+
+[job_story]
+description = """When the pipeline projects an AnalyticsEntity over millions
+of events on BigQuery, I want the per-entity compute to run as one SQL
+groupby-aggregation query rather than exporting the full event table to
+the client and iterating in Python, so projection time stops scaling with
+event volume on the client side."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 21 testing criteria from the M060 mission TOML pass",
+    "project_analytics_entity returns an Ibis expression composed from groupby + aggregation over JSON payload extracts — NOT an ibis.memtable wrapping a pandas DataFrame",
+    "Equivalence suite: for every existing test fixture in tests/test_analytics_entity_engine.py, both the new implementation and the vendored-pandas reference produce byte-identical output (exact column order, exact values; floats via pytest.approx where needed)",
+    "All existing tests pass unchanged: tests/test_analytics_entity_engine.py, tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py",
+    "JSON-extract spike documented (either in the commit message or in a comment near the extraction helper) explaining which Ibis primitive was chosen for DuckDB vs BigQuery and why",
+    "ruff + mypy clean; no new runtime deps",
+    "pyproject.toml version unchanged at 0.6.2; no CHANGELOG entry",
+    "M058 timings continue to populate; project_s for representative entities on the duckdb benchmark_result fixture decreased (cite before/after in PR body)",
+]
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/",
+]
+dependencies = ["M058"]
+
+[notes]
+considerations = """
+Architectural rewrite of the core projection engine. High risk without
+measurement — M058 timings are the safety rail. Mission TOML [notes]
+section has:
+- Full risk map (5 items: JSON portability, field_changed branching,
+  latest+NULLs, coalesce ordering, memtable harness)
+- Explicit test strategy (vendor pandas impl as test helper, parameterized
+  equivalence suite)
+- Concrete aggregation sketches per strategy / measure type
+
+Do the 30-minute JSON-extract portability spike FIRST before committing to
+the full rewrite. If Ibis JSON bindings don't cleanly cover both DuckDB
+and BigQuery for scalar extraction, escalate and re-scope rather than
+silently diverging backends.
+
+No version bump — bundles into v0.7.0 with M058 + M059 + M061.
+"""
+
+estimated_stories = 1

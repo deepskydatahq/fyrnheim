@@ -99,6 +99,13 @@ def _setup_bench_project(tmp_path: Path) -> None:
         }
     ).to_parquet(str(data_dir / "page_views.parquet"))
 
+    # Use POSIX form so the embedded path is safe to interpolate into a
+    # Python string literal on Windows (where "\" would start an escape).
+    parquet_posix = (data_dir / "page_views.parquet").as_posix()
+    entities_posix = entities_dir.as_posix()
+    data_posix = data_dir.as_posix()
+    output_posix = output_dir.as_posix()
+
     entity_code = f'''
 from fyrnheim.core.source import EventSource
 from fyrnheim.core.activity import ActivityDefinition, EventOccurred
@@ -109,7 +116,7 @@ page_views_source = EventSource(
     project="test",
     dataset="test",
     table="page_views",
-    duckdb_path="{data_dir / 'page_views.parquet'}",
+    duckdb_path="{parquet_posix}",
     entity_id_field="user_id",
     timestamp_field="event_time",
     event_type="page_view",
@@ -134,9 +141,9 @@ page_view_metrics = MetricsModel(
     (entities_dir / "page_views.py").write_text(entity_code)
 
     yaml_content = f"""
-entities_dir: {entities_dir}
-data_dir: {data_dir}
-output_dir: {output_dir}
+entities_dir: {entities_posix}
+data_dir: {data_posix}
+output_dir: {output_posix}
 backend: duckdb
 """
     (tmp_path / "fyrnheim.yaml").write_text(yaml_content)

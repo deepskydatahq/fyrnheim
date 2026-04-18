@@ -469,22 +469,25 @@ def bench(
     )
 
     try:
-        result = run_pipeline(assets, config, executor, no_state=no_state)
-    except Exception as exc:
-        if verbose:
-            raise
-        click.echo(f"Pipeline failed: {exc}", err=True)
-        sys.exit(1)
+        try:
+            result = run_pipeline(assets, config, executor, no_state=no_state)
+        except Exception as exc:
+            if verbose:
+                raise
+            click.echo(f"Pipeline failed: {exc}", err=True)
+            sys.exit(1)
 
-    if as_json:
-        click.echo(json.dumps(dataclasses.asdict(result.timings)))
-    else:
-        click.echo(_format_bench_report(result.timings, result.elapsed_seconds))
+        if as_json:
+            click.echo(json.dumps(dataclasses.asdict(result.timings)))
+        else:
+            click.echo(_format_bench_report(result.timings, result.elapsed_seconds))
 
-    if result.errors:
-        for err in result.errors:
-            click.echo(f"  - {err}", err=True)
-        sys.exit(1)
+        if result.errors:
+            for err in result.errors:
+                click.echo(f"  - {err}", err=True)
+            sys.exit(1)
+    finally:
+        executor.close()
 
 
 @main.command()

@@ -1,0 +1,278 @@
+id = "M059-E001-S001"
+parent = "M059-E001"
+title = "ThreadPoolExecutor fan-out + max_parallel_io config + DuckDB-thread-safe executor"
+status = "ready"
+created = 2026-04-18
+
+[outcome]
+description = """Parallelize the three serial I/O loops in pipeline.py
+(phase 1 source loads, phase 4 entity writes, phase 5 metrics writes)
+using a bounded ThreadPoolExecutor. Add ResolvedConfig.max_parallel_io
+(default 4) + `fyr run --max-parallel-io N`. Add a DuckDB connection lock
+to IbisExecutor so the shared executor is safe under concurrent calls."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ResolvedConfig gains a `max_parallel_io: int = 4` field (added to the frozen dataclass in src/fyrnheim/config.py). `resolve_config()` threads the value through and picks it up from fyrnheim.yaml's `max_parallel_io` key if set."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr run` CLI gains `--max-parallel-io INT` option (src/fyrnheim/cli.py). When passed, it overrides the config value. Value must be >= 1; click's IntRange(min=1) enforces."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "IbisExecutor gains a per-instance `threading.Lock` that protects every method that touches `self._conn` — but ONLY for DuckDB backend. For other backends (BigQuery; also the NotImplementedError paths), the lock is a `contextlib.nullcontext()` so parallelism is preserved. Pattern: `self._conn_lock = threading.Lock() if self.backend == 'duckdb' else contextlib.nullcontext()`. All of `execute`, `execute_parameterized`, `materialize_view`, `write_table`, `view_exists`, `drop_view` wrap their self._conn usage with `with self._conn_lock:`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Source loads (pipeline.py phase 1, currently lines 106-122) are replaced with a ThreadPoolExecutor(max_workers=config.max_parallel_io) fan-out. Each submitted task loads one source (same function calls as today: _load_state_source or load_event_source). Results are collected into event_tables in config.sources index order — use a list pre-sized to len(config.sources) and set by index after each future resolves, OR collect futures in a list and iterate in submission order. Do NOT use as_completed for source loads (ordering matters)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Analytics-entity writes (pipeline.py phase 4, currently lines 154-179) are parallelized OVER THE WRITE STEP ONLY: the projection step (project_analytics_entity + .execute()) still runs sequentially in the main thread per entity, feeding a df; the write step (executor.write_table or df.to_parquet) is submitted to the thread pool. Rationale: projection is M060's axis. Collecting writes in a list and waiting on all futures before phase 5 starts is acceptable."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Metrics-model writes (pipeline.py phase 5, currently lines 182-207) are parallelized the same way as phase 4: projection sequential, writes fanned out."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "When max_parallel_io == 1, all three loops run with a single-worker pool (ThreadPoolExecutor(max_workers=1)) — effectively serial. Smoke test asserts existing e2e tests still pass unchanged when forcing max_parallel_io=1."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Exception-propagation contract: if any worker raises, `run_pipeline` surfaces the first exception (via `future.result()` which re-raises) and does not silently swallow it. The pool's `__exit__` cancels any pending (not-yet-started) futures; in-flight ones finish naturally. No additional error-collection changes beyond today's `result.errors` list behavior."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_parallel_source_load_preserves_order: build a config with 3 event sources whose load functions sleep different amounts (e.g. via a stub that wraps load_event_source); assert event_tables' entries correspond to config.sources by index, not by completion time. Use `max_parallel_io=3`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_parallel_entity_writes_all_happen: a config with 3 AnalyticsEntity items all materialization='table' using a mocked IbisExecutor (capturing write_table calls); after run_pipeline, the mock has been called exactly 3 times with the correct (project, dataset, name, df) tuples. Use `max_parallel_io=3`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_exception_in_worker_propagates: a config with 3 event sources where the 2nd one's load function raises RuntimeError('boom'); run_pipeline raises RuntimeError('boom') (not a wrapper exception). The test accepts that one of the other two sources may or may not have fully completed — the guarantee is fail-fast propagation, not perfect cleanup."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_duckdb_executor_is_thread_safe: create an IbisExecutor with duckdb backend, launch 8 threads that each call execute_parameterized with a simple SELECT, assert no exception and all results correct. Regression test proving the lock works."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests in tests/ pass unchanged. Especially tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_benchmark_harness.py, tests/test_executor.py."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "M058 timings still populate correctly in the parallel case. The approximate-sum invariant from M058 continues to hold — but now with wall-clock elapsed_seconds that may be LESS than the sum of per-item timings (because items ran concurrently). UPDATE the invariant test to assert sum_of_timings >= elapsed_seconds - 0.15 (i.e. timings must account for at least elapsed minus tolerance), NOT strict equality. The original strict-equality assertion would fail with parallelism; the new form asserts 'no elapsed time is unaccounted for'."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CLI --help for `fyr run` mentions --max-parallel-io with a 1-line description referencing default=4"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README mentions max_parallel_io in the CLI / config section (2-3 lines)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No new runtime dependencies; stdlib `concurrent.futures`, `threading`, `contextlib` only"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No version bump, no CHANGELOG entry — M058/M059/M060 bundle into v0.7.0 at release time"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "tests/conftest.py",
+    "tests/test_benchmark_harness.py",
+    "tests/",
+    "README.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M059-parallel-source-and-entity-io.toml — read outcome +
+[notes]. Critical design constraints:
+- Threads, not asyncio (Ibis/BQ clients are sync)
+- Bounded pool; default 4
+- Source-load ORDERING must be preserved (event_tables[i] ↔ config.sources[i])
+- Projection step of phase 4/5 stays sequential — only writes parallelize
+
+## DuckDB thread-safety (MOST IMPORTANT)
+
+DuckDB Python connections are NOT thread-safe for concurrent queries on a
+single connection. The BigQuery client IS thread-safe. Apply this pattern
+in IbisExecutor.__init__:
+
+```python
+import threading, contextlib
+
+class IbisExecutor:
+    def __init__(self, ..., backend: str, ...):
+        ...
+        self.backend = backend
+        if backend == "duckdb":
+            self._conn_lock: threading.Lock | contextlib.AbstractContextManager = threading.Lock()
+        else:
+            self._conn_lock = contextlib.nullcontext()
+```
+
+Then in every method that touches `self._conn`:
+
+```python
+def execute_parameterized(self, sql: str, params: dict) -> list:
+    with self._conn_lock:
+        # existing body
+        ...
+```
+
+Apply to: `execute`, `execute_parameterized`, `materialize_view`,
+`write_table`, `view_exists`, `drop_view`. For BQ-only `write_table`, the
+lock is nullcontext so parallelism is preserved. For DuckDB, it serializes
+connection access (correct but still much better than the single-threaded
+pipeline because BQ and parquet writes in the same run aren't blocked by
+DuckDB's lock anyway).
+
+Test the lock with a threaded smoke test that stresses execute_parameterized.
+
+## Source-load fan-out pattern
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+
+def _load_source(source):
+    t0 = time.monotonic()
+    if isinstance(source, StateSource):
+        tbl = _load_state_source(source, executor, config, no_state=no_state)
+    elif isinstance(source, EventSource):
+        tbl = load_event_source(source, executor._conn, config.backend, data_dir=config.data_dir)
+    elapsed = time.monotonic() - t0
+    return source.name, tbl, elapsed
+
+event_tables: list[ibis.Table] = [None] * len(config.sources)
+
+with ThreadPoolExecutor(max_workers=config.max_parallel_io) as pool:
+    futures = [pool.submit(_load_source, src) for src in config.sources]
+    for i, fut in enumerate(futures):
+        name, tbl, elapsed = fut.result()
+        event_tables[i] = tbl
+        timings.source_loads[name] = elapsed
+```
+
+The pre-sized list + index-based assignment guarantees ordering without
+`as_completed`. Iterating `futures` in list order means each `fut.result()`
+blocks until that specific future is done — but earlier futures may have
+already completed concurrently with later ones, so total wall time is
+bounded by the slowest item plus a bit, not the sum.
+
+## Entity-write fan-out pattern
+
+```python
+with ThreadPoolExecutor(max_workers=config.max_parallel_io) as pool:
+    write_futures = []
+    for ae in analytics_entities:
+        t_project = time.monotonic()
+        try:
+            projected = project_analytics_entity(enriched_events, ae)
+            df = projected.execute()
+        except Exception as e:
+            result.errors.append(f\"project {ae.name}: {e}\")
+            timings.analytics_entities[ae.name] = {\"project_s\": time.monotonic() - t_project, \"write_s\": 0.0}
+            continue
+        project_s = time.monotonic() - t_project
+
+        def _write(ae=ae, df=df, project_s=project_s):
+            t_write = time.monotonic()
+            try:
+                if ae.materialization == \"table\":
+                    table_name = ae.table or ae.name
+                    executor.write_table(ae.project, ae.dataset, table_name, df)
+                else:
+                    out_path = config.output_dir / f\"{ae.name}.parquet\"
+                    df.to_parquet(str(out_path))
+            finally:
+                timings.analytics_entities[ae.name] = {\"project_s\": project_s, \"write_s\": time.monotonic() - t_write}
+
+        write_futures.append(pool.submit(_write))
+
+    for fut in write_futures:
+        fut.result()  # propagate exceptions
+```
+
+Mirror for metrics_models in phase 5.
+
+## timings dict thread-safety
+
+dict-setitem IS atomic in CPython (GIL). Multiple threads can safely
+`timings.analytics_entities[name] = {...}` concurrently without a lock.
+No extra synchronization needed for the timings dict.
+
+## Config threading
+
+- Add `max_parallel_io: int = 4` to ResolvedConfig (frozen dataclass — just another field)
+- In resolve_config(), accept `max_parallel_io: int | None = None` parameter; if None, fall back to config.max_parallel_io if set else 4
+- ProjectConfig doesn't currently have max_parallel_io; add it and default to None so it's picked up from yaml if present
+
+## CLI plumbing
+
+In cli.py `run` command:
+```python
+@click.option(\"--max-parallel-io\", type=click.IntRange(min=1), default=None,
+              help=\"Max parallel I/O workers for source loads and entity/metrics writes (default: 4)\")
+def run(..., max_parallel_io):
+    ...
+    config = resolve_config(..., max_parallel_io=max_parallel_io)
+    ...
+```
+
+Also apply to `fyr bench` for consistency.
+
+## Updating the M058 invariant test
+
+In tests/test_benchmark_harness.py, find the test that asserts
+`abs(sum - elapsed) < 0.15`. With parallelism, sum of per-item timings >=
+elapsed_seconds (could be much larger). Change to:
+
+```python
+# With parallel execution, sum_of_timings may exceed elapsed_seconds,
+# but must cover at least elapsed minus a small tolerance (no phase missed).
+assert sum_of_timings >= result.elapsed_seconds - 0.15
+```
+
+This still catches missed phases but tolerates concurrency.
+
+## Do NOT
+
+- Touch project_analytics_entity (M060's job)
+- Add asyncio or async/await
+- Add connection pooling to IbisExecutor (single-conn + lock is sufficient for v0.7.0)
+- Parallelize identity resolution (phase 3) — shared enriched_events state
+- Parallelize staging_views (phase 0) — sequencing matters across materialized views
+- Lock the BigQuery client (it's thread-safe; the lock would serialize the actual parallel win)
+- Bump the version
+"""
+reference_files = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "product/missions/M059-parallel-source-and-entity-io.toml",
+]

@@ -29,6 +29,29 @@ log = logging.getLogger("fyrnheim.pipeline")
 
 
 @dataclass
+class PipelineTimings:
+    """Per-phase / per-asset wall-clock timings for a pipeline run.
+
+    Populated by ``run_pipeline`` via :func:`time.monotonic` deltas so
+    downstream perf tooling (e.g. ``fyr bench``, the ``benchmark_result``
+    pytest fixture) can reason about where wall-clock time is spent.
+
+    All values are in seconds. Dict-valued fields are keyed by the
+    corresponding asset's ``name``. Inner dicts for analytics entities
+    and metrics models split work into ``project_s`` (projection +
+    ``.execute()``) and ``write_s`` (``write_table`` or
+    ``df.to_parquet``).
+    """
+
+    staging_views_s: float = 0.0
+    source_loads: dict[str, float] = field(default_factory=dict)
+    activities_s: float = 0.0
+    identity_graphs: dict[str, float] = field(default_factory=dict)
+    analytics_entities: dict[str, dict[str, float]] = field(default_factory=dict)
+    metrics_models: dict[str, dict[str, float]] = field(default_factory=dict)
+
+
+@dataclass
 class PipelineResult:
     """Result of a pipeline execution."""
 
@@ -40,6 +63,7 @@ class PipelineResult:
     elapsed_seconds: float = 0.0
     staging_materialized: list[str] = field(default_factory=list)
     staging_skipped: list[str] = field(default_factory=list)
+    timings: PipelineTimings = field(default_factory=PipelineTimings)
 
 
 def run_pipeline(
@@ -62,6 +86,7 @@ def run_pipeline(
     """
     start = time.monotonic()
     result = PipelineResult()
+    timings = result.timings
     conn = executor.connection
 
     sources = assets.get("sources", [])
@@ -83,6 +108,7 @@ def run_pipeline(
                     upstream = getattr(src, "upstream", None)
                     if upstream is not None:
                         fixture_names.add(upstream.name)
+        t_phase0 = time.monotonic()
         try:
             staging_summary = materialize_staging_views(
                 executor,
@@ -95,6 +121,7 @@ def run_pipeline(
         except Exception as exc:
             result.errors.append(f"Staging views: {exc}")
             log.warning("Failed to materialize staging views: %s", exc)
+        timings.staging_views_s = time.monotonic() - t_phase0
 
     if not sources:
         result.elapsed_seconds = time.monotonic() - start
@@ -104,6 +131,7 @@ def run_pipeline(
     event_tables: list[ibis.Table] = []
 
     for source in sources:
+        t_source = time.monotonic()
         try:
             if isinstance(source, StateSource):
                 events = _load_state_source(source, config, conn)
@@ -120,6 +148,8 @@ def run_pipeline(
         except Exception as exc:
             result.errors.append(f"Source '{source.name}': {exc}")
             log.warning("Failed to load source '%s': %s", source.name, exc)
+        finally:
+            timings.source_loads[source.name] = time.monotonic() - t_source
 
     if not event_tables:
         result.elapsed_seconds = time.monotonic() - start
@@ -130,31 +160,42 @@ def run_pipeline(
 
     # --- Phase 2: Apply activity definitions ---
     if activities:
+        t_phase2 = time.monotonic()
         try:
             all_events = apply_activity_definitions(all_events, activities)
         except Exception as exc:
             result.errors.append(f"Activity definitions: {exc}")
             log.warning("Failed to apply activity definitions: %s", exc)
+        timings.activities_s = time.monotonic() - t_phase2
 
     # --- Phase 3: Identity resolution ---
     enriched_events = all_events
     if identity_graphs:
         for ig in identity_graphs:
+            t_graph = time.monotonic()
             try:
                 id_mapping = resolve_identities(all_events, ig)
                 enriched_events = enrich_events(enriched_events, id_mapping)
             except Exception as exc:
                 result.errors.append(f"Identity graph '{ig.name}': {exc}")
                 log.warning("Failed identity resolution for '%s': %s", ig.name, exc)
+            finally:
+                timings.identity_graphs[ig.name] = time.monotonic() - t_graph
 
     # --- Phase 4: Analytics entities ---
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for ae in analytics_entities:
+        project_s = 0.0
+        write_s = 0.0
         try:
+            t_project = time.monotonic()
             projected = project_analytics_entity(enriched_events, ae)
             df = projected.execute()
+            project_s = time.monotonic() - t_project
+
+            t_write = time.monotonic()
             if ae.materialization == "table":
                 table_name = ae.table or ae.name
                 executor.write_table(ae.project, ae.dataset, table_name, df)
@@ -171,18 +212,30 @@ def run_pipeline(
                 df.to_parquet(str(out_path))
                 destination = f"parquet:{out_path}"
                 log.info("Wrote analytics entity: %s (%d rows)", ae.name, len(df))
+            write_s = time.monotonic() - t_write
             result.outputs[ae.name] = len(df)
             result.output_destinations[ae.name] = destination
             result.output_count += 1
         except Exception as exc:
             result.errors.append(f"Analytics entity '{ae.name}': {exc}")
             log.warning("Failed analytics entity '%s': %s", ae.name, exc)
+        finally:
+            timings.analytics_entities[ae.name] = {
+                "project_s": project_s,
+                "write_s": write_s,
+            }
 
     # --- Phase 5: Metrics models ---
     for mm in metrics_models:
+        project_s = 0.0
+        write_s = 0.0
         try:
+            t_project = time.monotonic()
             aggregated = aggregate_metrics(enriched_events, mm)
             df = aggregated.execute()
+            project_s = time.monotonic() - t_project
+
+            t_write = time.monotonic()
             if mm.materialization == "table":
                 table_name = mm.table or mm.name
                 executor.write_table(mm.project, mm.dataset, table_name, df)
@@ -199,12 +252,18 @@ def run_pipeline(
                 df.to_parquet(str(out_path))
                 destination = f"parquet:{out_path}"
                 log.info("Wrote metrics model: %s (%d rows)", mm.name, len(df))
+            write_s = time.monotonic() - t_write
             result.outputs[mm.name] = len(df)
             result.output_destinations[mm.name] = destination
             result.output_count += 1
         except Exception as exc:
             result.errors.append(f"Metrics model '{mm.name}': {exc}")
             log.warning("Failed metrics model '%s': %s", mm.name, exc)
+        finally:
+            timings.metrics_models[mm.name] = {
+                "project_s": project_s,
+                "write_s": write_s,
+            }
 
     result.elapsed_seconds = time.monotonic() - start
     return result

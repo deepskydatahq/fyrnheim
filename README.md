@@ -147,9 +147,16 @@ StreamAnalyticsModel(
 
 ```bash
 fyr init [project_name]   # Scaffold a new project
+fyr run                   # Run the pipeline
+fyr bench                 # Run the pipeline and print per-phase timings
+fyr bench --json          # Same, but emit PipelineTimings as JSON on stdout
 fyr --version             # Show version
 fyr --help                # Show available commands
 ```
+
+`fyr bench` reports wall-clock time per phase, per source, per identity graph,
+and per analytics entity / metrics model (split into projection vs. write),
+making it easy to spot where a pipeline spends its time.
 
 ## Why Fyrnheim?
 

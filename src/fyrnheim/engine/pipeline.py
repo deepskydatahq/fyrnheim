@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import ibis
 import pandas as pd
@@ -127,29 +129,50 @@ def run_pipeline(
         result.elapsed_seconds = time.monotonic() - start
         return result
 
-    # --- Phase 1: Load sources into events ---
-    event_tables: list[ibis.Table] = []
+    # --- Phase 1: Load sources into events (parallel) ---
+    # Sources fan out via ThreadPoolExecutor bounded by max_parallel_io.
+    # The resulting event_tables list preserves sources order via
+    # index-based assignment (no as_completed). The first worker exception
+    # surfaces to the caller of run_pipeline (future.result() re-raises).
+    #
+    # DuckDB's embedded Python connection is NOT thread-safe at the
+    # connection level, so we reuse the executor's connection lock
+    # (no-op nullcontext for BigQuery, real Lock for DuckDB) to serialize
+    # connection access across workers. On BigQuery the underlying
+    # google.cloud client is already thread-safe, so parallelism is
+    # preserved.
+    phase1_lock = executor._conn_lock
 
-    for source in sources:
-        t_source = time.monotonic()
-        try:
-            if isinstance(source, StateSource):
-                events = _load_state_source(source, config, conn)
-            elif isinstance(source, EventSource):
-                events = load_event_source(
-                    conn, source, data_dir=config.data_dir, backend=config.backend,
+    def _load_one_source(src: object) -> ibis.Table | None:
+        if isinstance(src, StateSource):
+            with phase1_lock:
+                return _load_state_source(src, config, conn)
+        if isinstance(src, EventSource):
+            with phase1_lock:
+                return load_event_source(
+                    conn, src, data_dir=config.data_dir, backend=config.backend,
                 )
-            else:
-                continue
+        return None
 
-            event_tables.append(events)
-            result.source_count += 1
-            log.info("Loaded source: %s", source.name)
-        except Exception as exc:
-            result.errors.append(f"Source '{source.name}': {exc}")
-            log.warning("Failed to load source '%s': %s", source.name, exc)
-        finally:
-            timings.source_loads[source.name] = time.monotonic() - t_source
+    def _phase1_worker(src: object) -> tuple[ibis.Table | None, float]:
+        t_source = time.monotonic()
+        tbl = _load_one_source(src)
+        return tbl, time.monotonic() - t_source
+
+    loaded_tables: list[ibis.Table | None] = [None] * len(sources)
+    max_workers = max(1, int(config.max_parallel_io))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(_phase1_worker, src) for src in sources]
+        for i, fut in enumerate(futures):
+            source = sources[i]
+            tbl, elapsed = fut.result()
+            loaded_tables[i] = tbl
+            timings.source_loads[source.name] = elapsed
+            if tbl is not None:
+                result.source_count += 1
+                log.info("Loaded source: %s", source.name)
+
+    event_tables: list[ibis.Table] = [t for t in loaded_tables if t is not None]
 
     if not event_tables:
         result.elapsed_seconds = time.monotonic() - start
@@ -182,88 +205,114 @@ def run_pipeline(
             finally:
                 timings.identity_graphs[ig.name] = time.monotonic() - t_graph
 
-    # --- Phase 4: Analytics entities ---
+    # --- Phase 4: Analytics entities (projection sequential, writes parallel) ---
+    # Projection (project_analytics_entity + .execute()) stays sequential in
+    # the main thread — that axis is M060's territory. Only the write step
+    # (executor.write_table or df.to_parquet) is submitted to the pool.
+    # Worker exceptions propagate via future.result().
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for ae in analytics_entities:
-        project_s = 0.0
-        write_s = 0.0
-        try:
+    def _write_frame(
+        *,
+        label: str,
+        name: str,
+        materialization: str | None,
+        table: str | None,
+        project: str,
+        dataset: str,
+        df: pd.DataFrame,
+    ) -> tuple[str, int, float]:
+        """Write a single DataFrame to its configured destination.
+
+        Returns (destination, row_count, write_elapsed_seconds). Runs in a
+        worker thread; must not touch pipeline-wide mutable state except
+        for the already-captured DataFrame.
+        """
+        t_write = time.monotonic()
+        if materialization == "table":
+            table_name = table or name
+            executor.write_table(project, dataset, table_name, df)
+            destination = f"{config.backend}:{project}.{dataset}.{table_name}"
+            log.info(
+                "Wrote %s to warehouse: %s (%d rows)", label, destination, len(df)
+            )
+        else:
+            out_path = output_dir / f"{name}.parquet"
+            df.to_parquet(str(out_path))
+            destination = f"parquet:{out_path}"
+            log.info("Wrote %s: %s (%d rows)", label, name, len(df))
+        return destination, len(df), time.monotonic() - t_write
+
+    if analytics_entities:
+        ae_pending: list[tuple[Any, pd.DataFrame, float]] = []
+        for ae in analytics_entities:
             t_project = time.monotonic()
             projected = project_analytics_entity(enriched_events, ae)
             df = projected.execute()
-            project_s = time.monotonic() - t_project
+            ae_pending.append((ae, df, time.monotonic() - t_project))
 
-            t_write = time.monotonic()
-            if ae.materialization == "table":
-                table_name = ae.table or ae.name
-                executor.write_table(ae.project, ae.dataset, table_name, df)
-                destination = (
-                    f"{config.backend}:{ae.project}.{ae.dataset}.{table_name}"
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            ae_futures = [
+                pool.submit(
+                    _write_frame,
+                    label="analytics entity",
+                    name=ae.name,
+                    materialization=ae.materialization,
+                    table=ae.table,
+                    project=ae.project,
+                    dataset=ae.dataset,
+                    df=df,
                 )
-                log.info(
-                    "Wrote analytics entity to warehouse: %s (%d rows)",
-                    destination,
-                    len(df),
-                )
-            else:
-                out_path = output_dir / f"{ae.name}.parquet"
-                df.to_parquet(str(out_path))
-                destination = f"parquet:{out_path}"
-                log.info("Wrote analytics entity: %s (%d rows)", ae.name, len(df))
-            write_s = time.monotonic() - t_write
-            result.outputs[ae.name] = len(df)
-            result.output_destinations[ae.name] = destination
-            result.output_count += 1
-        except Exception as exc:
-            result.errors.append(f"Analytics entity '{ae.name}': {exc}")
-            log.warning("Failed analytics entity '%s': %s", ae.name, exc)
-        finally:
-            timings.analytics_entities[ae.name] = {
-                "project_s": project_s,
-                "write_s": write_s,
-            }
+                for ae, df, _ in ae_pending
+            ]
+            for (ae, _df, project_s), ae_fut in zip(
+                ae_pending, ae_futures, strict=True
+            ):
+                destination, row_count, write_s = ae_fut.result()
+                # Dict-setitem is atomic in CPython, safe without a lock.
+                timings.analytics_entities[ae.name] = {
+                    "project_s": project_s,
+                    "write_s": write_s,
+                }
+                result.outputs[ae.name] = row_count
+                result.output_destinations[ae.name] = destination
+                result.output_count += 1
 
-    # --- Phase 5: Metrics models ---
-    for mm in metrics_models:
-        project_s = 0.0
-        write_s = 0.0
-        try:
+    # --- Phase 5: Metrics models (projection sequential, writes parallel) ---
+    if metrics_models:
+        mm_pending: list[tuple[Any, pd.DataFrame, float]] = []
+        for mm in metrics_models:
             t_project = time.monotonic()
             aggregated = aggregate_metrics(enriched_events, mm)
             df = aggregated.execute()
-            project_s = time.monotonic() - t_project
+            mm_pending.append((mm, df, time.monotonic() - t_project))
 
-            t_write = time.monotonic()
-            if mm.materialization == "table":
-                table_name = mm.table or mm.name
-                executor.write_table(mm.project, mm.dataset, table_name, df)
-                destination = (
-                    f"{config.backend}:{mm.project}.{mm.dataset}.{table_name}"
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            mm_futures = [
+                pool.submit(
+                    _write_frame,
+                    label="metrics model",
+                    name=mm.name,
+                    materialization=mm.materialization,
+                    table=mm.table,
+                    project=mm.project,
+                    dataset=mm.dataset,
+                    df=df,
                 )
-                log.info(
-                    "Wrote metrics model to warehouse: %s (%d rows)",
-                    destination,
-                    len(df),
-                )
-            else:
-                out_path = output_dir / f"{mm.name}.parquet"
-                df.to_parquet(str(out_path))
-                destination = f"parquet:{out_path}"
-                log.info("Wrote metrics model: %s (%d rows)", mm.name, len(df))
-            write_s = time.monotonic() - t_write
-            result.outputs[mm.name] = len(df)
-            result.output_destinations[mm.name] = destination
-            result.output_count += 1
-        except Exception as exc:
-            result.errors.append(f"Metrics model '{mm.name}': {exc}")
-            log.warning("Failed metrics model '%s': %s", mm.name, exc)
-        finally:
-            timings.metrics_models[mm.name] = {
-                "project_s": project_s,
-                "write_s": write_s,
-            }
+                for mm, df, _ in mm_pending
+            ]
+            for (mm, _df, project_s), mm_fut in zip(
+                mm_pending, mm_futures, strict=True
+            ):
+                destination, row_count, write_s = mm_fut.result()
+                timings.metrics_models[mm.name] = {
+                    "project_s": project_s,
+                    "write_s": write_s,
+                }
+                result.outputs[mm.name] = row_count
+                result.output_destinations[mm.name] = destination
+                result.output_count += 1
 
     result.elapsed_seconds = time.monotonic() - start
     return result

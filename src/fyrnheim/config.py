@@ -26,6 +26,7 @@ class ProjectConfig:
     backend_config: dict[str, str] | None = None
     output_backend: str | None = None
     output_config: dict[str, str] | None = None
+    max_parallel_io: int = 4
 
 
 def find_config(start_dir: Path) -> Path | None:
@@ -74,6 +75,20 @@ def load_config(start_dir: Path) -> ProjectConfig | None:
     raw_output_config = raw.get("output_config")
     output_config = dict(raw_output_config) if isinstance(raw_output_config, dict) else None
 
+    raw_max_parallel_io = raw.get("max_parallel_io", 4)
+    try:
+        max_parallel_io = int(raw_max_parallel_io)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(
+            f"max_parallel_io in {config_path} must be a positive integer, "
+            f"got {raw_max_parallel_io!r}"
+        ) from exc
+    if max_parallel_io < 1:
+        raise ConfigError(
+            f"max_parallel_io in {config_path} must be >= 1, got "
+            f"{max_parallel_io}"
+        )
+
     return ProjectConfig(
         project_root=project_root,
         entities_dir=_resolve_dir(project_root, raw.get("entities_dir", "entities")),
@@ -83,6 +98,7 @@ def load_config(start_dir: Path) -> ProjectConfig | None:
         backend_config=backend_config,
         output_backend=raw.get("output_backend"),
         output_config=output_config,
+        max_parallel_io=max_parallel_io,
     )
 
 
@@ -98,6 +114,9 @@ class ResolvedConfig:
     backend_config: dict[str, str] | None = None
     output_backend: str | None = None
     output_config: dict[str, str] | None = None
+    # Max concurrent I/O-bound tasks (source loads, entity/metrics writes).
+    # CLI override > fyrnheim.yaml > default 4.
+    max_parallel_io: int = 4
 
 
 def resolve_config(
@@ -109,6 +128,7 @@ def resolve_config(
     backend_config: dict[str, str] | None = None,
     output_backend: str | None = None,
     output_config: dict[str, str] | None = None,
+    max_parallel_io: int | None = None,
 ) -> ResolvedConfig:
     """Load project config and merge CLI overrides.
 
@@ -116,6 +136,13 @@ def resolve_config(
     which take precedence over built-in defaults.
     """
     config = load_config(Path.cwd())
+
+    if max_parallel_io is not None:
+        resolved_max_parallel_io = max_parallel_io
+    elif config is not None:
+        resolved_max_parallel_io = config.max_parallel_io
+    else:
+        resolved_max_parallel_io = 4
 
     return ResolvedConfig(
         entities_dir=Path(entities_dir) if entities_dir else (config.entities_dir if config else Path("entities")),
@@ -126,4 +153,5 @@ def resolve_config(
         backend_config=backend_config if backend_config is not None else (config.backend_config if config else None),
         output_backend=output_backend if output_backend is not None else (config.output_backend if config else None),
         output_config=output_config if output_config is not None else (config.output_config if config else None),
+        max_parallel_io=resolved_max_parallel_io,
     )

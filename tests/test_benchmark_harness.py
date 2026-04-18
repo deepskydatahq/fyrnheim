@@ -52,19 +52,22 @@ def test_benchmark_result_has_no_errors(benchmark_result: PipelineResult) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_timing_sum_close_to_elapsed(benchmark_result: PipelineResult) -> None:
-    """Sum of per-phase timings stays within 0.15s of ``elapsed_seconds``.
+def test_timing_sum_at_least_elapsed(benchmark_result: PipelineResult) -> None:
+    """Sum of per-phase timings is >= ``elapsed_seconds`` (minus slack).
 
-    Phases are wrapped in sequence (no parallelism yet), so the sum of
-    all timing values must track top-level wall-clock time closely —
-    this is the invariant future M059 work will relax once per-source
-    loads run in parallel.
+    M058 originally required the two to be within 0.15s of each other
+    because all phases ran serially. M059 introduced parallel source
+    loads and entity/metrics writes, so the sum of per-item timings can
+    exceed wall-clock time. The weaker "no missed phase" invariant still
+    holds: every accounted-for second of the pipeline must appear in at
+    least one timing bucket, so ``sum_of_timings >= elapsed_seconds``
+    (minus measurement jitter).
     """
     timings = benchmark_result.timings
     total = sum(_flatten_timings(timings))
-    assert abs(total - benchmark_result.elapsed_seconds) < 0.15, (
+    assert total >= benchmark_result.elapsed_seconds - 0.15, (
         f"sum={total:.6f}s elapsed={benchmark_result.elapsed_seconds:.6f}s "
-        f"diff={abs(total - benchmark_result.elapsed_seconds):.6f}s"
+        f"diff={benchmark_result.elapsed_seconds - total:.6f}s"
     )
 
 

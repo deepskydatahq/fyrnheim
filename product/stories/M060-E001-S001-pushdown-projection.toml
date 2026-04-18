@@ -1,0 +1,304 @@
+id = "M060-E001-S001"
+parent = "M060-E001"
+title = "Ibis-native project_analytics_entity with equivalence suite"
+status = "ready"
+created = 2026-04-18
+
+[outcome]
+description = """Rewrite project_analytics_entity to return an Ibis
+expression built from groupby + aggregation primitives over JSON payload
+extraction. Preserve M057 relevance filter. Preserve computed_fields
+Python evaluation. Add a parameterized equivalence test suite that runs
+both the new implementation and a vendored pandas reference against every
+existing fixture and asserts byte-identical output."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "JSON-extract portability spike completed FIRST: a 30-minute prototype confirms the chosen Ibis primitive (likely ibis.expr.types.JSONValue operations or an as-needed raw-SQL `JSON_VALUE`/`json_extract_string`) extracts a scalar field from a JSON-string payload column on BOTH duckdb and bigquery backends. Document the choice in a comment near the helper and in the commit message."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "project_analytics_entity (src/fyrnheim/engine/analytics_entity_engine.py) returns an `ibis.expr.types.Table` composed of filter → group_by → aggregate chains, NOT a result of `ibis.memtable(pd.DataFrame(...))`. The return type annotation remains `ibis.expr.types.Table`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "M057 relevance filter is preserved as the first step of the expression: `events.filter((source.isin(relevant_sources)) | (event_type.isin(relevant_activities)))`. When both sets are empty (defensive path), no filter is applied."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Grouping key: uses `canonical_id` when present in enriched_events.schema(), else `entity_id`. Same behavior as v0.6.2."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField strategy='latest': semantics identical to `_resolve_latest` in the v0.6.2 pandas code — returns the most recent non-null payload extract, ties broken by ts descending order. Implemented as an Ibis aggregation that filters out NULL extracts before argmax-by-ts (use Ibis `.arbitrary()` over a sub-filtered events expression OR a window-function shape such as `FIRST_VALUE(...) OVER (PARTITION BY group ORDER BY ts DESC) FILTER WHERE extract IS NOT NULL`)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField strategy='first': identical semantics to `_resolve_first` — most recent non-null extract in ts ascending order (earliest)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateField strategy='coalesce': iterates priority list left-to-right; for each source, uses the same latest-non-null logic scoped to that source; returns the first source's non-null result. Byte-identical to `_resolve_coalesce`. Implementation: a `coalesce(latest_from_source[0], latest_from_source[1], ...)` expression where each `latest_from_source[i]` is an aggregation over events filtered to that source."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "field_changed event shape: when `event_type == 'field_changed' AND JSON payload has key 'field_name' equal to the target field_name`, the extracted value is `payload.new_value`. Otherwise the target field is extracted via direct payload key lookup. Identical to `_extract_field_value` (analytics_entity_engine.py:33-71 in v0.6.2). Implemented as a CASE WHEN conditional inside the aggregation: a derived `resolved_value` sub-expression per (state_field, event) combination that the outer aggregation consumes."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Measure aggregation 'count': counts rows where `event_type == measure.activity`. Identical to `_compute_measure` count branch — emits 0 when no matching events for the group (not NULL)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Measure aggregation 'sum': sums `payload[measure.field]` cast-to-float across rows where `event_type == measure.activity`. Non-numeric values are skipped (matches pandas `float(val)` + try/except behavior). Emits 0.0 when no events match."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Measure aggregation 'latest': returns latest non-null `payload[measure.field]` across rows where `event_type == measure.activity`. Emits NULL when no events match."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "computed_fields continue to be evaluated in Python on the post-aggregation DataFrame (same code path as v0.6.2's analytics_entity_engine.py:248-254). Unchanged."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Empty-input path (enriched_events is empty or filtered to empty) returns an Ibis expression whose .execute() yields a DataFrame with exactly the columns [group_key] + state_field names + measure names + computed_field names. Preserves the M057 fix."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Parameterized equivalence test suite in tests/test_analytics_entity_engine.py: every existing fixture used by TestProjectAnalyticsEntity is re-run through BOTH the new implementation AND a vendored pandas reference (copied verbatim from v0.6.2's project_analytics_entity). Both results are pandas-converted and asserted equal via pandas.testing.assert_frame_equal with check_exact=False (float tolerance via pytest.approx-equivalent), sort_order tolerant (sort by group_key before comparing)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Vendored pandas reference lives in tests/_legacy_pandas_projection.py (prefixed with _ so pytest collection ignores it) OR tests/test_analytics_entity_engine.py as a module-level helper. Clearly labeled as 'vendored from v0.6.2 for equivalence testing; delete after N days of green main'. Not exported from the package."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing assertions in tests/test_analytics_entity_engine.py pass unchanged. Test fixtures are NOT modified except to give events distinct ts values IF a test fails due to stable-sort tie-break differences (this is explicit acceptable breakage in the mission TOML; note any such change in the commit message)."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "tests/test_e2e_entity_output.py and tests/test_e2e_identity_projection.py pass unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Float comparisons: any test that previously asserted exact float equality on a sum measure may need to switch to pytest.approx — document every such change in the commit message. Mission TOML explicitly anticipates 'Floating-point sum results may differ in the last bit between pandas and the backend aggregator.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No changes to Measure / StateField / AnalyticsEntity Pydantic models in src/fyrnheim/core/analytics_entity.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pipeline.py's consumer at line 251-252 (`projected = project_analytics_entity(...)` then `df = projected.execute()`) works unchanged because project_analytics_entity still returns an ibis.expr.types.Table — verify pipeline.py's diff is empty OR contains only cosmetic changes"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean; no new runtime dependencies; pyproject.toml version unchanged at 0.6.2; no CHANGELOG entry"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PR body cites before/after project_s timings from the M058 benchmark_result fixture on at least one representative AnalyticsEntity"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "tests/conftest.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M060-pushdown-analytics-projection.toml — read the
+outcome, risk map, and test strategy notes in full. This story is
+PLAN-level because the precise Ibis API calls depend on what the JSON
+spike reveals; the destination is clear.
+
+## Step 0: JSON-extract portability spike (DO FIRST)
+
+Before touching project_analytics_entity, prove the JSON extraction
+pattern works on both DuckDB and BigQuery via Ibis. Timebox: 30-45 minutes.
+
+```python
+import ibis
+import pandas as pd
+
+# DuckDB baseline (local, easy)
+df = pd.DataFrame([
+    {"source": "a", "entity_id": "1", "ts": "2024-01-01",
+     "event_type": "row_appeared", "payload": '{"email": "x@y.com", "plan": "free"}'},
+])
+t = ibis.memtable(df)
+# Try ibis's JSON extraction. Options in order of preference:
+#   1. t.payload.cast("json")["email"]
+#   2. t.payload.re_extract(r'"email":\\s*"([^"]*)"', 1)  # regex fallback
+#   3. ibis.literal("json_extract_string").call(t.payload, "$.email")  # raw
+expr = t.select(email=t.payload.cast("json")["email"].cast("string"))
+print(expr.execute())
+
+# BigQuery: skip if no creds. Verify Ibis compiles the same expr to BQ SQL:
+con = ibis.bigquery.connect(project="dummy", dataset="dummy")
+print(con.compile(expr))  # inspect the generated SQL
+```
+
+Decision to document:
+- Which Ibis expression produces scalar JSON extraction portably?
+- If portability is partial, document the fallback (e.g., backend-specific
+  branch via `isinstance(executor._conn, ibis.backends.duckdb.Backend)`).
+- If Ibis cannot express it portably, ESCALATE — do not silently diverge
+  backends. Update the story or open a follow-up question before proceeding.
+
+## Step 1: Vendor the pandas reference
+
+Copy the complete v0.6.2 project_analytics_entity body + all `_resolve_*`
+and `_compute_measure` helpers into `tests/_legacy_pandas_projection.py`
+(prefix `_` ensures pytest does not collect it as tests). Export one
+function: `legacy_project_analytics_entity(enriched_events, analytics_entity) -> ibis.expr.types.Table`.
+
+Add a module docstring: `# Vendored from v0.6.2 for M060 equivalence
+testing. Delete after the new implementation has been green on main
+for 2+ weeks.`
+
+## Step 2: Equivalence test harness
+
+In tests/test_analytics_entity_engine.py, add (or refactor an existing
+section into) a parameterized equivalence test:
+
+```python
+@pytest.mark.parametrize("fixture_name, entity_builder", [
+    ("events_with_state_and_activities", lambda: AnalyticsEntity(...)),
+    # ...one row per existing test scenario...
+])
+def test_new_matches_legacy(fixture_name, entity_builder, request):
+    events = request.getfixturevalue(fixture_name)
+    ae = entity_builder()
+    new_df = project_analytics_entity(events, ae).execute().sort_values("entity_id").reset_index(drop=True)
+    legacy_df = legacy_project_analytics_entity(events, ae).execute().sort_values("entity_id").reset_index(drop=True)
+    pd.testing.assert_frame_equal(new_df, legacy_df, check_exact=False, rtol=1e-6)
+```
+
+Build this BEFORE writing the Ibis implementation. It will fail at first
+(because the new impl doesn't exist yet); track it as the red→green signal
+as you build each aggregation class.
+
+## Step 3: Incremental implementation
+
+Implement aggregations in this order (each should turn some equivalence
+tests green):
+
+1. **Group key + empty-input** — get the scaffold producing an Ibis
+   expression with the right columns on empty inputs.
+2. **Measure: count** — simplest aggregation, no JSON extraction needed.
+3. **Measure: sum** — requires numeric cast + filter.
+4. **Measure: latest** — requires JSON extract + argmax-by-ts.
+5. **StateField latest/first** — builds on measure:latest.
+6. **StateField coalesce** — nested coalesce of per-source latest sub-aggregations.
+7. **field_changed branching** — CASE WHEN inside the resolved_value sub-expression; rerun all tests.
+8. **M057 relevance filter** — Ibis `.filter()` at the start of the expression (trivial, mirrors the current Python set logic).
+
+## Step 4: field_changed shape — the hard part
+
+Current Python behavior (`_extract_field_value`):
+- event_type='row_appeared' → payload[field_name]
+- event_type='field_changed' AND payload['field_name'] == target → payload['new_value']
+- anything else → payload[field_name] (flat lookup fallback)
+
+Ibis shape: per event, compute a derived `resolved_value` column via
+CASE WHEN before aggregation:
+
+```python
+resolved = ibis.case()\\
+    .when(
+        (events.event_type == 'field_changed') &
+        (events.payload.cast("json")["field_name"].cast("string") == target_field_name),
+        events.payload.cast("json")["new_value"].cast("string")
+    )\\
+    .else_(events.payload.cast("json")[target_field_name].cast("string"))\\
+    .end()
+```
+
+Then aggregate over `resolved`, filtering NULLs, arg-by-ts.
+
+## Step 5: Handle float tie-breaks
+
+Run the equivalence suite. For any failure that's a last-bit float
+difference on a sum measure, switch that test's assertion to
+`pytest.approx` and document in the commit. For any failure that's a
+stable-sort tie-break on ts (two events with the same ts resolved to
+different values), update the fixture to make ts distinct. These are the
+two acceptable-breakage classes in the mission TOML.
+
+## Step 6: computed_fields unchanged
+
+Pull the aggregation Ibis expression through `.execute()` inside
+project_analytics_entity just before the computed_fields loop, OR return
+the Ibis expression and let pipeline.py's existing `.execute()` do the
+work (preferred — keeps the public contract). computed_fields apply in
+Python over the small post-aggregation DataFrame, same code path.
+
+Wait — if project_analytics_entity returns an Ibis expression but
+computed_fields need to run in Python, the cleanest shape is:
+
+```python
+def project_analytics_entity(events, ae) -> ibis.expr.types.Table:
+    agg_expr = _build_aggregation_expression(events, ae)
+    if not ae.computed_fields:
+        return agg_expr
+    # Compute in Python for computed_fields; keep the return type ibis.expr.types.Table via memtable
+    df = agg_expr.execute()
+    for cf in ae.computed_fields:
+        df[cf.name] = df.apply(lambda r, expr=cf.expression: eval(expr, ...), axis=1)
+    return ibis.memtable(df)
+```
+
+This means entities without computed_fields get the full push-down; those
+with computed_fields still benefit from a server-side aggregation (only
+the small result is pulled, not the raw events). Acceptable compromise
+given the mission explicitly scoped computed_fields out.
+
+## Step 7: Benchmark the difference
+
+Use the M058 benchmark_result fixture. In the PR body, cite:
+- project_s for each AnalyticsEntity in the fixture before (on main, pre-merge) vs after (on branch).
+- Note that the benefit is biggest for entities with many state_fields/measures — the pandas loop was O(n_ids * n_fields), the new shape is O(1) SQL queries.
+
+## Do NOT
+
+- Touch Measure / StateField / AnalyticsEntity Pydantic models
+- Touch pipeline.py beyond potentially removing comments that are now stale
+- Change the M057 relevance filter logic (just translate it to Ibis .filter)
+- Push computed_fields into Ibis (separate mission)
+- Add a direct Ibis→write_table path (separate mission)
+- Vectorize the Python computed_fields apply (keep it simple)
+- Bump the version / add a CHANGELOG entry
+
+## Escape hatch
+
+If the JSON spike reveals that Ibis cannot cleanly express scalar JSON
+extraction against both backends, STOP and escalate. Options to discuss:
+- Accept backend-specific code paths via isinstance check on the connection
+- Defer BigQuery integration test to a follow-up mission; ship DuckDB-only
+- Abandon M060 and open a narrower mission with explicit backend scope
+
+The byte-identical-output contract on the equivalence suite is the safety
+net — if you can make it green, the rest is mechanical.
+"""
+reference_files = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/conftest.py",
+    "product/missions/M060-pushdown-analytics-projection.toml",
+]

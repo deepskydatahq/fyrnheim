@@ -1,0 +1,254 @@
+id = "M061-E001-S001"
+parent = "M061-E001"
+title = "CLI executor close + max_parallel_io tests + register_parquet lock"
+status = "ready"
+created = 2026-04-18
+
+[outcome]
+description = """Ship 4 retro fixes in one commit: register_parquet
+lock wrap, CLI try/finally executor.close() in run/materialize/drop/
+list-staging, 4 unit tests for max_parallel_io precedence, and 1-2
+regression tests for max_parallel_io=1 serial behavior."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/executor.py: register_parquet (currently line 211) body is wrapped with `with self._conn_lock:` — same pattern as materialize_view (line 243), write_table (274), execute_parameterized (321), view_exists (366), drop_view (390)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/cli.py: `run` command (IbisExecutor.from_config at line 303) wraps its post-from_config body in try/finally with executor.close() — matching the pattern used by `bench` at lines 490-514"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/cli.py: `materialize` command (IbisExecutor.from_config at line 557) wraps its post-from_config body in try/finally with executor.close()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/cli.py: `drop` command (IbisExecutor.from_config at line 613) wraps its post-from_config body in try/finally with executor.close()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/cli.py: `list-staging` command (IbisExecutor.from_config at line 667) wraps its post-from_config body in try/finally with executor.close()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CLI exit codes for run/materialize/drop/list-staging are unchanged by the close() addition — existing CLI tests continue to pass; any sys.exit call still takes effect via finally"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_config.py: new test test_resolve_config_max_parallel_io_default asserts resolve_config() with no CLI override and no yaml sets ResolvedConfig.max_parallel_io to 4"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_config.py: new test test_resolve_config_max_parallel_io_yaml_override writes a temporary fyrnheim.yaml with max_parallel_io: 8, uses monkeypatch.chdir(tmp_path), asserts resolve_config() returns 8"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_config.py: new test test_resolve_config_max_parallel_io_cli_beats_yaml writes yaml with 8, passes resolve_config(max_parallel_io=2), asserts result is 2"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_config.py: new test test_resolve_config_max_parallel_io_invalid_yaml_rejected writes yaml with max_parallel_io: 0 (or -1 or 'bad'), asserts load_config / resolve_config raises ProjectConfigError (or whatever config.py uses — grep first)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_parallel_io.py: new test test_max_parallel_io_one_is_serial uses a stub source loader that records threading.get_ident(); runs run_pipeline with max_parallel_io=1 on >=3 sources; asserts all calls happened on a single thread id"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_parallel_io.py: new test test_max_parallel_io_one_entity_writes_serial asserts no-overlap for entity writes at max_parallel_io=1 — record enter/exit timestamps per mocked write_table call; assert for any two calls i,j: enter[j] >= exit[i] OR enter[i] >= exit[j] (no temporal overlap)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged (no assertions modified, no existing tests removed)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No new runtime deps; no version bump (pyproject.toml still 0.6.2); no CHANGELOG entry"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Beads tasks closed at the end of the story: `bd close typedata-qjg1 typedata-c00p typedata-t1l1 typedata-ykug` (plus whatever story-level task /execute-mission creates for M061-E001-S001)"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_config.py",
+    "tests/test_parallel_io.py",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M061-post-m058-m059-retro-cleanup.toml — read outcome
+and [notes]. Four bundled fixes, all additive / behavior-preserving.
+
+## Suggested order
+
+1. register_parquet lock wrap (smallest, most isolated)
+2. CLI try/finally wraps (4 spots, same mechanical pattern as bench)
+3. max_parallel_io config tests (4 tests)
+4. max_parallel_io=1 serial regression tests (1-2 tests)
+5. Full suite + ruff + mypy
+
+## 1. register_parquet lock wrap
+
+src/fyrnheim/engine/executor.py:211 — currently:
+
+```python
+def register_parquet(self, name, path):
+    # existing body
+```
+
+Wrap with the existing `self._conn_lock` (set up in __init__ around line 82):
+
+```python
+def register_parquet(self, name, path):
+    with self._conn_lock:
+        # existing body
+```
+
+For DuckDB backend the lock is threading.Lock; for others it's
+contextlib.nullcontext so this is a no-op. 3-line change.
+
+## 2. CLI try/finally wraps
+
+The bench pattern (cli.py around lines 485-514) is:
+
+```python
+executor = IbisExecutor.from_config(
+    backend=config.backend,
+    backend_config=config.backend_config,
+)
+
+try:
+    # existing command body
+    ...
+finally:
+    executor.close()
+```
+
+Apply to:
+- run (from_config at line 303)
+- materialize (line 557)
+- drop (line 613)
+- list-staging (line 667)
+
+**Important:** existing `sys.exit(N)` calls will still trigger `finally`
+because SystemExit is a BaseException subclass that propagates through the
+finally block. Do not change exit behavior; just wrap.
+
+Also: the helper at cli.py:643 (no-state check) also creates a from_config —
+verify during implementation whether it's inside a command or a standalone
+helper. If inside a command that already has its own from_config wrapped,
+that inner executor needs its own try/finally too.
+
+## 3. max_parallel_io unit tests
+
+Current config.py layout:
+- ProjectConfig.max_parallel_io = 4 (line 29) — frozen dataclass field with default
+- load_config() validates yaml at lines 78-89 (positive int check)
+- ResolvedConfig.max_parallel_io = 4 (line 119) — frozen dataclass field
+- resolve_config() precedence at lines 131,140-145:
+  - CLI arg wins if not None
+  - else yaml (config.max_parallel_io) if config exists
+  - else built-in default 4
+
+Find the project's existing config test file (likely tests/test_config.py —
+grep to confirm). If no test file, create tests/test_config.py with a
+minimal harness. Tests should:
+
+```python
+def test_resolve_config_max_parallel_io_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    cfg = resolve_config()
+    assert cfg.max_parallel_io == 4
+
+def test_resolve_config_max_parallel_io_yaml_override(monkeypatch, tmp_path):
+    (tmp_path / "fyrnheim.yaml").write_text("max_parallel_io: 8\\n")
+    monkeypatch.chdir(tmp_path)
+    cfg = resolve_config()
+    assert cfg.max_parallel_io == 8
+
+def test_resolve_config_max_parallel_io_cli_beats_yaml(monkeypatch, tmp_path):
+    (tmp_path / "fyrnheim.yaml").write_text("max_parallel_io: 8\\n")
+    monkeypatch.chdir(tmp_path)
+    cfg = resolve_config(max_parallel_io=2)
+    assert cfg.max_parallel_io == 2
+
+def test_resolve_config_max_parallel_io_invalid_yaml_rejected(monkeypatch, tmp_path):
+    (tmp_path / "fyrnheim.yaml").write_text("max_parallel_io: 0\\n")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(<project's config error — grep for the raise site at config.py:83>):
+        resolve_config()
+```
+
+Check the exact exception class raised at config.py line 83 before writing
+the test — it should match.
+
+## 4. Serial-behavior regression tests
+
+Existing tests/test_parallel_io.py has the pattern for stubbing source
+loaders and capturing thread ids. Reuse that harness. Tests:
+
+```python
+def test_max_parallel_io_one_is_serial(monkeypatch):
+    # Use 3 sources with stub loaders that each record threading.get_ident()
+    # into a shared list. Run run_pipeline with max_parallel_io=1. Assert
+    # len(set(recorded_tids)) == 1 — all on the same thread.
+    ...
+
+def test_max_parallel_io_one_entity_writes_serial(monkeypatch):
+    # Mock executor.write_table. Capture (enter_ts, exit_ts) per call.
+    # Run run_pipeline with max_parallel_io=1 and 3 AnalyticsEntity items
+    # with materialization='table'. Assert no temporal overlap between any
+    # two intervals.
+    ...
+```
+
+The enter/exit overlap check:
+```python
+intervals = sorted(zip(enter_ts, exit_ts))
+for (e1, x1), (e2, x2) in zip(intervals, intervals[1:]):
+    assert e2 >= x1  # next one can't start before previous finishes
+```
+
+## Closing Beads tasks
+
+At the very end, close all relevant tasks:
+```
+bd close typedata-qjg1
+bd close typedata-c00p
+bd close typedata-t1l1
+bd close typedata-ykug
+bd close {story_level_task_id_from_execute_mission}
+```
+
+## Do NOT
+
+- Add a context-manager interface (__enter__/__exit__) to IbisExecutor
+- Refactor the CLI commands to share setup logic (separate mission)
+- Change max_parallel_io default, validation rules, or default=4 constant
+- Modify existing tests' assertions
+- Touch pipeline.py beyond what the new tests may need
+- Bump the version
+"""
+reference_files = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_parallel_io.py",
+    "product/missions/M061-post-m058-m059-retro-cleanup.toml",
+]

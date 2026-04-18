@@ -244,6 +244,15 @@ def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
     default=False,
     help="Bypass fyrnheim_state table: always re-materialize staging views and skip state writes.",
 )
+@click.option(
+    "--max-parallel-io",
+    type=click.IntRange(min=1),
+    default=None,
+    help=(
+        "Max concurrent I/O tasks for source loads and entity/metrics "
+        "writes (default 4). Set to 1 for strictly serial execution."
+    ),
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -252,6 +261,7 @@ def run(
     output_dir: str | None,
     backend: str | None,
     no_state: bool,
+    max_parallel_io: int | None,
 ) -> None:
     """Run the pipeline: load sources, apply transformations, write output."""
     from fyrnheim.config import resolve_config
@@ -266,6 +276,7 @@ def run(
             data_dir=data_dir,
             output_dir=output_dir,
             backend=backend,
+            max_parallel_io=max_parallel_io,
         )
     except Exception as exc:
         if verbose:
@@ -343,6 +354,7 @@ def _resolve_and_discover(
     data_dir: str | None = None,
     output_dir: str | None = None,
     backend: str | None = None,
+    max_parallel_io: int | None = None,
 ) -> tuple[ResolvedConfig, dict[str, list]]:
     """Shared helper: resolve config + discover assets, or exit(1) on error."""
     from fyrnheim.config import resolve_config
@@ -354,6 +366,7 @@ def _resolve_and_discover(
             data_dir=data_dir,
             output_dir=output_dir,
             backend=backend,
+            max_parallel_io=max_parallel_io,
         )
     except Exception as exc:
         if verbose:
@@ -434,6 +447,15 @@ def _format_bench_report(timings: PipelineTimings, elapsed_seconds: float) -> st
     default=False,
     help="Emit PipelineTimings as JSON on stdout (nothing else).",
 )
+@click.option(
+    "--max-parallel-io",
+    type=click.IntRange(min=1),
+    default=None,
+    help=(
+        "Max concurrent I/O tasks for source loads and entity/metrics "
+        "writes (default 4). Set to 1 for strictly serial execution."
+    ),
+)
 @click.pass_context
 def bench(
     ctx: click.Context,
@@ -443,6 +465,7 @@ def bench(
     backend: str | None,
     no_state: bool,
     as_json: bool,
+    max_parallel_io: int | None,
 ) -> None:
     """Run the pipeline and print per-phase timings (bench harness)."""
     from fyrnheim.engine.executor import IbisExecutor
@@ -456,6 +479,7 @@ def bench(
         data_dir=data_dir,
         output_dir=output_dir,
         backend=backend,
+        max_parallel_io=max_parallel_io,
     )
 
     total_assets = sum(len(v) for v in assets.values())

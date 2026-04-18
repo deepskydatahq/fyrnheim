@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from fyrnheim.config import ResolvedConfig
 from fyrnheim.core.activity import ActivityDefinition, EventOccurred, RowAppeared
@@ -270,8 +271,15 @@ class TestRunPipelineEmptyAndErrors:
 class TestPipelineErrorHandling:
     """Per-source and per-model error handling."""
 
-    def test_failed_source_does_not_block_others(self, tmp_path: Path) -> None:
-        """If one source fails, other sources still process."""
+    def test_failed_source_propagates_exception(self, tmp_path: Path) -> None:
+        """M059: a failing source raises to the caller of ``run_pipeline``.
+
+        Pre-M059 the pipeline collected per-source errors in
+        ``result.errors`` and kept going. With parallel source loads,
+        ``future.result()`` re-raises the first worker exception and it
+        surfaces verbatim to the caller. This is the explicit contract in
+        M059-E001-S001 AC8/AC9.
+        """
         config = _make_config(tmp_path)
         data_dir = tmp_path / "data"
         data_dir.mkdir()
@@ -321,13 +329,8 @@ class TestPipelineErrorHandling:
         }
 
         executor = IbisExecutor.duckdb()
-        result = run_pipeline(assets, config, executor)
-
-        # Good source was processed
-        assert result.source_count == 1
-        # Bad source recorded an error
-        assert len(result.errors) == 1
-        assert "bad_events" in result.errors[0]
+        with pytest.raises(Exception):  # noqa: B017  # any exception is acceptable
+            run_pipeline(assets, config, executor)
 
     def test_failed_metrics_model_does_not_block_others(self, tmp_path: Path) -> None:
         """If one MetricsModel fails, other models still process."""
@@ -396,8 +399,12 @@ class TestPipelineErrorHandling:
         assert "good_metrics" in result.outputs
         assert "other_metrics" in result.outputs
 
-    def test_error_messages_are_descriptive(self, tmp_path: Path) -> None:
-        """PipelineResult.errors contains descriptive messages."""
+    def test_bad_source_raises_on_run(self, tmp_path: Path) -> None:
+        """M059: a StateSource with a missing parquet surfaces its error.
+
+        With M059's parallel source loads, worker exceptions propagate
+        rather than being collected into ``result.errors``.
+        """
         config = _make_config(tmp_path)
 
         bad_source = StateSource(
@@ -418,8 +425,5 @@ class TestPipelineErrorHandling:
         }
 
         executor = IbisExecutor.duckdb()
-        result = run_pipeline(assets, config, executor)
-
-        assert len(result.errors) == 1
-        assert "missing_data" in result.errors[0]
-        assert result.source_count == 0
+        with pytest.raises(Exception):  # noqa: B017  # any exception is acceptable
+            run_pipeline(assets, config, executor)

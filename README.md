@@ -146,17 +146,23 @@ StreamAnalyticsModel(
 ## CLI
 
 ```bash
-fyr init [project_name]   # Scaffold a new project
-fyr run                   # Run the pipeline
-fyr bench                 # Run the pipeline and print per-phase timings
-fyr bench --json          # Same, but emit PipelineTimings as JSON on stdout
-fyr --version             # Show version
-fyr --help                # Show available commands
+fyr init [project_name]           # Scaffold a new project
+fyr run                           # Run the pipeline
+fyr run --max-parallel-io 8       # Override worker count for I/O fan-out
+fyr bench                         # Run the pipeline and print per-phase timings
+fyr bench --json                  # Same, but emit PipelineTimings as JSON on stdout
+fyr --version                     # Show version
+fyr --help                        # Show available commands
 ```
 
 `fyr bench` reports wall-clock time per phase, per source, per identity graph,
 and per analytics entity / metrics model (split into projection vs. write),
 making it easy to spot where a pipeline spends its time.
+
+Source loads and entity/metrics writes fan out across a bounded thread pool
+(default 4 workers). Tune with the `max_parallel_io` key in `fyrnheim.yaml`
+or the `--max-parallel-io` CLI flag on `fyr run` / `fyr bench`. Set to `1`
+for strictly serial behavior.
 
 ## Why Fyrnheim?
 

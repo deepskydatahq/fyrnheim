@@ -1,0 +1,66 @@
+# Epic: Retro cleanup — CLI executor hygiene + config tests + lock symmetry
+# Single epic covering the full M061 scope.
+
+id = "M061-E001"
+parent = "M061"
+title = "Retro cleanup: CLI executor close, max_parallel_io tests, register_parquet lock"
+status = "active"
+created = 2026-04-18
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M061 scope. Ship 4 small retro findings in
+one PR: (1) wrap run/materialize/drop/list-staging executor lifetimes in
+try/finally matching the bench pattern; (2) 4 unit tests for
+ResolvedConfig.max_parallel_io default/yaml/CLI precedence + invalid-yaml
+rejection; (3) 1-2 regression tests for max_parallel_io=1 serial
+behavior; (4) wrap register_parquet with the existing _conn_lock for
+symmetry with every other self._conn-touching method. No version bump.
+"""
+
+[job_story]
+description = """When I run any fyr command against a DuckDB or BigQuery
+backend, I want the backend connection to be released cleanly on exit, and
+I want the parallel-I/O config surface to have explicit regression
+coverage, so future refactors can't silently break either contract."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 10 testing criteria from the M061 mission TOML pass",
+    "Every IbisExecutor.from_config callsite in cli.py has a matching .close() in a finally block",
+    "4 new unit tests exist for max_parallel_io covering default/yaml/CLI/invalid paths",
+    "At least 1 regression test asserts serial behavior at max_parallel_io=1",
+    "register_parquet wraps self._conn access with self._conn_lock",
+    "All previously-passing tests still pass; ruff + mypy clean",
+    "pyproject.toml version unchanged at 0.6.2; no CHANGELOG entry",
+]
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_config.py",
+    "tests/test_parallel_io.py",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Four small, low-risk changes bundled for one-PR review. Mission TOML [notes]
+section lists the suggested implementation order (register_parquet lock
+first as the smallest isolated change, then CLI cleanup, then the two test
+additions). Also closes 4 existing Beads tasks: typedata-qjg1, typedata-c00p,
+typedata-t1l1, typedata-ykug.
+"""
+
+estimated_stories = 1

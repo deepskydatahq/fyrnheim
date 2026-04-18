@@ -1,0 +1,73 @@
+# Epic: Parallel source loads + parallel entity/metrics writes
+# Single epic covering the full M059 scope. Three serial I/O loops in
+# pipeline.py fan out via ThreadPoolExecutor, plus config + CLI plumbing
+# and DuckDB thread-safety for the shared executor.
+
+id = "M059-E001"
+parent = "M059"
+title = "ThreadPoolExecutor fan-out for source loads + entity writes + metrics writes"
+status = "active"
+created = 2026-04-18
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M059 scope. Replace the three serial I/O
+for-loops in src/fyrnheim/engine/pipeline.py (phase 1 source loads, phase 4
+analytics-entity writes, phase 5 metrics-model writes) with bounded
+ThreadPoolExecutor fan-out. Preserve event_tables ordering. Add
+ResolvedConfig.max_parallel_io (default 4) + `fyr run --max-parallel-io N`.
+Make IbisExecutor DuckDB-thread-safe via a connection lock so the shared
+executor works across worker threads. Timings from M058 continue to populate
+correctly per-item.
+"""
+
+[job_story]
+description = """When I run a pipeline with N independent sources or M
+independent entity writes, I want the wall time to be roughly max(item_time)
+not sum(item_time), so BigQuery-bound pipelines stop being pointlessly
+serial."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 15 testing criteria from the M059 mission TOML pass",
+    "Source loads (pipeline.py phase 1), analytics-entity writes (phase 4 write step only — not projection), and metrics-model writes (phase 5 write step only) all run via ThreadPoolExecutor",
+    "event_tables ordering is preserved: event_tables[i] == result of loading config.sources[i], regardless of completion order",
+    "max_parallel_io=1 preserves strictly serial behavior (regression safety)",
+    "IbisExecutor is DuckDB-thread-safe: a single IbisExecutor instance can be used concurrently by multiple threads without race conditions",
+    "No regression in existing tests",
+    "M058 timings still populate correctly when parallelism > 1",
+    "No new runtime deps; stdlib concurrent.futures only",
+    "ruff + mypy clean",
+]
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "tests/conftest.py",
+    "tests/",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Dispatching refactor. No compute-logic changes. Mission TOML [notes]
+section spells out thread-safety strategy (DuckDB lock; BQ already
+thread-safe) and the ordering guarantee for source loads. Read that first.
+The projection step of phase 4 stays sequential — that's M060's axis,
+intentionally orthogonal.
+"""
+
+estimated_stories = 1

@@ -1,0 +1,230 @@
+id = "M058-E001-S001"
+parent = "M058-E001"
+title = "PipelineTimings + fyr bench CLI + benchmark_result fixture"
+status = "ready"
+created = 2026-04-18
+
+[outcome]
+description = """Add PipelineTimings dataclass to PipelineResult, instrument
+every phase of run_pipeline() to record durations, add `fyr bench` CLI
+subcommand (human-readable + --json), and add a `benchmark_result` pytest
+fixture for future perf tests."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A new PipelineTimings dataclass (or equivalent typed container) is defined — likely in src/fyrnheim/engine/pipeline.py alongside PipelineResult — with fields: staging_views_s: float, source_loads: dict[str, float], activities_s: float, identity_graphs: dict[str, float], analytics_entities: dict[str, dict[str, float]] (each inner dict has project_s and write_s keys), metrics_models: dict[str, dict[str, float]] (same)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PipelineResult gains a `timings: PipelineTimings` field with a safe default (dataclass default_factory)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "run_pipeline() populates result.timings by calling time.monotonic() around each phase/item and recording the delta. No other clock source is used."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Source loads (pipeline.py:106-122): each iteration records the source's name and duration into timings.source_loads"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Identity resolution (pipeline.py:141-148): each iteration records the graph name and duration into timings.identity_graphs"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Analytics entities (pipeline.py:154-179): each iteration records the entity's name and both project_s (time for project_analytics_entity + .execute()) and write_s (time for executor.write_table or df.to_parquet) separately"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Metrics models (pipeline.py:182-207): each iteration records project_s and write_s per model, same shape as analytics entities"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Staging-view materialization (pipeline.py:74-98) is recorded as a single scalar timings.staging_views_s"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Activity application (pipeline.py:132-137) is recorded as a single scalar timings.activities_s"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "test_timings_sum_approximates_elapsed: for a real run of a small in-repo example, (sum of timings.staging_views_s + activities_s + all source_loads values + all identity_graphs values + all analytics_entities project_s/write_s + all metrics_models project_s/write_s) ≈ result.elapsed_seconds — within 150ms tolerance to cover bookkeeping overhead. Fails if a phase is missed."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr bench` CLI subcommand is registered in src/fyrnheim/cli.py; mirrors `fyr run`'s config-loading contract (same --config / --backend flags if `run` has them)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr bench` (no flags) runs the pipeline and prints a human-readable, ordered-by-phase report to stdout. Format: one line per phase with sub-lines for per-item entries (source names, entity names). No external libraries required for formatting (f-strings + .ljust/.rjust are fine)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr bench --json` prints exactly the PipelineTimings structure as JSON to stdout, with no human-readable report preamble. `json.loads(stdout)` must succeed and return a dict matching the PipelineTimings shape."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`fyr bench` exits 0 on success, non-zero on pipeline failure (mirrors `fyr run` exit contract)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A pytest fixture `benchmark_result` is defined (likely in tests/conftest.py) with session scope. It runs a small in-repo example (duckdb backend, whatever the existing e2e tests already use — do not invent new fixtures) once and yields the PipelineResult. The fixture does NOT assert any baseline; it's a primitive for future tests."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A minimal smoke test uses the benchmark_result fixture: `def test_benchmark_fixture_provides_populated_timings(benchmark_result): assert benchmark_result.timings.source_loads`"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged — tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, and all unit tests"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No new runtime dependencies added to pyproject.toml. Stdlib `time`, `json`, `dataclasses`, and existing click are sufficient."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ is clean; mypy src/ is clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "README.md (or the CLI section thereof) mentions `fyr bench` with a 2-3 line description of what it does"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No version bump in this mission (no pyproject.toml version change, no CHANGELOG entry) — M058/M059/M060 are bundled into v0.7.0 at release time via a later release mission"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/conftest.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+    "README.md",
+    "pyproject.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M058-pipeline-benchmark-harness.toml — read the outcome
+and [notes] sections for the full shape rationale. Key constraints:
+- Stdlib only (no pytest-benchmark, no hyperfine)
+- Non-invasive: instrument at existing phase boundaries; don't refactor phases
+- `fyr bench --json` must emit pure JSON on stdout (parsable by `json.loads`)
+
+## Suggested PipelineTimings shape
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class PipelineTimings:
+    staging_views_s: float = 0.0
+    source_loads: dict[str, float] = field(default_factory=dict)
+    activities_s: float = 0.0
+    identity_graphs: dict[str, float] = field(default_factory=dict)
+    analytics_entities: dict[str, dict[str, float]] = field(default_factory=dict)
+    metrics_models: dict[str, dict[str, float]] = field(default_factory=dict)
+```
+
+Put it in pipeline.py next to PipelineResult (don't make a new module for one
+small dataclass).
+
+## Instrumentation pattern (copy for each phase)
+
+```python
+t0 = time.monotonic()
+# ... existing phase code ...
+timings.source_loads[source.name] = time.monotonic() - t0
+```
+
+For analytics entities (lines 154-179), split the timing across project vs write:
+
+```python
+t_project = time.monotonic()
+projected = project_analytics_entity(enriched_events, ae)
+df = projected.execute()
+project_s = time.monotonic() - t_project
+
+t_write = time.monotonic()
+# ... existing write code (table or parquet branch) ...
+write_s = time.monotonic() - t_write
+
+timings.analytics_entities[ae.name] = {"project_s": project_s, "write_s": write_s}
+```
+
+Apply the same split to metrics models.
+
+## `fyr bench` CLI
+
+Register as a click subcommand alongside `fyr run` in cli.py. Reuse the
+same config-loading helper `fyr run` uses (do NOT duplicate config parsing).
+
+Default output shape (example):
+
+```
+Pipeline bench — total 4.231s
+  staging_views: 0.002s
+  source_loads (2):
+    users:         0.841s
+    events:        1.203s
+  activities:      0.014s
+  identity_graphs (1):
+    main:          0.512s
+  analytics_entities (2):
+    accounts:      project=0.219s  write=0.402s
+    sessions:      project=1.038s  write=0.000s  [parquet]
+  metrics_models (0): (none)
+```
+
+For `--json`, use `dataclasses.asdict(result.timings)` and `json.dumps(...)`.
+Print nothing else on stdout when `--json` is passed. The format stability is
+important since downstream tooling may parse it.
+
+## benchmark_result fixture
+
+In tests/conftest.py, add:
+
+```python
+@pytest.fixture(scope="session")
+def benchmark_result():
+    # Reuse the smallest duckdb-backed example already used by the e2e tests.
+    # If that fixture already exists, import and wrap it.
+    # Run the pipeline once, yield the PipelineResult.
+    ...
+```
+
+Find the existing e2e test pattern first (tests/test_e2e_entity_output.py
+and tests/test_e2e_identity_projection.py) and reuse the same fixture
+entry point — do NOT invent a new example project.
+
+## The approximate-sum test
+
+The mission's criterion is that the timings are complete — if a phase is
+missed, the sum diverges from elapsed_seconds by the missed phase's time.
+Tolerance 150ms (generous but small enough to catch a missed phase).
+Compute the sum exactly as the mission spec says; assert
+`abs(sum_of_timings - result.elapsed_seconds) < 0.15`.
+
+## What NOT to do
+
+- Do NOT add pytest-benchmark to pyproject.toml
+- Do NOT instrument inside phase internals (no per-row timings, no per-field-resolution timings)
+- Do NOT add structured logging or telemetry beyond the timings dict
+- Do NOT change pipeline.py phase boundaries; only wrap them with time.monotonic()
+- Do NOT bump the version or add a CHANGELOG entry — v0.7.0 is bundled later
+"""
+reference_files = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/conftest.py",
+    "product/missions/M058-pipeline-benchmark-harness.toml",
+]

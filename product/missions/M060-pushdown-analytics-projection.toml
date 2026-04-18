@@ -1,0 +1,232 @@
+# Mission: Push-down analytics-entity projection to Ibis
+# The architectural one. Replace the client-side pandas loop in
+# project_analytics_entity with an Ibis expression so the backend
+# (BigQuery or DuckDB) does the grouping and aggregation server-side.
+
+id = "M060"
+title = "Push-down project_analytics_entity to the backend via Ibis"
+status = "draft"
+created = 2026-04-18
+depends_on = ["M058"]
+
+[outcome]
+description = """
+The core of `project_analytics_entity` in
+src/fyrnheim/engine/analytics_entity_engine.py today is:
+
+  df = enriched_events.execute()          # materialize ALL events to pandas
+  # ... M057 relevance filter (row-level mask) ...
+  group_ids = df[group_key].unique()
+  for gid in group_ids:                   # Python for-loop
+      gid_events = df[df[group_key] == gid]
+      # per-field resolution in pandas, per-measure resolution in pandas
+  result_df = pd.DataFrame(rows)
+  return ibis.memtable(result_df)
+
+That shape forces the entire enriched-events stream onto the client before
+anything else happens. On BigQuery this means one full export of the event
+table per AnalyticsEntity. Everything after is CPU-bound Python. M057
+shrank the data volume; this mission eliminates the client-side loop.
+
+This mission rewrites `project_analytics_entity` to return an Ibis
+expression built from groupby + aggregation primitives, so the backend
+executes the projection. The caller in pipeline.py still gets an
+Ibis-compatible result; the subsequent `.execute()` (or a future direct
+`.to_table()` / `write_table_from_ibis` path — out of scope here) fetches
+only the final projected rows, not the raw event stream.
+
+Three aggregation classes to translate:
+
+1. **`strategy='latest'`** and **`strategy='first'`** state fields over
+   payload JSON. Current shape: sort events by ts desc/asc, iterate,
+   return first non-null extract of `payload[field_name]`. Ibis shape:
+   `events.group_by(group_key).agg(...ARRAY_AGG(payload ORDER BY ts DESC LIMIT 1)[1]...)`
+   via Ibis's `.arbitrary()` / `.first()` over a pre-filtered subexpression.
+   Per-field JSON extract must happen inside the aggregation so the backend
+   returns the scalar, not the whole payload.
+
+2. **`strategy='coalesce'`** across a priority list of sources. Ibis shape:
+   a `coalesce(...)` of per-source `latest(...)` sub-aggregations.
+
+3. **Measures** — `count` (easy: count of rows where event_type == activity),
+   `sum` (sum of a payload field where event_type == activity),
+   `latest` (latest non-null payload field where event_type == activity).
+   All three are standard `groupby().agg()` with an activity filter inside.
+
+The JSON-payload extraction requires a backend-portable Ibis expression.
+DuckDB has `json_extract`; BigQuery has `JSON_VALUE` / `JSON_EXTRACT_SCALAR`.
+Ibis exposes these via its JSON type operations — verify the exact binding
+during implementation. For `field_changed` events (which carry
+`{field_name, old_value, new_value}`), the current Python code has
+event-shape branching at analytics_entity_engine.py:54-71; this branching
+must translate to a conditional expression inside the aggregation (pick
+`new_value` if `event_type='field_changed' AND payload->>'field_name' = <target>`;
+otherwise fall back to `payload->><target>`).
+
+After this mission:
+- For BigQuery, the per-entity compute becomes one SQL query over
+  `enriched_events` that returns one row per group. No client-side pandas
+  materialization of the event stream.
+- For DuckDB, same — but obviously already in-process, so the gain is from
+  deleting the Python loop rather than network round-trips.
+- `computed_fields` (evaluated via `eval()` on a pandas DataFrame today)
+  continue to work, but now apply over the small post-aggregation frame.
+  Consider whether computed_fields should also move into Ibis as a
+  follow-up; out of scope for this mission.
+
+This is a big refactor. Landing it without M058's timing harness means
+we're guessing; landing it without M057's correctness filter means we're
+optimizing a silent bug. Both are prerequisites (M057 is already shipped;
+M058 is the explicit `depends_on`).
+"""
+
+user_progress = "From 'every AnalyticsEntity projection materializes the full enriched-events stream to pandas and iterates in Python' to 'projection is an Ibis expression; the backend does the grouping and aggregation; only the final per-entity rows land on the client'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "project_analytics_entity returns an Ibis expression (unbound Table or Expr), NOT an ibis.memtable wrapping a pandas DataFrame",
+    "The returned expression, when .execute()'d, produces a DataFrame with the same columns AND the same row values (byte-identical state-field and measure values) as the v0.6.2 pandas implementation for every existing test case in tests/test_analytics_entity_engine.py",
+    "`strategy='latest'` state fields: semantics are identical to the v0.6.2 `_resolve_latest` (most recent non-null payload extract, ties broken by ts order)",
+    "`strategy='first'` state fields: semantics are identical to `_resolve_first`",
+    "`strategy='coalesce'` state fields: iterates the priority list left-to-right, returning the latest non-null from the first source that has one — byte-identical to `_resolve_coalesce`",
+    "`field_changed` events are handled correctly: when event_type='field_changed' AND payload.field_name == <target>, the `new_value` is used; otherwise the target field is extracted from a flat payload — identical to `_extract_field_value`",
+    "Measures: `count` counts rows where event_type == measure.activity (identical to `_compute_measure` count branch)",
+    "Measures: `sum` sums payload[measure.field] as float, coercing/ignoring non-numeric values (identical to the sum branch)",
+    "Measures: `latest` returns the latest non-null payload[measure.field] over events with event_type == measure.activity (identical to the latest branch)",
+    "M057 relevance filter is preserved — now expressed as an Ibis `.filter(...)` over `source.isin(...)` / `event_type.isin(...)` at the start of the expression",
+    "The returned expression respects the same grouping key convention (canonical_id if present else entity_id)",
+    "computed_fields still work — either evaluated on the small post-aggregation DataFrame (simplest) or pushed down as Ibis expressions (more work; not required)",
+    "All existing tests in tests/test_analytics_entity_engine.py pass unchanged",
+    "tests/test_e2e_entity_output.py and tests/test_e2e_identity_projection.py pass unchanged",
+    "DuckDB backend: existing e2e tests produce byte-identical output",
+    "BigQuery backend: a new integration test (gated on BQ credentials / skipped otherwise, mirroring the existing BQ integration test pattern) confirms one entity projection runs and produces the expected rows",
+    "M058 timings show the per-entity `project_s` for the largest entity (sessions, 22 state fields + measures) decreased on DuckDB by a material amount — the PR body cites before/after",
+    "For BigQuery, the PR body cites before/after from a representative pipeline run (informal, not enforced in CI) and notes the query-plan shape changed from 'full event-table export' to 'aggregation query'",
+    "No changes to the Measure / StateField / AnalyticsEntity Pydantic models",
+    "No changes to pipeline.py beyond adjusting the consumer to accept an Ibis expression return (it already calls `.execute()` immediately, so this is a near-nop)",
+    "ruff + mypy clean; no new runtime dependencies",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_e2e_entity_output.py",
+    "tests/test_e2e_identity_projection.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "product/missions/M057-analytics-entity-source-scoping.toml",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/",
+]
+
+[scope]
+in_scope = [
+    "Rewrite project_analytics_entity to return an Ibis expression built from groupby + aggregation primitives",
+    "Translate _resolve_latest / _resolve_first / _resolve_coalesce to Ibis expressions over JSON payload extraction",
+    "Translate _compute_measure (count / sum / latest) to Ibis aggregations with activity filter",
+    "Translate _extract_field_value's event-shape branching (row_appeared / field_changed / other) to conditional expressions inside the aggregation",
+    "Preserve the M057 relevance filter as an Ibis .filter() at the start of the expression",
+    "computed_fields remain evaluated in Python on the (now small) post-aggregation DataFrame",
+    "Regression tests validating byte-identical output against the v0.6.2 implementation for every existing test case",
+    "New BigQuery integration test (credential-gated) for one representative entity projection",
+    "Before/after timings cited in the PR body using M058's harness",
+]
+out_of_scope = [
+    "Pushing computed_fields into Ibis (would require Ibis-compatible expression parsing of the user's Python string; big separate mission)",
+    "Pushing identity resolution (enrich_events) into Ibis (separate orthogonal mission)",
+    "Eliminating pipeline.py's `.execute()` call in phase 4 (would require a direct Ibis → write_table path, nice-to-have but independent)",
+    "Changes to Measure / StateField / AnalyticsEntity models",
+    "Changes to ResolvedConfig",
+    "Changes to the CLI",
+    "Perf optimization of individual aggregation expressions beyond 'equivalent to the pandas implementation, executed server-side'",
+]
+acceptable_breakage = [
+    "Subtle differences in tie-breaking behavior if two events share the same ts: the pandas implementation's `sort_values` is stable; Ibis / backend-specific ORDER BY ties may not be. If this breaks any test, the test's fixture should be updated to give events distinct ts values — this is a test-hygiene fix, not a regression in the projection itself.",
+    "Floating-point sum results may differ in the last bit between pandas and the backend's aggregator. Tests asserting exact float equality may need `pytest.approx`. Document in release notes.",
+]
+
+[notes]
+considerations = """
+## Why this mission depends on M058
+
+The whole value of this refactor is 'the backend does the work'. Without
+M058's timings we can't show that the work actually moved — we only have
+the invariant that correctness is preserved. M058's per-entity project_s
+plus the M057 row-count context together form the before/after story in
+the PR body.
+
+## Why this mission is not bundled with M059
+
+Different axes of speedup, different risk profiles. M059 is a dispatching
+refactor with no compute logic changes; M060 rewrites the core compute
+logic. Bundling would make PR review much harder and entangle the blast
+radii. Ship them independently against the M058 harness; the release
+mission (v0.7.0 candidate) bundles them at tag time.
+
+## Risk map
+
+1. **JSON extraction portability.** Ibis exposes JSON operations but
+   backend support varies. BigQuery has `JSON_VALUE` (scalar) vs
+   `JSON_EXTRACT` (JSON subtree); DuckDB has `json_extract_string`. Ibis's
+   abstraction works but has edge cases around NULLs and missing keys.
+   Prototype this FIRST — a 30-minute spike confirming the JSON pattern
+   works on both backends before committing to the full rewrite.
+
+2. **field_changed event shape.** The conditional inside the aggregation
+   is the trickiest part. Approach: compute a derived `resolved_value`
+   column per event (CASE WHEN event_type='field_changed' AND
+   payload.field_name = <target> THEN payload.new_value ELSE
+   payload.<target> END), then aggregate over that. This keeps the
+   per-event branching linear and aggregation-friendly.
+
+3. **`latest` with NULLs.** `_resolve_latest` returns the most recent
+   *non-null* extract, not the most recent event's extract. The Ibis
+   shape needs to filter NULLs before taking the argmax-by-ts, or use a
+   window function `FIRST_VALUE(... ORDER BY ts DESC) OVER (...)` with a
+   WHERE on non-null. Don't accidentally return NULL when a non-null
+   exists further back in time.
+
+4. **Coalesce ordering.** The priority list must be iterated in declared
+   order, not in source.unique() order. Implement as nested `coalesce(
+   latest_from(source[0]), latest_from(source[1]), ... )`.
+
+5. **Memtable-to-memtable tests.** Existing tests use `ibis.memtable` from
+   pandas DataFrames as input. Ibis supports groupby + agg on memtables
+   via the duckdb default backend — verify this works in-test; if it
+   doesn't, tests may need a per-test duckdb instance. The existing
+   project_analytics_entity test pattern in
+   tests/test_analytics_entity_engine.py should inform the harness.
+
+## Computed-fields strategy
+
+Keep them in Python for now. The projection already aggregates to one row
+per group; running `result_df.apply(eval(...))` over a small frame is
+fine. If a user writes a computed field that references a huge column,
+they can file a separate issue.
+
+## Test strategy
+
+Because the acceptance criterion is 'byte-identical output for every
+existing test case', the easiest robust approach is a parameterized
+equivalence test: for each existing test fixture, run BOTH the v0.6.2
+pandas implementation (vendored temporarily into a test helper) AND the
+new Ibis implementation, assert equality. Delete the vendored helper once
+the equivalence suite stays green over a few days. This is a stronger
+guarantee than rewriting assertions to match the new implementation's
+output.
+
+## Release shape
+
+Minor bump (0.7.0) when bundled with M058 + M059. This is the kind of
+change that deserves release notes with a 'performance' section and a
+warning about the float-tie-break acceptable breakage.
+"""

@@ -1,0 +1,169 @@
+# Mission: Parallel source loads + parallel entity writes
+# Two cheap, orthogonal I/O speedups in the pipeline: source loading and
+# entity/metrics writes are independent per item but run serially today.
+
+id = "M059"
+title = "Parallel source loads + parallel entity/metrics writes"
+status = "draft"
+created = 2026-04-18
+depends_on = []
+
+[outcome]
+description = """
+`run_pipeline()` in src/fyrnheim/engine/pipeline.py does two independent I/O
+loops serially where every item in each loop is independent of every other:
+
+1. **Source loading (pipeline.py:106-122).** Each source (StateSource or
+   EventSource) is loaded one at a time. EventSource load = Ibis table read
+   + client-side `.execute()` + Python row iteration; StateSource load = 1-2
+   Ibis queries + snapshot-diff computation. On the timo-data-stack pipeline
+   there are 9 sources; each round-trips BigQuery 2-5 times. They share no
+   state during load — every output is a separate event table appended to
+   `event_tables[]`.
+
+2. **Entity + metrics writes (pipeline.py:154-179 and 182-207).** Each
+   AnalyticsEntity and MetricsModel is projected then written serially.
+   `executor.write_table()` (executor.py:248-286) blocks on
+   `client.load_table_from_dataframe(...).result()` for BigQuery — i.e. the
+   whole job round-trip per entity, in series. 4 analytics entities × blocking
+   BQ load jobs is a material chunk of wall time on the observed pipeline.
+
+This mission parallelizes both loops using `concurrent.futures.ThreadPoolExecutor`
+(I/O-bound workloads; the underlying Ibis / BigQuery clients are thread-safe
+per-call but not async-native). The max-worker count is configurable via
+existing config (a new `ResolvedConfig.max_parallel_io` field, defaulting to
+a conservative value — e.g. 4 — to avoid hammering BigQuery slots on small
+projects).
+
+Ordering is preserved where it matters: source loads populate `event_tables`
+in the same order as they appear in `config.sources` (we collect futures in
+order and resolve them in order). Entity and metrics writes within their
+phase are independent — order of completion is irrelevant.
+
+No change to correctness. No change to public API beyond the new config
+field. No change to `project_analytics_entity` or any compute path. This is
+a dispatching refactor, measured by M058's timing harness.
+"""
+
+user_progress = "From 'nine source loads and four entity writes happen strictly serially, each blocking on one BigQuery round-trip at a time' to 'independent I/O fans out to a bounded thread pool; full-pipeline wall time drops proportionally to the slowest item in each phase'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pipeline.py source-load loop (currently 106-122) is replaced with a ThreadPoolExecutor-based fan-out that preserves `event_tables` ordering (event_tables[i] == result of loading config.sources[i])",
+    "pipeline.py analytics-entity write loop (currently 154-179) is parallelized over the write step — projection remains sequential within the item, but writes run concurrently across items",
+    "pipeline.py metrics-model write loop (currently 182-207) is parallelized the same way",
+    "ResolvedConfig gains `max_parallel_io: int = 4` (or equivalent); unit test covers the default and a user-overridden value",
+    "If `max_parallel_io == 1`, behavior is strictly serial — same execution shape as today (regression safety)",
+    "Exception handling: if any worker raises, the pool shuts down, remaining futures are cancelled where possible, and the first raised exception propagates to the caller (matches the existing fail-fast contract of `run_pipeline`)",
+    "No changes to per-source / per-entity / per-metrics correctness — every existing test in tests/ passes",
+    "M058 timings still populate correctly when parallelism > 1 (timings are per-item, using monotonic clocks captured inside each worker's callable, not wall-clock-derived)",
+    "New regression test test_parallel_source_load_preserves_order: a config with 3 sources whose load times intentionally differ (e.g. a sleep() in a stub loader) yields event_tables in declared-config order, not completion order",
+    "New regression test test_parallel_entity_writes_all_happen: a config with 3 AnalyticsEntities all materialization='table' verifies that executor.write_table is called exactly 3 times with the correct (project, dataset, name, df) tuples",
+    "New regression test test_exception_in_worker_propagates: one source raises; run_pipeline raises that exception; the other sources' partial progress is not silently swallowed",
+    "Benchmark result (recorded in the PR body, not enforced as a test): on a representative duckdb in-repo example with N>=4 sources, end-to-end pipeline time with max_parallel_io=4 is materially less than with max_parallel_io=1 (same PR should cite M058 timings before/after)",
+    "ruff + mypy clean",
+    "No new runtime dependencies (stdlib `concurrent.futures` is sufficient)",
+    "CLI: `fyr run --max-parallel-io N` is plumbed through (optional override of config value)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+]
+
+[scope]
+in_scope = [
+    "ThreadPoolExecutor fan-out for the source-load loop in pipeline.py (phase 1)",
+    "ThreadPoolExecutor fan-out for the analytics-entity write loop in pipeline.py (phase 4)",
+    "ThreadPoolExecutor fan-out for the metrics-model write loop in pipeline.py (phase 5)",
+    "ResolvedConfig.max_parallel_io (default 4) + CLI --max-parallel-io plumbing",
+    "Ordering guarantee for source loads (event_tables preserves config.sources order)",
+    "Exception-propagation contract documented in the run_pipeline docstring",
+    "3 new regression tests (ordering, write fan-out, exception propagation)",
+    "Brief note in CLI --help and README about max_parallel_io",
+]
+out_of_scope = [
+    "Parallelizing projection of analytics entities (would require rethinking the enriched_events shared state — orthogonal; M060 removes the Python projection entirely)",
+    "Parallelizing snapshot-diff internals inside a single StateSource load",
+    "Parallelizing identity-graph resolution (shared enriched_events table; not obviously parallel-safe without more thought)",
+    "Async/await rewrite — this mission uses threads, matching the stdlib-only principle",
+    "Connection pooling inside IbisExecutor (single-connection thread-safety is assumed; verify with BQ docs but do not re-architect if it holds)",
+    "Back-pressure / rate-limiting against BigQuery slot quotas (max_parallel_io=4 default is the safety knob)",
+]
+acceptable_breakage = [
+    "ResolvedConfig gains one new optional field (`max_parallel_io`). Users constructing ResolvedConfig directly in tests or tooling may need to pass the new field or rely on the default — documented in release notes when bundled",
+    "Exception timing changes: today the first-failing source fails before later sources start; with parallelism, later sources may be mid-flight when an earlier one fails. Partial-progress visibility may differ in failure-mode logs. Documented in run_pipeline docstring.",
+]
+
+[notes]
+considerations = """
+## Why threads, not asyncio
+
+Ibis backends and the BigQuery Python client are synchronous APIs. Making
+them async would require either an async rewrite of Ibis (out of scope) or
+wrapping every call in `asyncio.to_thread`, which is strictly more complex
+than a ThreadPoolExecutor for the same win. We're I/O-bound on socket
+round-trips; the GIL does not get in the way. Threads are the right tool.
+
+## Why bounded workers
+
+BigQuery slot quotas are real. An unbounded pool on a pipeline with 50
+sources would happily open 50 concurrent load jobs. Default
+`max_parallel_io=4` keeps small projects safe; users on big slots can bump
+it via config or `--max-parallel-io`. Document this in the CLI --help text.
+
+## Ordering guarantee for source loads
+
+`event_tables` ordering matters: `_concat_tables` (pipeline.py:129) preserves
+input order, and downstream phases may implicitly rely on deterministic
+row order for debug output. Use `executor.map()` or collect futures in a
+list and iterate in submission order — do NOT use `as_completed()` for
+source loads.
+
+## Projection sequentiality in phase 4
+
+We are deliberately NOT parallelizing the projection step of phase 4 in
+this mission — only the write step. The projection is CPU-bound Python
+(`project_analytics_entity`), and the for-loop over group_ids is the M060
+concern. Parallelizing projection too would multiply GIL contention and
+muddy M060's before/after comparison. Keep them orthogonal.
+
+## Thread-safety of IbisExecutor
+
+The single `self._conn` backend on IbisExecutor may or may not be
+thread-safe depending on backend. Verify during implementation:
+- DuckDB: `duckdb.DuckDBPyConnection` is NOT thread-safe; each thread needs
+  its own cursor or a lock around calls.
+- BigQuery: `google.cloud.bigquery.Client` IS thread-safe per Google's
+  docs; multiple threads can submit jobs concurrently.
+
+If DuckDB becomes a problem, either serialize DuckDB writes (only parallelize
+BQ) or add a per-backend lock. Prefer the simplest option that ships.
+
+## Interaction with M057 / v0.6.2
+
+Unrelated. M057 shrunk the per-entity iteration space; M059 shrinks the
+total wall time of the surrounding I/O phases. Compose cleanly.
+
+## Release shape
+
+Minor bump candidate (0.6.x -> 0.7.0) when bundled with M058 + M060.
+Release-PR flow per the release-flow memory.
+"""

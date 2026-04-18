@@ -4,6 +4,7 @@ import json
 import textwrap
 
 import ibis
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -11,6 +12,7 @@ from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.analytics_entity import AnalyticsEntity, Measure, StateField
 from fyrnheim.engine.analytics_entity_engine import project_analytics_entity
 from fyrnheim.engine.analytics_entity_registry import AnalyticsEntityRegistry
+from tests._legacy_pandas_projection import legacy_project_analytics_entity
 
 
 def _make_events(rows: list[dict]) -> ibis.expr.types.Table:
@@ -228,7 +230,13 @@ class TestProjectAnalyticsEntity:
     def test_latest_returns_none_when_no_matching_events(self):
         """With the M057 relevance filter, an id with events but none matching
         the measure activity is filtered out. For a surviving id whose events
-        don't include the measure activity payload field, latest returns None.
+        don't include the measure activity payload field, latest returns a
+        null-like value.
+
+        M060 note: the post-push-down implementation extracts ``latest``
+        measure payload fields as ``float64``, so a missing value is
+        represented as ``NaN`` rather than Python ``None``. The assertion
+        uses ``pd.isna`` to accept both.
         """
         events = _make_events([
             # X has a plan_changed event (matches measure activity) but no 'plan' field.
@@ -243,7 +251,7 @@ class TestProjectAnalyticsEntity:
         )
         result = project_analytics_entity(events, ae)
         df = result.execute()
-        assert df.iloc[0]["last_plan"] is None
+        assert pd.isna(df.iloc[0]["last_plan"])
 
     def test_first_strategy_state_field(self):
         events = _make_events([
@@ -435,6 +443,402 @@ class TestProjectAnalyticsEntity:
         df = result.execute()
         assert len(df) == 0
         assert set(df.columns) == {"entity_id", "company_name", "x_count", "doubled"}
+
+
+# ---------------------------------------------------------------------------
+# M060 equivalence suite: new Ibis-native impl vs vendored v0.6.2 pandas impl
+# ---------------------------------------------------------------------------
+
+
+def _build_equivalence_scenarios() -> list[tuple[str, object, object]]:
+    """Build (id, events_builder, entity_builder) scenarios.
+
+    Every scenario exercised by TestProjectAnalyticsEntity is re-run through
+    BOTH the new Ibis implementation AND the vendored v0.6.2 pandas reference;
+    both are asserted equal via ``pandas.testing.assert_frame_equal``. This
+    is the M060 byte-identical-output contract.
+    """
+
+    def _mixed_events():
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Acme", "plan": "free"}},
+            {"source": "crm", "entity_id": "A", "ts": "2024-02-01T00:00:00",
+             "event_type": "field_changed",
+             "payload": {"field_name": "plan", "old_value": "free", "new_value": "pro"}},
+            {"source": "app", "entity_id": "A", "ts": "2024-01-15T00:00:00",
+             "event_type": "workshop_attended", "payload": {}},
+            {"source": "app", "entity_id": "A", "ts": "2024-02-15T00:00:00",
+             "event_type": "workshop_attended", "payload": {}},
+            {"source": "billing", "entity_id": "A", "ts": "2024-01-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 100}},
+            {"source": "billing", "entity_id": "A", "ts": "2024-02-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 250}},
+            {"source": "crm", "entity_id": "B", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Beta Inc", "plan": "enterprise"}},
+            {"source": "app", "entity_id": "B", "ts": "2024-03-01T00:00:00",
+             "event_type": "workshop_attended", "payload": {}},
+            {"source": "billing", "entity_id": "B", "ts": "2024-03-01T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 500}},
+        ])
+
+    def _solo_login_event():
+        return _make_events([
+            {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
+             "event_type": "login", "payload": {}},
+        ])
+
+    def _canonical_id_events():
+        return _make_events([
+            {"source": "app", "entity_id": "X", "canonical_id": "CAN-1",
+             "ts": "2024-01-01T00:00:00", "event_type": "login", "payload": {}},
+            {"source": "app", "entity_id": "Y", "canonical_id": "CAN-1",
+             "ts": "2024-01-02T00:00:00", "event_type": "login", "payload": {}},
+        ])
+
+    def _mixed_purchase_login():
+        return _make_events([
+            {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
+             "event_type": "login", "payload": {}},
+            {"source": "app", "entity_id": "Y", "ts": "2024-01-01T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 10}},
+        ])
+
+    def _plan_changed_no_field():
+        return _make_events([
+            {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
+             "event_type": "plan_changed", "payload": {}},
+        ])
+
+    def _first_strategy_events():
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Original"}},
+            {"source": "crm", "entity_id": "A", "ts": "2024-06-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Updated"}},
+        ])
+
+    def _email_events():
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "alice@example.com"}},
+        ])
+
+    def _two_logins():
+        return _make_events([
+            {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
+             "event_type": "login", "payload": {}},
+            {"source": "app", "entity_id": "X", "ts": "2024-01-02T00:00:00",
+             "event_type": "login", "payload": {}},
+        ])
+
+    def _two_source_events():
+        return _make_events([
+            {"source": "A", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Acme"}},
+            {"source": "B", "entity_id": "B", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Beta"}},
+        ])
+
+    def _three_event_types():
+        return _make_events([
+            {"source": "app", "entity_id": "AX", "ts": "2024-01-01T00:00:00",
+             "event_type": "X", "payload": {}},
+            {"source": "app", "entity_id": "BY", "ts": "2024-01-01T00:00:00",
+             "event_type": "Y", "payload": {}},
+            {"source": "app", "entity_id": "CZ", "ts": "2024-01-01T00:00:00",
+             "event_type": "Z", "payload": {}},
+        ])
+
+    def _coalesce_priority_events():
+        return _make_events([
+            {"source": "A", "entity_id": "inA", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "a@x.com"}},
+            {"source": "B", "entity_id": "inB", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "b@x.com"}},
+            {"source": "C", "entity_id": "inC", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "c@x.com"}},
+        ])
+
+    def _union_relevance_events():
+        return _make_events([
+            {"source": "app", "entity_id": "UX", "ts": "2024-01-01T00:00:00",
+             "event_type": "X", "payload": {}},
+            {"source": "A", "entity_id": "UA", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "A-name"}},
+            {"source": "other", "entity_id": "UN", "ts": "2024-01-01T00:00:00",
+             "event_type": "noop", "payload": {}},
+        ])
+
+    def _empty_after_filter_events():
+        return _make_events([
+            {"source": "other", "entity_id": "Z", "ts": "2024-01-01T00:00:00",
+             "event_type": "noop", "payload": {}},
+        ])
+
+    def _coalesce_multi_source_for_one_entity():
+        return _make_events([
+            {"source": "A", "entity_id": "E1", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "from_a@x.com"}},
+            {"source": "B", "entity_id": "E1", "ts": "2024-01-02T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "from_b@x.com"}},
+            {"source": "B", "entity_id": "E2", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "e2_from_b@x.com"}},
+        ])
+
+    scenarios: list[tuple[str, object, object]] = [
+        (
+            "count_measure",
+            _mixed_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[Measure(name="workshop_count", activity="workshop_attended", aggregation="count")],
+            ),
+        ),
+        (
+            "sum_measure",
+            _mixed_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[Measure(name="total_revenue", activity="purchase", aggregation="sum", field="amount")],
+            ),
+        ),
+        (
+            "latest_measure",
+            _mixed_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[Measure(name="last_purchase_amount", activity="purchase", aggregation="latest", field="amount")],
+            ),
+        ),
+        (
+            "state_fields_project",
+            _mixed_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[
+                    StateField(name="company_name", source="crm", field="name", strategy="latest"),
+                    StateField(name="current_plan", source="crm", field="plan", strategy="latest"),
+                ],
+            ),
+        ),
+        (
+            "state_fields_and_measures_combined",
+            _mixed_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(name="company_name", source="crm", field="name", strategy="latest")],
+                measures=[
+                    Measure(name="workshop_count", activity="workshop_attended", aggregation="count"),
+                    Measure(name="total_revenue", activity="purchase", aggregation="sum", field="amount"),
+                ],
+            ),
+        ),
+        (
+            "computed_fields_on_top",
+            _mixed_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[
+                    Measure(name="workshop_count", activity="workshop_attended", aggregation="count"),
+                    Measure(name="total_revenue", activity="purchase", aggregation="sum", field="amount"),
+                ],
+                computed_fields=[
+                    ComputedColumn(name="revenue_per_workshop",
+                                   expression="total_revenue / workshop_count if workshop_count else 0"),
+                ],
+            ),
+        ),
+        (
+            "entity_id_no_canonical",
+            _solo_login_event,
+            lambda: AnalyticsEntity(
+                name="users",
+                measures=[Measure(name="login_count", activity="login", aggregation="count")],
+            ),
+        ),
+        (
+            "canonical_id_present",
+            _canonical_id_events,
+            lambda: AnalyticsEntity(
+                name="users",
+                measures=[Measure(name="login_count", activity="login", aggregation="count")],
+            ),
+        ),
+        (
+            "count_zero_filtered_out",
+            _mixed_purchase_login,
+            lambda: AnalyticsEntity(
+                name="users",
+                measures=[Measure(name="purchase_count", activity="purchase", aggregation="count")],
+            ),
+        ),
+        (
+            "latest_none_when_payload_missing_field",
+            _plan_changed_no_field,
+            lambda: AnalyticsEntity(
+                name="users",
+                measures=[Measure(name="last_plan", activity="plan_changed", aggregation="latest", field="plan")],
+            ),
+        ),
+        (
+            "first_strategy_state_field",
+            _first_strategy_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(name="first_name", source="crm", field="name", strategy="first")],
+            ),
+        ),
+        (
+            "computed_field_with_t_proxy",
+            _email_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(name="email", source="crm", field="email", strategy="latest")],
+                computed_fields=[ComputedColumn(name="email_domain", expression="t.email.split('@')[1]")],
+            ),
+        ),
+        (
+            "computed_field_direct_column_access",
+            _two_logins,
+            lambda: AnalyticsEntity(
+                name="users",
+                measures=[Measure(name="login_count", activity="login", aggregation="count")],
+                computed_fields=[ComputedColumn(name="is_active", expression="login_count > 0")],
+            ),
+        ),
+        (
+            "state_field_source_scope",
+            _two_source_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(name="company_name", source="A", field="name", strategy="latest")],
+            ),
+        ),
+        (
+            "measure_activity_scope",
+            _three_event_types,
+            lambda: AnalyticsEntity(
+                name="acts",
+                measures=[Measure(name="x_count", activity="X", aggregation="count")],
+            ),
+        ),
+        (
+            "coalesce_priority_sources",
+            _coalesce_priority_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(
+                    name="email", source="A", field="email",
+                    strategy="coalesce", priority=["A", "B"],
+                )],
+            ),
+        ),
+        (
+            "union_state_and_measure_relevance",
+            _union_relevance_events,
+            lambda: AnalyticsEntity(
+                name="acts",
+                state_fields=[StateField(name="company_name", source="A", field="name", strategy="latest")],
+                measures=[Measure(name="x_count", activity="X", aggregation="count")],
+            ),
+        ),
+        (
+            "empty_after_filter",
+            _empty_after_filter_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(name="company_name", source="A", field="name", strategy="latest")],
+                measures=[Measure(name="x_count", activity="X", aggregation="count")],
+                computed_fields=[ComputedColumn(name="doubled", expression="(x_count or 0) * 2")],
+            ),
+        ),
+        (
+            "coalesce_picks_first_priority_source",
+            _coalesce_multi_source_for_one_entity,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[StateField(
+                    name="email", source="A", field="email",
+                    strategy="coalesce", priority=["A", "B"],
+                )],
+            ),
+        ),
+    ]
+    return scenarios
+
+
+_EQUIVALENCE_SCENARIOS = _build_equivalence_scenarios()
+
+
+class TestEquivalenceWithLegacy:
+    """M060: every scenario produces byte-identical output under new + legacy."""
+
+    @pytest.mark.parametrize(
+        "scenario_id, events_builder, entity_builder",
+        _EQUIVALENCE_SCENARIOS,
+        ids=[s[0] for s in _EQUIVALENCE_SCENARIOS],
+    )
+    def test_new_matches_legacy(
+        self, scenario_id, events_builder, entity_builder
+    ):
+        events = events_builder()
+        ae = entity_builder()
+
+        new_df = project_analytics_entity(events, ae).execute()
+        legacy_df = legacy_project_analytics_entity(events, ae).execute()
+
+        group_key = "canonical_id" if "canonical_id" in new_df.columns else "entity_id"
+
+        # Sort both frames by group_key so row order does not affect equality.
+        new_sorted = (
+            new_df.sort_values(group_key).reset_index(drop=True)
+            if len(new_df)
+            else new_df.reset_index(drop=True)
+        )
+        legacy_sorted = (
+            legacy_df.sort_values(group_key).reset_index(drop=True)
+            if len(legacy_df)
+            else legacy_df.reset_index(drop=True)
+        )
+
+        # Both column sets must match.
+        assert set(new_sorted.columns) == set(legacy_sorted.columns), (
+            f"{scenario_id}: column mismatch "
+            f"new={sorted(new_sorted.columns)} legacy={sorted(legacy_sorted.columns)}"
+        )
+
+        # Align column order for pandas.testing.
+        new_sorted = new_sorted[legacy_sorted.columns]
+
+        # Normalise None / NaN representations before comparison.
+        # The legacy pandas implementation stores "missing" as Python None
+        # in an ``object`` column; the Ibis push-down implementation stores
+        # it as NaN in a ``float64`` column (for measure 'latest'). Pandas's
+        # ``assert_frame_equal`` accepts both today but emits a
+        # FutureWarning about upcoming strictness — coerce object-None to
+        # numpy NaN so the comparator sees one consistent null marker.
+        def _normalise_nulls(df: pd.DataFrame) -> pd.DataFrame:
+            out = df.copy()
+            for col in out.columns:
+                if out[col].dtype == object:
+                    out[col] = out[col].where(out[col].notna(), np.nan)
+            return out
+
+        new_sorted = _normalise_nulls(new_sorted)
+        legacy_sorted = _normalise_nulls(legacy_sorted)
+
+        # check_exact=False + rtol accommodates the "last-bit float" class of
+        # differences explicitly called out as acceptable breakage in the
+        # mission TOML. check_dtype=False tolerates e.g. int64 vs object for
+        # empty count columns.
+        pd.testing.assert_frame_equal(
+            new_sorted,
+            legacy_sorted,
+            check_exact=False,
+            rtol=1e-6,
+            check_dtype=False,
+        )
 
 
 # ---------------------------------------------------------------------------

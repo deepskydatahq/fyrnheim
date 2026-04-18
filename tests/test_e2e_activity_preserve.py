@@ -17,8 +17,9 @@ import ibis
 import pandas as pd
 
 from fyrnheim.core.activity import ActivityDefinition, RowAppeared
+from fyrnheim.core.analytics_entity import AnalyticsEntity, StateField
 from fyrnheim.engine.activity_engine import apply_activity_definitions
-from fyrnheim.engine.analytics_entity_engine import _resolve_latest
+from fyrnheim.engine.analytics_entity_engine import project_analytics_entity
 
 
 def test_e2e_customers_example_state_fields_stay_fresh():
@@ -63,7 +64,8 @@ def test_e2e_customers_example_state_fields_stay_fresh():
         )
     ]
 
-    result_df = apply_activity_definitions(raw, defns).execute()
+    enriched = apply_activity_definitions(raw, defns)
+    result_df = enriched.execute()
 
     # Both events must be present: the renamed signup AND the
     # passed-through field_changed event. Pre-v0.5.0, only signup
@@ -78,5 +80,22 @@ def test_e2e_customers_example_state_fields_stay_fresh():
     # signup-time value, baked into the rewritten signup payload).
     # After v0.5.0 it must return "a@c.com" — the latest field_changed
     # value — because the field_changed event is no longer dropped.
-    latest_email = _resolve_latest(result_df, "email")
-    assert latest_email == "a@c.com"
+    #
+    # M060: formerly imported `_resolve_latest` directly; the Ibis
+    # push-down rewrite removes that helper. This test now exercises
+    # the full `project_analytics_entity` path, which is the correct
+    # surface to assert the ADR-0001 invariant against.
+    ae = AnalyticsEntity(
+        name="customers",
+        state_fields=[
+            StateField(
+                name="email",
+                source="crm_contacts",
+                field="email",
+                strategy="latest",
+            ),
+        ],
+    )
+    projected = project_analytics_entity(enriched, ae).execute()
+    assert len(projected) == 1
+    assert projected.iloc[0]["email"] == "a@c.com"

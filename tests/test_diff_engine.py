@@ -331,31 +331,55 @@ class TestM051SerializeValue:
 
 
 class TestM051ResolveLatestFallsThroughNone:
-    """Issue #93: _resolve_latest must skip None rows instead of returning
-    the string 'null' as a present value."""
+    """Issue #93: ``latest`` state-field resolution must skip None rows
+    instead of returning them as a present value.
+
+    M060 note: this used to call the private pandas helper
+    ``_resolve_latest``. The Ibis push-down rewrite removes that helper;
+    the test now exercises the same invariant end-to-end through
+    ``project_analytics_entity``.
+    """
 
     def test_resolve_latest_falls_through_none_rows(self) -> None:
+        import ibis
         import pandas as pd
 
-        from fyrnheim.engine.analytics_entity_engine import _resolve_latest
-
-        events = pd.DataFrame(
-            [
-                {
-                    "source": "crm",
-                    "entity_id": "u1",
-                    "ts": "2026-01-01",
-                    "event_type": "row_appeared",
-                    "payload": json.dumps({"company": "Acme"}),
-                },
-                {
-                    "source": "crm",
-                    "entity_id": "u1",
-                    "ts": "2026-01-02",
-                    "event_type": "row_appeared",
-                    "payload": json.dumps({"company": None}),
-                },
-            ]
+        from fyrnheim.core.analytics_entity import AnalyticsEntity, StateField
+        from fyrnheim.engine.analytics_entity_engine import (
+            project_analytics_entity,
         )
+
+        events = ibis.memtable(
+            pd.DataFrame(
+                [
+                    {
+                        "source": "crm",
+                        "entity_id": "u1",
+                        "ts": "2026-01-01",
+                        "event_type": "row_appeared",
+                        "payload": json.dumps({"company": "Acme"}),
+                    },
+                    {
+                        "source": "crm",
+                        "entity_id": "u1",
+                        "ts": "2026-01-02",
+                        "event_type": "row_appeared",
+                        "payload": json.dumps({"company": None}),
+                    },
+                ]
+            )
+        )
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(
+                    name="company",
+                    source="crm",
+                    field="company",
+                    strategy="latest",
+                ),
+            ],
+        )
+        df = project_analytics_entity(events, ae).execute()
         # Latest row has None; must fall through to the earlier real value.
-        assert _resolve_latest(events, "company") == "Acme"
+        assert df.iloc[0]["company"] == "Acme"

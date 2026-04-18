@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.resources
+import json
 import logging
 import shutil
 import sys
@@ -16,6 +18,7 @@ from fyrnheim import __version__
 
 if TYPE_CHECKING:
     from fyrnheim.config import ResolvedConfig
+    from fyrnheim.engine.pipeline import PipelineTimings
 
 _SCAFFOLD_PKG = "fyrnheim._scaffold"
 
@@ -360,6 +363,131 @@ def _resolve_and_discover(
 
     assets = _discover_assets(config.entities_dir)
     return config, assets
+
+
+def _format_bench_report(timings: PipelineTimings, elapsed_seconds: float) -> str:
+    """Render a human-readable phase-ordered `fyr bench` report.
+
+    Plain f-strings only — no color, no rich/tables. The format mirrors
+    the M058 story's example output.
+    """
+    lines: list[str] = [f"Pipeline bench — total {elapsed_seconds:.3f}s"]
+    lines.append(f"  staging_views: {timings.staging_views_s:.3f}s")
+
+    def _name_width(names: list[str]) -> int:
+        return max((len(n) for n in names), default=0)
+
+    lines.append(f"  source_loads ({len(timings.source_loads)}):")
+    if timings.source_loads:
+        width = _name_width(list(timings.source_loads))
+        for name, secs in timings.source_loads.items():
+            lines.append(f"    {(name + ':').ljust(width + 1)} {secs:.3f}s")
+
+    lines.append(f"  activities:      {timings.activities_s:.3f}s")
+
+    lines.append(f"  identity_graphs ({len(timings.identity_graphs)}):")
+    if timings.identity_graphs:
+        width = _name_width(list(timings.identity_graphs))
+        for name, secs in timings.identity_graphs.items():
+            lines.append(f"    {(name + ':').ljust(width + 1)} {secs:.3f}s")
+
+    lines.append(f"  analytics_entities ({len(timings.analytics_entities)}):")
+    if timings.analytics_entities:
+        width = _name_width(list(timings.analytics_entities))
+        for name, parts in timings.analytics_entities.items():
+            lines.append(
+                f"    {(name + ':').ljust(width + 1)} "
+                f"project={parts.get('project_s', 0.0):.3f}s  "
+                f"write={parts.get('write_s', 0.0):.3f}s"
+            )
+
+    if timings.metrics_models:
+        lines.append(f"  metrics_models ({len(timings.metrics_models)}):")
+        width = _name_width(list(timings.metrics_models))
+        for name, parts in timings.metrics_models.items():
+            lines.append(
+                f"    {(name + ':').ljust(width + 1)} "
+                f"project={parts.get('project_s', 0.0):.3f}s  "
+                f"write={parts.get('write_s', 0.0):.3f}s"
+            )
+    else:
+        lines.append("  metrics_models (0): (none)")
+
+    return "\n".join(lines)
+
+
+@main.command()
+@click.option("--entities-dir", default=None, help="Directory with entity definitions")
+@click.option("--data-dir", default=None, help="Directory with source data files")
+@click.option("--output-dir", default=None, help="Directory for pipeline output")
+@click.option("--backend", default=None, help="Execution backend (duckdb, clickhouse)")
+@click.option(
+    "--no-state",
+    is_flag=True,
+    default=False,
+    help="Bypass fyrnheim_state table: always re-materialize staging views and skip state writes.",
+)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    default=False,
+    help="Emit PipelineTimings as JSON on stdout (nothing else).",
+)
+@click.pass_context
+def bench(
+    ctx: click.Context,
+    entities_dir: str | None,
+    data_dir: str | None,
+    output_dir: str | None,
+    backend: str | None,
+    no_state: bool,
+    as_json: bool,
+) -> None:
+    """Run the pipeline and print per-phase timings (bench harness)."""
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.pipeline import run_pipeline
+
+    verbose = ctx.obj.get("verbose", False)
+
+    config, assets = _resolve_and_discover(
+        ctx,
+        entities_dir,
+        data_dir=data_dir,
+        output_dir=output_dir,
+        backend=backend,
+    )
+
+    total_assets = sum(len(v) for v in assets.values())
+    if total_assets == 0:
+        click.echo(f"No assets found in {config.entities_dir}", err=True)
+        sys.exit(1)
+
+    executor = IbisExecutor.from_config(
+        backend=config.backend,
+        backend_config=config.backend_config,
+    )
+
+    try:
+        try:
+            result = run_pipeline(assets, config, executor, no_state=no_state)
+        except Exception as exc:
+            if verbose:
+                raise
+            click.echo(f"Pipeline failed: {exc}", err=True)
+            sys.exit(1)
+
+        if as_json:
+            click.echo(json.dumps(dataclasses.asdict(result.timings)))
+        else:
+            click.echo(_format_bench_report(result.timings, result.elapsed_seconds))
+
+        if result.errors:
+            for err in result.errors:
+                click.echo(f"  - {err}", err=True)
+            sys.exit(1)
+    finally:
+        executor.close()
 
 
 @main.command()

@@ -1,0 +1,154 @@
+# Mission: Retro cleanup from M058 + M059
+# Bundle 4 small post-implementation findings (CLI executor leaks, missing
+# unit tests for max_parallel_io, missing serial-behavior regression test,
+# register_parquet thread-safety gap) into one PR.
+
+id = "M061"
+title = "Retro cleanup from M058 + M059"
+status = "draft"
+created = 2026-04-18
+depends_on = ["M058", "M059"]
+
+[outcome]
+description = """
+Small cleanup mission addressing four findings surfaced by the post-M058 /
+post-M059 retro. All four are low-risk, additive, and would otherwise
+become one-line PRs each — bundling them avoids churn.
+
+1. **CLI IbisExecutor leaks.** 4 of 5 CLI commands in src/fyrnheim/cli.py
+   create IbisExecutor.from_config but never call .close(). Only `bench`
+   (line 490) has a matching close() at line 514, added during M058 rework
+   after CodeRabbit flagged it. Sites needing the same try/finally wrap:
+   line 303 (`run`), 557 (`materialize`), 613 (`drop`), 667
+   (`list-staging`). Trivial mechanical change, preserves every existing
+   exit-code / error semantic.
+
+2. **max_parallel_io config unit tests.** M059 added the field with full
+   resolve_config() precedence (CLI > yaml > default=4) and yaml-side
+   positive-int validation, but there is no dedicated test. Add 4 tests to
+   exercise each layer.
+
+3. **max_parallel_io=1 serial regression test.** Serial-by-construction
+   via ThreadPoolExecutor(max_workers=1), but no test locks that
+   invariant. Add a regression test in tests/test_parallel_io.py that
+   proves source-load and entity-write work runs on a single thread when
+   max_parallel_io=1.
+
+4. **register_parquet not lock-wrapped.** Every other IbisExecutor method
+   that touches self._conn (materialize_view, write_table,
+   execute_parameterized, view_exists, drop_view) wraps access with
+   `with self._conn_lock:`. register_parquet at executor.py:211 does not.
+   Safe today because it is only called during pipeline setup before
+   phase 1 workers spawn — but the lack of lock is implicit and load-
+   bearing. Wrap it for symmetry and to remove a latent thread-safety
+   gap.
+
+No version bump. No CHANGELOG entry. This folds into the v0.7.0 release
+mission later with M058 + M059 + M060.
+"""
+
+user_progress = "From '4 loose retro findings parked as individual Beads tasks' to 'all 4 shipped as a single small PR on the v0.7.0 track'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Every IbisExecutor.from_config(...) callsite in src/fyrnheim/cli.py has a matching executor.close() in a finally block. All 5 sites (lines 303, 490, 557, 613, 667 on current main) follow the same pattern.",
+    "`fyr run`, `fyr materialize`, `fyr drop`, `fyr list-staging` CLI exit codes remain unchanged — success=0, error=nonzero. Close() runs on both success and error paths (including SystemExit).",
+    "tests/test_config.py (or equivalent) gains 4 unit tests for max_parallel_io: (a) default is 4 when neither CLI nor yaml sets it, (b) yaml value overrides the default, (c) CLI value overrides yaml (precedence), (d) invalid yaml value (0, -1, or non-int string) causes load_config / resolve_config to raise",
+    "tests/test_parallel_io.py gains a regression test asserting serial behavior at max_parallel_io=1: source-load stubs record threading.get_ident(); all calls happen on the same thread id. Same for entity writes (either same-thread assertion OR no-concurrent-overlap assertion on enter/exit timestamps).",
+    "src/fyrnheim/engine/executor.py register_parquet (line 211) is wrapped with `with self._conn_lock:` following the pattern of the other self._conn-touching methods",
+    "All existing tests pass unchanged (no modifications to existing test assertions)",
+    "ruff check src/ tests/ clean; mypy src/ clean",
+    "No version bump (pyproject.toml still 0.6.2); no CHANGELOG entry",
+    "No new runtime dependencies",
+    "Single PR against main containing all 4 fixes",
+]
+
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_config.py",
+    "tests/test_parallel_io.py",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/test_config.py",
+    "tests/test_parallel_io.py",
+]
+
+[scope]
+in_scope = [
+    "CLI executor cleanup: wrap run/materialize/drop/list-staging in try/finally with executor.close() (matching the bench pattern at cli.py:490-514)",
+    "4 new unit tests for ResolvedConfig.max_parallel_io covering default, yaml override, CLI precedence, invalid-value rejection",
+    "1-2 regression tests for max_parallel_io=1 serial behavior in tests/test_parallel_io.py",
+    "Wrap register_parquet in executor.py with the existing _conn_lock",
+    "Beads task closure for typedata-qjg1, typedata-c00p, typedata-t1l1, typedata-ykug",
+]
+out_of_scope = [
+    "Any new CLI commands or option changes",
+    "Refactoring the CLI command structure or extracting shared helpers",
+    "Changes to max_parallel_io default value or validation rules",
+    "Changes to the ThreadPoolExecutor fan-out logic in pipeline.py",
+    "Adding a context-manager interface to IbisExecutor (could fold it into a larger refactor; out of scope here)",
+    "Version bump or CHANGELOG (handled by a later release mission for v0.7.0)",
+    "Changes to any test assertion, fixture, or helper not listed above",
+]
+acceptable_breakage = [
+    "None. Each change is either additive (new tests) or behavior-preserving (close() runs the same way bench already does; register_parquet lock is a no-op against itself).",
+]
+
+[notes]
+considerations = """
+## Origin
+
+Findings came out of the M058+M059 retro (see Beads tasks typedata-qjg1,
+typedata-c00p, typedata-t1l1, typedata-ykug). The retro notes are in the
+Beads task descriptions — read them first for the fuller context.
+
+## Sizing and shape
+
+One epic, one story. All four items are small and mechanical. A single
+implementation agent should finish this in one session. The evaluator
+checks count/shape rather than cross-file correctness.
+
+## Implementation order (suggested)
+
+1. register_parquet lock wrap (3 lines in executor.py) — smallest, isolates
+   the executor change from the CLI changes
+2. CLI executor cleanup (4 try/finally wraps) — mechanical, pattern is
+   already in the file at cli.py:490-514
+3. max_parallel_io config tests (4 new tests)
+4. max_parallel_io=1 serial regression test (1-2 new tests)
+5. Run full suite; ruff + mypy; push
+
+## Precedence test detail
+
+The "CLI beats yaml" test must use resolve_config(max_parallel_io=<cli_value>)
+with a fyrnheim.yaml file in tmp_path setting a different value. The test
+should NOT mock Path.cwd — the config lookup is `load_config(Path.cwd())`
+at config.py:118, which means the test either changes cwd to tmp_path or
+patches load_config directly. The simpler route is monkeypatch.chdir.
+
+## Do NOT
+
+- Add a context-manager interface to IbisExecutor (`__enter__`/`__exit__`).
+  Tempting but out of scope — M061 is preserve-behavior, not add-ergonomics.
+- Modify the 5 CLI `from_config(...)` keyword args. Just wrap the bodies.
+- Add a close() to register_parquet callsites in tests or docs. The lock
+  change is internal; no caller contract changes.
+
+## Release shape
+
+Folds into the v0.7.0 release mission alongside M058 + M059 + M060. No
+standalone release.
+"""

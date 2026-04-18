@@ -307,45 +307,48 @@ def run(
     start = time.monotonic()
 
     try:
-        result = run_pipeline(assets, config, executor, no_state=no_state)
-    except Exception as exc:
-        if verbose:
-            raise
-        click.echo(f"Pipeline failed: {exc}", err=True)
-        sys.exit(1)
-
-    elapsed = time.monotonic() - start
-
-    # Print summary
-    click.echo("")
-    click.echo(f"Sources processed: {result.source_count}")
-    if len(result.staging_materialized) + len(result.staging_skipped) > 0:
-        click.echo(
-            f"Staging views: {len(result.staging_materialized)} materialized, "
-            f"{len(result.staging_skipped)} skipped"
-        )
-    click.echo(f"Outputs written:   {result.output_count}")
-
-    if result.outputs:
-        click.echo("")
-        for name, row_count in result.outputs.items():
-            destination = result.output_destinations.get(name)
-            if destination is None:
-                destination = f"parquet:{config.output_dir / name}.parquet"
-            click.echo(f"  {name}: {row_count} rows -> {destination}")
-
-    click.echo(f"\nCompleted in {elapsed:.2f}s")
-
-    if result.errors:
-        click.echo("")
-        click.echo(f"Errors ({len(result.errors)}):")
-        for err in result.errors:
+        try:
+            result = run_pipeline(assets, config, executor, no_state=no_state)
+        except Exception as exc:
             if verbose:
-                click.echo(f"  - {err}", err=True)
-            else:
-                # Show a shorter version without the full traceback
-                click.echo(f"  - {err}", err=True)
-        sys.exit(1)
+                raise
+            click.echo(f"Pipeline failed: {exc}", err=True)
+            sys.exit(1)
+
+        elapsed = time.monotonic() - start
+
+        # Print summary
+        click.echo("")
+        click.echo(f"Sources processed: {result.source_count}")
+        if len(result.staging_materialized) + len(result.staging_skipped) > 0:
+            click.echo(
+                f"Staging views: {len(result.staging_materialized)} materialized, "
+                f"{len(result.staging_skipped)} skipped"
+            )
+        click.echo(f"Outputs written:   {result.output_count}")
+
+        if result.outputs:
+            click.echo("")
+            for name, row_count in result.outputs.items():
+                destination = result.output_destinations.get(name)
+                if destination is None:
+                    destination = f"parquet:{config.output_dir / name}.parquet"
+                click.echo(f"  {name}: {row_count} rows -> {destination}")
+
+        click.echo(f"\nCompleted in {elapsed:.2f}s")
+
+        if result.errors:
+            click.echo("")
+            click.echo(f"Errors ({len(result.errors)}):")
+            for err in result.errors:
+                if verbose:
+                    click.echo(f"  - {err}", err=True)
+                else:
+                    # Show a shorter version without the full traceback
+                    click.echo(f"  - {err}", err=True)
+            sys.exit(1)
+    finally:
+        executor.close()
 
 
 def _resolve_and_discover(
@@ -560,23 +563,26 @@ def materialize(
     )
 
     try:
-        summary = materialize_staging_views(
-            executor, staging_views, no_state=no_state
-        )
-    except Exception as exc:
-        if verbose:
-            raise
-        click.echo(f"Materialization failed: {exc}", err=True)
-        sys.exit(1)
+        try:
+            summary = materialize_staging_views(
+                executor, staging_views, no_state=no_state
+            )
+        except Exception as exc:
+            if verbose:
+                raise
+            click.echo(f"Materialization failed: {exc}", err=True)
+            sys.exit(1)
 
-    click.echo(
-        f"Staging views: {len(summary.materialized)} materialized, "
-        f"{len(summary.skipped)} skipped"
-    )
-    for name in summary.materialized:
-        click.echo(f"  materialized  {name}")
-    for name in summary.skipped:
-        click.echo(f"  skipped       {name}")
+        click.echo(
+            f"Staging views: {len(summary.materialized)} materialized, "
+            f"{len(summary.skipped)} skipped"
+        )
+        for name in summary.materialized:
+            click.echo(f"  materialized  {name}")
+        for name in summary.skipped:
+            click.echo(f"  skipped       {name}")
+    finally:
+        executor.close()
 
 
 @main.command()
@@ -616,31 +622,36 @@ def drop(
     )
 
     try:
-        executor.drop_view(target.project, target.dataset, target.name)
-        # Best-effort: remove state row if the state table exists.
-        qualified = _qualify_state_table(executor, target.project, target.dataset)
         try:
-            executor.execute_parameterized(
-                f"DELETE FROM {qualified} WHERE name = @name",
-                {"name": target.name},
+            executor.drop_view(target.project, target.dataset, target.name)
+            # Best-effort: remove state row if the state table exists.
+            qualified = _qualify_state_table(
+                executor, target.project, target.dataset
             )
-        except Exception as state_exc:
-            log = logging.getLogger("fyrnheim")
-            log.debug(
-                "State row delete skipped for %s (table missing?): %s",
-                target.name,
-                state_exc,
-            )
-    except Exception as exc:
-        if verbose:
-            raise
-        click.echo(f"Drop failed: {exc}", err=True)
-        sys.exit(1)
+            try:
+                executor.execute_parameterized(
+                    f"DELETE FROM {qualified} WHERE name = @name",
+                    {"name": target.name},
+                )
+            except Exception as state_exc:
+                log = logging.getLogger("fyrnheim")
+                log.debug(
+                    "State row delete skipped for %s (table missing?): %s",
+                    target.name,
+                    state_exc,
+                )
+        except Exception as exc:
+            if verbose:
+                raise
+            click.echo(f"Drop failed: {exc}", err=True)
+            sys.exit(1)
 
-    click.echo(
-        f"Dropped view {target.name} ({target.project}.{target.dataset}); "
-        f"removed state row from {STATE_TABLE_NAME}"
-    )
+        click.echo(
+            f"Dropped view {target.name} ({target.project}.{target.dataset}); "
+            f"removed state row from {STATE_TABLE_NAME}"
+        )
+    finally:
+        executor.close()
 
 
 @main.command("list-staging")
@@ -668,33 +679,38 @@ def list_staging(
         backend=config.backend,
         backend_config=config.backend_config,
     )
-    state_by_key: dict[tuple[str, str], dict[str, str]] = {}
-    for v in staging_views:
-        key = (v.project, v.dataset)
-        if key in state_by_key:
-            continue
-        try:
-            state_by_key[key] = _load_state(executor, v.project, v.dataset)
-        except Exception:
-            state_by_key[key] = {}
+    try:
+        state_by_key: dict[tuple[str, str], dict[str, str]] = {}
+        for v in staging_views:
+            key = (v.project, v.dataset)
+            if key in state_by_key:
+                continue
+            try:
+                state_by_key[key] = _load_state(executor, v.project, v.dataset)
+            except Exception:
+                state_by_key[key] = {}
 
-    rows = []
-    for v in staging_views:
-        stored = state_by_key.get((v.project, v.dataset), {}).get(v.name)
-        if stored is None:
-            freshness = "unmaterialized"
-        elif stored == v.content_hash():
-            freshness = "fresh"
-        else:
-            freshness = "stale"
-        rows.append((v.name, v.dataset, freshness))
+        rows = []
+        for v in staging_views:
+            stored = state_by_key.get((v.project, v.dataset), {}).get(v.name)
+            if stored is None:
+                freshness = "unmaterialized"
+            elif stored == v.content_hash():
+                freshness = "fresh"
+            else:
+                freshness = "stale"
+            rows.append((v.name, v.dataset, freshness))
 
-    name_w = max(len("NAME"), max(len(r[0]) for r in rows))
-    ds_w = max(len("DATASET"), max(len(r[1]) for r in rows))
-    fr_w = max(len("FRESHNESS"), max(len(r[2]) for r in rows))
+        name_w = max(len("NAME"), max(len(r[0]) for r in rows))
+        ds_w = max(len("DATASET"), max(len(r[1]) for r in rows))
+        fr_w = max(len("FRESHNESS"), max(len(r[2]) for r in rows))
 
-    click.echo(f"{'NAME':<{name_w}}  {'DATASET':<{ds_w}}  {'FRESHNESS':<{fr_w}}")
-    for name, ds, fr in rows:
-        click.echo(f"{name:<{name_w}}  {ds:<{ds_w}}  {fr:<{fr_w}}")
+        click.echo(
+            f"{'NAME':<{name_w}}  {'DATASET':<{ds_w}}  {'FRESHNESS':<{fr_w}}"
+        )
+        for name, ds, fr in rows:
+            click.echo(f"{name:<{name_w}}  {ds:<{ds_w}}  {fr:<{fr_w}}")
+    finally:
+        executor.close()
 
 

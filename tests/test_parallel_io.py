@@ -11,10 +11,16 @@ Covers:
 - ``test_duckdb_executor_is_thread_safe``: 8 threads driving
   ``execute_parameterized`` concurrently on a single DuckDB IbisExecutor
   produce correct results with no exceptions.
+- ``test_max_parallel_io_one_sources_serial``: with ``max_parallel_io=1``
+  all three source loaders run on the same thread.
+- ``test_max_parallel_io_one_entity_writes_serial``: with
+  ``max_parallel_io=1`` entity writes never temporally overlap.
 """
 
 from __future__ import annotations
 
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -288,3 +294,189 @@ def test_duckdb_executor_is_thread_safe() -> None:
         results = list(pool.map(_query, values))
 
     assert [r[0] for r in results] == values
+
+
+# ---------------------------------------------------------------------------
+# max_parallel_io=1 — strictly serial regression coverage (M061)
+# ---------------------------------------------------------------------------
+
+
+_THREAD_IDS: list[int] = []
+
+
+class _ThreadRecordingSource(EventSource):
+    """EventSource subclass that records the OS thread it ran on.
+
+    ``read_table`` is the pipeline's source-load seam, so by recording
+    ``threading.get_ident()`` in it we observe exactly which worker thread
+    executed the load. Results are appended to the module-level
+    ``_THREAD_IDS`` list (the Pydantic BaseModel ancestor rejects per-
+    instance state, so we keep the recorder external).
+    """
+
+    def read_table(self, conn: Any, backend: str, data_dir: Any = None) -> Any:
+        _THREAD_IDS.append(threading.get_ident())
+        # Return a minimal Ibis memtable shaped like the other loaders.
+        return ibis.memtable(
+            pd.DataFrame(
+                {
+                    "user_id": ["u"],
+                    "event_time": ["2024-01-01"],
+                    "page": ["/"],
+                }
+            )
+        )
+
+
+def test_max_parallel_io_one_sources_serial(tmp_path: Path) -> None:
+    """With ``max_parallel_io=1`` the source fan-out uses a single worker,
+    so all three loaders run on the same OS thread.
+    """
+    config = _make_config(tmp_path, max_parallel_io=1)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    # Reset the module-level recorder so other tests don't bleed in.
+    _THREAD_IDS.clear()
+
+    sources = [
+        _ThreadRecordingSource(
+            name=f"src_{i}",
+            project="test",
+            dataset="test",
+            table=f"src_{i}",
+            duckdb_path=str(data_dir / f"src_{i}.parquet"),
+            entity_id_field="user_id",
+            timestamp_field="event_time",
+            event_type="page_view",
+        )
+        for i in range(3)
+    ]
+
+    assets = {
+        "sources": sources,
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": [],
+        "metrics_models": [],
+    }
+
+    executor = IbisExecutor.duckdb()
+    result = run_pipeline(assets, config, executor)
+
+    assert result.source_count == 3
+    tids = list(_THREAD_IDS)
+    assert len(tids) == 3
+    assert len(set(tids)) == 1, (
+        f"max_parallel_io=1 should serialize source loads onto one thread, "
+        f"got {len(set(tids))} distinct thread ids: {tids}"
+    )
+
+
+def test_max_parallel_io_one_entity_writes_serial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With ``max_parallel_io=1`` entity writes run back-to-back — the
+    next write never enters before the previous one has exited.
+
+    We wrap ``executor.write_table`` in a stub that records an
+    (enter, exit) timestamp pair per call, holds the connection long
+    enough to make overlap detectable, then asserts that every
+    interval's entry is at-or-after the previous interval's exit.
+    """
+    config = _make_config(tmp_path, max_parallel_io=1)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    parquet_path = data_dir / "events.parquet"
+    pd.DataFrame(
+        {
+            "user_id": ["u1", "u2", "u3"],
+            "event_time": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "page": ["/a", "/b", "/c"],
+        }
+    ).to_parquet(str(parquet_path))
+
+    source = EventSource(
+        name="events",
+        project="test",
+        dataset="test",
+        table="events",
+        duckdb_path=str(parquet_path),
+        entity_id_field="user_id",
+        timestamp_field="event_time",
+        event_type="page_view",
+    )
+
+    from fyrnheim.core.analytics_entity import Measure
+
+    entities = [
+        AnalyticsEntity(
+            name=f"ae_{i}",
+            project="p",
+            dataset="d",
+            table=f"t_{i}",
+            materialization="table",
+            measures=[
+                Measure(
+                    name="n",
+                    activity="page_view",
+                    aggregation="count",
+                )
+            ],
+        )
+        for i in range(3)
+    ]
+
+    # Stub projection to avoid pulling in M060 engine work.
+    from fyrnheim.engine import pipeline as pipeline_module
+
+    def _stub_projection(
+        _events: ibis.Table, ae: AnalyticsEntity
+    ) -> ibis.Table:
+        return ibis.memtable(pd.DataFrame({"name": [ae.name], "count": [1]}))
+
+    monkeypatch.setattr(
+        pipeline_module, "project_analytics_entity", _stub_projection
+    )
+
+    real_executor = IbisExecutor.duckdb()
+
+    intervals: list[tuple[float, float]] = []
+    intervals_lock = threading.Lock()
+
+    def _recording_write_table(
+        project: str, dataset: str, name: str, df: pd.DataFrame
+    ) -> None:
+        enter_ts = time.monotonic()
+        # Small sleep so a concurrent call would produce overlap we can detect.
+        time.sleep(0.02)
+        exit_ts = time.monotonic()
+        with intervals_lock:
+            intervals.append((enter_ts, exit_ts))
+
+    monkeypatch.setattr(real_executor, "write_table", _recording_write_table)
+
+    assets = {
+        "sources": [source],
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": entities,
+        "metrics_models": [],
+    }
+
+    result = run_pipeline(assets, config, real_executor)
+    assert result.output_count == 3
+    assert len(intervals) == 3
+
+    ordered = sorted(intervals, key=lambda iv: iv[0])
+    # Pairwise (prev, next) over ordered intervals; different lengths by
+    # construction, so strict=False is intentional here.
+    for (_, prev_exit), (next_enter, _) in zip(
+        ordered, ordered[1:], strict=False
+    ):
+        assert next_enter >= prev_exit, (
+            f"max_parallel_io=1 must serialize writes, but one started at "
+            f"{next_enter:.6f} before the previous finished at "
+            f"{prev_exit:.6f}"
+        )

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-04-17
+
+### Fixed
+
+- `project_analytics_entity` now only emits rows for ids that have at
+  least one event from a source referenced by the entity's
+  `state_fields` (including `coalesce` strategy `priority` lists) OR an
+  event whose `event_type` matches one of the entity's `measures`
+  activity names. Previously, every AnalyticsEntity emitted one row per
+  unique id in the global enriched-events stream — most rows entirely
+  NULL for the entity in question. On the timo-data-stack pipeline this
+  reduced per-entity row counts from 76,762 (global unique-id count) to
+  the correct per-entity subset, and materially cut full-pipeline
+  runtime by shrinking the outer loop's iteration space.
+
 ## [0.6.1] - 2026-04-09
 
 ### Changed (internal)

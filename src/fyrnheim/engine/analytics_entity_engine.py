@@ -185,6 +185,28 @@ def project_analytics_entity(
     """
     df = enriched_events.execute()
 
+    # Scope df to rows relevant to this entity before deriving group_ids.
+    # relevant_sources: union of sf.source for non-coalesce state_fields AND
+    # every element of sf.priority for coalesce state_fields.
+    # relevant_activities: the set of measure.activity values.
+    # An entity's "relevant" rows are those whose source is referenced by a
+    # state_field OR whose event_type matches a measure activity.
+    # Pydantic enforces at least one state_field or measure on AnalyticsEntity,
+    # so the guard below is defensive but cheap.
+    relevant_sources: set[str] = set()
+    for sf in analytics_entity.state_fields:
+        if sf.strategy == "coalesce":
+            relevant_sources.update(sf.priority or [])
+        else:
+            relevant_sources.add(sf.source)
+    relevant_activities = {m.activity for m in analytics_entity.measures}
+
+    if relevant_sources or relevant_activities:
+        mask = df["source"].isin(relevant_sources) | df["event_type"].isin(
+            relevant_activities
+        )
+        df = df[mask]
+
     # Determine grouping key: use canonical_id if present, else entity_id
     group_key = "canonical_id" if "canonical_id" in df.columns else "entity_id"
 
@@ -214,9 +236,13 @@ def project_analytics_entity(
         [group_key]
         + [sf.name for sf in analytics_entity.state_fields]
         + [m.name for m in analytics_entity.measures]
+        + [cf.name for cf in analytics_entity.computed_fields]
     )
 
-    result_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=all_columns)
+    if not rows:
+        return ibis.memtable(pd.DataFrame(columns=all_columns))
+
+    result_df = pd.DataFrame(rows)
 
     # Evaluate computed fields
     for cf in analytics_entity.computed_fields:

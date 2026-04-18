@@ -202,9 +202,16 @@ class TestProjectAnalyticsEntity:
         assert len(df) == 2  # A and B
 
     def test_count_zero_when_no_matching_events(self):
+        """With the M057 relevance filter, ids with no event matching the
+        measure activity are filtered out entirely; when a matching activity
+        IS present for at least one id, count is still computed correctly.
+        """
         events = _make_events([
             {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
              "event_type": "login", "payload": {}},
+            # Y has a purchase event so survives the filter; X does not and is dropped.
+            {"source": "app", "entity_id": "Y", "ts": "2024-01-01T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 10}},
         ])
         ae = AnalyticsEntity(
             name="users",
@@ -214,12 +221,19 @@ class TestProjectAnalyticsEntity:
         )
         result = project_analytics_entity(events, ae)
         df = result.execute()
-        assert df.iloc[0]["purchase_count"] == 0
+        ids = set(df["entity_id"].tolist())
+        assert ids == {"Y"}
+        assert df[df["entity_id"] == "Y"].iloc[0]["purchase_count"] == 1
 
     def test_latest_returns_none_when_no_matching_events(self):
+        """With the M057 relevance filter, an id with events but none matching
+        the measure activity is filtered out. For a surviving id whose events
+        don't include the measure activity payload field, latest returns None.
+        """
         events = _make_events([
+            # X has a plan_changed event (matches measure activity) but no 'plan' field.
             {"source": "app", "entity_id": "X", "ts": "2024-01-01T00:00:00",
-             "event_type": "login", "payload": {}},
+             "event_type": "plan_changed", "payload": {}},
         ])
         ae = AnalyticsEntity(
             name="users",
@@ -287,6 +301,140 @@ class TestProjectAnalyticsEntity:
         result = project_analytics_entity(events, ae)
         df = result.execute()
         assert df.iloc[0]["is_active"] == True  # noqa: E712
+
+    def test_projection_scopes_to_state_field_sources(self):
+        """State-field-only entity: ids only appearing in unreferenced sources are filtered out."""
+        events = _make_events([
+            # Entity A has a row in source 'A' — state_field source matches.
+            {"source": "A", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Acme"}},
+            # Entity B only has rows in source 'B' — should be filtered out.
+            {"source": "B", "entity_id": "B", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "Beta"}},
+        ])
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(name="company_name", source="A", field="name", strategy="latest"),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        ids = set(df["entity_id"].tolist())
+        assert "A" in ids
+        assert "B" not in ids
+
+    def test_projection_scopes_to_measure_activities(self):
+        """Measure-only entity: ids whose events don't match any measure activity are filtered out."""
+        events = _make_events([
+            # Entity AX has an event_type 'X' that matches the measure.
+            {"source": "app", "entity_id": "AX", "ts": "2024-01-01T00:00:00",
+             "event_type": "X", "payload": {}},
+            # Entity BY only has 'Y' events — filtered out.
+            {"source": "app", "entity_id": "BY", "ts": "2024-01-01T00:00:00",
+             "event_type": "Y", "payload": {}},
+            # Entity CZ only has 'Z' events — filtered out.
+            {"source": "app", "entity_id": "CZ", "ts": "2024-01-01T00:00:00",
+             "event_type": "Z", "payload": {}},
+        ])
+        ae = AnalyticsEntity(
+            name="acts",
+            measures=[
+                Measure(name="x_count", activity="X", aggregation="count"),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        ids = set(df["entity_id"].tolist())
+        assert "AX" in ids
+        assert "BY" not in ids
+        assert "CZ" not in ids
+
+    def test_projection_scopes_to_coalesce_priority_sources(self):
+        """Coalesce state_field: relevance includes every element in priority list."""
+        events = _make_events([
+            # Entity in source A — relevant via priority.
+            {"source": "A", "entity_id": "inA", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "a@x.com"}},
+            # Entity in source B — relevant via priority.
+            {"source": "B", "entity_id": "inB", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "b@x.com"}},
+            # Entity only in source C — not in priority, filtered out.
+            {"source": "C", "entity_id": "inC", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"email": "c@x.com"}},
+        ])
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(
+                    name="email",
+                    source="A",  # ignored for coalesce, priority drives relevance
+                    field="email",
+                    strategy="coalesce",
+                    priority=["A", "B"],
+                ),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        ids = set(df["entity_id"].tolist())
+        assert "inA" in ids
+        assert "inB" in ids
+        assert "inC" not in ids
+
+    def test_projection_union_state_and_measure_relevance(self):
+        """Relevance is a UNION: measure activity alone makes an id relevant even if source is unreferenced."""
+        events = _make_events([
+            # Entity UX's only event is source='app' (not referenced) with event_type='X' (measure activity).
+            # The measure side of the OR should keep it.
+            {"source": "app", "entity_id": "UX", "ts": "2024-01-01T00:00:00",
+             "event_type": "X", "payload": {}},
+            # Entity UA has source='A' event — kept via state_field source.
+            {"source": "A", "entity_id": "UA", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"name": "A-name"}},
+            # Entity UN only has unrelated source + unrelated event_type — filtered.
+            {"source": "other", "entity_id": "UN", "ts": "2024-01-01T00:00:00",
+             "event_type": "noop", "payload": {}},
+        ])
+        ae = AnalyticsEntity(
+            name="acts",
+            state_fields=[
+                StateField(name="company_name", source="A", field="name", strategy="latest"),
+            ],
+            measures=[
+                Measure(name="x_count", activity="X", aggregation="count"),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        ids = set(df["entity_id"].tolist())
+        assert "UX" in ids
+        assert "UA" in ids
+        assert "UN" not in ids
+
+    def test_projection_empty_after_filter_preserves_schema(self):
+        """When filter empties the dataframe, output is empty with expected columns."""
+        events = _make_events([
+            # No rows match: source 'other' not referenced; event_type 'noop' not a measure activity.
+            {"source": "other", "entity_id": "Z", "ts": "2024-01-01T00:00:00",
+             "event_type": "noop", "payload": {}},
+        ])
+        ae = AnalyticsEntity(
+            name="accounts",
+            state_fields=[
+                StateField(name="company_name", source="A", field="name", strategy="latest"),
+            ],
+            measures=[
+                Measure(name="x_count", activity="X", aggregation="count"),
+            ],
+            computed_fields=[
+                ComputedColumn(name="doubled", expression="(x_count or 0) * 2"),
+            ],
+        )
+        result = project_analytics_entity(events, ae)
+        df = result.execute()
+        assert len(df) == 0
+        assert set(df.columns) == {"entity_id", "company_name", "x_count", "doubled"}
 
 
 # ---------------------------------------------------------------------------

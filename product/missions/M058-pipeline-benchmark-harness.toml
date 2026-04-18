@@ -1,0 +1,156 @@
+# Mission: Pipeline benchmark harness
+# Tiny measurement-layer mission so later perf missions (M059 parallel I/O,
+# M060 push-down projection) have a number to optimize against and to prove
+# their impact in PRs.
+
+id = "M058"
+title = "Pipeline benchmark harness"
+status = "draft"
+created = 2026-04-18
+depends_on = []
+
+[outcome]
+description = """
+Today `run_pipeline()` in src/fyrnheim/engine/pipeline.py tracks exactly one
+number: `result.elapsed_seconds = time.monotonic() - start` (lines 63, 209).
+There are no per-phase timings, no per-source timings, no per-entity
+timings, no benchmark command. Any claim that a later change "makes the
+pipeline faster" is therefore unverifiable except by stopwatch.
+
+This mission adds a minimal, non-invasive measurement layer:
+
+1. A `PipelineTimings` dataclass (or nested dict on `PipelineResult`) that
+   records durations for each of the existing phases in pipeline.py:
+   staging-view materialization (phase 0), source loads (phase 1, with
+   per-source breakdown), activity application (phase 2), identity
+   resolution (phase 3, with per-graph breakdown), analytics-entity
+   projection + write (phase 4, with per-entity breakdown: project time +
+   write time separately), metrics-model projection + write (phase 5, same
+   breakdown). All timings use `time.monotonic()`. No external deps.
+
+2. A `fyr bench` CLI subcommand that runs the configured pipeline end-to-end
+   and prints a structured timing report (both a human-readable table and a
+   `--json` flag for machine consumption), plus the existing exit contract.
+
+3. A tiny pytest fixture `benchmark_result` that a future performance test
+   could assert against (e.g. "source_load['zeffy_donations'] < baseline_s").
+   No baseline assertions in this mission — just the fixture.
+
+Everything else stays untouched. No change to correctness, no new heavy
+dependencies (no pytest-benchmark, no hyperfine). The goal is a measurement
+primitive that M059 and M060 can cite in their PRs.
+"""
+
+user_progress = "From 'the pipeline reports one total elapsed number' to 'every phase, source, and entity has its own timing, visible via fyr bench and programmatically accessible on PipelineResult'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "PipelineResult gains a `timings` field (dict or dataclass) populated by run_pipeline",
+    "timings records durations for phases 0-5 as individually keyed floats",
+    "timings.source_loads is a dict keyed by source name with per-source seconds",
+    "timings.identity_graphs is a dict keyed by graph name with per-graph seconds",
+    "timings.analytics_entities is a dict keyed by entity name with `project_s` and `write_s` subkeys",
+    "timings.metrics_models is a dict keyed by model name with `project_s` and `write_s` subkeys",
+    "Total `elapsed_seconds` is approximately equal to the sum of the phase timings (within a small tolerance — test asserts this directly to guard against missed phases)",
+    "`fyr bench` subcommand runs the configured pipeline and prints a timing report, defaulting to a human-readable table ordered by phase",
+    "`fyr bench --json` prints the timings dict as JSON on stdout (nothing else on stdout) so downstream tooling can parse it",
+    "`fyr bench` exit code is 0 on success, non-zero on pipeline failure (mirrors `fyr run`)",
+    "A tiny pytest fixture `benchmark_result` runs a small in-repo example (duckdb backend, local parquet sources) once per session and yields the PipelineResult — tests can read `.timings` off it without re-running the pipeline",
+    "No changes to correctness paths — existing tests in tests/test_e2e_entity_output.py and tests/test_e2e_identity_projection.py pass unchanged",
+    "No new runtime dependencies added to pyproject.toml (std-lib `time` is sufficient)",
+    "ruff + mypy clean",
+    "README / docs mention the `fyr bench` command briefly",
+    "CHANGELOG entry in the next release (not in this mission; a release mission will bundle M058 + M059 + M060 as v0.7.0 per the considered approach)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+    "pyproject.toml",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+]
+
+[scope]
+in_scope = [
+    "PipelineTimings structure on PipelineResult with per-phase, per-source, per-entity, per-model breakdowns",
+    "`fyr bench` CLI subcommand with human-readable default output + `--json` flag",
+    "pytest fixture `benchmark_result` yielding a PipelineResult from a small in-repo example",
+    "Light docs update (README or CLI --help text) describing the command",
+    "Tests asserting the timings dict shape and approximate-sum invariant",
+]
+out_of_scope = [
+    "Performance baselines / regressions (no pytest-benchmark integration, no CI gating on timings)",
+    "Dashboards, metric exporters, or any external telemetry",
+    "BigQuery-specific instrumentation (query-plan / slot-ms)",
+    "pytest-benchmark, hyperfine, or any new heavy dependency",
+    "Historical storage of benchmark results across runs",
+    "Changes to any phase's correctness behavior",
+]
+acceptable_breakage = [
+    "PipelineResult gains one new optional field (`timings`). Callers that spread PipelineResult into positional form (there are none in-repo) would need to adjust. Documented in release notes when bundled.",
+]
+
+[notes]
+considerations = """
+## Sizing
+
+This is a small mission by design — one epic, one story, probably
+implementable in a single session. The point is to unblock the next two
+missions with a measurement primitive.
+
+## Why no pytest-benchmark
+
+pytest-benchmark is heavy, adds a dependency, and is overkill for our use:
+we want *one* representative run per invocation, not statistical
+distributions from hundreds of iterations. Std-lib `time.monotonic()` plus
+a dict is sufficient and matches the existing pattern at pipeline.py:63,209.
+
+## Shape of timings
+
+One suggested shape (final author can choose):
+
+```python
+@dataclass
+class PipelineTimings:
+    staging_views_s: float = 0.0
+    source_loads: dict[str, float] = field(default_factory=dict)
+    activities_s: float = 0.0
+    identity_graphs: dict[str, float] = field(default_factory=dict)
+    analytics_entities: dict[str, dict[str, float]] = field(default_factory=dict)
+    metrics_models: dict[str, dict[str, float]] = field(default_factory=dict)
+```
+
+Where `analytics_entities['accounts'] == {'project_s': ..., 'write_s': ...}`.
+
+## fyr bench output shape
+
+For the human-readable default, a single plain-text table keyed by phase
+with per-item indentation beats ASCII art. The `--json` flag should emit
+exactly the `PipelineTimings` structure as JSON.
+
+## Release bundling
+
+This mission is not itself release-worthy. The implied release PR is a
+bundled v0.7.0 containing M058 + M059 + M060. Individual mission PRs
+should bump to dev versions or leave the version untouched; the release
+mission (a follow-up to M060) will do the final bump and CHANGELOG.
+
+## Why M058 first
+
+M059 and M060 both need this to demonstrate their impact. If you skip
+M058, each of them will have to roll its own ad-hoc timing prints in the
+PR description, which is what we did for M057 (informal "~14 min" numbers).
+Putting the harness in before the perf work pays for itself in the next
+two PRs.
+"""

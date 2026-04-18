@@ -25,7 +25,9 @@ to extract scalar fields portably:
   returns NULL for string or boolean JSON scalars. For ``sum`` parity with
   the legacy pandas ``float(val)`` behaviour, numeric-strings (e.g.
   ``{"amount": "250"}``) are recovered via a ``coalesce`` with
-  ``unwrap_as("string").try_cast("float64")``.
+  ``unwrap_as("string").try_cast("float64")``, and boolean JSON scalars
+  are coerced to 1.0/0.0 via ``unwrap_as("bool").cast("float64")`` to
+  mirror Python's ``float(True) == 1.0`` / ``float(False) == 0.0``.
 
 ## Type preservation for state fields and the ``latest`` measure
 
@@ -45,11 +47,15 @@ backend — only the one-row-per-group result is post-processed.
 ``event_type``:
 
 * ``row_appeared`` -> ``payload[field_name]``
-* ``field_changed`` -> ``payload.new_value`` iff ``payload.field_name == field_name``
+* ``field_changed`` -> ``payload.new_value`` iff ``payload.field_name == field_name``,
+  else ``None`` (never falls back to ``payload[field_name]``)
 * anything else -> ``payload[field_name]`` (flat lookup fallback)
 
 In Ibis this is a per-event ``CASE WHEN`` producing a ``resolved_value``
 sub-expression consumed by the aggregation — see ``_resolved_value_for_field``.
+The ordering of the WHEN arms is load-bearing: the field-name match
+(``new_value``) must be checked before the general ``field_changed`` NULL
+arm, or a matching event would be dropped.
 
 ## ``computed_fields``
 
@@ -111,12 +117,18 @@ def _extract_as_float(events: Table, field: str) -> Any:
 
     For parity with the legacy pandas ``sum`` aggregation (which accepted
     numeric strings via ``float(val)``), numeric-string values are recovered
-    by coalescing with ``unwrap_as("string").try_cast("float64")``.
+    by coalescing with ``unwrap_as("string").try_cast("float64")``. Boolean
+    JSON scalars are also recovered as 1.0 / 0.0 to mirror Python's
+    ``float(True) == 1.0`` / ``float(False) == 0.0`` coercion used by the
+    legacy ``_compute_measure`` sum branch; ``unwrap_as("bool")`` returns
+    SQL NULL for non-boolean JSON values on both DuckDB and BigQuery, so
+    the coalesce fallback chain remains correct.
     """
     pj = _payload_json(events)[field]
     direct = pj.unwrap_as("float64")
     from_string = pj.unwrap_as("string").try_cast("float64")
-    return ibis.coalesce(direct, from_string)
+    from_bool = pj.unwrap_as("bool").cast("float64")
+    return ibis.coalesce(direct, from_string, from_bool)
 
 
 def _extract_as_json_text(events: Table, field: str) -> StringValue:
@@ -151,20 +163,29 @@ def _resolved_value_for_field(events: Table, field: str) -> StringValue:
 
     * ``event_type == 'field_changed' AND payload.field_name == <field>`` ->
       ``payload.new_value`` as JSON text
+    * ``event_type == 'field_changed' AND payload.field_name != <field>`` ->
+      NULL (matching the legacy ``_extract_field_value`` early return; a
+      ``field_changed`` event targeting a *different* field must not leak a
+      sibling key from the same payload).
     * otherwise -> ``payload[<field>]`` as JSON text
 
     Both the ``row_appeared`` branch and the "anything else" fallback in the
-    legacy code use the flat payload lookup, so they collapse into the
-    ELSE branch here.
+    legacy code use the flat payload lookup, so they collapse into the ELSE
+    branch here. The ordering of the WHEN arms matters: the field-name match
+    must be evaluated before the general ``field_changed`` NULL arm.
     """
     pj = _payload_json(events)
-    field_name_match = (
-        (events.event_type == "field_changed")
-        & (pj["field_name"].unwrap_as("string") == field)
+    is_field_changed = events.event_type == "field_changed"
+    field_name_match = is_field_changed & (
+        pj["field_name"].unwrap_as("string") == field
     )
     new_value = pj["new_value"].try_cast("string")
     fallback = pj[field].try_cast("string")
-    return ibis.cases((field_name_match, new_value), else_=fallback)
+    return ibis.cases(
+        (field_name_match, new_value),
+        (is_field_changed, ibis.null().cast("string")),
+        else_=fallback,
+    )
 
 
 def _latest_non_null(

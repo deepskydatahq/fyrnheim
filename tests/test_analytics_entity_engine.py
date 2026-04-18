@@ -640,6 +640,36 @@ def _build_equivalence_scenarios() -> list[tuple[str, object, object]]:
              "payload": {"field_name": "headcount", "old_value": 10, "new_value": 42}},
         ])
 
+    def _field_changed_non_matching_field_events():
+        # A field_changed event whose payload.field_name is "other" but
+        # whose payload also happens to carry a sibling key
+        # "target_field". Legacy ``_extract_field_value`` returned None
+        # (never falls back to the flat lookup for field_changed events);
+        # the new CASE WHEN must do the same so no sibling key leaks.
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "field_changed",
+             "payload": {
+                 "field_name": "other",
+                 "new_value": "ignore_me",
+                 "target_field": "sibling_value",
+             }},
+        ])
+
+    def _boolean_sum_events():
+        # Boolean payload values under a ``sum`` aggregation — legacy's
+        # ``float(val)`` coerces True -> 1.0 and False -> 0.0, so summing
+        # True/False/True yields 2.0. The Ibis impl must mirror that via
+        # the unwrap_as("bool").cast("float64") branch in the coalesce.
+        return _make_events([
+            {"source": "app", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "activity", "payload": {"activated": True}},
+            {"source": "app", "entity_id": "A", "ts": "2024-02-01T00:00:00",
+             "event_type": "activity", "payload": {"activated": False}},
+            {"source": "app", "entity_id": "A", "ts": "2024-03-01T00:00:00",
+             "event_type": "activity", "payload": {"activated": True}},
+        ])
+
     scenarios: list[tuple[str, object, object]] = [
         (
             "count_measure",
@@ -877,6 +907,34 @@ def _build_equivalence_scenarios() -> list[tuple[str, object, object]]:
                     StateField(
                         name="headcount", source="crm", field="headcount",
                         strategy="latest",
+                    ),
+                ],
+            ),
+        ),
+        # M060 round-2 rework: guard the CASE WHEN against sibling-key leak.
+        (
+            "field_changed_non_matching_field_returns_none",
+            _field_changed_non_matching_field_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[
+                    StateField(
+                        name="target_field", source="crm",
+                        field="target_field", strategy="latest",
+                    ),
+                ],
+            ),
+        ),
+        # M060 round-2 rework: preserve legacy ``float(True)`` coercion.
+        (
+            "boolean_sum_measure",
+            _boolean_sum_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[
+                    Measure(
+                        name="activation_total", activity="activity",
+                        aggregation="sum", field="activated",
                     ),
                 ],
             ),

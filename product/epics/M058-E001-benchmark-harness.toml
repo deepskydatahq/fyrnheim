@@ -1,0 +1,62 @@
+# Epic: Benchmark harness — timings on PipelineResult + fyr bench CLI
+# Single epic covering the full M058 scope.
+
+id = "M058-E001"
+parent = "M058"
+title = "PipelineTimings + fyr bench CLI"
+status = "active"
+created = 2026-04-18
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M058 scope. Add a `PipelineTimings` structure
+to `PipelineResult` populated by `run_pipeline()`, covering per-phase,
+per-source, per-identity-graph, per-analytics-entity, and per-metrics-model
+durations. Add a `fyr bench` CLI subcommand with a human-readable default
+output and a `--json` flag. Add a pytest fixture `benchmark_result` for
+future perf tests.
+"""
+
+[job_story]
+description = """When I'm about to touch a hot path in the pipeline (M059
+parallel I/O, M060 push-down projection), I want per-phase timings I can
+cite before/after, so PR bodies include evidence instead of vibes."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 16 testing criteria from the M058 mission TOML pass",
+    "`PipelineResult.timings` exists and is populated on every successful run_pipeline invocation",
+    "`fyr bench` and `fyr bench --json` both work against the duckdb in-repo example used by existing e2e tests",
+    "No regressions: all existing tests pass unchanged",
+    "ruff + mypy clean; no new runtime dependencies",
+]
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+    "pyproject.toml",
+    "README.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/cli.py",
+    "tests/",
+    "pyproject.toml",
+    "README.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Measurement-layer change. Non-invasive: timings are observed at the phase
+boundaries that already exist in run_pipeline. No new abstractions, no
+public-API breakage beyond adding one optional field to PipelineResult.
+Full implementation sketch and shape guidance in the M058 mission TOML
+[notes] section — read that first.
+"""
+
+estimated_stories = 1

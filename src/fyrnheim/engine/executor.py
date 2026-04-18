@@ -225,7 +225,8 @@ class IbisExecutor:
         if "*" not in path_str and "?" not in path_str and not path.exists():
             raise SourceNotFoundError(f"Parquet file not found: {path}")
 
-        self._conn.read_parquet(path_str, table_name=name)
+        with self._conn_lock:
+            self._conn.read_parquet(path_str, table_name=name)
         self._registered_sources[name] = path
         log.debug("Registered source: %s -> %s", name, path)
 

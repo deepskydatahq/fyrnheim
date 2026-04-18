@@ -586,6 +586,60 @@ def _build_equivalence_scenarios() -> list[tuple[str, object, object]]:
              "event_type": "row_appeared", "payload": {"email": "e2_from_b@x.com"}},
         ])
 
+    def _numeric_state_field_events():
+        # Numeric-typed JSON scalar as a state field — legacy returned the
+        # raw int; the JSON-text round-trip must preserve that.
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"age": 29}},
+            {"source": "crm", "entity_id": "A", "ts": "2024-06-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"age": 30}},
+        ])
+
+    def _boolean_state_field_events():
+        # Boolean-typed JSON scalar as a state field — legacy returned the
+        # raw bool; the JSON-text round-trip must preserve that.
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"is_active": False}},
+            {"source": "crm", "entity_id": "A", "ts": "2024-06-01T00:00:00",
+             "event_type": "field_changed",
+             "payload": {"field_name": "is_active", "old_value": False, "new_value": True}},
+        ])
+
+    def _numeric_string_sum_events():
+        # Numeric-string payloads are accepted by the legacy ``float(val)``
+        # branch — the Ibis ``sum`` measure must include them for parity.
+        return _make_events([
+            {"source": "billing", "entity_id": "A", "ts": "2024-01-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": "250"}},
+            {"source": "billing", "entity_id": "A", "ts": "2024-02-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 100}},
+            {"source": "billing", "entity_id": "A", "ts": "2024-03-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": "not-a-number"}},
+        ])
+
+    def _numeric_string_latest_events():
+        # Numeric-string as the ``latest`` measure payload — legacy returned
+        # the raw string "250"; the JSON-text round-trip preserves that.
+        return _make_events([
+            {"source": "billing", "entity_id": "A", "ts": "2024-01-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": 100}},
+            {"source": "billing", "entity_id": "A", "ts": "2024-02-10T00:00:00",
+             "event_type": "purchase", "payload": {"amount": "250"}},
+        ])
+
+    def _numeric_new_value_events():
+        # Numeric ``new_value`` in a field_changed event — legacy extracted
+        # the raw int; our CASE WHEN must do the same via JSON text.
+        return _make_events([
+            {"source": "crm", "entity_id": "A", "ts": "2024-01-01T00:00:00",
+             "event_type": "row_appeared", "payload": {"headcount": 10}},
+            {"source": "crm", "entity_id": "A", "ts": "2024-06-01T00:00:00",
+             "event_type": "field_changed",
+             "payload": {"field_name": "headcount", "old_value": 10, "new_value": 42}},
+        ])
+
     scenarios: list[tuple[str, object, object]] = [
         (
             "count_measure",
@@ -762,6 +816,69 @@ def _build_equivalence_scenarios() -> list[tuple[str, object, object]]:
                     name="email", source="A", field="email",
                     strategy="coalesce", priority=["A", "B"],
                 )],
+            ),
+        ),
+        # M060 rework: CodeRabbit-surfaced blind spots in the original suite.
+        (
+            "numeric_state_field_latest",
+            _numeric_state_field_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[
+                    StateField(name="age", source="crm", field="age", strategy="latest"),
+                ],
+            ),
+        ),
+        (
+            "boolean_state_field_latest_via_field_changed",
+            _boolean_state_field_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[
+                    StateField(
+                        name="is_active", source="crm", field="is_active",
+                        strategy="latest",
+                    ),
+                ],
+            ),
+        ),
+        (
+            "numeric_string_sum_measure",
+            _numeric_string_sum_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[
+                    Measure(
+                        name="total_revenue", activity="purchase",
+                        aggregation="sum", field="amount",
+                    ),
+                ],
+            ),
+        ),
+        (
+            "numeric_string_latest_measure",
+            _numeric_string_latest_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                measures=[
+                    Measure(
+                        name="last_purchase_amount", activity="purchase",
+                        aggregation="latest", field="amount",
+                    ),
+                ],
+            ),
+        ),
+        (
+            "numeric_field_changed_new_value",
+            _numeric_new_value_events,
+            lambda: AnalyticsEntity(
+                name="accounts",
+                state_fields=[
+                    StateField(
+                        name="headcount", source="crm", field="headcount",
+                        strategy="latest",
+                    ),
+                ],
             ),
         ),
     ]

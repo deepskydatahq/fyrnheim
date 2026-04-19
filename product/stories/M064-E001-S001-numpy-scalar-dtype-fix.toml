@@ -1,0 +1,305 @@
+id = "M064-E001-S001"
+parent = "M064-E001"
+title = "Broaden type sets for numpy scalars + 6 unit tests + v0.7.2 release"
+status = "ready"
+created = 2026-04-19
+
+[outcome]
+description = """Import numpy, define _BOOL_TYPES / _INT_TYPES /
+_FLOAT_TYPES module-level sets covering Python + numpy scalars, rewire
+_coerce_to_arrow_friendly_dtype to subset-match against them, add 6 unit
+tests for numpy scalars, bump 0.7.1 -> 0.7.2 with CHANGELOG entry, push
+release/v0.7.2 branch and open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/analytics_entity_engine.py imports `numpy as np` near the top of the file (alongside the existing pandas import)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Three module-level constants defined near _coerce_to_arrow_friendly_dtype: _BOOL_TYPES = {bool, np.bool_}; _INT_TYPES = {int, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64}; _FLOAT_TYPES = {float, np.float16, np.float32, np.float64}"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_coerce_to_arrow_friendly_dtype branches use subset matching against the new sets, in order: `types <= _BOOL_TYPES` → 'boolean'; `types <= _INT_TYPES` → pd.Int64Dtype(); `types <= _INT_TYPES | _FLOAT_TYPES` → 'Float64'; `types == {str}` → object; else object"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Strict `type(v) is int` via `{type(v) for v in non_null}` preserved — grep for `isinstance` in the helper body returns no matches (only docstring/comment references are allowed)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_numpy_int64: `pd.Series([None, np.int64(85), None, np.int64(60)], dtype=object)` → helper returns pd.Int64Dtype()"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_numpy_float64: `pd.Series([None, np.float64(3.14), None], dtype=object)` → helper returns 'Float64'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_numpy_bool: `pd.Series([None, np.bool_(True), np.bool_(False)], dtype=object)` → helper returns 'boolean'. MUST explicitly assert the returned dtype is NOT Int64 (the numpy-bool-leak-to-int guard)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_python_and_numpy_int_mix: `pd.Series([None, 42, np.int64(85), None], dtype=object)` → helper returns pd.Int64Dtype() (subset matching handles Python int + np.int64 together)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_python_and_numpy_float_mix: `pd.Series([None, 3.14, np.float64(2.71), None], dtype=object)` → helper returns 'Float64'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_numpy_int_float_mix: `pd.Series([None, np.int64(5), np.float64(2.71), None], dtype=object)` → helper returns 'Float64' (int|float branch catches numpy+numpy mix)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All v0.7.1 regression tests continue to pass unchanged: test_projection_nullable_int_state_field_is_arrow_compatible, test_projection_nullable_float_state_field_is_arrow_compatible, test_projection_nullable_bool_state_field_is_arrow_compatible, test_projection_string_state_field_remains_object_and_arrow_compatible, test_projection_mixed_type_state_field_falls_back_to_object"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All 26 TestEquivalenceWithLegacy scenarios pass unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All other existing tests pass: tests/test_analytics_entity_engine.py (other test classes), tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_benchmark_harness.py, tests/test_parallel_io.py, tests/test_config.py, tests/test_executor.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version field == '0.7.2'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated via `uv lock`; fyrnheim entry records version 0.7.2"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.7.2] - 2026-04-19` section above the existing `## [0.7.1]` header with a single `### Fixed` bullet describing the numpy-scalar passthrough gap, the BigQuery-user impact, and the set enumeration"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope exactly 5 files: src/fyrnheim/engine/analytics_entity_engine.py, tests/test_analytics_entity_engine.py, pyproject.toml, uv.lock, CHANGELOG.md. Nothing else modified."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.7.2` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M064): recognize numpy scalar types in dtype coercion (v0.7.2)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "PR opened against main titled `release: v0.7.2 — numpy scalar dtype recognition`. Body describes the bug, BQ impact, includes the post-merge-steps block (`git tag v0.7.2`, `git push origin v0.7.2`, PyPI verify)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge, tag, or publish. Those are human post-merge actions."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M064-v0.7.2-numpy-scalar-dtype-fix.toml — full outcome,
+root-cause chain, type-enumeration, and CHANGELOG copy in [notes]. Read
+that first.
+
+## Implementation sketch
+
+Add near the top of analytics_entity_engine.py (after pandas import):
+
+```python
+import numpy as np
+```
+
+Add near `_coerce_to_arrow_friendly_dtype` (before the helper body):
+
+```python
+_BOOL_TYPES: set[type] = {bool, np.bool_}
+_INT_TYPES: set[type] = {
+    int,
+    np.int8, np.int16, np.int32, np.int64,
+    np.uint8, np.uint16, np.uint32, np.uint64,
+}
+_FLOAT_TYPES: set[type] = {float, np.float16, np.float32, np.float64}
+```
+
+Update the helper body:
+
+```python
+def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
+    non_null = s.dropna()
+    if len(non_null) == 0:
+        return s.astype(object)
+    types = {type(v) for v in non_null}  # strict type(), NOT isinstance
+    if types <= _BOOL_TYPES:
+        return s.astype("boolean")
+    if types <= _INT_TYPES:
+        return s.astype(pd.Int64Dtype())
+    if types <= _INT_TYPES | _FLOAT_TYPES:
+        return s.astype("Float64")
+    if types == {str}:
+        return s.astype(object)
+    return s.astype(object)
+```
+
+The set subtraction handles Python + numpy mixes in one branch. Strict
+`type()` collection still prevents `bool`/`np.bool_` from leaking into
+the int branch — bool is a subclass of int by isinstance but has a
+distinct type identity (`type(True)` is `bool`, not `int`).
+
+## Update the docstring
+
+The v0.7.1 docstring mentions "Python scalars" — broaden to "Python or
+numpy scalars" to reflect the wider type coverage. Add a line in the
+docstring noting that the recognised numpy types are enumerated by the
+module-level `_*_TYPES` constants and can be extended if new backends
+return additional scalar types.
+
+## New unit test pattern
+
+All 6 new tests go in tests/test_analytics_entity_engine.py near the
+existing TestCoerceToArrowFriendlyDtype class. Import numpy if not
+already imported there:
+
+```python
+import numpy as np
+
+def test_coerce_handles_numpy_int64():
+    s = pd.Series([None, np.int64(85), None, np.int64(60)], dtype=object)
+    result = _coerce_to_arrow_friendly_dtype(s)
+    assert isinstance(result.dtype, pd.Int64Dtype), \
+        f"expected Int64, got {result.dtype!r}"
+    # Verify values preserved
+    assert result.iloc[1] == 85
+    assert pd.isna(result.iloc[2])
+
+def test_coerce_handles_numpy_bool():
+    s = pd.Series([None, np.bool_(True), np.bool_(False)], dtype=object)
+    result = _coerce_to_arrow_friendly_dtype(s)
+    assert result.dtype == "boolean", \
+        f"expected boolean, got {result.dtype!r}"
+    # Explicitly guard against numpy bool leaking to int
+    assert not isinstance(result.dtype, pd.Int64Dtype), \
+        f"numpy bool should not be coerced to Int64"
+```
+
+Follow the same shape for the 4 remaining tests.
+
+## CHANGELOG entry (verbatim)
+
+```
+## [0.7.2] - 2026-04-19
+
+### Fixed
+
+- `_coerce_to_arrow_friendly_dtype` now recognises numpy scalar types
+  (`np.int8`/`int16`/`int32`/`int64`, unsigned variants,
+  `np.float16`/`float32`/`float64`, `np.bool_`) alongside their Python
+  equivalents. v0.7.1 fixed the Python-scalar case, but BigQuery's
+  client returns numpy scalars — the helper's strict `type()` match
+  rejected them and the output column fell through to object dtype,
+  reintroducing the same PyArrow registration failure v0.7.1 was meant
+  to eliminate. DuckDB was unaffected because it returns plain Python
+  scalars.
+```
+
+## Release-flow rituals (same as M063/v0.7.1)
+
+1. In the fresh worktree, rename the branch FIRST:
+   ```
+   git branch -m release/v0.7.2
+   ```
+
+2. Claim Beads (the execute-mission harness tells you the task ID).
+
+3. Implement: imports + type sets + helper rewire + docstring update.
+
+4. Add the 6 new unit tests in tests/test_analytics_entity_engine.py
+   near the existing TestCoerceToArrowFriendlyDtype class.
+
+5. Bump pyproject.toml 0.7.1 -> 0.7.2 and run `uv lock`.
+
+6. Write the CHANGELOG [0.7.2] entry above [0.7.1].
+
+7. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`.
+
+8. Single commit:
+   ```
+   fix(M064): recognize numpy scalar types in dtype coercion (v0.7.2)
+
+   v0.7.1's _coerce_to_arrow_friendly_dtype used strict type() equality
+   against Python-only types. BigQuery's client returns numpy.int64 /
+   numpy.float64 values, which _parse_json_text_cell passes through
+   unchanged (non-string passthrough). The helper's types == {int}
+   match failed for {np.int64}, falling through to object dtype,
+   reintroducing the same PyArrow registration failure v0.7.1 was
+   meant to fix.
+
+   Broaden the recognised type sets to cover numpy scalars:
+   - _BOOL_TYPES:  {bool, np.bool_}
+   - _INT_TYPES:   {int, int8..int64, uint8..uint64}
+   - _FLOAT_TYPES: {float, float16, float32, float64}
+
+   Switch the helper's branches to subset matching (types <= _INT_TYPES)
+   so Python + numpy mixes land in one branch. Strict type() collection
+   stays intact, keeping the bool-as-int guard.
+
+   6 new unit tests cover numpy-only cases, Python+numpy mixes, and the
+   numpy-bool-must-not-leak-to-int invariant.
+   ```
+
+9. Close Beads.
+
+10. Push: `git push -u origin release/v0.7.2`.
+
+11. Open the PR with the post-merge-steps block.
+
+## Post-merge steps for PR body
+
+```
+### Post-merge steps (human)
+
+After this PR merges:
+
+    git fetch origin
+    git checkout main && git pull --ff-only
+    git tag v0.7.2
+    git push origin v0.7.2
+
+The tag push triggers publish.yml → PyPI. Verify:
+
+    gh run list --workflow=publish.yml --limit 1
+    curl -s https://pypi.org/pypi/fyrnheim/json | python -c "import sys, json; print(json.load(sys.stdin)['info']['version'])"
+```
+
+## Do NOT
+
+- Merge, tag, or publish yourself.
+- Modify _parse_json_text_cell (Option B from planning — filed as retro
+  if more scalar-type bugs surface).
+- Add numpy to direct dependencies in pyproject.toml (it's transitive
+  through pandas; hygiene task, out of scope for this patch).
+- Touch Pydantic models, pipeline.py, cli.py, or any other engine file.
+- Touch any test file besides tests/test_analytics_entity_engine.py.
+"""
+reference_files = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M064-v0.7.2-numpy-scalar-dtype-fix.toml",
+]

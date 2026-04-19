@@ -1,0 +1,205 @@
+# Mission: v0.7.2 — recognize numpy scalar types in dtype coercion
+# Patch release. v0.7.1 fixed Python-scalar-and-None columns, but the
+# helper's strict type() matching only knows Python types. BigQuery's
+# client returns numpy scalars (np.int64, etc.); those fall through to
+# the object-dtype catch-all and PyArrow chokes again.
+
+id = "M064"
+title = "v0.7.2 — recognize numpy scalar types in _coerce_to_arrow_friendly_dtype"
+status = "draft"
+created = 2026-04-19
+depends_on = ["M063"]
+
+[outcome]
+description = """
+v0.7.1's `_coerce_to_arrow_friendly_dtype` in `src/fyrnheim/engine/
+analytics_entity_engine.py` (lines 364-403) uses strict `type()` set
+equality against Python-only types (`int`, `float`, `bool`, `str`).
+`_parse_json_text_cell` (line 355-357) passes non-string values through
+unchanged when a backend pre-parses JSON — and the BigQuery Python client
+returns `numpy.int64` / `numpy.float64` scalars, not Python `int` /
+`float`. The helper's `types == {int}` match fails for `{np.int64}`,
+falls through to the catch-all `object` branch, and PyArrow fails
+registering the memtable on the BigQuery path.
+
+DuckDB returns plain Python `int`, which is why v0.7.1 tests passed and
+the bug only triggers on BigQuery users. Downstream impact: any entity
+with a nullable numeric state field breaks on BigQuery — same symptom
+as v0.7.0's original bug, different root cause.
+
+Fix: broaden the type-match sets to enumerate numpy scalar equivalents
+explicitly. Keep strict `type()` collection (preserves the bool-as-int
+guard). Switch set-equality checks to subset matching (`types <=
+_INT_TYPES`) so Python + numpy mixes are handled. Mutually exclusive
+ordering (bool → int → int|float → str → other) prevents `np.bool_`
+from silently matching the int branch.
+
+No user-facing API change. No change to Pydantic models, pipeline.py, or
+anywhere outside the helper body + its tests. Ship as v0.7.2 via the
+release-PR flow.
+"""
+
+user_progress = "From 'v0.7.1 still breaks on BigQuery because numpy.int64 scalars skip the int dtype branch' to 'numpy scalar types (int8-int64, uint8-uint64, float16-float64, bool_) are recognized and coerced to the appropriate nullable pandas dtype alongside their Python equivalents'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "src/fyrnheim/engine/analytics_entity_engine.py imports `numpy as np`",
+    "Three module-level frozensets (or `set` constants) are defined near the helper: `_BOOL_TYPES`, `_INT_TYPES`, `_FLOAT_TYPES`, covering the Python + numpy scalar types listed in the mission notes",
+    "`_coerce_to_arrow_friendly_dtype` switches from `types == {int}` / `types <= {int, float}` style checks to `types <= _INT_TYPES` / `types <= _INT_TYPES | _FLOAT_TYPES` subset matches — the bool branch uses `types <= _BOOL_TYPES`",
+    "Strict `type(v) is int` (via `{type(v) for v in non_null}`) is preserved — no `isinstance` in the helper body",
+    "Unit test: `pd.Series([None, np.int64(85), None, np.int64(60)], dtype=object)` → helper returns `Int64` dtype",
+    "Unit test: `pd.Series([None, np.float64(3.14), None], dtype=object)` → helper returns `Float64` dtype",
+    "Unit test: `pd.Series([None, np.bool_(True), None], dtype=object)` → helper returns `boolean` dtype (explicitly assert NOT `Int64` — numpy `bool_` must not leak into the int branch)",
+    "Unit test: mixed Python int + np.int64 in the same column → helper returns `Int64` dtype (subset matching handles the mix)",
+    "Unit test: mixed Python float + np.float64 → helper returns `Float64` dtype",
+    "Unit test: mixed np.int64 + np.float64 → helper returns `Float64` dtype",
+    "All v0.7.1 regression tests (nullable-int / nullable-float / nullable-bool / string / mixed) continue to pass unchanged — the Python-only test shapes must still work",
+    "All existing tests pass: tests/test_analytics_entity_engine.py (including the 26-scenario TestEquivalenceWithLegacy), tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_benchmark_harness.py, tests/test_parallel_io.py, tests/test_config.py, tests/test_executor.py",
+    "ruff + mypy clean",
+    "pyproject.toml version 0.7.1 → 0.7.2; uv.lock regenerated (fyrnheim at 0.7.2)",
+    "CHANGELOG.md has new `## [0.7.2] - 2026-04-19` section above `## [0.7.1]` with a single `### Fixed` bullet describing the numpy-scalar passthrough gap and BigQuery-user impact",
+    "Release-PR flow executed: release/v0.7.2 branch -> PR with post-merge-steps block -> green CI -> human merges + tags + publishes",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+
+[scope]
+in_scope = [
+    "Add `import numpy as np` in analytics_entity_engine.py",
+    "Define `_BOOL_TYPES`, `_INT_TYPES`, `_FLOAT_TYPES` module-level sets covering Python + numpy scalar types",
+    "Update `_coerce_to_arrow_friendly_dtype` branch checks from `==` to `<=` against these sets; keep strict `type()` collection",
+    "6 new unit tests covering numpy scalars and Python+numpy mixes (the 6 listed in the criteria above)",
+    "Version bump 0.7.1 -> 0.7.2 + uv.lock regeneration",
+    "CHANGELOG [0.7.2] entry",
+    "release/v0.7.2 branch + PR with post-merge-steps block",
+]
+out_of_scope = [
+    "Normalizing numpy scalars to Python scalars in _parse_json_text_cell via `.item()` (structurally cleaner, filed as retro follow-up if more scalar-type bugs appear)",
+    "Adding numpy as a direct dependency in pyproject.toml (it's already a transitive from pandas/ibis/pyarrow; declaring it explicitly is a hygiene task, not a bugfix)",
+    "BigQuery credential-gated integration test (typedata-tidw) — still deferred; the unit tests seeded with numpy scalars catch this bug class without BQ creds",
+    "Restoring lazy return for no-computed_fields path (typedata-vmok) — still deferred",
+    "Any change to Pydantic models, pipeline.py, cli.py, or other engine files",
+    "Merge, tag, and PyPI publish — human steps post-merge",
+]
+acceptable_breakage = [
+    "None. Broadening the supported type sets is strictly additive — Python-int/float/bool/str columns behave identically. Columns that previously fell through to object (numpy scalars with None) now get the correct nullable dtype, which is the fix.",
+]
+
+[notes]
+considerations = """
+## Root cause chain
+
+The complete chain for the reproducer `pd.Series([None, np.int64(85),
+None, np.int64(60)], dtype=object)`:
+
+1. BigQuery's Python client (google-cloud-bigquery) returns numpy
+   scalars from result rows, not Python ints.
+2. `agg_expr.execute()` on a BigQuery-backed Ibis expression returns a
+   pandas DataFrame whose object columns contain numpy scalars where
+   values are present and None where they are missing.
+3. `_parse_json_text_cell` at line 355-357 has a non-string passthrough:
+   ```python
+   if not isinstance(value, str):
+       return value  # passthrough — numpy scalar stays as numpy scalar
+   ```
+   This is by design (legacy pandas-materialised backends return typed
+   values), but it preserves the numpy scalar type instead of normalising
+   to Python.
+4. `_coerce_to_arrow_friendly_dtype` collects
+   `types = {type(v) for v in non_null}` — `{np.int64}`, NOT `{int}`.
+5. `types == {int}` fails. `types <= {int, float}` fails. Falls through
+   to `return s.astype(object)`.
+6. `project_analytics_entity` wraps the object DataFrame in
+   `ibis.memtable(df)`. When something calls `.to_pyarrow()` on it (or
+   when Ibis registers it for a BigQuery join), PyArrow's
+   `Table.from_pandas` raises `ArrowTypeError: Expected bytes, got a
+   'int' object` because the column has numpy scalars interleaved with
+   Pythons None.
+7. DuckDB returns plain Python ints so the type-set is `{int}` and the
+   correct `Int64` branch fires.
+
+## Type enumeration
+
+```python
+import numpy as np
+
+_BOOL_TYPES: set[type] = {bool, np.bool_}
+_INT_TYPES: set[type] = {
+    int,
+    np.int8, np.int16, np.int32, np.int64,
+    np.uint8, np.uint16, np.uint32, np.uint64,
+}
+_FLOAT_TYPES: set[type] = {float, np.float16, np.float32, np.float64}
+```
+
+`np.longlong` / `np.ulonglong` are platform-dependent aliases (same as
+int64/uint64 on most 64-bit systems) — covered by the existing entries
+via `type()` identity. If a user reports a bug with a different scalar
+type, the enumeration can be extended.
+
+## Why subset matching (`<=`) instead of equality (`==`)
+
+`types <= _INT_TYPES` handles mixed collections — e.g. a column with
+some Python `int` values and some `np.int64` values (possible if the
+result mixes materialised-elsewhere data with fresh BQ data). Subset
+matching covers the pure case AND the mixed case in one branch.
+
+Bool branch uses subset matching for symmetry; since `bool ∉ _INT_TYPES`
+and `np.bool_ ∉ _INT_TYPES` (by strict type identity, not isinstance),
+a pure-bool column correctly matches `<= _BOOL_TYPES` before falling
+through to int.
+
+## CHANGELOG entry
+
+```
+## [0.7.2] - 2026-04-19
+
+### Fixed
+
+- `_coerce_to_arrow_friendly_dtype` now recognises numpy scalar types
+  (`np.int8`/`int16`/`int32`/`int64`, unsigned variants,
+  `np.float16`/`float32`/`float64`, `np.bool_`) alongside their Python
+  equivalents. v0.7.1 fixed the Python-scalar case, but BigQuery's
+  client returns numpy scalars — the helper's strict `type()` match
+  rejected them and the output column fell through to object dtype,
+  reintroducing the same PyArrow registration failure v0.7.1 was meant
+  to eliminate. DuckDB was unaffected because it returns plain Python
+  scalars.
+```
+
+## Release shape
+
+Patch release. Mirrors M063/v0.7.1 exactly:
+- release/v0.7.2 branch
+- single commit
+- PR with post-merge-steps block
+- human merges + tags + publishes
+
+## Do NOT
+
+- Change `_parse_json_text_cell` (Option B from the planning discussion —
+  cleaner but out of scope for this patch; filed as retro if more
+  scalar bugs surface).
+- Add numpy to direct dependencies in pyproject.toml (hygiene task).
+- Merge, tag, or publish — human steps.
+- Touch Pydantic models, pipeline.py, cli.py, or any test file other
+  than tests/test_analytics_entity_engine.py.
+"""

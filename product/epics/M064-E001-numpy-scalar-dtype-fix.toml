@@ -1,0 +1,70 @@
+# Epic: v0.7.2 numpy scalar dtype fix — the full patch-release in one PR
+# Single epic covering the full M064 scope: broaden type sets + unit tests
+# + version bump + CHANGELOG. Mirrors M063 v0.7.1 shape.
+
+id = "M064-E001"
+parent = "M064"
+title = "Broaden _coerce_to_arrow_friendly_dtype for numpy scalars + v0.7.2 release"
+status = "active"
+created = 2026-04-19
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M064 scope: import numpy, add three
+module-level type sets (`_BOOL_TYPES`, `_INT_TYPES`, `_FLOAT_TYPES`)
+covering Python + numpy scalar types, rewire _coerce_to_arrow_friendly_dtype
+to subset-match against those sets, add 6 unit tests covering numpy
+scalars and Python+numpy mixes, bump 0.7.1 -> 0.7.2 with CHANGELOG entry,
+open release PR.
+
+Mirrors M063's v0.7.1 shape: one mission = one branch = one PR = one
+release. Tag + publish are post-merge human steps.
+"""
+
+[job_story]
+description = """When I run a pipeline against BigQuery with a nullable
+numeric state field, I want the helper to recognise the numpy scalars
+the BQ client returns so the output coerces to the correct nullable
+pandas dtype, so PyArrow registration actually works on BQ the way
+v0.7.1 claimed it would."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 16 testing criteria from the M064 mission TOML pass",
+    "`numpy as np` imported in analytics_entity_engine.py",
+    "Three module-level sets (_BOOL_TYPES, _INT_TYPES, _FLOAT_TYPES) cover Python + numpy scalars",
+    "Helper uses `types <= _INT_TYPES` subset matching; strict `type()` collection preserved (no isinstance)",
+    "6 new unit tests: np.int64-only, np.float64-only, np.bool_-only, Python+np.int64 mix, Python+np.float64 mix, np.int64+np.float64 mix",
+    "The np.bool_ test explicitly asserts NOT Int64 (numpy bool must not leak to int branch)",
+    "26-scenario TestEquivalenceWithLegacy still green; all v0.7.1 regression tests still pass unchanged",
+    "ruff + mypy clean; pyproject.toml version == 0.7.2; CHANGELOG [0.7.2] entry added",
+]
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M063's v0.7.1 shape — one commit bundling fix + version bump +
+CHANGELOG on a release/v0.7.2 branch. Full implementation sketch,
+CHANGELOG copy, and root-cause chain are in the M064 mission TOML
+[notes] section. Read that first.
+"""
+
+estimated_stories = 1

@@ -1,0 +1,178 @@
+# Mission: v0.7.0 release — performance bundle
+# Cut v0.7.0 bundling M058 (benchmark harness) + M059 (parallel I/O) +
+# M060 (push-down projection) + M061 (retro cleanup).
+
+id = "M062"
+title = "v0.7.0 release — performance bundle"
+status = "draft"
+created = 2026-04-19
+depends_on = ["M058", "M059", "M060", "M061"]
+
+[outcome]
+description = """
+Cut the v0.7.0 release. All four component missions (M058/M059/M060/M061)
+have merged to main; pyproject.toml is still at 0.6.2 and CHANGELOG.md
+still has 0.6.2 as the top entry. This mission does the mechanical
+release work:
+
+1. Bump pyproject.toml version 0.6.2 → 0.7.0; regenerate uv.lock.
+2. Write the CHANGELOG.md `[0.7.0] - 2026-04-19` entry bundling the four
+   missions under appropriate Keep-a-Changelog categories:
+   - **Performance** (M060 push-down; M059 parallel I/O)
+   - **Added** (M058 benchmark harness + `fyr bench` CLI; M059's
+     `max_parallel_io` config + CLI flag)
+   - **Changed** (M059's phase-1 source-load failure semantics — errors
+     now raise instead of accumulating; noted as behavior change, not
+     breaking, because the new behavior matches fail-fast semantics users
+     reasonably expect)
+   - **Fixed** (M061 retro items: CLI executor close in
+     run/materialize/drop/list-staging; register_parquet lock symmetry)
+3. Release-PR flow per the release-flow memory: branch `release/v0.7.0` →
+   PR → green CI (all 3 Python versions) → merge to main → tag `v0.7.0`
+   at the merge commit → push tag → `publish.yml` triggers on `v*` push
+   and ships to PyPI.
+
+Post-release, three retro follow-ups remain open as tracked Beads tasks
+(typedata-tidw BigQuery integration test for M060; typedata-vmok /
+typedata-j8e1 restore lazy return for no-computed_fields path). These are
+non-blocking; flag them in release notes as known limitations.
+
+Note on M060 latest-measure dtype: the v0.7.0 implementation preserves
+all JSON scalar types (string/int/float/bool) via a client-side
+json.loads round-trip after the backend aggregation. The earlier
+dtype-narrowing concern (raised mid-implementation) was addressed in
+rework and does NOT ship as breakage — no CHANGELOG call-out needed for
+that.
+"""
+
+user_progress = "From 'four features merged to main at version 0.6.2' to 'v0.7.0 tagged and published on PyPI with release notes'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pyproject.toml version == 0.7.0",
+    "uv.lock regenerated so the recorded project version is 0.7.0",
+    "CHANGELOG.md has a new `## [0.7.0] - 2026-04-19` section placed above the 0.6.2 entry",
+    "CHANGELOG entry includes a 'Performance' subsection calling out M060's push-down project_analytics_entity (3.8×-83× speedup at 1k-50k rows cited) and M059's parallel source loads + entity/metrics writes (max_parallel_io default 4)",
+    "CHANGELOG entry includes an 'Added' subsection for `fyr bench` CLI (PipelineTimings on PipelineResult; --json flag) and `max_parallel_io` config + `fyr run --max-parallel-io N` flag",
+    "CHANGELOG entry includes a 'Changed' subsection noting M059's phase-1 source-load failure semantics (exceptions now propagate via future.result() instead of accumulating in result.errors — fail-fast matches user expectations; migration note: wrap run_pipeline in try/except if you relied on partial-progress accumulation)",
+    "CHANGELOG entry includes a 'Fixed' subsection for M061 items (IbisExecutor leak in run/materialize/drop/list-staging CLI commands; register_parquet now holds the executor's connection lock for symmetry with other self._conn-touching methods)",
+    "CHANGELOG entry ends with a 'Known limitations' note pointing to typedata-tidw (BQ integration test follow-up) and typedata-vmok (no-computed_fields lazy return follow-up)",
+    "All existing tests pass; ruff + mypy clean — no code changes in this mission beyond version bump + CHANGELOG + uv.lock",
+    "Release-PR flow executed: branch `release/v0.7.0` pushed, PR opened targeting main, CI green on all 3 Python versions, PR merged, tag `v0.7.0` created at the merge commit, tag pushed",
+    "publish.yml triggered on `v0.7.0` tag push and completed successfully (verified via `gh run list --workflow=publish.yml`)",
+    "PyPI shows fyrnheim 0.7.0 as the latest version (verified via curl to pypi.org/pypi/fyrnheim/json or equivalent)",
+]
+
+validator_context = [
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+    ".github/workflows/publish.yml",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[scope]
+in_scope = [
+    "pyproject.toml version 0.6.2 → 0.7.0",
+    "uv.lock regeneration (`uv lock`)",
+    "CHANGELOG.md [0.7.0] entry with Performance / Added / Changed / Fixed subsections + Known-limitations footer",
+    "`release/v0.7.0` branch + PR against main",
+    "Tag `v0.7.0` at the merge commit + push to trigger publish.yml",
+    "Verify PyPI upload succeeded",
+]
+out_of_scope = [
+    "Any code changes beyond the version bump",
+    "typedata-tidw (BQ integration test for M060) — retro follow-up, explicitly deferred",
+    "typedata-vmok / typedata-j8e1 (restore lazy return for no-computed_fields path) — retro follow-up, explicitly deferred",
+    "Blog posts, announcement content, or marketing copy",
+    "Backport to v0.6.x",
+    "Any CI/CD workflow changes",
+    "Docs site updates beyond CHANGELOG",
+    "New features not already on main",
+]
+acceptable_breakage = [
+    "M059's phase-1 source-load failure semantics change (errors propagate instead of accumulating in result.errors) is a documented behavior change. Users relying on partial-progress visibility after a failed source load will need to adjust. CHANGELOG migration note covers this.",
+]
+
+[notes]
+considerations = """
+## Release-flow memory
+
+Version bumps go through a release PR, never direct push to main. Branch
+name convention: `release/v<version>`. Tag after merge on the merge
+commit. publish.yml auto-triggers on `v*` tag push.
+
+## CHANGELOG content sourcing
+
+All four component missions have their own TOMLs on main with detailed
+[outcome] sections — use those + the merged PR bodies (#111, #113, #115,
+#117) as source material for the CHANGELOG entry. Don't paraphrase the
+TOML verbatim; write it as user-facing release notes.
+
+## Acceptable-breakage scope
+
+The user's planning prompt mentioned "M060's two acceptable-breakage
+items" — but one of them (the latest-measure dtype narrowing) was
+addressed in M060's final rework via JSON-text roundtrip and no longer
+ships as breakage. Do NOT call it out in the CHANGELOG; that would
+confuse users into migrating away from behavior that still works.
+
+The genuine behavior change is M059's phase-1 fail-fast propagation.
+That IS worth a 'Changed' entry with a brief migration note.
+
+## M058 benchmark harness note
+
+CHANGELOG should call out `fyr bench` as a new CLI command and the
+`PipelineTimings` structure on `PipelineResult` as a new attribute.
+Subordinate: mention the pytest `benchmark_result` session fixture for
+contributors.
+
+## M060 performance citation
+
+The commit message / PR body for #117 cited 3.8× @ 1k rows, 26.2× @ 10k,
+83.3× @ 50k on DuckDB. Cite the same numbers in the CHANGELOG
+'Performance' subsection. Make clear these are synthetic benchmarks (not
+the M058 benchmark_result fixture, which doesn't include an
+AnalyticsEntity).
+
+## M059 performance citation
+
+M059 didn't have a hard benchmark in the PR — the real-world win is on
+BigQuery-bound pipelines where phase-1 loads serialise 9+ BQ round-trips
+and phase-4/5 writes serialise blocking load jobs. Default
+max_parallel_io=4 is a conservative-by-design knob; mention it without
+specific speedup numbers.
+
+## Known-limitations section
+
+Keep it short. One bullet per open retro task, one line each, with the
+Beads task ID in case someone wants to track:
+- BigQuery integration test coverage for the new push-down path is
+  pending (runtime verified via SQL compile; Beads typedata-tidw).
+- The push-down path always materialises results server-side; a future
+  release may restore lazy return for the no-computed_fields path
+  (Beads typedata-vmok).
+
+## Release shape
+
+Mirrors M056's v0.6.1 release and M057's v0.6.2 release. Single commit on
+`release/v0.7.0` with version + uv.lock + CHANGELOG; single PR; one merge
+commit on main; tag at the merge commit; push tag.
+
+## If the publish fails
+
+publish.yml has shipped 0.6.0, 0.6.1, 0.6.2 without incident. If 0.7.0
+fails unexpectedly (trusted-publisher misconfig, upload conflict, etc.),
+the fix is out-of-scope of this mission — open a separate ticket. Don't
+hand-patch PyPI.
+"""

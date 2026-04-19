@@ -1,0 +1,289 @@
+id = "M063-E001-S001"
+parent = "M063-E001"
+title = "_coerce_to_arrow_friendly_dtype + regression tests + v0.7.1 release"
+status = "ready"
+created = 2026-04-19
+
+[outcome]
+description = """Add _coerce_to_arrow_friendly_dtype helper in
+analytics_entity_engine.py, rewire _parse_json_text_columns to call it,
+add 5 regression tests + 1 unit test on the helper, bump 0.7.0 -> 0.7.1
+with CHANGELOG [0.7.1] entry, push release/v0.7.1 branch, open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/analytics_entity_engine.py gains a new private helper `_coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series` placed directly above `_parse_json_text_columns` (currently around line 364)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The helper uses `type(v) is int` (strict type match) not `isinstance(v, int)` when building the type set — verified by reading the source (grep for `isinstance` in the helper should return nothing)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The helper's branches in order: bool-only -> 'boolean'; int-only -> pd.Int64Dtype(); numeric (int+float or float-only) -> 'Float64'; str-only -> object; mixed / all-None / empty -> object. Tests assert each branch."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`_parse_json_text_columns` calls the helper instead of `.astype(object)` on line 375 (current location). The `.astype(object)` is removed; the helper's return value is assigned directly to `out[col]`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_coerce_to_arrow_friendly_dtype covers: all-null series returns object; all-int returns Int64; all-float returns Float64; int-and-float mix returns Float64; all-bool returns boolean; all-str returns object; mixed str+int returns object; empty series returns object"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression test test_projection_nullable_int_state_field_is_arrow_compatible: AnalyticsEntity with a StateField(strategy='latest', field='lead_score') over events where some events have `{\"lead_score\": 42}` and some omit the key entirely. project_analytics_entity(events, ae).to_pyarrow() succeeds; the lead_score column has arrow type int64 (with nulls for the missing rows)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression test test_projection_nullable_float_state_field_is_arrow_compatible: same shape but with `{\"amount\": 3.14}` payloads and some missing. Result arrow type is double/float64."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression test test_projection_nullable_bool_state_field_is_arrow_compatible: bool values `{\"is_active\": true}` and some missing. Result arrow type is `bool` — MUST explicitly assert it is NOT int64 (guards against the isinstance/type gotcha end-to-end)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression test test_projection_string_state_field_remains_object_and_arrow_compatible: string state field still produces a projection that round-trips through to_pyarrow() (arrow type: string)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Regression test test_projection_mixed_type_state_field_falls_back_to_object: an intentionally-mixed payload (some events with int, some with str for the same field). project_analytics_entity(...).execute() returns an object-dtype column. Either .to_pyarrow() succeeds with string-coerced values OR raises a clear error — both are acceptable; the test documents the observed behavior via xfail/skip with a note, or asserts whichever happens."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All 26 existing TestEquivalenceWithLegacy scenarios still pass unchanged (check_dtype=False is already in use so the dtype change doesn't break value-level equivalence)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged: tests/test_analytics_entity_engine.py (except for the new tests being added), tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_benchmark_harness.py, tests/test_parallel_io.py, tests/test_config.py, tests/test_executor.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version field == '0.7.1'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated via `uv lock`; the lockfile's fyrnheim entry records version 0.7.1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.7.1] - 2026-04-19` section above the existing `## [0.7.0]` entry with a single `### Fixed` bullet describing the bug, the BigQuery-user impact, and the dtype-coercion fix"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No changes outside src/fyrnheim/engine/analytics_entity_engine.py, tests/test_analytics_entity_engine.py, pyproject.toml, uv.lock, CHANGELOG.md. Specifically: no changes to pipeline.py, cli.py, core/analytics_entity.py, or any other test file."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.7.1` (rename the auto-worktree branch first). Single commit. Commit message: `fix(M063): coerce projection output to Arrow-friendly dtypes (v0.7.1)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed to origin; PR opened against main titled `release: v0.7.1 — dtype coercion fix for JSON-text roundtrip`. PR body describes the bug, the BigQuery impact, links the 5 regression tests, and includes a `### Post-merge steps (human)` block with `git tag v0.7.1`, `git push origin v0.7.1`, and the PyPI verification commands"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT create the tag. Do NOT trigger publish. Post-merge actions are human steps."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M063-v0.7.1-dtype-coercion-fix.toml — full outcome,
+implementation sketch, CHANGELOG copy, and the isinstance/type gotcha
+are in the [notes] section. Read that first.
+
+## Implementation sketch (from mission TOML)
+
+```python
+def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
+    non_null = s.dropna()
+    if len(non_null) == 0:
+        return s.astype(object)
+    types = {type(v) for v in non_null}  # strict type(), NOT isinstance
+    # Order matters: bool before int because bool IS a subclass of int
+    # (but {bool} != {int} by set equality, so the explicit branch
+    # ordering is more for reader clarity than correctness)
+    if types == {bool}:
+        return s.astype("boolean")
+    if types == {int}:
+        return s.astype(pd.Int64Dtype())
+    if types <= {int, float}:
+        return s.astype("Float64")
+    if types == {str}:
+        return s.astype(object)
+    return s.astype(object)  # mixed / other — user's data model choice
+
+def _parse_json_text_columns(df, columns):
+    out = df.copy()
+    for col in columns:
+        if col in out.columns:
+            parsed = out[col].map(_parse_json_text_cell)
+            out[col] = _coerce_to_arrow_friendly_dtype(parsed)
+    return out
+```
+
+## The isinstance gotcha (critical)
+
+`isinstance(True, int) == True` in Python — bools are a subclass of int.
+If the helper uses `isinstance(v, int)` to collect the type set,
+a column of bools would coerce to `Int64` and lose semantic meaning.
+Strict `type(v) is int` matching prevents this.
+
+The dedicated regression test
+`test_projection_nullable_bool_state_field_is_arrow_compatible` MUST
+assert the final pyarrow type is `pa.bool_()`, not `pa.int64()`. Write
+that assertion with an explicit error message so a future regression is
+obvious:
+
+```python
+import pyarrow as pa
+table = project_analytics_entity(events, ae).to_pyarrow()
+col = table.schema.field("is_active").type
+assert col == pa.bool_(), f"expected bool_(), got {col!r}"
+```
+
+## to_pyarrow() test pattern
+
+```python
+import pyarrow as pa
+# build events memtable
+events = ibis.memtable(pd.DataFrame([
+    {"source": "crm", "entity_id": "e1", "ts": "2024-01-01",
+     "event_type": "row_appeared", "payload": json.dumps({"lead_score": 42})},
+    {"source": "crm", "entity_id": "e2", "ts": "2024-01-01",
+     "event_type": "row_appeared", "payload": json.dumps({})},
+]))
+ae = AnalyticsEntity(
+    name="scored_leads",
+    state_fields=[StateField(name="lead_score", source="crm",
+                             field="lead_score", strategy="latest")],
+)
+result = project_analytics_entity(events, ae)
+table = result.to_pyarrow()  # <-- this is the failing path pre-fix
+# e1 gets 42; e2 gets NULL
+score_type = table.schema.field("lead_score").type
+assert score_type == pa.int64() or score_type == pa.large_list(pa.int64()) or ... # accept any int64 variant
+```
+
+Use `pa.types.is_integer(...)` / `pa.types.is_floating(...)` /
+`pa.types.is_boolean(...)` for flexible-but-correct assertions.
+
+## CHANGELOG entry text
+
+```
+## [0.7.1] - 2026-04-19
+
+### Fixed
+
+- `project_analytics_entity` output now uses pandas nullable dtypes
+  (`Int64` / `Float64` / `boolean`) for numeric and boolean state fields
+  instead of object dtype with Python-scalar-and-None values. v0.7.0
+  produced object-dtype columns that PyArrow could not convert, breaking
+  the BigQuery memtable-registration path for any entity with a
+  nullable numeric or boolean state field. DuckDB was unaffected.
+```
+
+## Release-flow rituals (same as M057/M062)
+
+1. In the fresh worktree, rename the branch FIRST:
+   ```
+   git branch -m release/v0.7.1
+   ```
+
+2. Claim Beads: `bd update <story-task-id> --status in_progress` — the
+   /execute-mission harness will tell you the task ID.
+
+3. Implement the fix (helper + rewire in analytics_entity_engine.py).
+
+4. Add the 5 regression tests + 1 unit test in
+   tests/test_analytics_entity_engine.py.
+
+5. Bump pyproject.toml 0.7.0 -> 0.7.1 and run `uv lock`.
+
+6. Write the CHANGELOG [0.7.1] entry above [0.7.0].
+
+7. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`.
+
+8. Single commit:
+   ```
+   fix(M063): coerce projection output to Arrow-friendly dtypes (v0.7.1)
+
+   _parse_json_text_columns previously forced .astype(object), producing
+   mixed-Python-type columns (int + None) that pyarrow.Table.from_pandas
+   cannot convert. BigQuery's memtable-registration path was broken for
+   any nullable numeric or boolean state field. DuckDB silently tolerated
+   the object dtype.
+
+   Add _coerce_to_arrow_friendly_dtype per-column inference:
+   - all int  -> Int64 (nullable)
+   - any float -> Float64 (nullable)
+   - all bool -> boolean (nullable)
+   - all str  -> object (Arrow handles object-str)
+   - mixed   -> object (user's data shape)
+
+   Strict type() check to prevent bool (subclass of int) from silently
+   coercing to Int64. Regression tests exercise the memtable -> to_pyarrow
+   path without needing BQ credentials.
+   ```
+
+9. Close Beads: `bd close <story-task-id>`.
+
+10. Push: `git push -u origin release/v0.7.1`.
+
+11. Open the PR with the post-merge-steps block.
+
+## Post-merge steps to include in PR body
+
+```
+### Post-merge steps (human)
+
+After this PR merges, the human operator will:
+
+    git fetch origin
+    git checkout main && git pull --ff-only
+    git tag v0.7.1
+    git push origin v0.7.1
+
+The tag push triggers `.github/workflows/publish.yml` which uploads the
+wheel to PyPI. Verify via:
+
+    gh run list --workflow=publish.yml --limit 1
+    curl -s https://pypi.org/pypi/fyrnheim/json | python -c "import sys, json; print(json.load(sys.stdin)['info']['version'])"
+```
+
+## Do NOT
+
+- Merge the PR or create the tag yourself.
+- Touch pipeline.py, cli.py, core/analytics_entity.py, or any test file
+  besides tests/test_analytics_entity_engine.py.
+- Add a `value_type` hint to StateField (out of scope).
+- Add a BigQuery credential-gated integration test (sibling task typedata-tidw).
+- Use `isinstance` for the type check — strict `type()` matching only.
+"""
+reference_files = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M063-v0.7.1-dtype-coercion-fix.toml",
+]

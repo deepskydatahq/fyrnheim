@@ -1,0 +1,202 @@
+# Mission: v0.7.1 — dtype coercion fix after JSON-text roundtrip
+# Patch release fixing a v0.7.0 regression: nullable numeric state fields
+# produced object-dtype columns that PyArrow couldn't register (BigQuery
+# memtable path fails; DuckDB silently tolerates).
+
+id = "M063"
+title = "v0.7.1 — dtype coercion fix for JSON-text roundtrip"
+status = "draft"
+created = 2026-04-19
+depends_on = ["M060"]
+
+[outcome]
+description = """
+v0.7.0's M060 rewrite of `project_analytics_entity` extracts JSON-typed
+state fields and the `latest` measure as JSON text and parses them back
+to Python scalars on the client (to preserve mixed int/float/str/bool
+types). The helper `_parse_json_text_columns` (`src/fyrnheim/engine/
+analytics_entity_engine.py:375`) finishes with `.astype(object)` — which
+produces object-dtype columns containing Python scalars of varying
+types.
+
+For a nullable numeric state field like `{"lead_score": 42}` (with some
+rows missing the field entirely), the parsed column ends up as
+object-dtype with a mix of Python `int` and `None`. DuckDB tolerates
+this when the memtable is used downstream. BigQuery does not — when
+`ibis.memtable(df)` gets registered via PyArrow, `pyarrow.Table.from_pandas`
+cannot infer a consistent Arrow type across `int | None` values and
+raises. This makes v0.7.0 broken for any BigQuery user with a nullable
+numeric state field.
+
+Fix: after the JSON-text parse, infer a clean pandas dtype per column
+from the set of non-null Python types:
+- all `int` → `Int64` (nullable)
+- `int` + `float` (or all `float`) → `Float64` (nullable)
+- all `bool` → `boolean` (nullable)
+- all `str` → object (Arrow tolerates object-str)
+- mixed (e.g. `str` + `int`) → object, user's data-model choice
+
+Use strict `type(v) is int` (not `isinstance`), because
+`isinstance(True, int)` is True in Python — without strict matching, a
+boolean column would silently coerce to `Int64` and lose semantic
+meaning.
+
+No user-facing API change. No change to Pydantic models. No change to
+pipeline.py. Ship as v0.7.1 via the release-PR flow.
+"""
+
+user_progress = "From 'v0.7.0 breaks for BigQuery users with nullable numeric state fields (object-dtype + Nones fails PyArrow inference)' to 'the projection engine returns Arrow-friendly nullable-typed columns so both DuckDB and BigQuery paths round-trip cleanly'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "src/fyrnheim/engine/analytics_entity_engine.py: new private helper (e.g. `_coerce_to_arrow_friendly_dtype`) takes a pd.Series of Python scalars and returns a pandas Series with the appropriate nullable dtype (Int64 for all-int, Float64 for any-float, boolean for all-bool, object otherwise)",
+    "Strict `type(v) is int` matching: a Series containing only Python bool values returns boolean dtype, NEVER Int64 — the test MUST explicitly assert this to guard against the isinstance/type gotcha",
+    "_parse_json_text_columns calls the new helper per column instead of `.astype(object)` — resulting frame has inferred nullable dtypes",
+    "Regression test test_projection_nullable_int_state_field_is_arrow_compatible: AnalyticsEntity with a state_field referencing a payload key that is present in some events (as int) and missing in others; project_analytics_entity(...).to_pyarrow() succeeds and the resulting column has arrow type int64 (with nulls where the value was missing)",
+    "Regression test test_projection_nullable_float_state_field_is_arrow_compatible: same shape but with float values; result pyarrow type is double",
+    "Regression test test_projection_nullable_bool_state_field_is_arrow_compatible: bool values; result pyarrow type is bool — explicitly different from int64 (this guards against the isinstance gotcha end-to-end)",
+    "Regression test test_projection_string_state_field_remains_object: string state field still works (object dtype in pandas is expected; PyArrow handles it)",
+    "Regression test test_projection_mixed_type_state_field_falls_back_to_object: deliberately-mixed payload (some int, some str) produces object dtype and PyArrow conversion either succeeds as string-coerced or raises a clear error — either is acceptable, but the user's data shape is the cause, not a fyrnheim bug",
+    "Unit test test_coerce_to_arrow_friendly_dtype_pure: 4-5 targeted assertions on the new helper covering the int-only, float-only, int+float, bool-only, str-only, mixed, and all-None cases",
+    "Existing 26-scenario equivalence suite (TestEquivalenceWithLegacy) still passes unchanged — the fix changes dtype of the final frame but values round-trip through pd.testing.assert_frame_equal(check_dtype=False) correctly",
+    "All existing tests pass unchanged: tests/test_analytics_entity_engine.py, tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_benchmark_harness.py, tests/test_parallel_io.py",
+    "ruff + mypy clean",
+    "pyproject.toml version 0.7.0 → 0.7.1; uv.lock regenerated",
+    "CHANGELOG.md has a new `## [0.7.1] - 2026-04-19` section above 0.7.0 with a single `### Fixed` bullet describing the bug and the BigQuery-user impact",
+    "Release-PR flow executed: release/v0.7.1 branch -> PR -> green CI -> human merges + tags + publishes",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+
+[scope]
+in_scope = [
+    "New private helper `_coerce_to_arrow_friendly_dtype(series)` in analytics_entity_engine.py",
+    "Rewire `_parse_json_text_columns` to call the helper per column",
+    "5 regression tests: nullable int / float / bool / string state field roundtripping through `to_pyarrow()`, plus a mixed-type fallback test",
+    "Unit tests on the new helper covering edge cases (all-null series, single-type series, multi-type series)",
+    "Version bump 0.7.0 -> 0.7.1 + uv.lock regen",
+    "CHANGELOG [0.7.1] entry describing the bug + impact",
+    "release/v0.7.1 branch + PR",
+]
+out_of_scope = [
+    "BigQuery credential-gated integration test (typedata-tidw) — remains open as a sibling mission; the PyArrow regression test catches this bug class without creds",
+    "Restoring lazy return for no-computed_fields path (typedata-vmok) — tracked separately",
+    "Any change to the SQL-level aggregation expressions (they're correct; the bug is purely in post-aggregation dtype handling)",
+    "Any change to Measure / StateField / AnalyticsEntity Pydantic models",
+    "Adding a `value_type` hint to StateField (bigger API design question; not needed for this fix)",
+    "Merge, tag, and PyPI publish — human steps per the release-flow memory",
+]
+acceptable_breakage = [
+    "Columns that previously came out as `object` dtype with Python int values will now come out as `Int64`. Any downstream code that relied on isinstance(col.iloc[0], int) will still work (Int64 values are still numeric). Code that relied on `col.dtype == 'object'` for numeric columns will need to adapt — extremely unlikely in practice, but documented in the CHANGELOG entry.",
+]
+
+[notes]
+considerations = """
+## How this slipped through
+
+M060's equivalence suite used `pd.testing.assert_frame_equal(check_dtype=False)`
+to tolerate the dtype differences between the new impl and the vendored
+pandas reference. That's correct for asserting value-level equivalence
+but masked the fact that the new impl's dtypes are Arrow-hostile. Going
+forward, the dtype check shouldn't be enabled on the equivalence suite
+(values are what matter there), but the new regression tests in this
+mission DO need to assert Arrow compatibility directly — hence the
+`to_pyarrow()` check, not an `assert_frame_equal`.
+
+## The isinstance gotcha
+
+`isinstance(True, int)` is True in Python — booleans are a subclass of
+int. If the helper uses `isinstance(v, int)`, a column of bools would
+coerce to Int64 and lose semantic meaning. Strict `type(v) is int`
+matching (NOT isinstance) prevents this. The dedicated
+test_projection_nullable_bool_state_field_is_arrow_compatible test must
+assert the final pyarrow type is `bool_()`, not `int64()`.
+
+## Implementation sketch
+
+```python
+def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
+    non_null = s.dropna()
+    if len(non_null) == 0:
+        return s.astype(object)
+    types = {type(v) for v in non_null}  # strict type, not isinstance
+    if types == {bool}:
+        return s.astype("boolean")
+    if types == {int}:
+        return s.astype(pd.Int64Dtype())
+    if types <= {int, float}:
+        return s.astype("Float64")
+    if types == {str}:
+        return s.astype(object)
+    return s.astype(object)  # mixed — user's data model choice
+
+def _parse_json_text_columns(df, columns):
+    out = df.copy()
+    for col in columns:
+        if col in out.columns:
+            parsed = out[col].map(_parse_json_text_cell)
+            out[col] = _coerce_to_arrow_friendly_dtype(parsed)
+    return out
+```
+
+Order matters: check `bool` BEFORE `int` because `bool` is a subclass of
+`int` — a set-equals comparison against `{bool}` works because set
+equality uses `type()` not `isinstance()`, but the reader should see the
+explicit bool check first.
+
+## Why to_pyarrow() in the regression test
+
+`ibis.memtable(df).to_pyarrow()` exercises the exact path that fails on
+BigQuery (PyArrow table construction from the pandas frame). A test
+that does `ibis.memtable(df)` alone is not enough — memtable creation
+is lazy. Calling `.to_pyarrow()` forces the conversion and raises if the
+dtype is Arrow-hostile. This catches the bug class without BQ creds.
+
+## CHANGELOG shape for [0.7.1]
+
+Single bullet under `### Fixed`:
+
+```
+## [0.7.1] - 2026-04-19
+
+### Fixed
+
+- `project_analytics_entity` output now uses pandas nullable dtypes
+  (`Int64` / `Float64` / `boolean`) for numeric and boolean state fields
+  instead of object dtype with Python-scalar-and-None values. v0.7.0
+  produced object-dtype columns that PyArrow could not convert, breaking
+  the BigQuery memtable-registration path for any entity with a
+  nullable numeric or boolean state field. DuckDB was unaffected.
+```
+
+## Release shape
+
+Patch release, mirrors M057 (v0.6.2) and M062 (v0.7.0) release-PR flow:
+release/v0.7.1 branch -> PR -> green CI -> human merges -> tag v0.7.1
+-> push tag -> publish.yml ships to PyPI -> verify.
+
+## Do NOT
+
+- Merge, tag, or publish — those are post-merge human steps.
+- Touch Pydantic models, pipeline.py, cli.py, or any SQL-level aggregation expression.
+- Add the BQ integration test in this mission (sibling work, kept as typedata-tidw).
+- Add a StateField.value_type hint (bigger API question; not needed).
+"""

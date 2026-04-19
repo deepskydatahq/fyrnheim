@@ -1,0 +1,67 @@
+# Epic: v0.7.1 dtype coercion fix — the full patch-release in one PR
+# Single epic covering the full M063 scope: dtype helper + rewire +
+# regression tests + version bump + CHANGELOG. Mirrors M057 v0.6.2 shape.
+
+id = "M063-E001"
+parent = "M063"
+title = "Dtype coercion after JSON-text roundtrip + v0.7.1 release"
+status = "active"
+created = 2026-04-19
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M063 scope: add _coerce_to_arrow_friendly_dtype
+helper in analytics_entity_engine.py, rewire _parse_json_text_columns to
+call it per column, add 5-6 regression tests (nullable int/float/bool/
+string/mixed + a pure unit test on the helper), bump 0.7.0 -> 0.7.1 with
+a CHANGELOG [0.7.1] entry, open release PR.
+
+Mirrors M057's v0.6.2 shape: one mission = one branch = one PR = one
+release. Tag + publish are post-merge human steps.
+"""
+
+[job_story]
+description = """When I run a pipeline with a nullable numeric state
+field on BigQuery, I want the output to round-trip cleanly through
+PyArrow's Arrow table construction instead of erroring on object-dtype
+columns with mixed Python int/None values, so fyrnheim 0.7.x actually
+works on BigQuery for my real data."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 15 testing criteria from the M063 mission TOML pass",
+    "_coerce_to_arrow_friendly_dtype exists, uses strict type(v) is int matching (not isinstance), and returns correct nullable dtypes",
+    "5 regression tests pass and exercise memtable -> to_pyarrow() for int / float / bool / string / mixed state fields",
+    "1 dedicated unit test on the helper covering each branch + all-null + empty-series cases",
+    "Existing equivalence suite (26 scenarios) still passes unchanged",
+    "ruff + mypy clean; pyproject.toml version == 0.7.1; CHANGELOG [0.7.1] entry added",
+]
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M057's v0.6.2 shape — one commit bundling fix + version bump +
+CHANGELOG on a release/v0.7.1 branch. Full implementation sketch,
+CHANGELOG copy, and the isinstance/type gotcha are documented in the
+M063 mission TOML [notes] section. Read that first.
+"""
+
+estimated_stories = 1

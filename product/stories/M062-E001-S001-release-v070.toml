@@ -1,0 +1,182 @@
+id = "M062-E001-S001"
+parent = "M062-E001"
+title = "pyproject.toml 0.7.0 + uv.lock + CHANGELOG [0.7.0] + release/v0.7.0 branch"
+status = "ready"
+created = 2026-04-19
+
+[outcome]
+description = """Bump pyproject.toml to 0.7.0, regenerate uv.lock, write
+CHANGELOG.md's [0.7.0] entry bundling M058+M059+M060+M061, push branch
+release/v0.7.0 and open release PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version field == '0.7.0'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated via `uv lock`; recorded project version is 0.7.0 (grep the lockfile for `name = \"fyrnheim\"` and verify the `version = ...` line next to it)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new '## [0.7.0] - 2026-04-19' header placed immediately after the file's preamble and above the existing '## [0.6.2] - 2026-04-17' header"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG [0.7.0] has a '### Performance' subsection citing M060 push-down (reference speedups: 3.8× @ 1k rows, 26× @ 10k, 83× @ 50k — synthetic DuckDB benchmark, not the test harness fixture) AND M059 parallel source loads + entity/metrics writes (no hard speedup number; mention it's a BQ-bound workload win and cite max_parallel_io default=4)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG [0.7.0] has an '### Added' subsection calling out: (a) `fyr bench` CLI with human-readable default + `--json` flag, (b) `PipelineTimings` structure on `PipelineResult` with per-phase/source/entity/metrics-model breakdowns, (c) `max_parallel_io` config field and `fyr run --max-parallel-io N` / `fyr bench --max-parallel-io N` CLI flags"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG [0.7.0] has a '### Changed' subsection noting the M059 phase-1 source-load fail-fast propagation with a 1-2 line migration note (old: errors collected into `result.errors` and other sources continued; new: first-failing source raises via `future.result()`). Frame as behavior change, not breaking"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG [0.7.0] has a '### Fixed' subsection for M061 items: IbisExecutor connection leak fixed in `run`, `materialize`, `drop`, `list-staging` (those commands now close the executor in a finally block matching `bench`); `register_parquet` now holds the executor's connection lock for symmetry with all other `self._conn`-touching methods"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG [0.7.0] ends with a '### Known limitations' section listing: (a) no BigQuery credential-gated integration test for the new push-down path yet (Beads typedata-tidw); (b) push-down path materializes results server-side but also round-trips them to pandas for type preservation — a future release may restore lazy return for the no-computed_fields path (Beads typedata-vmok). Two bullets, one line each"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT include any call-out about a 'latest-measure dtype narrowing' — that concern was addressed in M060's final rework via the JSON-text roundtrip, no user-visible narrowing remains, and mentioning it would mislead users into migrating away from working behavior"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "No code changes beyond the three files (pyproject.toml, uv.lock, CHANGELOG.md). Specifically: src/ is untouched, tests/ is untouched, no other product/* files modified"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "`uv run pytest` all pass; `uv run ruff check src/ tests/` clean; `uv run mypy src/` clean — regression safety only, no new tests"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch is named `release/v0.7.0` (NOT `feat/M062-...` or `worktree-agent-...`). Rename the auto-created worktree branch before the first commit"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Single commit on `release/v0.7.0` with a message like `release: v0.7.0 — performance bundle` (or `chore(release): v0.7.0` — pick the project's release-commit convention; check recent release commits via `git log --oneline v0.6.2^..v0.6.2 v0.6.1^..v0.6.1` to match style)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed to origin and PR opened against main. PR title: `release: v0.7.0 — performance bundle`. PR body summarizes the four component missions with PR numbers (#111 M058, #113 M059, #115 M061, #117 M060), cites the M060 performance numbers, notes the M059 fail-fast behavior change, and links the three known-limitations Beads tasks. Also include a short 'Post-merge steps for human' block listing `git tag v0.7.0 <merge-sha>`, `git push origin v0.7.0`, and 'verify publish.yml succeeded; confirm PyPI shows 0.7.0 as latest'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge the PR. Do NOT create the tag. Do NOT trigger publish. Those are human actions post-review"
+
+[context]
+relevant_paths = [
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+    "product/missions/M058-pipeline-benchmark-harness.toml",
+    "product/missions/M059-parallel-source-and-entity-io.toml",
+    "product/missions/M060-pushdown-analytics-projection.toml",
+    "product/missions/M061-post-m058-m059-retro-cleanup.toml",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M062-v0.7.0-release.toml — read outcome + [notes]
+sections. Key constraints:
+- No code changes; only version + lockfile + CHANGELOG
+- Do NOT describe the M060 dtype-narrowing that isn't shipping
+- DO describe the M059 fail-fast change
+- Known-limitations footer is short and references Beads IDs
+
+## CHANGELOG content sourcing
+
+For each subsection, draw material from:
+- M058: product/missions/M058-pipeline-benchmark-harness.toml [outcome]
+- M059: product/missions/M059-parallel-source-and-entity-io.toml [outcome]
+  and [scope] — explicit about the phase-1 fail-fast semantics change
+- M060: product/missions/M060-pushdown-analytics-projection.toml [outcome]
+  + PR #117 body (use `gh pr view 117 --json body --jq .body | head -80`
+  for the speedup numbers)
+- M061: product/missions/M061-post-m058-m059-retro-cleanup.toml [outcome]
+
+Don't paraphrase the TOMLs verbatim — write release notes that a user
+reading PyPI would find useful. Think "what changed for me" not "what
+this mission's scope was".
+
+## Style reference
+
+Match the existing CHANGELOG entries ([0.6.2] and [0.6.1]):
+- Keep-a-Changelog section headers
+- Bullet points with backticked identifiers for code references
+- Wrap at ~75 chars
+- Use subsection names consistent with past entries (Fixed / Changed / Added / Changed (internal) / Performance — note the existing file already uses 'Fixed' and 'Changed (internal)'; 'Performance' is new but standard Keep-a-Changelog)
+
+## Release-flow rituals
+
+1. In the fresh worktree, rename the branch to `release/v0.7.0` BEFORE
+   touching files:
+   ```
+   git branch -m release/v0.7.0
+   ```
+
+2. Bump `pyproject.toml`: change `version = "0.6.2"` → `version = "0.7.0"`.
+
+3. Run `uv lock` to regenerate the lockfile. The lockfile gets a
+   `version = "0.7.0"` entry for the `fyrnheim` project.
+
+4. Write the CHANGELOG entry above `## [0.6.2]`.
+
+5. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`.
+   All must pass.
+
+6. Commit everything in one commit with the release message.
+
+7. Push `release/v0.7.0` and open the PR.
+
+## Post-merge human steps (include in PR body)
+
+After the PR merges, the human operator will:
+```
+git fetch origin
+git checkout main && git pull --ff-only
+git tag v0.7.0
+git push origin v0.7.0
+```
+
+The tag push triggers `.github/workflows/publish.yml` which uploads the
+wheel to PyPI. Verify via:
+```
+gh run list --workflow=publish.yml --limit 1
+curl -s https://pypi.org/pypi/fyrnheim/json | jq '.info.version'
+```
+
+Include this in the PR body as 'Post-merge steps' so the human has the
+exact commands handy.
+
+## Do NOT
+
+- Make any code change outside pyproject.toml + uv.lock + CHANGELOG.md
+- Merge the PR or create the tag yourself
+- Call out a latest-measure dtype narrowing (it was rework-fixed and no
+  longer ships)
+- Skip the `uv lock` regeneration — CI will fail if the lockfile is stale
+- Close the Beads task for this story before the PR is opened
+"""
+reference_files = [
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+    "product/missions/M062-v0.7.0-release.toml",
+    "product/missions/M058-pipeline-benchmark-harness.toml",
+    "product/missions/M059-parallel-source-and-entity-io.toml",
+    "product/missions/M060-pushdown-analytics-projection.toml",
+    "product/missions/M061-post-m058-m059-retro-cleanup.toml",
+]

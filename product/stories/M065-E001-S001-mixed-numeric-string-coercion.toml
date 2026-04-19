@@ -1,0 +1,333 @@
+id = "M065-E001-S001"
+parent = "M065-E001"
+title = "_try_coerce_strings_to_numeric helper + tolerant-coercion branch + v0.7.3 release"
+status = "ready"
+created = 2026-04-19
+
+[outcome]
+description = """Add _try_coerce_strings_to_numeric helper and a
+tolerant-coercion branch in _coerce_to_arrow_friendly_dtype that handles
+mixed numeric + numeric-string columns, add 7 unit tests, bump 0.7.2 ->
+0.7.3 with CHANGELOG entry, push release/v0.7.3 branch, open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/analytics_entity_engine.py gains a new private helper `_try_coerce_strings_to_numeric(non_null: list) -> tuple[list, bool] | None` placed directly above `_coerce_to_arrow_friendly_dtype` (so it's visible where it's called)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The helper iterates the input list; for each string value it calls `json.loads` (catching ValueError / TypeError); accepts ONLY results where `type(parsed) is int` or `type(parsed) is float` (strict type check — NOT isinstance, so bool is rejected); returns None if any string is unparseable OR parses to a non-numeric type (str, bool, list, dict, None)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The helper tracks `saw_float` across all values (set True when any float is encountered post-parse OR when a non-string input has `type(v) in _FLOAT_TYPES`); returns `(coerced_values, saw_float)` on success"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`_coerce_to_arrow_friendly_dtype` gains a new branch placed AFTER the pure `types <= _INT_TYPES | _FLOAT_TYPES` branch and AFTER the `types == {str}` branch, BEFORE the final `return s.astype(object)`: if `types <= _INT_TYPES | _FLOAT_TYPES | {str}`, call the coercion helper; if it returns a tuple, rebuild the Series with the coerced non-null values spliced back at the right positions (None/NaN positions preserved) and return it cast to `pd.Int64Dtype()` if saw_float is False else `'Float64'`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Rebuild shape: `s.dropna()` preserves order, so the coerced list can be consumed in order while iterating `s`. The implementer should use a pattern like `iter(coerced); next(it) for non-null else None for all s` or equivalent. The result must have the same length and index as `s`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_int_plus_numeric_strings: `pd.Series([None, 11, '-5', '0', None, '47'], dtype=object)` → helper returns pd.Int64Dtype() with values [None, 11, -5, 0, None, 47] (None positions preserved exactly; strings parsed to ints)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_float_plus_numeric_strings: `pd.Series([None, 3.14, '2.71', '1.41'], dtype=object)` → helper returns 'Float64' with values [None, 3.14, 2.71, 1.41]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_int_plus_float_strings: `pd.Series([None, 11, '2.5', '-5'], dtype=object)` → helper returns 'Float64' (any float post-parse promotes to Float64)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_bails_on_non_parseable_string: `pd.Series([None, 11, 'hello', '-5'], dtype=object)` → helper returns object dtype (the 'hello' string is not JSON-parseable; fall back; PyArrow-unfriendly but matches current acceptable behavior for genuinely inconsistent data)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_bails_on_json_bool_string: `pd.Series([None, 11, 'true', '-5'], dtype=object)` → helper returns object dtype. Reason: `json.loads('true')` returns Python bool True; `type(True) is int` is False (strict), so the coercion helper treats it as non-numeric and bails. This keeps the bool-as-int guard consistent across the layer."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_bails_on_json_null_string: `pd.Series([None, 11, 'null', '-5'], dtype=object)` → helper returns object dtype. Reason: `json.loads('null')` returns Python None; None is treated as non-numeric by the coercion helper."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit test test_coerce_handles_numpy_int_plus_numeric_string: `pd.Series([None, np.int64(11), '-5', None], dtype=object)` → helper returns pd.Int64Dtype() with values [None, 11, -5, None]. The numpy int is passed through as-is by the coercion helper (not a string), and the single numeric-string is parsed."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All v0.7.1 regression tests (TestProjectionArrowCompatibility: nullable_int/float/bool/string/mixed) continue to pass unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All v0.7.2 numpy unit tests (numpy_int64, numpy_float64, numpy_bool, python+numpy mixes) continue to pass unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All 26 TestEquivalenceWithLegacy scenarios pass unchanged"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All other existing tests pass: tests/test_analytics_entity_engine.py (other test classes), tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_benchmark_harness.py, tests/test_parallel_io.py, tests/test_config.py, tests/test_executor.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version field == '0.7.3'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated via `uv lock`; the lockfile's fyrnheim entry records version 0.7.3"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.7.3] - 2026-04-19` section above the existing `## [0.7.2]` header with a `### Fixed` bullet describing the mixed-numeric-string coercion AND a `### Changed` bullet (or a 'behavior change' note within Fixed) explaining that intentionally-mixed numeric-and-numeric-string columns will now coerce to a unified nullable numeric dtype"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope exactly 5 files: src/fyrnheim/engine/analytics_entity_engine.py, tests/test_analytics_entity_engine.py, pyproject.toml, uv.lock, CHANGELOG.md. Nothing else modified."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.7.3` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M065): tolerant numeric coercion for mixed int+string columns (v0.7.3)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.7.3 — tolerant numeric coercion for mixed int+string columns`. Body describes the bug (user-data inconsistency), the BigQuery impact, the behavior change, includes the post-merge-steps block (`git tag v0.7.3`, `git push origin v0.7.3`, PyPI verify)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+product/missions/M065-v0.7.3-mixed-numeric-string-coercion.toml — full
+outcome, root-cause chain, CHANGELOG copy, and full implementation
+sketch in [notes]. Read that first.
+
+## Implementation sketch (from mission TOML)
+
+```python
+def _try_coerce_strings_to_numeric(
+    non_null: list,
+) -> tuple[list, bool] | None:
+    \"\"\"Attempt json.loads on string values, keeping numeric ones in place.
+
+    Returns (coerced_values, saw_float) if every string parses cleanly
+    to a Python ``int`` or ``float``. Returns ``None`` if any string
+    parses to a non-numeric type (str, bool, None, list, dict) or is
+    unparseable — signalling 'fall back to object dtype'.
+    \"\"\"
+    out: list = []
+    saw_float = False
+    for v in non_null:
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except (ValueError, TypeError):
+                return None
+            if type(parsed) is int:
+                out.append(parsed)
+            elif type(parsed) is float:
+                out.append(parsed)
+                saw_float = True
+            else:
+                return None
+        else:
+            out.append(v)
+            if type(v) in _FLOAT_TYPES:
+                saw_float = True
+    return out, saw_float
+
+
+def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
+    non_null = s.dropna()
+    if len(non_null) == 0:
+        return s.astype(object)
+    types = {type(v) for v in non_null}
+    if types <= _BOOL_TYPES:
+        return s.astype("boolean")
+    if types <= _INT_TYPES:
+        return s.astype(pd.Int64Dtype())
+    if types <= _INT_TYPES | _FLOAT_TYPES:
+        return s.astype("Float64")
+    if types == {str}:
+        return s.astype(object)
+    # NEW: mixed numeric + string — tolerantly coerce when ALL strings
+    # parse cleanly to int/float.
+    if types <= _INT_TYPES | _FLOAT_TYPES | {str}:
+        result = _try_coerce_strings_to_numeric(list(non_null))
+        if result is not None:
+            coerced, saw_float = result
+            it = iter(coerced)
+            rebuilt = [
+                next(it) if not (v is None or (isinstance(v, float) and pd.isna(v))) else None
+                for v in s
+            ]
+            target = "Float64" if saw_float else pd.Int64Dtype()
+            return pd.Series(rebuilt, index=s.index, dtype=object).astype(target)
+    return s.astype(object)
+```
+
+## Rebuild step — subtle correctness
+
+- `s.dropna()` preserves index order AND drops Nones/NaNs. The coerced
+  list is in the same order as non-null positions in `s`.
+- Iterating `s` with `iter(coerced)` and `next(it)` for non-null
+  positions correctly splices the coerced values back where they belong.
+- None positions stay None. The output has the same length and index as
+  `s`.
+
+Test this carefully with a fixture that has Nones interleaved — e.g.
+`[None, 11, '-5', '0', None, '47']` → output `[None, 11, -5, 0, None, 47]`.
+
+## Why strict type check after json.loads
+
+`json.loads("true")` returns Python `bool` True. `isinstance(True, int)`
+is True — but `type(True) is int` is False. Using strict `type()` keeps
+the bool-as-int guard consistent with the rest of the module. A column
+with a mix of int and JSON-bool-strings falls through to object dtype
+(the user has genuinely inconsistent data).
+
+Similarly `json.loads("null")` returns Python None. A None post-parse
+is rejected by the coercion helper (None is not int/float).
+
+## CHANGELOG entry (verbatim)
+
+```
+## [0.7.3] - 2026-04-19
+
+### Fixed
+
+- `_coerce_to_arrow_friendly_dtype` now attempts to coerce mixed
+  numeric-and-string columns to a nullable numeric dtype when every
+  string is a valid JSON number. Previously the column fell through
+  to object dtype, breaking the BigQuery PyArrow registration path
+  for any state field whose source payload stored the value
+  inconsistently as JSON numbers in some rows and JSON-quoted numbers
+  in others (e.g. `{"score": 11}` vs `{"score": "-5"}` across the
+  same source).
+
+### Changed
+
+- State fields and `latest` measures over payloads with intentionally
+  mixed numeric-and-numeric-string values now produce a unified
+  nullable numeric column (`Int64` if all values parse to int,
+  `Float64` if any parse to float). Columns containing any
+  non-numeric string are unaffected and continue to produce
+  object-dtype output — which still fails PyArrow registration
+  loudly, as it should (genuinely inconsistent data needs upstream
+  cleanup, not silent type coercion).
+```
+
+## Release-flow rituals (same as M063/M064)
+
+1. In the fresh worktree, rename the branch FIRST:
+   ```
+   git branch -m release/v0.7.3
+   ```
+
+2. Claim Beads: `bd update <story-task-id> --status in_progress`
+
+3. Implement the helper + branch.
+
+4. Add 7 unit tests in tests/test_analytics_entity_engine.py near the
+   existing TestCoerceToArrowFriendlyDtype class.
+
+5. Bump pyproject.toml 0.7.2 -> 0.7.3 and run `uv lock`.
+
+6. Write CHANGELOG [0.7.3] entry above [0.7.2].
+
+7. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`.
+
+8. Single commit:
+   ```
+   fix(M065): tolerant numeric coercion for mixed int+string columns (v0.7.3)
+
+   Source payloads that store a numeric value inconsistently — JSON
+   number in some rows ({\"score\": 11}), JSON-quoted number in others
+   ({\"score\": \"-5\"}) — produced an object-dtype column after the
+   push-down extraction, because _coerce_to_arrow_friendly_dtype's
+   pure-type branches matched neither {int, str} nor {float, str}.
+   PyArrow rejected the object column on BigQuery; DuckDB silently
+   tolerated it.
+
+   Add _try_coerce_strings_to_numeric: when every string value parses
+   cleanly to int or float via json.loads, coerce the whole column to
+   Int64 / Float64. Non-numeric strings (\"hello\"), JSON bools
+   (\"true\"), and JSON nulls (\"null\") cause the helper to bail
+   out — the column stays object-dtype and PyArrow still fails loudly,
+   which is the right signal for genuinely inconsistent data.
+
+   Strict type(v) classification after json.loads preserves the bool-
+   as-int guard.
+   ```
+
+9. Close Beads. Push release/v0.7.3.
+
+10. Open PR with title `release: v0.7.3 — tolerant numeric coercion for
+    mixed int+string columns`. Body includes:
+    - Bug summary (user-data inconsistency exposed by M060 push-down)
+    - BigQuery impact
+    - Behavior-change note about intentionally-mixed numeric+string
+    - Post-merge-steps block:
+      ```
+      ### Post-merge steps (human)
+
+      After this PR merges:
+
+          git fetch origin
+          git checkout main && git pull --ff-only
+          git tag v0.7.3
+          git push origin v0.7.3
+
+      Tag push triggers publish.yml → PyPI. Verify:
+
+          gh run list --workflow=publish.yml --limit 1
+          curl -s https://pypi.org/pypi/fyrnheim/json | python -c "import sys, json; print(json.load(sys.stdin)['info']['version'])"
+      ```
+
+11. STOP. Do NOT merge, tag, or publish.
+
+## Do NOT
+
+- Modify `_parse_json_text_cell` (keep surface narrow).
+- Coerce mixed non-numeric-and-string columns to all-string (keep the
+  behavior change minimal).
+- Change the M064 type sets (`_INT_TYPES` etc. are fine as-is).
+- Touch Pydantic models, pipeline.py, cli.py, or any test file other
+  than tests/test_analytics_entity_engine.py.
+- Use `isinstance` for type classification after json.loads — strict
+  `type()` only (bool-as-int guard).
+- Merge, tag, or publish.
+"""
+reference_files = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M065-v0.7.3-mixed-numeric-string-coercion.toml",
+]

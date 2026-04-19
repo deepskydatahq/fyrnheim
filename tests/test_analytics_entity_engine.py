@@ -1081,6 +1081,91 @@ class TestCoerceToArrowFriendlyDtype:
         result = _coerce_to_arrow_friendly_dtype(s)
         assert result.dtype == object
 
+    # ---- M064: numpy scalar recognition (v0.7.2) -------------------------
+    # BigQuery's Python client returns numpy scalars (np.int64, np.float64,
+    # np.bool_) where DuckDB returns plain Python scalars. v0.7.1's strict
+    # ``type() == {int}`` equality rejected ``{np.int64}`` and the column
+    # fell through to object dtype, reintroducing the PyArrow
+    # memtable-registration failure v0.7.1 was meant to fix. These tests
+    # pin the behaviour: numpy scalars and Python+numpy mixes must land
+    # in the same branch as their Python-only equivalents, while the
+    # ``np.bool_ -> boolean`` branch must not leak to Int64 (mirroring
+    # the Python-``bool`` guardrail).
+
+    def test_coerce_handles_numpy_int64(self):
+        s = pd.Series([None, np.int64(85), None, np.int64(60)], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert isinstance(result.dtype, pd.Int64Dtype), (
+            f"expected Int64, got {result.dtype!r}"
+        )
+        assert result.iloc[1] == 85
+        assert pd.isna(result.iloc[2])
+        assert result.iloc[3] == 60
+
+    def test_coerce_handles_numpy_float64(self):
+        s = pd.Series([None, np.float64(1.5), None, np.float64(2.5)], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert str(result.dtype) == "Float64", (
+            f"expected Float64, got {result.dtype!r}"
+        )
+        assert result.iloc[1] == 1.5
+        assert pd.isna(result.iloc[2])
+        assert result.iloc[3] == 2.5
+
+    def test_coerce_handles_numpy_bool(self):
+        s = pd.Series([None, np.bool_(True), np.bool_(False)], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert str(result.dtype) == "boolean", (
+            f"expected boolean, got {result.dtype!r}"
+        )
+        # Critical invariant: numpy bool must NOT coerce to Int64.
+        # ``np.bool_`` lives only in ``_BOOL_TYPES``; the strict
+        # ``type()`` collection + subset check keeps the branch pure.
+        assert not isinstance(result.dtype, pd.Int64Dtype), (
+            "numpy bool must not coerce to Int64"
+        )
+        assert result.iloc[1] is True or result.iloc[1] == True  # noqa: E712
+        assert result.iloc[2] is False or result.iloc[2] == False  # noqa: E712
+
+    def test_coerce_handles_python_int_plus_numpy_int64_mix(self):
+        # Realistic BigQuery path: a column that mixes a Python ``int``
+        # (from a direct json.loads fallback) with ``np.int64`` (from
+        # the BigQuery client's typed return) must still collapse to
+        # Int64 via subset matching on ``_INT_TYPES``.
+        s = pd.Series([1, np.int64(2), None, 3, np.int64(4)], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert isinstance(result.dtype, pd.Int64Dtype), (
+            f"expected Int64, got {result.dtype!r}"
+        )
+        assert result.iloc[0] == 1
+        assert result.iloc[1] == 2
+        assert pd.isna(result.iloc[2])
+
+    def test_coerce_handles_python_float_plus_numpy_float64_mix(self):
+        s = pd.Series(
+            [1.5, np.float64(2.5), None, 3.5, np.float64(4.5)], dtype=object
+        )
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert str(result.dtype) == "Float64", (
+            f"expected Float64, got {result.dtype!r}"
+        )
+        assert result.iloc[0] == 1.5
+        assert result.iloc[1] == 2.5
+        assert pd.isna(result.iloc[2])
+
+    def test_coerce_handles_numpy_int64_plus_numpy_float64_mix(self):
+        # int + float -> Float64 via ``types <= _INT_TYPES | _FLOAT_TYPES``.
+        s = pd.Series(
+            [np.int64(1), np.float64(2.5), None, np.int64(3)], dtype=object
+        )
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert str(result.dtype) == "Float64", (
+            f"expected Float64, got {result.dtype!r}"
+        )
+        assert result.iloc[0] == 1.0
+        assert result.iloc[1] == 2.5
+        assert pd.isna(result.iloc[2])
+
 
 class TestProjectionArrowCompatibility:
     """Regression tests for M063: projection -> ibis.memtable -> to_pyarrow().

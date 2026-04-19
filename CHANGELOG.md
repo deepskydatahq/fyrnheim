@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-04-19
+
+### Fixed
+
+- `_coerce_to_arrow_friendly_dtype` now recognises numpy scalar types
+  (`np.int8`/`int16`/`int32`/`int64`, unsigned variants,
+  `np.float16`/`float32`/`float64`, `np.bool_`) alongside their Python
+  equivalents. v0.7.1 fixed the Python-scalar case, but BigQuery's
+  client returns numpy scalars — the helper's strict `type()` match
+  rejected them and the output column fell through to object dtype,
+  reintroducing the same PyArrow registration failure v0.7.1 was meant
+  to eliminate. DuckDB was unaffected because it returns plain Python
+  scalars.
+
 ## [0.7.1] - 2026-04-19
 
 ### Fixed

@@ -71,6 +71,7 @@ import json
 from typing import Any
 
 import ibis
+import numpy as np
 import pandas as pd
 from ibis.expr.types import BooleanValue, StringValue, Table
 
@@ -361,42 +362,78 @@ def _parse_json_text_cell(value: Any) -> Any:
         return value
 
 
+# Module-level type sets — the source of truth for what
+# :func:`_coerce_to_arrow_friendly_dtype` recognises as an
+# Arrow-friendly scalar. Kept as exact ``type`` sets (not ``isinstance``
+# hierarchies) so that ``bool`` — a subclass of ``int`` — never leaks
+# into the int branch; see the helper docstring for the invariant.
+_BOOL_TYPES: set[type] = {bool, np.bool_}
+_INT_TYPES: set[type] = {
+    int,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
+    np.uint8,
+    np.uint16,
+    np.uint32,
+    np.uint64,
+}
+_FLOAT_TYPES: set[type] = {float, np.float16, np.float32, np.float64}
+
+
 def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
-    """Infer a pandas nullable dtype for an object series of Python scalars.
+    """Infer a pandas nullable dtype for an object series of Python or numpy scalars.
 
     After :func:`_parse_json_text_cell` we hold an object-dtype column of
-    mixed Python scalars (``int`` + ``None``, ``float`` + ``None``,
-    ``bool`` + ``None``, ``str`` + ``None``). PyArrow cannot infer a
-    stable Arrow type across an object column that contains
-    Python-scalar values interleaved with ``None`` — and
+    mixed Python or numpy scalars (``int`` + ``None``, ``float`` + ``None``,
+    ``bool`` + ``None``, ``str`` + ``None``, or the numpy-scalar
+    equivalents ``np.int64`` / ``np.float64`` / ``np.bool_`` etc. that
+    BigQuery's Python client returns). PyArrow cannot infer a stable
+    Arrow type across an object column that contains Python-scalar
+    values interleaved with ``None`` — and
     ``ibis.memtable(df).to_pyarrow()`` (the BigQuery memtable-registration
     path) fails as a result. DuckDB silently tolerates the object dtype.
 
     To keep the projection Arrow-compatible without breaking the
     mixed-type contract for legitimately heterogeneous payloads, we
-    inspect the *non-null* Python values and pick a clean nullable pandas
-    dtype per column:
+    inspect the *non-null* values and pick a clean nullable pandas
+    dtype per column. The recognised type sets are the module-level
+    :data:`_BOOL_TYPES`, :data:`_INT_TYPES`, and :data:`_FLOAT_TYPES`
+    — the source of truth for which Python and numpy scalar types
+    collapse to each Arrow-friendly pandas dtype:
 
-    * all ``bool``  -> ``"boolean"``         (pandas nullable BooleanDtype)
-    * all ``int``   -> ``pd.Int64Dtype()``   (pandas nullable Int64)
-    * ``int`` + ``float`` (or all-float) -> ``"Float64"``  (nullable)
-    * all ``str``   -> ``object``            (Arrow handles object-str)
-    * mixed / all-null / empty -> ``object`` (caller's data model choice)
+    * all types ``<= _BOOL_TYPES``  -> ``"boolean"``
+      (pandas nullable BooleanDtype)
+    * all types ``<= _INT_TYPES``   -> ``pd.Int64Dtype()``
+      (pandas nullable Int64)
+    * all types ``<= _INT_TYPES | _FLOAT_TYPES`` -> ``"Float64"``
+      (nullable Float64; covers all-float and int+float mixes including
+      Python+numpy combinations)
+    * all types ``== {str}``        -> ``object`` (Arrow handles object-str)
+    * mixed / all-null / empty      -> ``object`` (caller's data model choice)
 
-    Strict ``type(v) is int`` matching is used (not ``isinstance``) so a
-    ``bool`` value — which is a subclass of ``int`` in Python — is not
-    silently coerced to ``Int64``. This is the guardrail that keeps the
-    ``bool``-branch correct end-to-end.
+    Strict ``type(v) is int`` matching via ``{type(v) for v in non_null}``
+    is used (not ``isinstance``) so a ``bool`` value — which is a
+    subclass of ``int`` in Python — is not silently coerced to ``Int64``.
+    Equivalently, ``np.bool_`` is a distinct type (not a subclass of
+    the numpy integer scalars) and lives only in :data:`_BOOL_TYPES`.
+    This is the guardrail that keeps the ``bool``-branch correct
+    end-to-end.
+
+    Subset matching (``types <= _INT_TYPES``) instead of equality lets
+    Python+numpy mixes (e.g. ``{int, np.int64}``) land in the right
+    branch without an explosion of per-combination checks.
     """
     non_null = s.dropna()
     if len(non_null) == 0:
         return s.astype(object)
     types = {type(v) for v in non_null}  # strict type(), NOT isinstance
-    if types == {bool}:
+    if types <= _BOOL_TYPES:
         return s.astype("boolean")
-    if types == {int}:
+    if types <= _INT_TYPES:
         return s.astype(pd.Int64Dtype())
-    if types <= {int, float}:
+    if types <= _INT_TYPES | _FLOAT_TYPES:
         return s.astype("Float64")
     if types == {str}:
         return s.astype(object)

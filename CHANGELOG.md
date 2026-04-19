@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-04-19
+
+### Fixed
+
+- `project_analytics_entity` output now uses pandas nullable dtypes
+  (`Int64` / `Float64` / `boolean`) for numeric and boolean state fields
+  instead of object dtype with Python-scalar-and-None values. v0.7.0
+  produced object-dtype columns that PyArrow could not convert, breaking
+  the BigQuery memtable-registration path for any entity with a
+  nullable numeric or boolean state field. DuckDB was unaffected.
+
 ## [0.7.0] - 2026-04-19
 
 Performance bundle: push-down analytics-entity projection (M060), parallel

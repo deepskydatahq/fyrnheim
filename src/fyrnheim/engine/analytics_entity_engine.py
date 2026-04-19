@@ -361,6 +361,48 @@ def _parse_json_text_cell(value: Any) -> Any:
         return value
 
 
+def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
+    """Infer a pandas nullable dtype for an object series of Python scalars.
+
+    After :func:`_parse_json_text_cell` we hold an object-dtype column of
+    mixed Python scalars (``int`` + ``None``, ``float`` + ``None``,
+    ``bool`` + ``None``, ``str`` + ``None``). PyArrow cannot infer a
+    stable Arrow type across an object column that contains
+    Python-scalar values interleaved with ``None`` — and
+    ``ibis.memtable(df).to_pyarrow()`` (the BigQuery memtable-registration
+    path) fails as a result. DuckDB silently tolerates the object dtype.
+
+    To keep the projection Arrow-compatible without breaking the
+    mixed-type contract for legitimately heterogeneous payloads, we
+    inspect the *non-null* Python values and pick a clean nullable pandas
+    dtype per column:
+
+    * all ``bool``  -> ``"boolean"``         (pandas nullable BooleanDtype)
+    * all ``int``   -> ``pd.Int64Dtype()``   (pandas nullable Int64)
+    * ``int`` + ``float`` (or all-float) -> ``"Float64"``  (nullable)
+    * all ``str``   -> ``object``            (Arrow handles object-str)
+    * mixed / all-null / empty -> ``object`` (caller's data model choice)
+
+    Strict ``type(v) is int`` matching is used (not ``isinstance``) so a
+    ``bool`` value — which is a subclass of ``int`` in Python — is not
+    silently coerced to ``Int64``. This is the guardrail that keeps the
+    ``bool``-branch correct end-to-end.
+    """
+    non_null = s.dropna()
+    if len(non_null) == 0:
+        return s.astype(object)
+    types = {type(v) for v in non_null}  # strict type(), NOT isinstance
+    if types == {bool}:
+        return s.astype("boolean")
+    if types == {int}:
+        return s.astype(pd.Int64Dtype())
+    if types <= {int, float}:
+        return s.astype("Float64")
+    if types == {str}:
+        return s.astype(object)
+    return s.astype(object)  # mixed / other — user's data model choice
+
+
 def _parse_json_text_columns(
     df: pd.DataFrame, columns: list[str]
 ) -> pd.DataFrame:
@@ -368,11 +410,27 @@ def _parse_json_text_columns(
 
     Operates in place on a copy and returns the updated frame. Columns
     missing from ``df`` (e.g. on an empty aggregation result) are ignored.
+    Each parsed column is passed through
+    :func:`_coerce_to_arrow_friendly_dtype` so the resulting frame is
+    safe to register as an ``ibis.memtable`` and convert to PyArrow on
+    backends (BigQuery) that require a stable Arrow schema.
     """
     out = df.copy()
     for col in columns:
         if col in out.columns:
-            out[col] = out[col].map(_parse_json_text_cell).astype(object)
+            # Build the parsed column via a list comprehension rather than
+            # ``.map`` so pandas does not auto-infer a dtype. ``.map`` would
+            # helpfully promote ``[int, None]`` to ``float64`` with NaN,
+            # hiding the real Python scalar types from
+            # :func:`_coerce_to_arrow_friendly_dtype`. Constructing the
+            # series with ``dtype=object`` preserves the exact Python
+            # values the helper needs to branch on.
+            parsed = pd.Series(
+                [_parse_json_text_cell(v) for v in out[col]],
+                index=out[col].index,
+                dtype=object,
+            )
+            out[col] = _coerce_to_arrow_friendly_dtype(parsed)
     return out
 
 

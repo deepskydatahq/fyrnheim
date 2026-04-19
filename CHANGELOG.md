@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-04-19
+
+### Fixed
+
+- `_coerce_to_arrow_friendly_dtype` now attempts to coerce mixed
+  numeric-and-string columns to a nullable numeric dtype when every
+  string is a valid JSON number. Previously the column fell through
+  to object dtype, breaking the BigQuery PyArrow registration path
+  for any state field whose source payload stored the value
+  inconsistently as JSON numbers in some rows and JSON-quoted numbers
+  in others (e.g. `{"score": 11}` vs `{"score": "-5"}` across the
+  same source).
+
+### Changed
+
+- State fields and `latest` measures over payloads with intentionally
+  mixed numeric-and-numeric-string values now produce a unified
+  nullable numeric column (`Int64` if all values parse to int,
+  `Float64` if any parse to float). Columns containing any
+  non-numeric string are unaffected and continue to produce
+  object-dtype output — which still fails PyArrow registration
+  loudly, as it should (genuinely inconsistent data needs upstream
+  cleanup, not silent type coercion).
+
 ## [0.7.2] - 2026-04-19
 
 ### Fixed

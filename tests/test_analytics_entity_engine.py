@@ -1166,6 +1166,93 @@ class TestCoerceToArrowFriendlyDtype:
         assert result.iloc[1] == 2.5
         assert pd.isna(result.iloc[2])
 
+    # ---- M065: tolerant numeric coercion for mixed int+string (v0.7.3) ----
+    # Real-world BigQuery payloads stored a ``lead_score`` inconsistently —
+    # JSON number in some rows ({"lead_score": 11}), JSON-quoted number in
+    # others ({"lead_score": "-5"}). After M060 push-down + _parse_json_text
+    # normalisation the column is a Python-scalar mix of ``int`` + ``str``
+    # (and sometimes ``float``). Before v0.7.3 the helper's pure-type
+    # branches rejected it and the column fell through to object dtype,
+    # breaking the PyArrow registration path on BigQuery (DuckDB silently
+    # tolerated it). The tolerant branch calls json.loads on each string
+    # and only coerces when every string parses cleanly to a Python
+    # ``int`` or ``float`` (strict type() — rejecting bool / null / list /
+    # dict so genuinely inconsistent data still surfaces as an error).
+
+    def test_coerce_handles_int_plus_numeric_strings(self):
+        s = pd.Series([None, 11, "-5", "0", None, "47"], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert isinstance(result.dtype, pd.Int64Dtype), (
+            f"expected Int64, got {result.dtype!r}"
+        )
+        assert result.iloc[1] == 11
+        assert result.iloc[2] == -5
+        assert result.iloc[3] == 0
+        assert pd.isna(result.iloc[4])
+        assert result.iloc[5] == 47
+
+    def test_coerce_handles_float_plus_numeric_strings(self):
+        s = pd.Series([None, 1.5, "2.25", "0.5", None], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert str(result.dtype) == "Float64", (
+            f"expected Float64, got {result.dtype!r}"
+        )
+        assert result.iloc[1] == 1.5
+        assert result.iloc[2] == 2.25
+        assert result.iloc[3] == 0.5
+        assert pd.isna(result.iloc[4])
+
+    def test_coerce_handles_int_plus_float_string_mix_becomes_float64(self):
+        # Any float anywhere (Python value or parsed string) promotes to Float64.
+        s = pd.Series([None, 11, "-5.5", "0", "47"], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert str(result.dtype) == "Float64", (
+            f"expected Float64, got {result.dtype!r}"
+        )
+        assert result.iloc[1] == 11.0
+        assert result.iloc[2] == -5.5
+        assert result.iloc[3] == 0.0
+        assert result.iloc[4] == 47.0
+
+    def test_coerce_bails_on_non_parseable_string(self):
+        # "hello" is not valid JSON — helper returns None, column stays object.
+        s = pd.Series([None, 11, "hello", "-5"], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert result.dtype == object, (
+            f"expected object, got {result.dtype!r}"
+        )
+
+    def test_coerce_bails_on_json_bool_string(self):
+        # json.loads("true") -> Python bool; strict type() check rejects it
+        # (``type(True) is int`` is False) and we fall back to object dtype
+        # so PyArrow still fails loudly for genuinely inconsistent data.
+        s = pd.Series([None, 11, "true", "-5"], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert result.dtype == object, (
+            f"expected object, got {result.dtype!r}"
+        )
+
+    def test_coerce_bails_on_json_null_string(self):
+        # json.loads("null") -> None; non-numeric parsed type -> bail out.
+        s = pd.Series([None, 11, "null", "-5"], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert result.dtype == object, (
+            f"expected object, got {result.dtype!r}"
+        )
+
+    def test_coerce_handles_numpy_int_plus_numeric_string(self):
+        # BigQuery's client returns np.int64 — combined with a JSON-quoted
+        # numeric string, the tolerant branch still lands on Int64.
+        s = pd.Series([None, np.int64(85), "-5", None, "47"], dtype=object)
+        result = _coerce_to_arrow_friendly_dtype(s)
+        assert isinstance(result.dtype, pd.Int64Dtype), (
+            f"expected Int64, got {result.dtype!r}"
+        )
+        assert result.iloc[1] == 85
+        assert result.iloc[2] == -5
+        assert pd.isna(result.iloc[3])
+        assert result.iloc[4] == 47
+
 
 class TestProjectionArrowCompatibility:
     """Regression tests for M063: projection -> ibis.memtable -> to_pyarrow().

@@ -1,0 +1,72 @@
+# Epic: Release v0.7.0 — version bump + CHANGELOG + release PR
+# Single epic covering the full M062 scope. Post-merge tag + publish
+# happen outside the agent flow.
+
+id = "M062-E001"
+parent = "M062"
+title = "Version bump + CHANGELOG + release PR"
+status = "active"
+created = 2026-04-19
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering M062's in-scope work: bump pyproject.toml 0.6.2 →
+0.7.0, regenerate uv.lock, author CHANGELOG.md's [0.7.0] entry bundling
+M058/M059/M060/M061 under Performance/Added/Changed/Fixed subsections,
+and open the release PR against main on branch `release/v0.7.0`.
+
+Tag creation, tag push, and PyPI verification happen AFTER the release
+PR merges — outside the agent's scope and executed manually per the
+release-flow memory.
+"""
+
+[job_story]
+description = """When the four performance missions are merged and I want
+to ship v0.7.0, I want a single release PR that bundles the version bump
+plus user-facing release notes so I can review-and-merge once rather than
+juggle artifacts myself."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "pyproject.toml version == 0.7.0",
+    "uv.lock regenerated (recorded project version is 0.7.0)",
+    "CHANGELOG.md has a new `## [0.7.0] - 2026-04-19` section above the 0.6.2 entry",
+    "CHANGELOG [0.7.0] section has Performance / Added / Changed / Fixed subsections with content matching the four component missions (M058 harness; M059 parallel I/O + max_parallel_io; M060 push-down with 3.8×/26×/83× speedups cited; M059 fail-fast change; M061 retro fixes)",
+    "CHANGELOG entry ends with a 'Known limitations' note referencing the three open follow-up Beads tasks",
+    "No code changes beyond version bump + CHANGELOG + uv.lock",
+    "All existing tests pass; ruff + mypy clean",
+    "Branch `release/v0.7.0` pushed to origin with a single commit",
+    "PR opened against main titled `release: v0.7.0 — performance bundle`",
+]
+validator_context = [
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+    "product/missions/M058-pipeline-benchmark-harness.toml",
+    "product/missions/M059-parallel-source-and-entity-io.toml",
+    "product/missions/M060-pushdown-analytics-projection.toml",
+    "product/missions/M061-post-m058-m059-retro-cleanup.toml",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mission TOML (product/missions/M062-v0.7.0-release.toml) [notes] section
+has: CHANGELOG content sourcing guidance, the M060-dtype-narrowing
+clarification (do NOT call it out — was fixed in rework), M059 fail-fast
+migration-note shape, M060 performance citation, known-limitations shape.
+
+Tag + push + PyPI verification are post-merge manual steps — NOT in this
+epic's scope.
+"""
+
+estimated_stories = 1

@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-19
+
+Performance bundle: push-down analytics-entity projection (M060), parallel
+source/entity I/O (M059), benchmark harness (M058), and post-retro cleanup
+(M061).
+
+### Performance
+
+- `project_analytics_entity` now compiles to a single backend
+  `filter → group_by → aggregate` Ibis expression instead of materializing
+  the full enriched-events stream to pandas and looping in Python. JSON
+  payload extraction stays backend-portable (DuckDB `JSON_TYPE` / BigQuery
+  `SAFE.*` casts). Measured on a synthetic DuckDB fixture (1000 entities,
+  mixed state fields + measures, median of 3):
+
+  | rows | legacy | new | speedup |
+  | ---- | ------ | ----- | ------- |
+  | 1k   | 72.5ms | 19.2ms | 3.8×   |
+  | 10k  | 832ms  | 31.8ms | 26×    |
+  | 50k  | 7607ms | 91.3ms | 83×    |
+
+  The new shape scales essentially flat with event volume on the client;
+  the old Python loop was `O(n_ids × n_fields)`. On BigQuery the win is
+  one aggregation query per entity instead of a full event-table export.
+
+- Source loads (phase 1) and entity/metrics writes (phases 4–5) now fan
+  out to a `ThreadPoolExecutor` with a configurable worker count
+  (`max_parallel_io`, default `4`). Biggest wins are on BigQuery-bound
+  pipelines where each load/write blocks on a server round-trip; small
+  local DuckDB projects are unaffected at the default. Source-load order
+  is preserved — `event_tables[i]` still corresponds to
+  `config.sources[i]` regardless of completion order.
+
+### Added
+
+- `fyr bench` CLI subcommand — runs the configured pipeline end-to-end
+  and prints a per-phase, per-source, per-entity timing report. Human-
+  readable table by default, `--json` for machine consumption. Exit
+  contract matches `fyr run`.
+- `PipelineTimings` is now populated on every `PipelineResult`,
+  recording phase 0–5 durations plus per-source, per-identity-graph,
+  per-entity (`project_s` / `write_s`), and per-metrics-model timings.
+  Total `elapsed_seconds` is approximately the sum of the phase
+  timings.
+- `ResolvedConfig.max_parallel_io: int = 4` — bounds the I/O thread
+  pool. Configurable via `fyrnheim.yaml` or CLI overrides.
+- `fyr run --max-parallel-io N` and `fyr bench --max-parallel-io N` —
+  override the configured pool size for a single invocation.
+
+### Changed
+
+- Phase 1 (source loading) is now fail-fast: if any source loader
+  raises, the exception propagates out of `run_pipeline` via
+  `future.result()` rather than being accumulated into
+  `PipelineResult.errors` and reported at phase end. This matches the
+  serial pre-M059 contract where the first failure aborted the run.
+
+  **Migration:** if you were inspecting `result.errors` for source-load
+  failures, wrap `run_pipeline(...)` in `try/except` instead. No public
+  API signature changed.
+
+### Fixed
+
+- `IbisExecutor` connection leaks in four CLI commands closed:
+  `fyr run`, `fyr materialize`, `fyr drop`, and `fyr list-staging` now
+  wrap the executor in `try/finally` with `executor.close()` on both
+  success and error paths, matching the `fyr bench` pattern introduced
+  in M058.
+- `IbisExecutor.register_parquet` now holds `self._conn_lock` around
+  the connection mutation, for symmetry with every other
+  `self._conn`-touching method. Removes a latent thread-safety gap
+  under M059's parallel source loads.
+
+### Known limitations
+
+- No BigQuery credential-gated integration test covers the push-down
+  path yet — BQ portability is verified via `con.compile(expr)` against
+  a dummy connection, not a live job. Tracked as typedata-tidw.
+- `project_analytics_entity` still materializes aggregation results to
+  a pandas DataFrame and round-trips JSON scalars client-side for mixed-
+  type preservation, even when no `computed_fields` are declared. A
+  lazy-return path for the no-`computed_fields` case may land in a
+  future release. Tracked as typedata-vmok.
+
 ## [0.6.2] - 2026-04-17
 
 ### Fixed

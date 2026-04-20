@@ -1,0 +1,69 @@
+# Epic: v0.7.3 tolerant numeric coercion — the full patch-release in one PR
+# Single epic covering the full M065 scope. Mirrors M063/M064 shape.
+
+id = "M065-E001"
+parent = "M065"
+title = "Tolerant numeric coercion for mixed int+string columns + v0.7.3 release"
+status = "active"
+created = 2026-04-19
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M065 scope: add _try_coerce_strings_to_numeric
+helper in analytics_entity_engine.py, add a new branch in
+_coerce_to_arrow_friendly_dtype that calls it when types are a subset of
+numeric + str, add 7 unit tests (including the reproducer + edge cases
+for JSON bool/null/non-parseable strings), bump 0.7.2 -> 0.7.3 with
+CHANGELOG entry noting the Fixed + behavior-change. Open release PR.
+
+Mirrors M063/M064's v0.7.x shape: one mission = one branch = one PR =
+one release. Tag + publish are post-merge human steps.
+"""
+
+[job_story]
+description = """When I run a pipeline against BigQuery with a state
+field whose source payload stores a numeric value inconsistently (JSON
+number in some rows, JSON-quoted number in others), I want the coercion
+helper to recognise the strings as numbers when they all parse cleanly,
+so the output column has a unified nullable numeric dtype and PyArrow
+registration works."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 17 testing criteria from the M065 mission TOML pass",
+    "New private helper `_try_coerce_strings_to_numeric` present and correct",
+    "Tolerant-coercion branch added to `_coerce_to_arrow_friendly_dtype` between the pure numeric branches and the object fallback",
+    "Strict `type(v) is int` / `type(v) is float` classification after json.loads (NOT isinstance) — preserves bool-as-int guard at the coercion layer",
+    "7 new unit tests covering: int+numeric-string -> Int64; float+numeric-string -> Float64; int+float-string mix -> Float64; non-parseable string -> object (bail-out); JSON bool interleaved -> object; JSON null interleaved -> object; numpy int64 + numeric-string -> Int64",
+    "All v0.7.1 + v0.7.2 regression tests + 26 TestEquivalenceWithLegacy scenarios pass unchanged",
+    "ruff + mypy clean; pyproject.toml version == 0.7.3; CHANGELOG [0.7.3] entry added with Fixed + behavior-change notes",
+]
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_analytics_entity_engine.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M063/M064 shape — one commit bundling fix + version bump +
+CHANGELOG on a release/v0.7.3 branch. Full implementation sketch, root-
+cause chain, and CHANGELOG copy are in the M065 mission TOML [notes]
+section. Read that first.
+"""
+
+estimated_stories = 1

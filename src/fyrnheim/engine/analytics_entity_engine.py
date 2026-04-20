@@ -382,6 +382,59 @@ _INT_TYPES: set[type] = {
 _FLOAT_TYPES: set[type] = {float, np.float16, np.float32, np.float64}
 
 
+def _try_coerce_strings_to_numeric(
+    non_null: list,
+) -> tuple[list, bool] | None:
+    """Attempt ``json.loads`` on string values, keeping numeric ones in place.
+
+    Used by :func:`_coerce_to_arrow_friendly_dtype` for the tolerant-
+    coercion branch that handles payloads storing a single logical
+    numeric value inconsistently — as a JSON number in some rows and a
+    JSON-quoted number in others (e.g. ``{"score": 11}`` in one row,
+    ``{"score": "-5"}`` in another). After M060's push-down extraction
+    and :func:`_parse_json_text_cell` normalisation the resulting
+    column is a mix of Python ``int`` / ``float`` and ``str`` values,
+    which the pure-type branches do not recognise.
+
+    Iterates the non-null values; for each ``str`` it calls
+    ``json.loads`` (catching ``ValueError`` / ``TypeError``) and keeps
+    the parsed value only when its *strict* ``type(...)`` is ``int`` or
+    ``float``. ``isinstance`` is deliberately avoided: ``json.loads`` of
+    ``"true"`` / ``"false"`` returns a Python ``bool``, and
+    ``isinstance(True, int)`` is ``True``; the strict check rejects
+    bools and defers to the object-dtype fallback so PyArrow can still
+    fail loudly on genuinely inconsistent data.
+
+    Returns ``(coerced_values, saw_float)`` if every string parses
+    cleanly to ``int`` or ``float``. Returns ``None`` if any string
+    parses to a non-numeric type (``str``, ``bool``, ``None``, ``list``,
+    ``dict``) or is unparseable — signalling "fall back to object
+    dtype". ``saw_float`` is tracked across *all* values (both Python/
+    numpy floats and strings that parse to float) so the caller knows
+    whether to target ``Int64`` or ``Float64``.
+    """
+    out: list = []
+    saw_float = False
+    for v in non_null:
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except (ValueError, TypeError):
+                return None
+            if type(parsed) is int:
+                out.append(parsed)
+            elif type(parsed) is float:
+                out.append(parsed)
+                saw_float = True
+            else:
+                return None  # parsed to str/bool/None/list/dict — give up
+        else:
+            out.append(v)
+            if type(v) in _FLOAT_TYPES:
+                saw_float = True
+    return out, saw_float
+
+
 def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
     """Infer a pandas nullable dtype for an object series of Python or numpy scalars.
 
@@ -411,6 +464,15 @@ def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
       (nullable Float64; covers all-float and int+float mixes including
       Python+numpy combinations)
     * all types ``== {str}``        -> ``object`` (Arrow handles object-str)
+    * all types ``<= _INT_TYPES | _FLOAT_TYPES | {str}`` and every
+      string parses to a Python ``int`` / ``float`` via ``json.loads``
+      -> ``pd.Int64Dtype()`` (if no float was seen) or ``"Float64"``
+      (otherwise). This is the M065 tolerant-coercion branch for
+      payloads that store a numeric value inconsistently as a JSON
+      number in some rows and a JSON-quoted number in others. Columns
+      whose strings do not all parse cleanly to numeric fall through
+      to the object dtype below — PyArrow still fails loudly for
+      genuinely inconsistent data, which is the correct signal.
     * mixed / all-null / empty      -> ``object`` (caller's data model choice)
 
     Strict ``type(v) is int`` matching via ``{type(v) for v in non_null}``
@@ -437,6 +499,20 @@ def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
         return s.astype("Float64")
     if types == {str}:
         return s.astype(object)
+    # M065 tolerant-coercion branch: mixed numeric + numeric-string.
+    if types <= _INT_TYPES | _FLOAT_TYPES | {str}:
+        result = _try_coerce_strings_to_numeric(list(non_null))
+        if result is not None:
+            coerced, saw_float = result
+            it = iter(coerced)
+            rebuilt = [
+                next(it)
+                if not (v is None or (isinstance(v, float) and pd.isna(v)))
+                else None
+                for v in s
+            ]
+            target: Any = "Float64" if saw_float else pd.Int64Dtype()
+            return pd.Series(rebuilt, index=s.index, dtype=object).astype(target)
     return s.astype(object)  # mixed / other — user's data model choice
 
 

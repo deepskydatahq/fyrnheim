@@ -43,11 +43,12 @@ class SnapshotDiffPipeline:
 
         1. Retrieve the previous snapshot from the store.
         2. Diff current data against the previous snapshot.
-        3. If the diff is empty but a previous snapshot exists, replay
-           every current row as a synthetic ``row_appeared`` event so
-           downstream state-field materialization continues to produce
-           correct output (M066: fixes silent 0-rows-for-stable-
-           StateSources bug).
+        3. If the diff is empty but a previous snapshot exists AND the
+           current table has rows, replay every current row as a synthetic
+           ``row_appeared`` event so downstream state-field materialization
+           continues to produce correct output (M066: fixes silent
+           0-rows-for-stable-StateSources bug). If current is also empty
+           (M067), skip the replay and return the empty events table.
         4. Save the current data as the new snapshot.
         5. Return the event table.
 
@@ -77,13 +78,23 @@ class SnapshotDiffPipeline:
             exclude_fields=exclude_fields,
         )
 
-        # Step 3: M066 empty-diff replay. When a prior snapshot exists and
-        # current state matches it exactly, diff_snapshots returns 0 events.
-        # Downstream AnalyticsEntity materialization would then emit 0 rows
-        # (silent pipeline failure). Replay every current row as a synthetic
-        # row_appeared so state-field extraction sees current data.
+        # Step 3: M066 empty-diff replay, M067 guarded against empty current.
+        # When a prior snapshot exists and current state matches it exactly,
+        # diff_snapshots returns 0 events. Downstream AnalyticsEntity
+        # materialization would then emit 0 rows (silent pipeline failure).
+        # Replay every current row as a synthetic row_appeared so state-field
+        # extraction sees current data.
+        #
+        # M067: if current_table is ALSO 0 rows (empty placeholder sources —
+        # e.g. Salesforce placeholders backed by ``SELECT ... FROM UNNEST([1])
+        # LIMIT 0``), the replay has nothing to emit and the downstream
+        # ``ibis.memtable(pd.DataFrame([]))`` rejects a 0-column DataFrame
+        # with ``Invalid Input Error: Provided table/dataframe must have at
+        # least one column``. Skip the replay in that case and return the
+        # empty events table (the pre-v0.8.0 behavior for this specific case).
         event_count = int(events.count().execute())
-        if event_count == 0 and previous is not None:
+        current_count = int(current_table.count().execute())
+        if event_count == 0 and previous is not None and current_count > 0:
             replay_events = _make_appeared_events(
                 current_table.execute(),
                 source_name,
@@ -94,7 +105,13 @@ class SnapshotDiffPipeline:
             log.info(
                 "StateSource %s: diff empty, replayed %d rows as row_appeared",
                 source_name,
-                len(replay_events),
+                current_count,
+            )
+        elif event_count == 0 and previous is not None and current_count == 0:
+            log.info(
+                "StateSource %s: diff empty and current has 0 rows, "
+                "skipping replay",
+                source_name,
             )
         else:
             log.info(

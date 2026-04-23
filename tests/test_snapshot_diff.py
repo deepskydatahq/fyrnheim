@@ -146,6 +146,54 @@ class TestSnapshotDiffPipelineUnit:
         assert len(result) == 2
         assert set(result["ts"]) == {run2_date.isoformat()}
 
+    def test_run_skips_replay_when_current_is_empty(self, tmp_path, duckdb_conn):
+        """M067: a StateSource whose upstream returns 0 rows must not crash
+        the pipeline on subsequent runs. The v0.8.0 replay branch would try
+        to ``_make_appeared_events`` on a 0-row DataFrame, causing
+        ``ibis.memtable`` to reject it with "Provided table/dataframe must
+        have at least one column". The M067 guard narrows the replay branch
+        so it skips when current is also empty — nothing to replay — and
+        returns the empty events table unchanged.
+        """
+        snapshot_dir = tmp_path / "snapshots"
+        store = SnapshotStore(base_dir=snapshot_dir, conn=duckdb_conn)
+        pipeline = SnapshotDiffPipeline(store=store, conn=duckdb_conn)
+
+        # 0-row current table (empty placeholder source — e.g. Salesforce
+        # placeholders backed by ``SELECT ... FROM UNNEST([1]) LIMIT 0``).
+        empty_df = pd.DataFrame(
+            {
+                "id": pd.Series([], dtype="int64"),
+                "name": pd.Series([], dtype="object"),
+            }
+        )
+
+        # Run 1 — cold start, previous is None
+        result1 = pipeline.run(
+            source_name="empty_source",
+            current_table=ibis.memtable(empty_df),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 1),
+        )
+        assert len(result1.execute()) == 0
+
+        # Run 2 — previous snapshot exists (empty); current still empty.
+        # Without the M067 guard this would crash with
+        # "Provided table/dataframe must have at least one column".
+        result2 = pipeline.run(
+            source_name="empty_source",
+            current_table=ibis.memtable(empty_df),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 2),
+        )
+        assert len(result2.execute()) == 0
+
+        # Both snapshots saved (the skip path still calls store.save so the
+        # "previous snapshot exists on subsequent runs" invariant holds).
+        source_dir = snapshot_dir / "empty_source"
+        parquet_files = sorted(source_dir.glob("*.parquet"))
+        assert len(parquet_files) == 2
+
 
 # ---------------------------------------------------------------------------
 # Story 2: End-to-end test with multiple pipeline runs

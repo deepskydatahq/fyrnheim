@@ -93,26 +93,30 @@ class SnapshotDiffPipeline:
         # least one column``. Skip the replay in that case and return the
         # empty events table (the pre-v0.8.0 behavior for this specific case).
         event_count = int(events.count().execute())
-        current_count = int(current_table.count().execute())
-        if event_count == 0 and previous is not None and current_count > 0:
-            replay_events = _make_appeared_events(
-                current_table.execute(),
-                source_name,
-                id_field,
-                snapshot_date.isoformat(),
-            )
-            events = ibis.memtable(pd.DataFrame(replay_events))
-            log.info(
-                "StateSource %s: diff empty, replayed %d rows as row_appeared",
-                source_name,
-                current_count,
-            )
-        elif event_count == 0 and previous is not None and current_count == 0:
-            log.info(
-                "StateSource %s: diff empty and current has 0 rows, "
-                "skipping replay",
-                source_name,
-            )
+        if event_count == 0 and previous is not None:
+            # Only pay the extra row-count query when replay is actually
+            # possible (empty diff + prior snapshot). Avoids an unnecessary
+            # backend round trip on every normal run.
+            current_count = int(current_table.count().execute())
+            if current_count > 0:
+                replay_events = _make_appeared_events(
+                    current_table.execute(),
+                    source_name,
+                    id_field,
+                    snapshot_date.isoformat(),
+                )
+                events = ibis.memtable(pd.DataFrame(replay_events))
+                log.info(
+                    "StateSource %s: diff empty, replayed %d rows as row_appeared",
+                    source_name,
+                    current_count,
+                )
+            else:
+                log.info(
+                    "StateSource %s: diff empty and current has 0 rows, "
+                    "skipping replay",
+                    source_name,
+                )
         else:
             log.info(
                 "StateSource %s: diff produced %d events", source_name, event_count

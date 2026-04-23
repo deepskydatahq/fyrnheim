@@ -165,6 +165,17 @@ class StateSource(BaseTableSource):
     name: str = PydanticField(min_length=1)
     id_field: str = PydanticField(min_length=1)
     snapshot_grain: Literal["hourly", "daily", "weekly"] = "daily"
+    full_refresh: bool = PydanticField(
+        default=False,
+        description=(
+            "When True, skip the snapshot-diff machinery entirely and "
+            "emit row_appeared for every current row on every run. "
+            "Useful for state-only sources where CDC-style field_changed "
+            "events are not needed, or to force deterministic "
+            "state-reflects-current behavior independent of snapshot-"
+            "store state."
+        ),
+    )
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
     computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)

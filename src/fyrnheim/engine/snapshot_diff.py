@@ -8,11 +8,15 @@ data, saves the new snapshot, and returns the resulting event table.
 from __future__ import annotations
 
 import datetime
+import logging
 
 import ibis
+import pandas as pd
 
-from fyrnheim.engine.diff_engine import diff_snapshots
+from fyrnheim.engine.diff_engine import _make_appeared_events, diff_snapshots
 from fyrnheim.engine.snapshot_store import SnapshotStore
+
+log = logging.getLogger(__name__)
 
 
 class SnapshotDiffPipeline:
@@ -39,8 +43,13 @@ class SnapshotDiffPipeline:
 
         1. Retrieve the previous snapshot from the store.
         2. Diff current data against the previous snapshot.
-        3. Save the current data as the new snapshot.
-        4. Return the event table.
+        3. If the diff is empty but a previous snapshot exists, replay
+           every current row as a synthetic ``row_appeared`` event so
+           downstream state-field materialization continues to produce
+           correct output (M066: fixes silent 0-rows-for-stable-
+           StateSources bug).
+        4. Save the current data as the new snapshot.
+        5. Return the event table.
 
         Args:
             source_name: Logical name of the state source.
@@ -68,8 +77,32 @@ class SnapshotDiffPipeline:
             exclude_fields=exclude_fields,
         )
 
-        # Step 3: save current as new snapshot
+        # Step 3: M066 empty-diff replay. When a prior snapshot exists and
+        # current state matches it exactly, diff_snapshots returns 0 events.
+        # Downstream AnalyticsEntity materialization would then emit 0 rows
+        # (silent pipeline failure). Replay every current row as a synthetic
+        # row_appeared so state-field extraction sees current data.
+        event_count = int(events.count().execute())
+        if event_count == 0 and previous is not None:
+            replay_events = _make_appeared_events(
+                current_table.execute(),
+                source_name,
+                id_field,
+                snapshot_date.isoformat(),
+            )
+            events = ibis.memtable(pd.DataFrame(replay_events))
+            log.info(
+                "StateSource %s: diff empty, replayed %d rows as row_appeared",
+                source_name,
+                len(replay_events),
+            )
+        else:
+            log.info(
+                "StateSource %s: diff produced %d events", source_name, event_count
+            )
+
+        # Step 4: save current as new snapshot
         self._store.save(source_name, snapshot_date, current_table)
 
-        # Step 4: return events
+        # Step 5: return events
         return events

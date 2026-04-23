@@ -5,6 +5,7 @@ Flows: sources -> diff/events -> activities -> identity -> analytics entities + 
 
 from __future__ import annotations
 
+import datetime
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +20,7 @@ from fyrnheim.config import ResolvedConfig
 from fyrnheim.core.source import EventSource, StateSource
 from fyrnheim.engine.activity_engine import apply_activity_definitions
 from fyrnheim.engine.analytics_entity_engine import project_analytics_entity
+from fyrnheim.engine.diff_engine import _make_appeared_events
 from fyrnheim.engine.event_source_loader import load_event_source
 from fyrnheim.engine.executor import IbisExecutor
 from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
@@ -323,8 +325,29 @@ def _load_state_source(
     config: ResolvedConfig,
     conn: ibis.BaseBackend,
 ) -> ibis.Table:
-    """Load a StateSource through SnapshotDiffPipeline."""
+    """Load a StateSource through SnapshotDiffPipeline.
+
+    When ``source.full_refresh`` is True, bypass the snapshot-diff machinery
+    entirely and emit ``row_appeared`` for every current row. No snapshot
+    read, no snapshot save — deterministic "entity reflects current state"
+    behavior independent of any prior snapshot (M066 escape hatch).
+    """
     table = source.read_table(conn, config.backend, data_dir=config.data_dir)
+
+    if source.full_refresh:
+        # M066: escape hatch — never consult the snapshot store.
+        today = datetime.date.today().isoformat()
+        replay_events = _make_appeared_events(
+            table.execute(), source.name, source.id_field, today
+        )
+        events = ibis.memtable(pd.DataFrame(replay_events))
+        log.info(
+            "StateSource %s: full_refresh enabled, emitted %d rows as row_appeared",
+            source.name,
+            len(replay_events),
+        )
+        return events
+
     snapshot_dir = Path(config.output_dir) / "snapshots"
     store = SnapshotStore(snapshot_dir, conn)
     pipeline = SnapshotDiffPipeline(store, conn)

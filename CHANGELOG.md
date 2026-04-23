@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-23
+
+### Fixed
+
+- `SnapshotDiffPipeline` no longer silently produces 0 events when
+  upstream StateSource data is unchanged since the last saved
+  snapshot. Previously, any pipeline run against stable or
+  slowly-changing StateSources after the first run would emit an
+  empty event stream, and downstream `AnalyticsEntity` materialization
+  would produce 0 rows — silent pipeline failure. A production
+  pipeline running against two GA4 daily-session StateSources hit
+  this: `sessions` entity dropped from 3,000 rows to 0 rows on the
+  second run, `anon_users` entity dropped from 2,241 to 1,348 rows,
+  with no error signal anywhere. Fix: when the diff returns 0 events
+  AND a previous snapshot exists, replay every current row as a
+  synthetic `row_appeared` event so downstream state-field
+  materialization continues to produce correct output.
+
+### Added
+
+- `StateSource.full_refresh: bool = False` — when True, skip the
+  snapshot-diff machinery entirely and emit `row_appeared` for every
+  current row on every run. Useful for state-only sources where
+  CDC-style `field_changed` events are not needed, or to force
+  deterministic state-reflects-current behavior regardless of
+  snapshot-store state.
+
+### Changed
+
+- Default `SnapshotDiffPipeline` behavior is now "replay row_appeared
+  on empty diff" (see Fixed). Users whose pipelines were previously
+  producing 0 rows from stable StateSources will see entity row
+  counts jump to correct values on the next run after upgrading —
+  this is the fix, not a regression. No action required unless
+  downstream consumers had cached or aggregated the (incorrect)
+  empty output; in that case, invalidate those caches after the
+  first 0.8.0 run.
+
 ## [0.7.3] - 2026-04-19
 
 ### Fixed

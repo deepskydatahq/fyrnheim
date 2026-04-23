@@ -1,0 +1,253 @@
+# Mission: v0.8.1 — guard empty-diff replay against 0-row current tables
+# Patch release. M066's v0.8.0 introduced "replay row_appeared on empty diff"
+# to fix silent 0-rows-for-stable-StateSources. The replay unconditionally
+# runs _make_appeared_events(current_table, ...) when events are empty AND
+# previous is not None — but when current_table is ALSO 0 rows (empty
+# placeholder sources), the downstream ibis.memtable(df) rejects the
+# 0-row (and/or 0-column) DataFrame with "Provided table/dataframe must
+# have at least one column".
+
+id = "M067"
+title = "v0.8.1 — guard empty-diff replay against 0-row current tables"
+status = "draft"
+created = 2026-04-23
+depends_on = ["M066"]
+
+[outcome]
+description = """
+M066's v0.8.0 replay-on-empty-diff fix
+(src/fyrnheim/engine/snapshot_diff.py, the branch added around line 85-98
+during M066-E001-S001) triggers when ``diff_snapshots`` returns an empty
+events table AND a previous snapshot exists. It then calls
+``_make_appeared_events(current_table.execute(), source_name, id_field,
+snapshot_date.isoformat())`` to synthesize row_appeared events for every
+current row.
+
+**Regression reported 2026-04-23:** for StateSources whose upstream view
+returns 0 rows (empty placeholders — e.g. ``SELECT ... FROM UNNEST([1])
+LIMIT 0`` for Salesforce placeholder sources), the replay branch fires
+(events is empty; previous exists from the cold-start save) and then
+crashes with:
+
+    Invalid Input Error: Provided table/dataframe must have at least
+    one column
+
+Three sources reproduce in production (timo-data-stack reporter):
+``salesforce_accounts``, ``salesforce_contacts``,
+``salesforce_opportunities``. All three are empty placeholders. All other
+sources (with real data) replay fine.
+
+**Root cause (to verify in Phase 1 but highly likely):** the ibis
+``current_table`` over an empty UNNEST-based staging view executes to a
+pandas DataFrame with 0 rows — and, depending on how the BigQuery /
+DuckDB backend serialises the empty expression, possibly 0 columns.
+Downstream ``ibis.memtable(df)`` (inside ``_make_appeared_events`` or
+adjacent helpers in diff_engine.py) rejects 0-column frames.
+
+**The fix aligns with v0.8.0's intent.** Replay was designed to make
+downstream state-field materialization reflect the current state when
+unchanged — for a 0-row current table, there's nothing to reflect. The
+correct behavior is the pre-0.8.0 one for this specific case: return
+the empty events table unchanged. This is NOT a behavior change for
+conforming users; it's the 0.8.0 fix narrowed to its actual intent.
+
+**Scope:**
+
+1. Narrow the replay guard in ``SnapshotDiffPipeline.run()``: only replay
+   when ``event_count == 0 AND previous is not None AND current row
+   count > 0``. When current is also empty, skip the replay and return
+   the empty events table.
+2. Regression test: StateSource backed by a 0-row staging view, run the
+   pipeline twice across two dates with persistent snapshot, assert the
+   second run does not crash and returns an empty events table (not a
+   synthetic row_appeared table).
+3. Version bump 0.8.0 -> 0.8.1 via release-PR flow.
+
+**What this mission must NOT do:** change the v0.8.0 behavior for
+non-empty current tables (the M066 fix is still correct for stable data
+with real rows). Do not touch diff_engine.py, snapshot_store.py, or any
+other M066 surface beyond the single guard condition in
+SnapshotDiffPipeline.run().
+"""
+
+user_progress = "From 'v0.8.0 replay-on-empty-diff crashes with Invalid Input Error on any StateSource whose upstream returns 0 rows (three Salesforce placeholders in production)' to 'v0.8.1 guards the replay against empty current tables — skip replay when nothing to replay — regression test pinned to 0-row StagingView'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "`SnapshotDiffPipeline.run()` replay branch guarded by current-row-count > 0. Implementation: compute a cheap row count on `current_table` (ibis `current_table.count().execute()` or equivalent); add it as a third AND condition alongside existing `event_count == 0` and `previous is not None`. If current is empty, skip the replay and return the (empty) events table as-is. Update the diagnostic log to call out the skip case (e.g. `log.info('StateSource %s: diff empty and current has 0 rows, skipping replay', source_name)`)",
+    "New regression test `test_run_skips_replay_when_current_is_empty`: StateSource backed by a 0-row ibis expression (`ibis.memtable({'id': [], 'name': []})` or equivalent), run the pipeline twice across two snapshot_dates with persistent snapshot_dir. Assert: (a) no exception on run 2, (b) both runs return an empty events table (len == 0), (c) snapshot store still persisted the empty snapshot both times",
+    "The M066 two-runs-across-two-dates regression test (`test_entity_output_stable_across_persistent_snapshot_runs` in tests/test_e2e_entity_output.py) still passes unchanged — the fix for empty-current does not affect non-empty-current behavior",
+    "The three flipped-from-M066 tests still pass unchanged: `test_run_replays_appeared_events_when_diff_is_empty`, `test_e2e_no_changes_replays_appeared_events`, `test_e2e_events_union_into_consistent_log`",
+    "All other existing tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml version 0.8.0 -> 0.8.1; uv.lock regenerated",
+    "CHANGELOG.md has a new `## [0.8.1] - YYYY-MM-DD` section above `## [0.8.0]` with a `### Fixed` bullet describing the empty-current crash and the narrowed guard. Cite the three affected Salesforce placeholder sources from the field report",
+    "Branch `release/v0.8.1`, single commit, message `fix(M067): guard empty-diff replay against 0-row current tables (v0.8.1)`",
+    "PR opened against main titled `release: v0.8.1 — guard empty-diff replay against 0-row current tables`. Body includes: regression summary, the 3-source Salesforce repro, the guard fix, post-merge-steps block",
+    "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps",
+    "Diff scope exactly 5 files: src/fyrnheim/engine/snapshot_diff.py, tests/test_snapshot_diff.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT touch diff_engine.py, snapshot_store.py, core/source.py, pipeline.py, or any other source file — M066's other changes stand as-is",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M066 — v0.8.0 empty-diff replay + full_refresh flag (introduced the replay branch being fixed here)",
+    "M063 / M064 / M065 — patch-release shape reference",
+]
+
+[scope]
+in_scope = [
+    "Third AND condition on the replay guard in `SnapshotDiffPipeline.run()`: skip replay when current_table row count == 0",
+    "Diagnostic log update for the skip case",
+    "New regression test for the 0-row-current-table scenario",
+    "Version bump 0.8.0 -> 0.8.1",
+    "CHANGELOG [0.8.1] entry with the Salesforce-placeholder regression reproduction",
+    "release/v0.8.1 branch + PR with post-merge-steps block",
+]
+out_of_scope = [
+    "Any change to the non-empty-current replay path (M066's core behavior for stable StateSources)",
+    "Any change to `full_refresh` flag behavior (M066 Option B — unaffected by this bug)",
+    "Any change to diff_engine.py internals (`diff_snapshots`, `_make_appeared_events`, `_diff_dataframes`) — the empty-current crash surfaces inside these helpers but the fix belongs in the caller guard, not the helpers",
+    "Any change to SnapshotStore format or date semantics",
+    "Any change to analytics_entity_engine.py, identity_engine.py, pipeline.py _load_state_source, or core/source.py — the M066 fix in those files is correct",
+    "Batch follow-up for any other v0.8.0 behavior — reporter confirmed this is the only known v0.8.0 regression at time of filing",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "None expected. Users whose pipelines had StateSources with 0-row current tables were crashing on v0.8.0 — they are the reason for this patch. No conforming user behavior changes.",
+]
+
+[notes]
+considerations = """
+## Why this is a patch and not a minor
+
+The v0.8.0 replay was intended to produce row_appeared events for
+current rows when the diff is empty and state hasn't changed. A 0-row
+current table has no rows to produce — the replay is a no-op that should
+have returned the empty events table to begin with. Narrowing the guard
+aligns with the v0.8.0 intent; no conforming user sees a behavior change.
+Patch release is correct.
+
+This respects the release-discipline rule: patch = "fix aligns with
+documented/intended behavior, no behavior change visible to conforming
+users."
+
+## Reporter's field report (2026-04-23)
+
+Production pipeline (timo-data-stack, fyrnheim 0.8.0) with three
+Salesforce placeholder StateSources whose upstream staging views are
+`SELECT ... FROM UNNEST([1]) LIMIT 0` — i.e. zero rows by construction.
+
+First run: diff_snapshots sees `previous=None`, emits 0 row_appeared
+events (correct — nothing in current). Snapshot saved as an empty
+parquet file.
+
+Second run: `previous` is the empty snapshot from run 1. diff_snapshots
+emits 0 events (nothing in current, nothing changed). M066's replay
+branch fires: `event_count == 0 AND previous is not None` → True →
+attempts `_make_appeared_events(current_table.execute(), ...)`.
+
+`current_table.execute()` for an empty UNNEST-based BigQuery view
+returns a DataFrame that the downstream `ibis.memtable(df)` call
+rejects with `Invalid Input Error: Provided table/dataframe must have
+at least one column`. The reporter suspects the DataFrame either has
+0 columns or 0 rows with column inference failing — Phase 1
+investigation should capture whichever is the actual shape.
+
+Three sources reproduce identically: `salesforce_accounts`,
+`salesforce_contacts`, `salesforce_opportunities`. All other sources
+with real data replay fine on v0.8.0.
+
+The reporter has rolled back to v0.7.3 and flagged that M014 is
+blocked until v0.8.1 ships. M014's mission TOML should gain a
+`depends_on = ["M067"]` reference after this mission is accepted.
+
+## Phase 1 investigation (for /plan-mission)
+
+1. Add a 0-row StateSource fixture to a scratch test and verify the
+   exact error (shape of the DataFrame that `current_table.execute()`
+   returns — 0 columns or 0 rows, and which downstream call rejects
+   it).
+2. Confirm the guard is at `SnapshotDiffPipeline.run()` — simplest
+   narrow fix — rather than inside `_make_appeared_events` (which
+   would be a diff_engine.py change, expanding scope).
+3. Verify the regression test runs on DuckDB locally AND that the
+   existing e2e stack still handles empty StateSources correctly
+   downstream of the skip-replay path (a 0-row events table flowing
+   into identity_engine + analytics_entity_engine should produce a
+   0-row entity output, which is correct behavior for an empty
+   source).
+
+## Phase 2 implementation sketch
+
+```python
+# src/fyrnheim/engine/snapshot_diff.py — modify the replay guard
+event_count = int(events.count().execute())
+current_count = int(current_table.count().execute())
+
+if event_count == 0 and previous is not None and current_count > 0:
+    events = _make_appeared_events(
+        current_table.execute(),
+        source_name,
+        id_field,
+        snapshot_date.isoformat(),
+    )
+    log.info(
+        "StateSource %s: diff empty, replayed %d rows as row_appeared",
+        source_name,
+        current_count,
+    )
+elif event_count == 0 and previous is not None and current_count == 0:
+    log.info(
+        "StateSource %s: diff empty and current has 0 rows, skipping replay",
+        source_name,
+    )
+else:
+    log.info(
+        "StateSource %s: diff produced %d events", source_name, event_count
+    )
+```
+
+Consider refactoring for readability if the conditional chain gets
+unwieldy, but preserve the log-variant contract from M066.
+
+## Release shape (same as M063/M064/M065/M066)
+
+- release/v0.8.1 branch
+- single commit
+- PR with post-merge-steps block
+- human merges + tags + publishes
+- CHANGELOG [0.8.1] with the Salesforce-placeholder reproduction
+
+## Do NOT
+
+- Touch diff_engine.py — the fix is a caller-side guard
+- Touch analytics_entity_engine.py, identity_engine.py, pipeline.py,
+  core/source.py, snapshot_store.py — M066's changes in those files
+  are correct
+- Alter the full_refresh flag or its plumbing
+- Merge, tag, or publish — human post-merge steps
+- Batch unrelated fixes — reporter confirmed this is the only known
+  v0.8.0 regression
+"""

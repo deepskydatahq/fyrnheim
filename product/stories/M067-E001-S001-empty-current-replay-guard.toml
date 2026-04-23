@@ -1,0 +1,279 @@
+id = "M067-E001-S001"
+parent = "M067-E001"
+title = "Guard empty-diff replay against 0-row current tables + v0.8.1 release"
+status = "ready"
+created = 2026-04-23
+
+[outcome]
+description = """Narrow the M066 replay guard in SnapshotDiffPipeline.run()
+with a third AND condition (current_count > 0) so the replay branch is
+skipped when the current table is also empty; add a regression test;
+bump 0.8.0 -> 0.8.1 with CHANGELOG entry; push release/v0.8.1 branch;
+open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "`src/fyrnheim/engine/snapshot_diff.py` — `SnapshotDiffPipeline.run()` is modified: compute `current_count = int(current_table.count().execute())` once (reuse it in the log message). Narrow the replay branch to fire only when `event_count == 0 AND previous is not None AND current_count > 0`. When current_count == 0 AND event_count == 0 AND previous is not None: skip the replay, log the skip variant, return the empty events table unchanged."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Log variants (three total — add one new, keep two existing): normal (`StateSource %s: diff produced %d events`), empty-diff replay (`StateSource %s: diff empty, replayed %d rows as row_appeared`), NEW skip case (`StateSource %s: diff empty and current has 0 rows, skipping replay`). Use the existing `log` logger (already a module-level `logging.getLogger(__name__)` in snapshot_diff.py after M066)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New regression test `test_run_skips_replay_when_current_is_empty` in tests/test_snapshot_diff.py: StateSource backed by a 0-row ibis expression (use `ibis.memtable(pd.DataFrame({'id': [], 'name': []}))` or equivalent empty DuckDB-backed table), run the pipeline twice across two snapshot_dates with persistent snapshot_dir. Assertions: (a) no exception on run 2 (would crash on v0.8.0 with 'Provided table/dataframe must have at least one column'), (b) both runs return events table with len == 0, (c) the SnapshotStore directory has exactly 2 parquet files after run 2 (cold-start save from run 1 + save from run 2). Use tmp_path for the snapshot dir."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "M066's regression test `test_entity_output_stable_across_persistent_snapshot_runs` in tests/test_e2e_entity_output.py passes unchanged (the non-empty-current replay still works correctly)"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "M066's flipped tests still pass unchanged: `test_run_replays_appeared_events_when_diff_is_empty`, `test_e2e_no_changes_replays_appeared_events`, `test_e2e_events_union_into_consistent_log` in tests/test_snapshot_diff.py"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All other existing tests pass: test_snapshot_store.py (unchanged), test_e2e_identity_projection.py, test_analytics_entity_engine.py, test_executor.py, test_config.py, test_benchmark_harness.py, test_parallel_io.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version field updated from '0.8.0' to '0.8.1'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated via `uv lock`; the lockfile's fyrnheim entry records version 0.8.1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.8.1] - 2026-04-23` section (use today's date) above `## [0.8.0]` with a `### Fixed` bullet describing the empty-current crash. Cite the Salesforce placeholder reproduction: 'Pipelines with StateSources whose upstream view returns 0 rows (empty placeholders) crashed with `Invalid Input Error: Provided table/dataframe must have at least one column` on every run after the first. Three production StateSources reproduced: salesforce_accounts, salesforce_contacts, salesforce_opportunities.' Include the fix description: 'SnapshotDiffPipeline.run() now checks the current table row count before attempting the replay; when current is empty, the replay is skipped (nothing to replay) and the pipeline returns an empty events table as before v0.8.0 for this specific case.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope exactly 5 files: src/fyrnheim/engine/snapshot_diff.py, tests/test_snapshot_diff.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify diff_engine.py, snapshot_store.py, core/source.py, pipeline.py, analytics_entity_engine.py, identity_engine.py, or any other source file or test file."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.8.1` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M067): guard empty-diff replay against 0-row current tables (v0.8.1)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.8.1 — guard empty-diff replay against 0-row current tables`. Body includes: regression summary, three-Salesforce-placeholder repro, the guard fix, post-merge-steps block."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- product/missions/M067-v0.8.1-empty-current-replay-crash.toml — full
+  outcome, root-cause analysis, field reproduction, Phase 1/2 guidance
+- product/epics/M067-E001-empty-current-replay-guard.toml
+- product/stories/M067-E001-S001-empty-current-replay-guard.toml
+
+## Implementation sketch
+
+Current M066 code in snapshot_diff.py (lines ~82-102):
+
+```python
+events = diff_snapshots(...)
+
+# M066: empty-diff replay fallback
+event_count = int(events.count().execute())
+if event_count == 0 and previous is not None:
+    events = _make_appeared_events(
+        current_table.execute(),
+        source_name,
+        id_field,
+        snapshot_date.isoformat(),
+    )
+    replayed = int(events.count().execute())
+    log.info(
+        "StateSource %s: diff empty, replayed %d rows as row_appeared",
+        source_name,
+        replayed,
+    )
+else:
+    log.info(
+        "StateSource %s: diff produced %d events", source_name, event_count
+    )
+
+self._store.save(source_name, snapshot_date, current_table)
+return events
+```
+
+After M067:
+
+```python
+events = diff_snapshots(...)
+
+# M066+M067: empty-diff replay fallback, guarded against empty current
+event_count = int(events.count().execute())
+current_count = int(current_table.count().execute())
+
+if event_count == 0 and previous is not None and current_count > 0:
+    events = _make_appeared_events(
+        current_table.execute(),
+        source_name,
+        id_field,
+        snapshot_date.isoformat(),
+    )
+    log.info(
+        "StateSource %s: diff empty, replayed %d rows as row_appeared",
+        source_name,
+        current_count,
+    )
+elif event_count == 0 and previous is not None and current_count == 0:
+    log.info(
+        "StateSource %s: diff empty and current has 0 rows, skipping replay",
+        source_name,
+    )
+else:
+    log.info(
+        "StateSource %s: diff produced %d events", source_name, event_count
+    )
+
+self._store.save(source_name, snapshot_date, current_table)
+return events
+```
+
+Notes:
+- `current_table.count().execute()` is cheap — it's a pushed-down COUNT
+  on the backend, not a full materialization.
+- The `replayed` variable from M066 can go away — `current_count` is
+  the same number (every current row becomes a replayed row_appeared
+  event, 1-to-1).
+- Keep the `self._store.save(...)` call on the new empty-current path —
+  skipping the save would break the "previous snapshot exists" invariant
+  for subsequent runs. The save should still happen so that on the
+  third run, `previous` still points to a valid (empty) snapshot.
+
+## New regression test sketch
+
+```python
+def test_run_skips_replay_when_current_is_empty(tmp_path, duckdb_conn):
+    '''M067: a StateSource whose upstream returns 0 rows must not crash
+    the pipeline on subsequent runs. The v0.8.0 replay branch would
+    try to _make_appeared_events on a 0-row DataFrame, causing
+    ibis.memtable to reject it with "Provided table/dataframe must
+    have at least one column".
+    '''
+    import pandas as pd
+
+    store = SnapshotStore(tmp_path, duckdb_conn)
+    pipeline = SnapshotDiffPipeline(store, duckdb_conn)
+
+    # 0-row current table
+    empty_df = pd.DataFrame({"id": pd.Series([], dtype="int64"),
+                             "name": pd.Series([], dtype="object")})
+    current_table = ibis.memtable(empty_df)
+
+    # Run 1 — cold start, previous is None
+    result1 = pipeline.run(
+        source_name="empty_source",
+        current_table=current_table,
+        snapshot_date=datetime.date(2026, 1, 1),
+    )
+    assert len(result1.execute()) == 0
+
+    # Run 2 — previous snapshot exists (empty); current still empty.
+    # Without the M067 guard this would crash.
+    result2 = pipeline.run(
+        source_name="empty_source",
+        current_table=current_table,
+        snapshot_date=datetime.date(2026, 1, 2),
+    )
+    assert len(result2.execute()) == 0
+
+    # Both snapshots saved
+    source_dir = tmp_path / "empty_source"
+    parquet_files = sorted(source_dir.glob("*.parquet"))
+    assert len(parquet_files) == 2
+```
+
+Place this test in tests/test_snapshot_diff.py near the other
+TestSnapshotDiffPipelineUnit tests. Reuse the existing pipeline/store
+fixtures if they fit; otherwise inline like above.
+
+## CHANGELOG entry
+
+```
+## [0.8.1] - 2026-04-23
+
+### Fixed
+
+- Pipelines with StateSources whose upstream view returns 0 rows
+  (empty placeholders — e.g. `SELECT ... FROM UNNEST([1]) LIMIT 0`
+  for Salesforce placeholders) crashed with `Invalid Input Error:
+  Provided table/dataframe must have at least one column` on every
+  run after the first. The v0.8.0 replay-on-empty-diff branch fired
+  unconditionally when events were empty and a previous snapshot
+  existed, attempting to replay `row_appeared` events from a 0-row
+  DataFrame. Three production StateSources reproduced:
+  `salesforce_accounts`, `salesforce_contacts`,
+  `salesforce_opportunities`. `SnapshotDiffPipeline.run()` now
+  checks the current table row count before attempting the replay;
+  when current is empty, the replay is skipped (nothing to replay)
+  and the pipeline returns an empty events table — the pre-v0.8.0
+  behavior for this specific case.
+```
+
+Use today's date.
+
+## Release-flow rituals (same as M063/M064/M065/M066)
+
+1. Rename branch: `git branch -m release/v0.8.1`
+2. Claim Beads: `bd update <task-id> --status in_progress`
+3. Implement the guard + the new test
+4. Bump pyproject.toml 0.8.0 -> 0.8.1 + `uv lock`
+5. Write CHANGELOG [0.8.1] entry above [0.8.0]
+6. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+7. Single commit: `fix(M067): guard empty-diff replay against 0-row current tables (v0.8.1)`
+8. Close Beads
+9. Push release/v0.8.1
+10. Open PR with post-merge-steps block
+11. STOP — do not merge/tag/publish
+
+## Do NOT
+
+- Touch diff_engine.py — this fix is a caller-side guard
+- Touch analytics_entity_engine.py, identity_engine.py, pipeline.py,
+  core/source.py, snapshot_store.py — M066's changes there are correct
+- Modify the full_refresh flag or its plumbing
+- Change the behavior for non-empty-current-with-unchanged-data (M066's
+  core replay is correct for that case)
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M067-v0.8.1-empty-current-replay-crash.toml",
+    "product/epics/M067-E001-empty-current-replay-guard.toml",
+    "product/stories/M065-E001-S001-mixed-numeric-string-coercion.toml",
+    "product/stories/M066-E001-S001-statesource-empty-diff-replay.toml",
+]

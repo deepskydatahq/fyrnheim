@@ -1,0 +1,87 @@
+# Epic: M067 guard empty-current replay + v0.8.1 release
+# Single epic covering the full M067 scope. Mirrors M063/M064/M065/M066 shape:
+# one mission = one branch = one PR = one release. Tag + publish are
+# post-merge human steps.
+
+id = "M067-E001"
+parent = "M067"
+title = "Guard empty-diff replay against 0-row current tables + v0.8.1 release"
+status = "active"
+created = 2026-04-23
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M067 scope: narrow M066's replay guard in
+SnapshotDiffPipeline.run() with a third AND condition (current_count > 0)
+so the replay branch is skipped when the current table is also empty
+(avoiding the `Invalid Input Error: Provided table/dataframe must have
+at least one column` crash from _make_appeared_events on a 0-row
+DataFrame); add a regression test pinned to a 0-row StateSource
+fixture; bump 0.8.0 -> 0.8.1 with CHANGELOG entry; open release/v0.8.1
+PR.
+
+Mirrors M063/M064/M065/M066 shape: one mission = one branch = one PR =
+one release. Tag + publish are post-merge human steps.
+"""
+
+[job_story]
+description = """When I run a fyrnheim pipeline with a StateSource
+whose upstream view returns 0 rows (empty placeholders, unlanded
+Salesforce sources, etc.), I want the SnapshotDiffPipeline to handle
+the empty-current case gracefully — skip the v0.8.0 replay branch
+(there's nothing to replay) and return the empty events table — so
+the pipeline doesn't crash with an ibis.memtable column-count error."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 12 testing criteria from the M067 mission TOML pass",
+    "`SnapshotDiffPipeline.run()` replay branch gains a third guard: only replay when `current_count > 0`. Implementation uses a cheap ibis count (e.g. `current_table.count().execute()`); when current is empty, skip the replay and return the empty events table",
+    "Log variant added for the skip case (e.g. `StateSource %s: diff empty and current has 0 rows, skipping replay`). Existing M066 log variants unchanged",
+    "New regression test covering the 0-row-StateSource scenario: run the pipeline twice with persistent snapshot_dir, assert no exception and both runs return empty events",
+    "M066 regression test `test_entity_output_stable_across_persistent_snapshot_runs` still passes unchanged",
+    "M066 flipped tests `test_run_replays_appeared_events_when_diff_is_empty`, `test_e2e_no_changes_replays_appeared_events`, `test_e2e_events_union_into_consistent_log` still pass unchanged",
+    "All other existing tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml version 0.8.0 -> 0.8.1; uv.lock regenerated",
+    "CHANGELOG.md has a `## [0.8.1] - YYYY-MM-DD` section above `## [0.8.0]` with a `### Fixed` bullet citing the three Salesforce placeholder sources from the field report",
+    "Diff scope exactly 5 files: src/fyrnheim/engine/snapshot_diff.py, tests/test_snapshot_diff.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT touch diff_engine.py, snapshot_store.py, core/source.py, pipeline.py, analytics_entity_engine.py, identity_engine.py",
+    "Branch `release/v0.8.1`, single commit, message `fix(M067): guard empty-diff replay against 0-row current tables (v0.8.1)`",
+    "PR opened against main with post-merge-steps block. Do NOT merge/tag/publish.",
+]
+validator_context = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M063/M064/M065/M066 shape — one commit bundling fix + test +
+version bump + CHANGELOG on a release/v0.8.1 branch.
+
+Full implementation sketch and release-flow rituals in the M067
+mission TOML [notes] section. Read that first.
+
+Safety: the fix is a strict narrowing of the M066 replay guard — only
+users whose pipelines currently crash are affected, and they go from
+crash to correct empty-state output. No conforming user behavior
+change. Patch release is correct per the release-discipline memory.
+"""
+
+estimated_stories = 1

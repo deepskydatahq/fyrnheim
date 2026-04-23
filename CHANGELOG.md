@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-04-23
+
+### Fixed
+
+- Pipelines with StateSources whose upstream view returns 0 rows
+  (empty placeholders — e.g. `SELECT ... FROM UNNEST([1]) LIMIT 0`
+  for Salesforce placeholders) crashed with `Invalid Input Error:
+  Provided table/dataframe must have at least one column` on every
+  run after the first. The v0.8.0 replay-on-empty-diff branch fired
+  unconditionally when events were empty and a previous snapshot
+  existed, attempting to replay `row_appeared` events from a 0-row
+  DataFrame. Three production StateSources reproduced:
+  `salesforce_accounts`, `salesforce_contacts`,
+  `salesforce_opportunities`. `SnapshotDiffPipeline.run()` now
+  checks the current table row count before attempting the replay;
+  when current is empty, the replay is skipped (nothing to replay)
+  and the pipeline returns an empty events table — the pre-v0.8.0
+  behavior for this specific case.
+
 ## [0.8.0] - 2026-04-23
 
 ### Fixed

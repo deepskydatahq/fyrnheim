@@ -1,0 +1,323 @@
+# Mission: StateSource snapshot-diff produces 0 rows downstream for stable data
+# Originally filed 2026-04-22 as a BigQuery coalesce bug. Root cause confirmed
+# on 2026-04-22 to be unrelated to BigQuery or coalesce: SnapshotDiffPipeline
+# emits 0 events when current data matches the last saved snapshot, and
+# downstream entity materializations then produce 0 rows.
+#
+# Planning completed 2026-04-23 via /plan-mission. Scope locked to Option B:
+# default-behavior fix (snapshot replay on empty diff) + per-source
+# `full_refresh` flag on StateSource as an explicit force-replay escape hatch.
+# Ships as minor release v0.8.0.
+
+id = "M066"
+title = "StateSource snapshot-diff produces 0 rows downstream for stable data"
+status = "ready"
+created = 2026-04-22
+planned = 2026-04-23
+depends_on = []
+
+[outcome]
+description = """
+Fix the silent-failure mode where StateSource-backed entities materialize
+0 rows on any pipeline run where the upstream data is unchanged from the
+last saved snapshot. Root cause (confirmed): ``SnapshotDiffPipeline.run()``
+calls ``diff_snapshots`` which correctly emits 0 events when
+``current == previous`` — but downstream ``AnalyticsEntity`` materialization
+runs argmax / coalesce over those 0 events and produces 0 rows. This
+breaks any pipeline run against stable or slowly-changing StateSources
+(confirmed impact: ``sessions`` entity drops 3,000 rows -> 0 rows;
+``anon_users`` entity drops 2,241 rows -> 1,348 rows in the production
+timo-data-stack pipeline).
+
+**The fix (Option B — locked in during /plan-mission 2026-04-23):**
+
+1. **Default behavior change** (fixes the bug for everyone with no config
+   change): in ``SnapshotDiffPipeline.run()``, after calling
+   ``diff_snapshots``, if the returned event table is empty AND
+   ``previous is not None`` (i.e. we've seen this source before but
+   nothing changed), fall back to emitting synthetic ``row_appeared``
+   events for every current row by calling the existing
+   ``_make_appeared_events(current, ...)`` helper from diff_engine.py.
+   Semantically: "unchanged state is represented as every row having
+   appeared again". This is safe — no measure or aggregation in the
+   codebase counts ``row_appeared`` events (verified during planning;
+   measures count activity-named events produced by ``ActivityDefinition``
+   rewriting, and state-field extraction is idempotent over duplicate
+   ``row_appeared`` events).
+
+2. **Explicit escape hatch via ``full_refresh: bool`` on StateSource**:
+   new Pydantic field ``full_refresh: bool = False`` on ``StateSource``
+   in core/source.py. When ``True``, ``_load_state_source`` in
+   pipeline.py short-circuits the snapshot-diff machinery entirely —
+   every current row emits as a synthetic ``row_appeared`` regardless of
+   any prior snapshot. This serves users who (a) use the source purely
+   for state projection and don't need CDC-style ``field_changed``
+   events, (b) want deterministic "entity reflects current state"
+   behavior independent of snapshot-store state, or (c) want to skip the
+   snapshot I/O cost for state-only sources.
+
+3. **Diagnostic logging**: a single-line log (INFO level) per
+   StateSource per run indicating which path ran — normal diff, empty-
+   diff replay, or full-refresh. So users can SEE what the pipeline did
+   and diagnose issues like "why did my entity suddenly jump in row
+   count" without digging into internals.
+
+4. **Regression test** pinning the two-runs-across-two-dates scenario
+   that would have caught this bug (the gap identified during planning
+   — no existing test runs the full pipeline twice with persistent
+   snapshot and asserts downstream entity output).
+
+5. **Release as v0.8.0** (minor bump) via the release-PR flow. This is
+   a minor, not a patch, because the default behavior change is a
+   semantic shift: pipelines that were silently producing 0 rows from
+   stable StateSources will now produce correct non-zero rows on the
+   next run after upgrading. CHANGELOG must explicitly call out the
+   row-count jump so users understand it as a correction, not a
+   regression.
+
+**The fix is narrow:**
+- ``SnapshotDiffPipeline.run()`` in engine/snapshot_diff.py: +1 branch
+- ``StateSource`` in core/source.py: +1 Pydantic field
+- ``_load_state_source`` in engine/pipeline.py: +1 conditional branch
+  for the ``full_refresh`` flag
+- Diff-engine ``_make_appeared_events`` is already the right helper and
+  used by the first-run path — reuse it, don't duplicate
+- One existing test (``test_run_returns_empty_table_when_no_changes``
+  in tests/test_snapshot_diff.py) actively pins today's buggy behavior
+  as a contract; it must flip to pin the new behavior
+- One new e2e regression test covering the two-runs-across-two-dates
+  scenario
+- CHANGELOG entry for v0.8.0
+- Version bump + uv.lock regen
+
+**Not in this mission (explicitly deferred):**
+- Option 4 (entity materialization reads SnapshotStore directly for
+  state fields) — architecturally cleaner but significantly larger
+  refactor. File as a future mission if warranted.
+- Option 3 (pipeline-runner detection of "0 events across identity
+  graph") — rejected: Option A already fixes the silent failure; a
+  whole-pipeline heuristic adds brittleness without extra value.
+- Any BigQuery-specific SQL compilation work — the original 2026-04-22
+  hypothesis was wrong; no such bug exists.
+- Any changes to the coalesce state-field strategy or
+  analytics_entity_engine.py aggregation semantics.
+"""
+
+user_progress = "From 'StateSources with stable upstream data silently produce 0 rows in downstream entities on every run after the first — only caught by deleting the snapshot directory' to 'SnapshotDiffPipeline falls back to row_appeared replay when diff is empty, users can force this behavior per-source via full_refresh=True, and a regression test runs the pipeline twice with persistent snapshot to prevent re-introduction'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Default-behavior fix: `SnapshotDiffPipeline.run()` in src/fyrnheim/engine/snapshot_diff.py, after line 62-69 where `diff_snapshots` returns, falls back to calling `_make_appeared_events(current_table, source_name, snapshot_date)` when the returned events table is empty AND `previous is not None`. First-run behavior (previous is None) unchanged — it already emits row_appeared for every row",
+    "`full_refresh: bool = False` field added to `StateSource` in src/fyrnheim/core/source.py:158-170 via `PydanticField(default=False)`. Docstring notes the semantics: when True, skip the diff and always emit row_appeared per current row",
+    "`_load_state_source` in src/fyrnheim/engine/pipeline.py:321-335 reads `source.full_refresh`. When True, bypasses `SnapshotDiffPipeline.run()` entirely and constructs the event table directly via `_make_appeared_events(current_table, ...)` — no snapshot read, no snapshot save",
+    "One diagnostic log line per StateSource per run at INFO level via `log` (already imported in pipeline.py). Variants: 'StateSource <name>: diff produced N events' (normal path), 'StateSource <name>: diff empty, replayed N rows as row_appeared' (empty-diff fallback), 'StateSource <name>: full_refresh enabled, emitted N rows as row_appeared' (flag path)",
+    "Existing test `tests/test_snapshot_diff.py::TestSnapshotDiffPipelineUnit::test_run_returns_empty_table_when_no_changes` REMOVED or RENAMED to `test_run_replays_appeared_events_when_diff_is_empty` — must now assert that the second run (with previous snapshot, unchanged data) returns `N` row_appeared events where `N == len(current_table)`. This is the contract flip",
+    "Matching e2e test `tests/test_snapshot_diff.py::TestSnapshotDiffPipelineE2E::test_e2e_no_changes_empty_events` similarly flipped — now asserts all three runs produce row_appeared events (first run: all rows appeared as new; subsequent runs: all rows replayed)",
+    "New regression test `tests/test_e2e_entity_output.py::test_entity_output_stable_across_persistent_snapshot_runs` (or equivalent co-located in an existing e2e file): wires a StateSource through `SnapshotDiffPipeline` + identity graph + `project_analytics_entity`, runs the pipeline TWICE with the SAME `SnapshotStore` (persisted tmp_path) across two different snapshot_dates, asserts both runs produce identical non-zero downstream entity materialization. MUST fail on 0.7.3 and pass after the fix",
+    "New unit test `test_state_source_full_refresh_skips_diff` in tests/test_snapshot_diff.py (or test_e2e_*.py): StateSource with `full_refresh=True`, run the pipeline twice with persistent snapshot, assert both runs emit row_appeared for every current row AND SnapshotStore is not consulted (no get_previous / save calls). Use a mock or spy on SnapshotStore methods",
+    "New unit test `test_state_source_full_refresh_defaults_false`: asserts `StateSource(name='s', id_field='id').full_refresh is False` — default preserves the (new, replay-on-empty) Option A behavior",
+    "CHANGELOG.md has a new `## [0.8.0] - 2026-04-23` section (or later date depending on merge day) above `## [0.7.3]` with THREE sub-sections: `### Fixed` (silent 0-rows-from-stable-StateSources bug), `### Added` (full_refresh flag), `### Changed` (default SnapshotDiffPipeline behavior now replays row_appeared on empty diff — clearly notes that upgrading users may see entity row counts jump from 0 to their correct value, and that this is a fix not a regression)",
+    "All existing tests pass after the contract-flip updates: tests/test_snapshot_diff.py (all scenarios), tests/test_snapshot_store.py (unchanged), tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_analytics_entity_engine.py, tests/test_executor.py",
+    "ruff + mypy clean",
+    "pyproject.toml version 0.7.3 -> 0.8.0; uv.lock regenerated (fyrnheim at 0.8.0)",
+    "Release-PR flow executed: release/v0.8.0 branch -> PR with post-merge-steps block -> green CI -> human merges + tags + publishes (mirrors M063/M064/M065 release structure)",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_snapshot_store.py",
+    "tests/test_e2e_entity_output.py",
+    "CHANGELOG.md",
+    "pyproject.toml",
+    "uv.lock",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+    "docs/decisions/0001-activity-definitions-drop-vs-preserve.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/analytics_entity.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_snapshot_store.py",
+    "tests/test_e2e_entity_output.py",
+]
+related_missions = [
+    "M020 — incremental materialization (planned / not-yet-implemented — orthogonal, no collision)",
+    "M027 — snapshot diff engine (the engine being fixed)",
+    "M041 — snapshot grain (declarative config on StateSource, no collision)",
+    "M052 — activity definitions drop-vs-preserve (downstream of event stream, no collision)",
+    "M053 — preserve unmatched events v0.5.0 (downstream, no collision)",
+]
+
+[scope]
+in_scope = [
+    "Default-behavior fix in `SnapshotDiffPipeline.run()`: empty-diff fallback to `_make_appeared_events` when `previous is not None`",
+    "New `full_refresh: bool = False` field on `StateSource` (Pydantic model + docstring)",
+    "`_load_state_source` branch for `full_refresh=True`: skip snapshot-diff machinery, build events directly via `_make_appeared_events`",
+    "Diagnostic INFO-level log lines for the three paths (normal diff / empty-diff replay / full_refresh)",
+    "Flip the two existing tests that pin today's 0-events-on-no-change contract: unit and e2e versions in test_snapshot_diff.py",
+    "New e2e regression test running the pipeline twice with persistent snapshot across two dates, asserting stable downstream entity output",
+    "New unit tests for full_refresh=True behavior and default=False invariant",
+    "CHANGELOG [0.8.0] entry with Fixed / Added / Changed sub-sections and a user-visible row-count-jump migration note",
+    "Version bump 0.7.3 -> 0.8.0 + uv.lock regen",
+    "release/v0.8.0 branch + PR with post-merge-steps block",
+]
+out_of_scope = [
+    "Option 4: routing entity materialization state fields through SnapshotStore directly (bypassing the event stream). Architecturally cleaner but a larger refactor — deferred to a potential future mission",
+    "Option 3: pipeline-runner-level detection of 'all sources empty' and heuristic fallback. Rejected during planning — Option A already fixes the silent failure, this adds brittleness",
+    "Any change to `diff_snapshots` / `diff_engine.py` logic. The diff engine is correct today — the fix is at the pipeline-level orchestration, not the diff algorithm",
+    "Any change to `SnapshotStore` format, date semantics, or the `parsed_dt < ref` strict-less-than rule. The existing behavior is correct; this mission just makes downstream materialization tolerant to empty-but-unchanged diffs",
+    "Any BigQuery-specific SQL compilation work (the original 2026-04-22 hypothesis was wrong)",
+    "Any change to `analytics_entity_engine.py` state-field / coalesce / measure semantics",
+    "Incremental materialization or cumulative event streams across runs (M020 territory)",
+    "A CLI command (`fyr inspect-source` or similar) for diagnosing snapshot state. Useful but out of scope; consider for /retro",
+    "A warning when a downstream entity produces 0 rows in general (broader silent-failure policy; consider for /retro)",
+    "Merge, tag, PyPI publish — human steps post-merge",
+]
+acceptable_breakage = [
+    "Users whose pipelines have been silently producing 0 rows from StateSource-backed entities will, after upgrading to 0.8.0, suddenly see correct non-zero row counts. Downstream consumers that cached or aggregated the empty output will see the correction. This is the fix, not a regression — CHANGELOG calls this out explicitly.",
+    "The existing unit test `test_run_returns_empty_table_when_no_changes` and e2e test `test_e2e_no_changes_empty_events` pin today's buggy behavior as a contract. They must be flipped (renamed + assertions updated) — they will be visible in the PR diff as contract changes, not test deletions. Reviewers should expect this.",
+    "Any external test / user script that depended on `SnapshotDiffPipeline.run()` returning an empty events table on unchanged data will break. Unlikely (the contract was never documented as a feature) but possible — migration path is `full_refresh=False` stays the same symptom IF you explicitly want zero events, but there is no way to get zero events back under the new default; a user who wants zero events on no change has to either not use StateSource or build a filter downstream. We deem this acceptable — the 'zero events on no change' was itself the bug.",
+]
+
+[notes]
+considerations = """
+## Planning history
+
+Mission opened 2026-04-22 as a BigQuery coalesce bug report, reframed
+twice over the same day as evidence surfaced:
+
+- Draft 1: 'coalesce produces 0 rows + all-STRING schema on BigQuery'
+  — hypothesized an ibis MAX_BY-with-all-NULL-HAVING-MAX compilation
+  pathology.
+- Draft 2: two competing hypotheses A (pushdown compilation) vs B
+  (upstream identity/enrichment round-trip empty) with a cheap
+  distinguishing test (run compiled SQL against real upstream).
+- Draft 3: reporter ran the distinguishing test; both hypotheses
+  falsified. Real root cause surfaced: `rm -rf generated/snapshots/`
+  fixes the pipeline on BigQuery. Bug is SnapshotDiffPipeline emitting
+  0 events when current data matches saved snapshot.
+- This plan (2026-04-23): /plan-mission run, Option B (Option A
+  default + full_refresh flag) locked after exploration confirmed
+  Option 1 synthetic-replay is safe (no row_appeared-counting
+  measures anywhere), no mission collisions, and the implementation
+  surface is ~3 file-touches.
+
+The BQ-vs-DuckDB discrepancy that started the investigation was a
+coincidence of snapshot state at each run — DuckDB happened to run
+with fresh snapshots (or a different snapshot directory) while BQ
+runs preserved them across test runs. No backend-specific bug exists.
+
+## Architecture notes from /plan-mission codebase exploration
+
+**Diff-engine behavior (src/fyrnheim/engine/diff_engine.py):**
+- `_make_appeared_events(df, source, snapshot_date)` is called on every
+  row of `current` when `previous is None` (first run — line 58-60).
+- When `previous is not None`, the common-IDs loop only emits
+  `field_changed` when `_values_differ()` is true (line 199-206); if
+  current and previous are identical, the output is an empty memtable
+  with correct schema (line 67-78).
+- `_make_appeared_events` is the right helper for the empty-diff
+  fallback — same schema, same semantics as first-run.
+
+**Pipeline orchestration (src/fyrnheim/engine/pipeline.py):**
+- `_load_state_source(source, config, conn)` at line 321-335 is the
+  single entry point for StateSource → event stream. It builds a
+  `SnapshotStore`, a `SnapshotDiffPipeline`, and calls
+  `pipeline.run(source_name, current_table, id_field)`.
+- `snapshot_date` is NOT passed explicitly — defaults to
+  `datetime.date.today()` inside `SnapshotDiffPipeline.run()`.
+- All StateSource and EventSource event tables are `pd.concat`'d at
+  line 182 into `all_events` before identity resolution (line 200).
+- **Option B hooks cleanly here**: the empty-diff fallback lives in
+  `SnapshotDiffPipeline.run()` (handles the default case); the
+  `full_refresh` shortcut lives in `_load_state_source` (branches
+  before creating the pipeline).
+
+**Snapshot store date semantics (src/fyrnheim/engine/snapshot_store.py):**
+- `get_previous(source_name, date)` uses `parsed_dt < ref` strict
+  less-than (line 133). Same-day re-runs see `previous=None` and
+  already emit all rows as row_appeared (first-run semantics).
+- The bug manifests ONLY on subsequent-DATE runs, when a prior-date
+  snapshot is found and matches current data exactly. This is the
+  reporter's scenario: run 1 on April 22, run 2 on April 23.
+- The fix doesn't need to touch date semantics. It just makes the
+  empty-diff case emit replay events instead of an empty table.
+
+**Why Option 1 (synthetic replay) is safe (verified):**
+- No `Measure` or `ActivityDefinition` in the codebase uses
+  `activity="row_appeared"` as its trigger. Measures count
+  activity-named events (e.g. `"signup"`, `"purchase"`) produced
+  by `ActivityDefinition` rewriting in
+  src/fyrnheim/engine/activity_engine.py:110-111.
+- `ActivityDefinition` passes unmatched `row_appeared` events through
+  unchanged (ADR-0001 v0.5.0 behavior).
+- State-field extraction at
+  src/fyrnheim/engine/analytics_entity_engine.py:229-242 uses argmax/
+  coalesce which is idempotent over duplicate `row_appeared` events
+  with identical payloads.
+- Synthetic replay on empty diff produces duplicate row_appeared
+  events across runs for unchanged rows, which is semantically
+  equivalent to the first-run emission — no double-counting.
+
+**Test coverage gap (verified):**
+- `tests/test_snapshot_diff.py::test_run_returns_empty_table_when_no_changes`
+  and the e2e `test_e2e_no_changes_empty_events` actively pin today's
+  buggy behavior (empty events on unchanged data) AS A CONTRACT. These
+  must flip.
+- `tests/test_e2e_entity_output.py::test_entity_materialization_is_idempotent`
+  runs entity projection twice and asserts output stability — but
+  does NOT run through SnapshotDiffPipeline / StateSource, so it
+  misses the real bug.
+- No test today wires StateSource → SnapshotDiffPipeline → identity
+  → entity projection and runs the whole thing twice with persistent
+  snapshots. That is the exact gap to close.
+
+## Suggested epic breakdown (for /execute-mission)
+
+**Epic 1 — Default replay + full_refresh flag (single PR):**
+- Update `SnapshotDiffPipeline.run()` with the empty-diff fallback
+- Add `full_refresh: bool = False` to StateSource
+- Add the `_load_state_source` branch for `full_refresh=True`
+- Add INFO-level diagnostic logging
+- Flip the two existing pinned-buggy-contract tests
+- Add new unit tests for `full_refresh=True` and default=False
+- Add the new e2e regression test (run pipeline twice across two dates
+  with persistent snapshot)
+
+**Epic 2 — Release v0.8.0 (release-PR flow):**
+- Version bump + uv.lock
+- CHANGELOG [0.8.0] entry
+- release/v0.8.0 branch + PR with post-merge-steps block
+
+Epic 1 is a single tight PR (≈150-300 LOC net incl tests). Epic 2
+mirrors M063/M064/M065 release mechanics exactly. Human merges + tags
++ publishes.
+
+## Do NOT
+
+- Touch `diff_engine.py` internals (`diff_snapshots`,
+  `_make_appeared_events`, `_diff_dataframes`) — the diff is correct
+- Touch `SnapshotStore` date semantics or storage format
+- Touch `analytics_entity_engine.py` coalesce / argmax / measure code
+- Touch `identity_engine.py` enrichment path
+- Add a second knob / mode / strategy beyond the `full_refresh` bool —
+  keep the surface minimal
+- Skip the diagnostic log lines — they are load-bearing for user
+  debugability and prevent future versions of this same bug from being
+  silent
+- Merge, tag, or publish — human post-merge steps
+"""

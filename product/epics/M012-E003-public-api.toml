@@ -1,0 +1,35 @@
+id = "M012-E003"
+parent = "M012"
+title = "Promote engine exceptions and EntityRegistry to top-level API"
+status = "active"
+created = "2026-03-04"
+depends_on = []
+
+[outcome]
+description = """Exception classes (ExecutionError, SourceNotFoundError, TransformModuleError,
+FyrnheimEngineError, CircularDependencyError), EntityRegistry, and EntityInfo are importable
+from fyrnheim top-level via lazy imports. Tests verify the exports."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "from fyrnheim import ExecutionError works",
+    "from fyrnheim import EntityRegistry works",
+    "All promoted names in fyrnheim.__all__",
+    "test_public_api.py updated with new exports",
+]
+validator_context = ["src/fyrnheim/__init__.py", "tests/test_public_api.py"]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/engine/__init__.py",
+    "src/fyrnheim/engine/errors.py",
+    "src/fyrnheim/engine/registry.py",
+    "tests/test_public_api.py",
+]
+
+[notes]
+considerations = """These are lazy imports since they come from engine/ which requires ibis.
+Add to _LAZY_IMPORTS dict and __all__. Update test_public_api.py to verify."""
+estimated_stories = 1

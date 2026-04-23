@@ -1,0 +1,39 @@
+id = "M013-E001-S003"
+parent = "M013-E001"
+title = "Build code walkthrough and comparison table sections"
+status = "ready"
+created = "2026-03-06"
+
+[outcome]
+description = """Add 4-step code walkthrough section and dbt comparison table to the
+landing page. Footer with Get Started CTA and GitHub link."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "visual"
+description = "Code walkthrough shows 4 steps: init, entity definition, generate, run — with terminal-style code blocks"
+
+[[acceptance_criteria.criteria]]
+test = "visual"
+description = "Comparison table shows Fyrnheim vs dbt across: language, type safety, local dev, backend portability, testing, boilerplate, identity resolution, multi-source union"
+
+[[acceptance_criteria.criteria]]
+test = "visual"
+description = "Footer section with Get Started CTA and GitHub repo link"
+
+[[acceptance_criteria.criteria]]
+test = "build"
+description = "npm run build succeeds with complete landing page"
+
+[context]
+relevant_paths = ["README.md", "docs/plans/2026-03-06-website-design.md"]
+input_fixtures = []
+depends_on = ["M013-E001-S002"]
+
+[handoff]
+implementation_hints = """Content for code walkthrough and comparison table comes directly
+from README.md Quick Start and Why Fyrnheim sections. Terminal-style dark code blocks
+with subtle borders. Amber highlight on Fyrnheim column in comparison table."""
+reference_files = ["README.md"]

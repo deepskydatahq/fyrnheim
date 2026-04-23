@@ -1,0 +1,108 @@
+# Epic: M066 default-replay + full_refresh flag + v0.8.0 release
+# Single epic covering the full M066 scope. Mirrors M063/M064/M065 shape:
+# one mission = one branch = one PR = one release. Tag + publish are
+# post-merge human steps.
+
+id = "M066-E001"
+parent = "M066"
+title = "SnapshotDiff empty-diff replay + full_refresh flag + v0.8.0 release"
+status = "active"
+created = 2026-04-23
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M066 scope: fix the silent 0-rows-for-
+stable-StateSources bug in SnapshotDiffPipeline by falling back to
+row_appeared replay when the diff is empty but a previous snapshot
+exists, add a `full_refresh: bool = False` field on StateSource as an
+explicit force-replay escape hatch, add diagnostic INFO logging per
+StateSource per run, flip the two existing tests that pin today's
+buggy empty-events-on-no-change contract, add the missing regression
+test that runs the pipeline twice with persistent snapshot, bump
+0.7.3 -> 0.8.0 with CHANGELOG entry, open release/v0.8.0 PR.
+
+Mirrors M063/M064/M065 shape: one mission = one branch = one PR =
+one release. Tag + publish are post-merge human steps.
+"""
+
+[job_story]
+description = """When I run a fyrnheim pipeline against a StateSource
+whose upstream data hasn't changed since the last run (e.g. stable GA4
+daily sessions, slow-changing CRM exports), I want downstream entities
+to still materialize the current state — not silently produce 0 rows —
+so my pipeline outputs are correct every run regardless of snapshot
+state."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 14 testing criteria from the M066 mission TOML pass",
+    "`SnapshotDiffPipeline.run()` falls back to `_make_appeared_events(current_table, source_name, snapshot_date)` when diff_snapshots returns an empty events table AND previous is not None",
+    "`StateSource` has a new `full_refresh: bool = False` field with a clear docstring",
+    "`_load_state_source` branches on `source.full_refresh`: when True, constructs events directly via `_make_appeared_events` and skips the SnapshotStore / SnapshotDiffPipeline entirely (no snapshot read, no snapshot save)",
+    "One INFO-level log line per StateSource per run indicating which path ran (normal diff / empty-diff replay / full_refresh)",
+    "The two existing tests that pin today's buggy contract (test_run_returns_empty_table_when_no_changes + test_e2e_no_changes_empty_events) are flipped to pin the new replay-on-empty behavior",
+    "New e2e regression test runs the full pipeline twice across two dates with persistent snapshot_dir, asserts both runs produce identical non-zero downstream entity output",
+    "New unit tests for full_refresh=True behavior and default=False invariant",
+    "All other existing tests pass unchanged: test_snapshot_store.py, test_e2e_entity_output.py, test_e2e_identity_projection.py, test_analytics_entity_engine.py, test_executor.py",
+    "ruff check src/ tests/ clean; mypy src/ clean",
+    "pyproject.toml version 0.7.3 -> 0.8.0; uv.lock regenerated",
+    "CHANGELOG.md has a new `## [0.8.0] - 2026-04-23` (or later merge date) section with Fixed / Added / Changed subsections and a user-visible row-count-jump migration note",
+    "Branch named `release/v0.8.0` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M066): snapshot-diff replay on empty diff + full_refresh flag (v0.8.0)`",
+    "Branch pushed; PR opened against main titled `release: v0.8.0 — snapshot-diff replay on empty diff + full_refresh flag`. Body describes the bug, the two-part fix, the behavior change, includes the post-merge-steps block (tag v0.8.0, push origin v0.8.0, PyPI verify)",
+    "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps.",
+]
+validator_context = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_snapshot_store.py",
+    "tests/test_e2e_entity_output.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M063/M064/M065 shape — one commit bundling fix + tests + version
+bump + CHANGELOG on a release/v0.8.0 branch.
+
+Full implementation spec, architecture notes from the codebase
+exploration, and CHANGELOG copy are in the M066 mission TOML [notes]
+section — read that first.
+
+Hooks:
+- Default replay fix: SnapshotDiffPipeline.run() in snapshot_diff.py
+  after line 69, before line 72 (save step)
+- full_refresh flag: StateSource at src/fyrnheim/core/source.py:158-170
+- full_refresh plumbing: _load_state_source at pipeline.py:321-335
+- Diagnostic logging: reuse the existing `log` import in pipeline.py
+  (or add to snapshot_diff.py as needed)
+
+Safety verified during planning:
+- No measure or ActivityDefinition in the codebase counts
+  `row_appeared` events — synthetic replay is idempotent for
+  state-field materialization and doesn't affect measure counts
+- First-run behavior (previous=None) is unchanged — it already emits
+  row_appeared for every row via _make_appeared_events
+"""
+
+estimated_stories = 1

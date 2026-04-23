@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import datetime
 import json
+from pathlib import Path
 
 import ibis
 import pandas as pd
 import pytest
 
+from fyrnheim.config import ResolvedConfig
+from fyrnheim.core.source import StateSource
+from fyrnheim.engine.pipeline import _load_state_source
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
 
@@ -77,8 +81,12 @@ class TestSnapshotDiffPipelineUnit:
         result = events.execute()
         assert len(result) == 1
 
-    def test_run_returns_empty_table_when_no_changes(self, pipeline):
-        """run() returns empty event table with correct schema when no changes."""
+    def test_run_replays_appeared_events_when_diff_is_empty(self, pipeline):
+        """M066: when a previous snapshot exists and current data matches it,
+        run() replays every current row as a synthetic row_appeared event
+        instead of returning an empty table. This fixes the silent
+        0-rows-downstream bug for stable StateSources.
+        """
         data = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
 
         # Run 1: cold start
@@ -89,7 +97,8 @@ class TestSnapshotDiffPipelineUnit:
             snapshot_date=datetime.date(2026, 1, 1),
         )
 
-        # Run 2: same data, next day
+        # Run 2: same data, next day — diff is empty but previous exists,
+        # so we expect a full row_appeared replay.
         events = pipeline.run(
             source_name="users",
             current_table=ibis.memtable(data),
@@ -98,7 +107,9 @@ class TestSnapshotDiffPipelineUnit:
         )
 
         result = events.execute()
-        assert len(result) == 0
+        assert len(result) == len(data)
+        assert set(result["event_type"]) == {"row_appeared"}
+        assert set(result["entity_id"]) == {"1", "2"}
         assert set(result.columns) == {
             "source",
             "entity_id",
@@ -106,6 +117,34 @@ class TestSnapshotDiffPipelineUnit:
             "event_type",
             "payload",
         }
+
+    def test_run_replay_uses_current_snapshot_date(self, pipeline):
+        """M066: replay events carry the CURRENT snapshot_date.isoformat()
+        as their ts, not the previous snapshot's date.
+        """
+        data = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
+
+        # Run 1: cold start on 2026-01-01
+        pipeline.run(
+            source_name="users",
+            current_table=ibis.memtable(data),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 1),
+        )
+
+        # Run 2: same data on 2026-01-15 — empty diff -> replay should carry
+        # 2026-01-15 as ts.
+        run2_date = datetime.date(2026, 1, 15)
+        events = pipeline.run(
+            source_name="users",
+            current_table=ibis.memtable(data),
+            id_field="id",
+            snapshot_date=run2_date,
+        )
+
+        result = events.execute()
+        assert len(result) == 2
+        assert set(result["ts"]) == {run2_date.isoformat()}
 
 
 # ---------------------------------------------------------------------------
@@ -204,8 +243,11 @@ class TestSnapshotDiffPipelineE2E:
         assert payload["old_value"] == "free"
         assert payload["new_value"] == "pro"
 
-    def test_e2e_no_changes_empty_events(self, pipeline):
-        """Run 3 (no changes): produces empty event table."""
+    def test_e2e_no_changes_replays_appeared_events(self, pipeline):
+        """M066: Run 3 (same data as run 2) replays every current row as
+        row_appeared rather than producing an empty table, so downstream
+        entity materialization keeps working on stable StateSources.
+        """
         # Run 1
         pipeline.run(
             source_name="customers",
@@ -222,16 +264,22 @@ class TestSnapshotDiffPipelineE2E:
             snapshot_date=datetime.date(2026, 1, 2),
         )
 
-        # Run 3: same data as day 2
+        # Run 3: same data as day 2 — empty diff + previous exists ->
+        # full replay of all 3 current rows as row_appeared.
+        day3 = self._customers_day3()
         events = pipeline.run(
             source_name="customers",
-            current_table=ibis.memtable(self._customers_day3()),
+            current_table=ibis.memtable(day3),
             id_field="id",
             snapshot_date=datetime.date(2026, 1, 3),
         )
 
         result = events.execute()
-        assert len(result) == 0
+        assert len(result) == len(day3)
+        assert set(result["event_type"]) == {"row_appeared"}
+        assert set(result["entity_id"]) == {
+            str(eid) for eid in day3["id"].tolist()
+        }
 
     def test_e2e_events_union_into_consistent_log(self, pipeline):
         """Events from all runs union into a single consistent event log."""
@@ -263,8 +311,9 @@ class TestSnapshotDiffPipelineE2E:
         all_events = ibis.union(events1, events2, events3)
         result = all_events.execute()
 
-        # Run 1: 3 appeared, Run 2: 1 appeared + 1 disappeared + 1 changed, Run 3: 0
-        assert len(result) == 6
+        # Run 1: 3 appeared. Run 2: 1 appeared + 1 disappeared + 1 changed.
+        # Run 3: M066 empty-diff replay -> 3 appeared for each current row.
+        assert len(result) == 9
         assert set(result.columns) == {
             "source",
             "entity_id",
@@ -275,9 +324,88 @@ class TestSnapshotDiffPipelineE2E:
 
         # Verify event type counts
         type_counts = result["event_type"].value_counts().to_dict()
-        assert type_counts["row_appeared"] == 4  # 3 from run1 + 1 from run2
+        # 3 (run1) + 1 (run2 dave) + 3 (run3 replay) = 7
+        assert type_counts["row_appeared"] == 7
         assert type_counts["row_disappeared"] == 1
         assert type_counts["field_changed"] == 1
 
         # All events have same source
         assert set(result["source"]) == {"customers"}
+
+
+# ---------------------------------------------------------------------------
+# M066: StateSource.full_refresh flag tests
+# ---------------------------------------------------------------------------
+
+
+def _make_config(tmp_path: Path) -> ResolvedConfig:
+    return ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=tmp_path / "data",
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+
+
+def _write_parquet(path: Path, df: pd.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(str(path))
+
+
+class TestStateSourceFullRefresh:
+    """Tests for the M066 full_refresh escape hatch on StateSource."""
+
+    def test_state_source_full_refresh_defaults_false(self):
+        """StateSource.full_refresh defaults to False so the new replay-on-
+        empty default is what users get without config changes.
+        """
+        source = StateSource(
+            name="s",
+            id_field="id",
+            project="p",
+            dataset="d",
+            table="t",
+        )
+        assert source.full_refresh is False
+
+    def test_state_source_full_refresh_skips_snapshot_store(
+        self, tmp_path: Path, duckdb_conn
+    ):
+        """With full_refresh=True, _load_state_source emits row_appeared
+        for every current row on every run AND never creates any files
+        under the snapshot directory.
+        """
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+
+        parquet_path = data_dir / "users.parquet"
+        df = pd.DataFrame(
+            {"id": ["1", "2", "3"], "name": ["alice", "bob", "carol"]}
+        )
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="users",
+            project="test",
+            dataset="test",
+            table="users",
+            duckdb_path=str(parquet_path),
+            id_field="id",
+            full_refresh=True,
+        )
+
+        snapshot_dir = Path(config.output_dir) / "snapshots"
+
+        for _run in range(2):
+            events = _load_state_source(source, config, duckdb_conn)
+            result = events.execute()
+            assert len(result) == len(df)
+            assert set(result["event_type"]) == {"row_appeared"}
+            assert set(result["entity_id"]) == {"1", "2", "3"}
+
+        # SnapshotStore was never consulted — no files under snapshot_dir
+        # (the dir may or may not exist; either way it must be empty).
+        if snapshot_dir.exists():
+            assert list(snapshot_dir.rglob("*.parquet")) == []

@@ -68,8 +68,11 @@ def _reads_duckdb_fixture(
     * ``source.duckdb_fixture_is_transformed`` is True — explicit opt-in.
     * ``backend == "duckdb"`` — BigQuery / ClickHouse / other backends
       read the raw upstream table and must still apply transforms.
-    * ``source.duckdb_path`` is not None — DuckDB-as-production users
+    * ``source.duckdb_path`` is truthy — DuckDB-as-production users
       (live DuckDB tables, no fixture) must still apply transforms.
+      Truthiness (not ``is not None``) mirrors ``read_table``'s
+      ``if not self.duckdb_path`` check, which treats the empty
+      string as missing.
 
     Returns False otherwise — preserves v0.9.1 uniform-transform behavior
     for the non-opt-in and non-fixture-read cases.
@@ -77,7 +80,7 @@ def _reads_duckdb_fixture(
     return (
         bool(source.duckdb_fixture_is_transformed)
         and backend == "duckdb"
-        and source.duckdb_path is not None
+        and bool(source.duckdb_path)
     )
 
 

@@ -362,3 +362,23 @@ def test_reads_duckdb_fixture_false_when_no_duckdb_path() -> None:
         duckdb_fixture_is_transformed=True,
     )
     assert _reads_duckdb_fixture(src, "duckdb") is False
+
+
+def test_reads_duckdb_fixture_false_when_duckdb_path_is_empty_string() -> None:
+    """Gate does not fire when duckdb_path is the empty string.
+
+    Mirrors ``BaseTableSource.read_table``'s ``if not self.duckdb_path``
+    check (``src/fyrnheim/core/source.py`` ~line 165), which raises
+    ``ValueError`` for the empty string — the helper must not claim the
+    engine reads a fixture when read_table itself would fail.
+    """
+    src = StateSource(
+        name="s",
+        project="p",
+        dataset="d",
+        table="t",
+        id_field="id",
+        duckdb_path="",
+        duckdb_fixture_is_transformed=True,
+    )
+    assert _reads_duckdb_fixture(src, "duckdb") is False

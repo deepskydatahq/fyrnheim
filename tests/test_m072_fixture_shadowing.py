@@ -22,7 +22,6 @@ import json
 
 import ibis
 import pandas as pd
-import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
@@ -193,7 +192,10 @@ def test_event_source_computed_columns_apply_on_skip_path(tmp_path) -> None:
     result = load_event_source(conn, es, backend="duckdb").execute()
     assert len(result) == 2
     payloads = [json.loads(p) for p in result["payload"]]
-    derived = [p["derived"] for p in payloads]
+    # Sort before asserting — the DuckDB read has no explicit ORDER BY,
+    # so row order is not guaranteed. Matches the pattern used elsewhere
+    # in this file (e.g. the state-source computed_columns test).
+    derived = sorted(p["derived"] for p in payloads)
     assert derived == [20, 40]
 
 
@@ -520,7 +522,6 @@ def test_fixture_is_transformed_with_mismatched_shape_produces_wrong_output(
         assert "name" in p
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_event_source_and_state_source_field_declared_on_base() -> None:
     """Confirms `duckdb_fixture_is_transformed` lives on BaseTableSource —
     both EventSource AND StateSource (and therefore TableSource /

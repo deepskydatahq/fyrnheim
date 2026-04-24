@@ -21,8 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   post-transform. Applies to `StateSource`, `EventSource`,
   `TableSource`, and `DerivedSource` via inheritance. Gate condition
   (all three must hold): flag=True AND `config.backend == "duckdb"`
-  AND `source.duckdb_path is not None`. Mirrors the parquet-read
-  branch of `BaseTableSource.read_table`.
+  AND `source.duckdb_path` is truthy (non-empty string). Mirrors
+  the parquet-read branch of `BaseTableSource.read_table`, which
+  rejects empty strings via `if not self.duckdb_path`.
 - Diagnostic INFO log line on the skip path:
   `StateSource/EventSource %s: duckdb_fixture_is_transformed=True,
   skipping transforms/fields/filter (reading duckdb_path fixture)`.

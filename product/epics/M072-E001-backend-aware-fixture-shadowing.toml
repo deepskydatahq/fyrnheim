@@ -1,0 +1,113 @@
+# Epic: M072 v0.10.0 minor — FR-8 backend-aware fixture shadowing
+# Single epic mirroring M066/M068/M069 minor-release shape.
+
+id = "M072-E001"
+parent = "M072"
+title = "Backend-aware fixture shadowing on StateSource/EventSource + v0.10.0 release"
+status = "active"
+created = 2026-04-24
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M072 scope: add a new boolean field
+`duckdb_fixture_is_transformed` on `BaseTableSource`; gate the
+transforms / json_path / filter application in both loaders on the
+flag × backend × fixture-read conditions; add diagnostic logging for
+the skip path; add unit + integration tests covering default=False,
+skip-on-duckdb-with-flag, no-skip-on-bigquery, no-skip-on-live-duckdb-
+table, computed_columns-still-apply, and a negative test documenting
+the backend-parity trade-off. Bump 0.9.1 → 0.10.0 with CHANGELOG entry.
+Open release/v0.10.0 PR.
+
+Mirrors the M066/M068/M069 minor-release shape. Tag + publish are
+post-merge human steps. TestPyPI RC is optional per release-discipline
+memory — noted in PR body but not required.
+
+**Context (v0.9.0 M012 migration report 2026-04-24):** the reporter
+migrated pardot_opportunities.sql to pydantic after v0.9.0 shipped
+but reverted pardot_accounts / pardot_prospects / pardot_lifecycle_
+history because their DuckDB fixtures are post-transform snapshots —
+Fyrnheim's uniform transform application fails with
+\"Column 'custom_type' is not found in table\" on DuckDB because the
+pre-transform JSON columns don't exist in the post-transform fixture.
+M072 fixes this via an explicit opt-in flag.
+"""
+
+[job_story]
+description = """When I have a StateSource or EventSource with
+duckdb_path pointing to a post-transform fixture parquet (as a
+dev/test convenience instead of re-authoring the fixture in raw
+pre-transform shape), I want to declare `duckdb_fixture_is_transformed=
+True` so Fyrnheim skips transforms / fields / filter on DuckDB —
+reading the fixture as-is since it already represents the final
+shape — while BigQuery still applies the full declarative pipeline to
+the raw upstream table."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 14 testing criteria from the M072 mission TOML pass",
+    "New `duckdb_fixture_is_transformed: bool = False` field on `BaseTableSource` with docstring including backend-parity warning + v0.9.1-behavior-preservation note",
+    "Skip logic in both `load_event_source` and `_load_state_source` gated on (flag=True) AND (backend=duckdb) AND (source reads from duckdb_path, not a live duckdb table)",
+    "Skipped layers: transforms, json_path extractions, filter. computed_columns STILL APPLY (backend-independent expressions)",
+    "Diagnostic INFO log line when skip fires",
+    "Unit tests: default=False, skip-fires, no-skip-on-bq, no-skip-on-live-duckdb-table, computed_columns-still-apply",
+    "E2e test validating skip path produces a correctly-shaped downstream entity",
+    "Negative test documenting the trade-off when fixture mismatches post-transform shape",
+    "All M066/M067/M068/M069/M071 regression tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml 0.9.1 -> 0.10.0; uv.lock regenerated",
+    "CHANGELOG [0.10.0] Added + Notes entries",
+    "Branch release/v0.10.0, single commit, PR with post-merge-steps block",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_identity_projection.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_event_source_loader.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M066/M068/M069 minor-release shape — one commit bundling the
+field + gate + tests + version bump + CHANGELOG on a release/v0.10.0
+branch.
+
+Full design rationale (gate condition details, why computed_columns
+still apply, naming alternatives, backend-parity trade-off) is in the
+M072 mission TOML [notes] section. Read that first.
+
+Safety: new field defaults to False. Users who don't set the flag see
+identical v0.9.1 behavior. Users who opt in and have correctly-shaped
+fixtures get the intended skip. Users who opt in and have mismatched
+fixtures get visibly-wrong DuckDB output (caught by cross-backend
+tests) — documented trade-off, not silent failure.
+
+Release discipline: minor (0.10.0) because of new API surface. Per
+release-discipline memory, optionally ship a TestPyPI RC first —
+planner's call during PR open.
+"""
+
+estimated_stories = 1

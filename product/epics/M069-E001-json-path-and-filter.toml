@@ -1,0 +1,102 @@
+# Epic: M069 Field.json_path wiring + source-level filter + v0.9.0 release
+# Single epic covering the full M069 scope. Mirrors M063/M064/M065/M066/M067/M068 shape.
+
+id = "M069-E001"
+parent = "M069"
+title = "Field.json_path + source-level filter + v0.9.0 release"
+status = "active"
+created = 2026-04-24
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M069 scope: add `Field.source_column`
+field; add a json_path-extraction step in source_transforms.py that
+iterates `source.fields` and derives columns from JSON source columns;
+add `BaseTableSource.filter` string field; add a filter-application
+step in both loaders after computed_columns; add unit + e2e tests for
+both features; bump 0.8.2 -> 0.9.0 with CHANGELOG entry; open
+release/v0.9.0 PR.
+
+Mirrors the M066/M068 minor-release patch-PR shape. Tag + publish are
+post-merge human steps. RC-to-TestPyPI is the planner's call.
+"""
+
+[job_story]
+description = """When I declare `Field(name='utm_source', json_path='$.utm_source')`
+on a StateSource or EventSource, I want the engine to extract that JSON
+value at read time into a column named `utm_source` (or from a
+different source column if I set `Field.source_column`). And when I
+declare `filter='t._fivetran_deleted != True'` on a source, I want the
+engine to apply that filter after transforms + computed_columns so my
+declarative pipeline can replace SQL WHERE clauses without a
+StagingView."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 18 testing criteria from the M069 mission TOML pass",
+    "Field in src/fyrnheim/core/source.py gains `source_column: str | None = None`",
+    "BaseTableSource in src/fyrnheim/core/source.py gains `filter: str | None = None` with NULL-gotcha docstring",
+    "New json_path extraction helper in src/fyrnheim/engine/source_transforms.py (or extended existing helper signature) applied after renames but before computed_columns",
+    "Filter application in both load_event_source and _load_state_source after computed_columns",
+    "Unit + e2e tests for both features",
+    "All existing tests pass unchanged (M066/M067/M068 regression)",
+    "ruff + mypy clean",
+    "pyproject.toml 0.8.2 -> 0.9.0; uv.lock regenerated",
+    "CHANGELOG [0.9.0] Added + Changed sections",
+    "Branch release/v0.9.0, single commit, PR with post-merge-steps + optional RC note",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_source_transforms.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_source_transforms.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M066/M068 minor-release shape — one commit with fix + tests +
+version bump + CHANGELOG on release/v0.9.0.
+
+Full implementation sketch (Field.source_column convention, eval
+pattern for filter, pipeline-stage order, NULL-gotcha, JSON-path
+format decision) is in the M069 mission TOML [notes] section. Read
+that first.
+
+Safety: new fields default to None / no-op. Users who don't set
+json_path or filter see identical behavior to v0.8.2. The only
+behavior change is for users who already set Field(json_path=...) —
+that's the intended fix; CHANGELOG calls it out.
+
+Release discipline: minor (0.9.0) because of new API surface. Per
+release-discipline memory, optionally ship a TestPyPI RC first for
+field-team validation — planner's call during PR open.
+"""
+
+estimated_stories = 1

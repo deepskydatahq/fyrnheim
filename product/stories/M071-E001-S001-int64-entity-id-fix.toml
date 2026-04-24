@@ -1,0 +1,245 @@
+id = "M071-E001-S001"
+parent = "M071-E001"
+title = "Preserve int-shape for integer id columns + v0.9.1 release"
+status = "ready"
+created = 2026-04-24
+
+[outcome]
+description = """Phase 1 trace of int→float promotion in the
+SnapshotDiffPipeline; Phase 2 fix at the identified layer (candidate:
+defensive int-aware stringification in diff_engine); regression test
+written BEFORE the fix; bump 0.9.0 → 0.9.1 with CHANGELOG; push
+release/v0.9.1 branch; open PR. Closes typedata-nfj6 + typedata-ta1i."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Phase 1 investigation: using the systematic-debugging skill (from superpowers), reproduce the bug with the minimal fixture from the mission TOML: `df = pd.DataFrame({'id': [1,2,3], 'score': [3.14, 2.71, 1.41]}); t = ibis.memtable(df); r1 = pipe.run('src', t, id_field='id', snapshot_date=datetime.date(2026,1,1))`. Inspect `r1.execute()['entity_id'].tolist()` — should be `['1.0', '2.0', '3.0']` (the bug). Then trace the dtype at each step: `t.execute()['id'].dtype`, `cur_df['id'].dtype` inside `_diff_dataframes`, the type of `row['id']` inside `_make_appeared_events`. Document the layer in the implementation notes / commit message."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Failing regression test written BEFORE the fix (systematic-debugging Phase 4 discipline — test MUST fail on the pre-fix code). File: `tests/test_diff_engine.py` (preferred — tests the helper directly) OR `tests/test_snapshot_diff.py` (tests the full pipeline). Test name: `test_int64_id_column_preserves_int_shape`. Body: create DataFrame with int64 id column, run through `_make_appeared_events` (or full pipeline), assert every entity_id is int-shaped (no `.` in the string)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Second regression test covering the M066 replay path: run the pipeline TWICE across two dates with persistent snapshot, unchanged int64-id data. On run 2, the empty-diff replay fires — assert the replayed entity_ids are STILL int-shaped. This catches the pandas-parquet-round-trip promotion case specifically."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Fix applied at the layer identified in Phase 1. Preferred candidate (smallest blast radius): helper `_stringify_id(v: Any) -> str` in `src/fyrnheim/engine/diff_engine.py` that checks for float-with-no-fractional-part and casts to int before str. Used at lines 96 and 118 (and any other `str(row[id_field])` sites). Implementation: `def _stringify_id(v): return str(int(v)) if isinstance(v, float) and v.is_integer() else str(v)`. Add a brief docstring explaining the pandas promotion context. If Phase 1 identifies a cleaner layer (e.g. preserve int64 through ibis.memtable.execute), implement there instead and document the rationale."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Both new regression tests pass after the fix. Confirm via `uv run pytest tests/test_diff_engine.py tests/test_snapshot_diff.py -v`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Behavioral check: run the minimal fixture from Phase 1 after the fix and confirm `entity_ids == ['1', '2', '3']` (not `['1.0', '2.0', '3.0']`). Include the before/after snippet in the commit message body for posterity."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Defensive: also covers numpy types. `_stringify_id(np.float64(1.0))` returns `'1'`; `_stringify_id(np.float64(1.5))` returns `'1.5'`; `_stringify_id(np.int64(1))` returns `'1'`; `_stringify_id('abc')` returns `'abc'`; `_stringify_id(True)` — tricky. `isinstance(True, int)` is True in Python. Decide: bool-as-entity-id is pathological; if user passes a bool id column, `_stringify_id(True)` returns `'True'` (str(True) default). Do NOT special-case bool — document in the helper docstring."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged: tests/test_snapshot_diff.py (M066/M067/M068/M069 regression), tests/test_diff_engine.py (existing tests), tests/test_e2e_entity_output.py, tests/test_e2e_identity_projection.py, tests/test_source_transforms.py, tests/test_event_source_loader.py, tests/test_analytics_entity_engine.py, tests/test_executor.py. 577-test baseline from v0.9.0 + 2 new regression tests = 579 green expected"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.9.0 -> 0.9.1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated; fyrnheim entry records 0.9.1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has `## [0.9.1] - 2026-04-24` (today's date) above `## [0.9.0]` with a `### Fixed` subsection. Text: 'SnapshotDiffPipeline emitted `entity_id` as `\"1.0\"` (float-shaped string) instead of `\"1\"` for StateSources with integer id columns. Root cause: pandas silently promoted int64 → float64 during [LAYER IDENTIFIED IN PHASE 1], and `str(np.float64(1.0))` produced the float-shape. This silently broke identity resolution for any source with integer ids. Fix: [LAYER OF FIX]. Regression test covers both the cold-start and M066 empty-diff replay paths.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/engine/diff_engine.py (if Layer C fix) OR src/fyrnheim/engine/snapshot_diff.py (if Layer B fix) OR wherever Phase 1 identifies, plus tests/test_diff_engine.py and/or tests/test_snapshot_diff.py (regression tests), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT touch core/source.py, identity_engine.py, analytics_entity_engine.py, source_transforms.py, pipeline.py, snapshot_store.py (unless Phase 1 identifies it as the correct layer — in that case document the reason explicitly in the commit message)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.9.1` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M071): preserve int-shape for integer id columns (v0.9.1)` with a body covering Phase 1 findings + the fix rationale."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.9.1 — preserve int-shape for integer id columns`. Body describes the bug (int64 entity_id emitted as '1.0'), the impact (silent identity-resolution breakage), the root cause (Phase 1 findings), the fix (Phase 2 layer), the regression tests (cold-start + replay), and the post-merge-steps block."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Close both Beads tasks: `bd close typedata-nfj6` (the bug task) and `bd close typedata-ta1i` (the regression-test task) — this mission addresses both."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- product/missions/M071-v0.9.1-int64-entity-id-stringification.toml
+  (full outcome, Phase 1 checklist, candidate fix layers A/B/C,
+  release-flow rituals)
+- product/epics/M071-E001-int64-entity-id-fix.toml
+- product/stories/M071-E001-S001-int64-entity-id-fix.toml
+
+READ ALL THREE BEFORE STARTING. The mission TOML has the full Phase 1
+investigation template.
+
+## Phase 1 mandate — DO NOT SKIP
+
+Use the `superpowers:systematic-debugging` skill. The Iron Law applies:
+no fixes without root-cause investigation first. Specifically:
+
+1. Invoke the systematic-debugging skill.
+2. Follow Phase 1: reproduce the bug (the mission TOML has the exact
+   fixture), trace the dtype chain at each layer.
+3. Capture evidence (dtypes printed at each step).
+4. Identify the smallest layer where the promotion happens.
+5. THEN write the failing regression test (Phase 4 step 1 in
+   systematic-debugging: 'Create Failing Test Case').
+6. THEN implement the fix.
+7. Verify the regression test passes.
+
+Do NOT jump to the candidate fix (Layer C stringification helper)
+without confirming it's the right layer. If Phase 1 shows the
+promotion happens in a more fundamental layer (e.g. ibis.memtable
+on v12.0.0 always promotes), Layer C is still the right patch-shape
+fix for v0.9.1 but document WHY in the commit body.
+
+## Layer C candidate fix sketch
+
+```python
+# src/fyrnheim/engine/diff_engine.py — new helper above _make_appeared_events
+
+def _stringify_id(v: object) -> str:
+    \"\"\"Stringify an id-field value, preserving int-shape for pandas-
+    promoted integers.
+
+    Context: pandas silently promotes int64 columns to float64 during
+    round-trips (memtable materialization, parquet save/load). A naive
+    ``str(row[id_field])`` then produces ``'1.0'`` for what was
+    originally ``int(1)``. This helper detects float values with no
+    fractional part and casts them to int before stringifying, so
+    integer ids surface as ``'1'`` end-to-end.
+
+    Preserves str() default behavior for all non-integral values
+    (true floats, strings, bools, etc.).
+    \"\"\"
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+```
+
+Apply at the two call sites in `_make_appeared_events` (line 96,
+`str(row[id_field])`) and `_make_disappeared_events` (line 118, same
+call). Also grep for any other `str(row[id_field])` in the module
+and apply uniformly.
+
+## Test fixtures
+
+From mission TOML Phase 1 checklist (paste verbatim for reproduction):
+
+```python
+import datetime
+import ibis
+import pandas as pd
+from fyrnheim.engine.snapshot_store import SnapshotStore
+from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
+
+# Minimal reproducer — pre-fix emits ['1.0', '2.0', '3.0']
+df = pd.DataFrame({'id': [1, 2, 3], 'score': [3.14, 2.71, 1.41]})
+t = ibis.memtable(df)
+
+store = SnapshotStore(tmp_path, conn)  # duckdb conn
+pipe = SnapshotDiffPipeline(store, conn)
+
+r1 = pipe.run('src', t, id_field='id', snapshot_date=datetime.date(2026,1,1))
+assert r1.execute()['entity_id'].tolist() == ['1', '2', '3']
+```
+
+## Regression test placement
+
+- **test_diff_engine.py**: unit-level test of `_stringify_id` helper
+  (given the candidate fix path). Add a `class TestStringifyId` or
+  just top-level test functions.
+- **test_snapshot_diff.py**: integration-level test of the full
+  pipeline with int64 ids. Cover both cold-start (run 1) and the
+  M066 replay path (run 2 with unchanged data, persistent snapshot).
+
+## Release-flow rituals (same as M063/M064/M065/M067)
+
+1. `git branch -m release/v0.9.1`
+2. Claim Beads: `bd update typedata-nfj6 --status in_progress` AND
+   `bd update typedata-ta1i --status in_progress`
+3. Phase 1 investigation — reproduce + trace + document
+4. Write failing regression test (run it, confirm it fails)
+5. Implement the fix
+6. Confirm regression test passes
+7. Bump pyproject.toml 0.9.0 → 0.9.1
+8. `uv lock`
+9. Write CHANGELOG [0.9.1] entry — fill in the Phase 1 layer + fix layer
+10. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+11. Single commit: `fix(M071): preserve int-shape for integer id columns (v0.9.1)` + body with Phase 1 findings
+12. Close Beads: `bd close typedata-nfj6` AND `bd close typedata-ta1i`
+13. Push release/v0.9.1
+14. Open PR (via orchestrator — the epic agent just pushes)
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory returned by
+the worktree harness. Do NOT use absolute paths starting with
+`/home/tmo/roadtothebeach/open/fyrnheim/...` — those hit the main
+repo, not the worktree. M068 agent fell into this trap. `pwd` first
+if unsure.
+
+## Do NOT
+
+- Skip Phase 1 investigation — the whole mission design hinges on it
+- Touch core/source.py, identity_engine.py, analytics_entity_engine.py,
+  source_transforms.py, pipeline.py (unless Phase 1 identifies one of
+  these as the correct fix layer — document rationale explicitly)
+- Special-case bool handling in `_stringify_id` (bool-as-id is
+  pathological; str(True) = 'True' is fine)
+- Add new API surface (patch release = no API changes)
+- Batch with snapshot_grain / UnionSource fixes (those are separate
+  decisions)
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M071-v0.9.1-int64-entity-id-stringification.toml",
+    "product/epics/M071-E001-int64-entity-id-fix.toml",
+    "product/stories/M067-E001-S001-empty-current-replay-guard.toml",
+]

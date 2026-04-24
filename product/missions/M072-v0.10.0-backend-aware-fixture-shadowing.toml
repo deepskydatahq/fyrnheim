@@ -1,0 +1,316 @@
+# Mission: v0.10.0 — backend-aware fixture shadowing (FR-8)
+# Minor release. Addresses the final v0.9.0 migration gap from the
+# client-flowable M012 Pydantic migration report (2026-04-24):
+# StateSource fixtures on duckdb_path serve as post-transform snapshots,
+# but the engine re-applies transforms/fields/filter on DuckDB, failing
+# because pre-transform column names don't exist in the fixture.
+#
+# Status=ready (scope is clear from the reporter's brief + my design read
+# on 2026-04-24). Single new boolean field, one conditional guard, narrow
+# test matrix.
+
+id = "M072"
+title = "v0.10.0 — backend-aware fixture shadowing on StateSource (FR-8)"
+status = "ready"
+created = 2026-04-24
+depends_on = ["M071"]
+
+[outcome]
+description = """
+Follow-up to the M069 migration-gap report (2026-04-24, client-flowable
+M012 Pydantic migration). v0.9.0 shipped FR-1 through FR-4 but only 1
+of 7 SQL staging views migrated to pydantic — the `pardot_opportunities`
+pure-rename case. Three more Pardot sources (`pardot_accounts`,
+`pardot_prospects`, `pardot_lifecycle_history`) are blocked by a design
+tension between `duckdb_path` fixtures and `transforms`/`fields`/`filter`.
+
+**The tension (from the reporter's report):**
+
+A StateSource with `duckdb_path` serves two purposes:
+1. **On BigQuery**: reads `project.dataset.table` (raw upstream), applies
+   `transforms` + `fields` (json_path) + `filter` to produce the final
+   shape.
+2. **On DuckDB**: reads `duckdb_path` parquet fixture, which ALREADY has
+   the final post-transform column shape.
+
+v0.9.0's engine applies transforms unconditionally on both backends.
+This forces fixture authors to choose:
+- (a) Keep fixtures in raw-BQ shape (JSON columns, pre-rename ids, etc.)
+  — ugly, unreadable, harder to debug
+- (b) Skip `transforms`/`fields`/`filter` entirely — can't migrate from SQL
+
+Neither is workable. Reporter tried (a) and reverted.
+
+**The fix (Option B from /plan-mission-style exploration):**
+
+Add a new explicit opt-in field on `BaseTableSource`:
+
+```python
+duckdb_fixture_is_transformed: bool = PydanticField(
+    default=False,
+    description=(
+        "When True AND the source reads from `duckdb_path` AND the "
+        "backend is DuckDB, the engine SKIPS `transforms`, `fields` "
+        "(json_path extraction), and `filter` at source read time. "
+        "Use this when your parquet fixture is a post-transform snapshot "
+        "of the BigQuery output — the fixture IS the final shape. "
+        "WARNING: if the fixture does NOT match the post-transform BQ "
+        "output, DuckDB-only runs will produce wrong results with no "
+        "backend-parity error. Caught only by cross-backend tests. "
+        "Default False preserves v0.9.0 behavior (apply transforms on "
+        "both backends)."
+    ),
+)
+```
+
+When the flag is True and the backend is DuckDB and `duckdb_path` is the
+read source: skip `_apply_source_transforms`, skip
+`_apply_json_path_extractions`, skip the `filter` step. The fixture is
+assumed to be in post-transform shape; all five declarative stages are
+a no-op on DuckDB. Output remains backend-parity-equivalent as long as
+the fixture was generated correctly from BQ.
+
+**Why explicit opt-in (not auto-magic):**
+- Users who declare `transforms` on a DuckDB-production source
+  (DuckDB-as-backend, not DuckDB-as-fixture) still want transforms to
+  apply — auto-magic based on `duckdb_path`-presence would break them
+- Explicit `duckdb_fixture_is_transformed=True` makes the fixture-
+  semantics visible in the source declaration — future readers can
+  tell the fixture is post-transform without having to inspect the
+  parquet schema
+- Aligns with release-discipline memory: "behavior change = minor"
+  but an opt-in default=False keeps the v0.9.0 behavior for
+  non-opting-in users; no surprise row-count jumps
+
+**Migration impact after v0.10.0 ships:**
+
+| SQL file | M068 | M069 | M072 | Remaining blocker |
+|----------|------|------|------|-------------------|
+| pardot_opportunities.sql | ✓ | — | — | — (shipped in M068) |
+| pardot_accounts.sql | — | — | ✓ (FR-8) | — |
+| pardot_lifecycle_history.sql | partial | partial | ✓ (FR-8) | joins (StagingView path) |
+| pardot_prospects.sql | — | partial | ✓ (FR-8) | joins (StagingView path) |
+| ga4_* (3 files) | — | — | — | keep as SQL (aggregation-heavy) |
+
+End state: 4/7 SQL files fully migrated to pydantic (all Pardot sources
+use declarative pydantic for transforms+extraction+filter; the two that
+need joins keep their StagingView SQL but the pydantic model is now
+clean). 3/7 stay as SQL (GA4 aggregations). Matches the reporter's
+pragmatic split and the original /plan-mission M069 end-state target.
+
+**Weakens the case for M070 (source-level joins):** the reporter's
+report explicitly notes "Without FR-5, those 2 files keep their
+StagingView SQL but skip the JSON/rename transforms via the pydantic
+model" — i.e. FR-8 + StagingView-for-joins is a workable alternative
+to FR-5. M070 stays deferred with LESS urgency than before.
+"""
+
+user_progress = "From 'v0.9.0 shipped FR-1 through FR-4 but only 1 of 7 SQL files migrated — the fixture shape vs. transforms tension blocks 3 more' to 'explicit duckdb_fixture_is_transformed opt-in flag skips transforms/fields/filter when a DuckDB fixture is already post-transform, unblocking pardot_accounts/prospects/lifecycle_history migrations'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "`BaseTableSource` in src/fyrnheim/core/source.py gains `duckdb_fixture_is_transformed: bool = False` with docstring including the backend-parity warning (wrong-fixture = DuckDB-only wrong output) and the v0.9.0-behavior-preservation note",
+    "`load_event_source` in src/fyrnheim/engine/event_source_loader.py: when `event_source.duckdb_fixture_is_transformed is True AND the source is currently reading from duckdb_path (i.e. backend == 'duckdb' AND event_source.duckdb_path is not None AND (event_source.table is None OR we're in the DuckDB-only path))`, skip `_apply_source_transforms`, `_apply_json_path_extractions`, and the `filter` step. `computed_columns` STILL APPLY (these are engine-derived values on top of the raw or transformed table; they are backend-independent expressions, not a bakeable transform)",
+    "`_load_state_source` in src/fyrnheim/engine/pipeline.py: same conditional skip as load_event_source. Confirm the gate uses `config.backend == 'duckdb'` (from the ResolvedConfig) rather than probing the ibis connection — the gate must be deterministic from config",
+    "Decision: does `computed_columns` skip too? **No.** The reporter's FR-8 brief says 'skip transforms, fields, and filter entirely' but does NOT mention computed_columns. Computed columns are user-defined derived expressions — they're evaluated AT READ TIME against the table shape; if the fixture matches the transformed BQ output, computed expressions should evaluate the same way against both. Keep `computed_columns` active on the skip path. Document this explicitly in the Field docstring and CHANGELOG",
+    "Diagnostic log line when the skip path fires: `log.info('StateSource %s: duckdb_fixture_is_transformed=True, skipping transforms/fields/filter (DuckDB fixture read)', source_name)` — users see WHEN the skip is happening. Mirrors the M066 diagnostic log discipline",
+    "New unit tests in tests/test_source_transforms.py: test_fixture_is_transformed_flag_defaults_false; test_fixture_is_transformed_flag_skips_when_true_on_duckdb; test_fixture_is_transformed_flag_does_not_skip_when_backend_is_bigquery (config says bigquery, even if duckdb_path is set, transforms apply); test_fixture_is_transformed_flag_does_not_skip_when_reading_from_table (backend=duckdb but source reading from a live duckdb table, not the duckdb_path parquet); test_fixture_is_transformed_preserves_computed_columns (flag is True, computed_columns still apply)",
+    "New e2e test: StateSource with `duckdb_fixture_is_transformed=True` + `duckdb_path='fixture.parquet'` where the parquet has post-transform shape, flow through _load_state_source + identity graph + project_analytics_entity. Assert: downstream entity materialization matches what an equivalent BQ source with transforms applied would produce",
+    "Negative test: StateSource with `duckdb_fixture_is_transformed=True` but the fixture does NOT match post-transform shape — asserts that the resulting output is visibly wrong (missing columns, wrong values) when compared to the BQ baseline. This is the warning test: a cross-backend test WOULD catch the user error. Keep as a test that documents the trade-off",
+    "All M066/M067/M068/M069/M071 regression tests pass unchanged (ideally 577+ green)",
+    "ruff + mypy clean",
+    "pyproject.toml 0.9.x -> 0.10.0; uv.lock regenerated",
+    "CHANGELOG.md has `## [0.10.0] - YYYY-MM-DD` with `### Added` subsection for the flag + an `### Notes` subsection documenting the backend-parity warning (wrong fixture = DuckDB-only wrong output, caught by cross-backend tests). Explicitly note that computed_columns still apply on the skip path",
+    "Branch `release/v0.10.0`, single commit, message `feat(M072): backend-aware fixture shadowing for StateSource/EventSource (v0.10.0)`",
+    "PR opened titled `release: v0.10.0 — backend-aware fixture shadowing (FR-8)`. Body describes the reporter's M012 migration gap, the flag semantics, the backend-parity warning, and the post-merge-steps block. Optionally note TestPyPI RC availability per release-discipline memory",
+    "Do NOT merge/tag/publish — human post-merge steps",
+    "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, tests/test_source_transforms.py, one e2e test file, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify source_transforms.py itself (the flag GATES calls to _apply_source_transforms; it does NOT change what that helper does), snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py",
+]
+
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+    "product/missions/M012-artifacts/fyrnheim-feature-requests.md (reporter's M012 migration report)",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_identity_projection.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M068 — v0.8.2 wire dead pydantic fields (established source_transforms.py helper that this mission gates)",
+    "M069 — v0.9.0 json_path + filter (shipped with uniform transform application; this mission adds the fixture-skip escape hatch)",
+    "M070 — source-level joins (deferred; FR-8 weakens the case for FR-5 further since Pardot files with joins can use StagingView for the join layer + pydantic + FR-8 for the rest)",
+    "M071 — v0.9.1 int64 entity_id patch (prerequisite — should ship first so v0.10.0 sits on a clean int-shape baseline)",
+]
+
+[scope]
+in_scope = [
+    "New `duckdb_fixture_is_transformed: bool = False` field on `BaseTableSource` with explicit backend-parity warning docstring",
+    "Conditional skip of `_apply_source_transforms`, `_apply_json_path_extractions`, and the `filter` step in both loaders when flag=True + backend=duckdb + reading from duckdb_path",
+    "computed_columns STILL APPLY on the skip path (intentional — computed expressions are derived values, not transforms)",
+    "Diagnostic INFO log when the skip path fires",
+    "Unit tests covering default=False, skip-on-duckdb-with-flag, no-skip-on-bigquery, no-skip-on-duckdb-table-read, computed_columns-still-apply",
+    "E2e test validating the skip path produces a correctly-shaped downstream entity",
+    "Negative test documenting the backend-parity trade-off",
+    "Version bump 0.9.x → 0.10.0 + uv.lock",
+    "CHANGELOG [0.10.0] Added + Notes entries",
+    "release/v0.10.0 branch + PR with post-merge-steps block",
+    "Optional TestPyPI RC release recommendation in PR body per release-discipline memory",
+]
+out_of_scope = [
+    "Making the flag apply per-feature (separate skip-transforms, skip-fields, skip-filter flags) — scope creep without a matching use case",
+    "Auto-detecting fixture shape and inferring the flag — magic, brittle, and removes the explicit declaration benefit",
+    "Backend-parity validation (comparing DuckDB and BQ outputs on every run) — out of scope; that's an integration-test concern",
+    "Refactoring the load_event_source / _load_state_source to share more code — they already share source_transforms.py; further DRY is not the M072 goal",
+    "FR-5 source-level joins (still deferred to M070 — FR-8 weakens the case further)",
+    "FR-6 / FR-7 (reporter's own assessment: keep as SQL)",
+    "Changes to source_transforms.py itself (the flag gates CALLS to the helpers, does not modify them)",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "Users who set `duckdb_fixture_is_transformed=True` but whose fixture is NOT actually post-transform will see DuckDB-only wrong output. This is a documented trade-off — the flag is explicit opt-in with a WARNING docstring. Cross-backend tests catch the mismatch.",
+    "No behavior change for conforming v0.9.0 users (default=False). Users who did NOT set the flag see identical v0.9.0 behavior.",
+]
+
+[notes]
+considerations = """
+## Design rationale (from 2026-04-24 reporter discussion)
+
+The client-flowable M012 Pydantic migration report (product/missions/
+M012-artifacts/fyrnheim-feature-requests.md) surfaced the tension after
+v0.9.0 shipped:
+
+- **FR-1 (transforms) + FR-3 (json_path) + FR-4 (filter)** work perfectly
+  on BigQuery where the source is the raw upstream table.
+- They BREAK on DuckDB when the `duckdb_path` fixture is a post-transform
+  snapshot, because the raw column names don't exist in the fixture.
+- The reporter tried (a) raw-shape fixtures and reverted — "ugly,
+  unreadable fixtures" with JSON columns and pre-rename ids hurt
+  development velocity.
+- The reporter proposed FR-8 as "skip transforms/fields/filter when
+  duckdb_path + DuckDB". After design review: prefer explicit opt-in
+  field over implicit "when duckdb_path is set" behavior, because some
+  users run DuckDB as a PRODUCTION backend (not just fixture) and want
+  transforms to apply.
+
+## Why the flag default is False
+
+- Preserves v0.9.0 behavior exactly for non-opting-in users
+- Forces users who want the skip to declare it explicitly in the source
+  model — makes the fixture-semantics visible at the declaration site
+  (a reader can tell "this source's DuckDB fixture is post-transform"
+  without inspecting the parquet)
+- Aligns with release-discipline memory: new API surface = minor, but
+  default=False means no surprise row-count jumps for existing users
+
+## Why computed_columns still apply
+
+The reporter's FR-8 proposal said "skip transforms, fields, and filter
+entirely" but did not mention `computed_columns`. Thinking it through:
+
+- `transforms` = how the raw column shape maps to the target shape
+  (cast / rename / derive). If the fixture is already in the target
+  shape, transforms are a no-op or would fail (reporter's case).
+- `fields (json_path)` = same story — the fixture's JSON extraction has
+  already happened.
+- `filter` = row-level predicate. The fixture may or may not already
+  have been filtered. AMBIGUOUS case. Reporter's pardot_prospects
+  fixture IS pre-filtered (no `_fivetran_deleted=True` rows), so
+  applying the filter a second time is a no-op. In general, whether
+  filter-has-been-applied is part of "post-transform" semantics — let's
+  group it with transforms and skip it on the flag.
+- `computed_columns` = user-defined derived expressions. They're
+  evaluated AT READ TIME against the table shape. They're NOT bakeable
+  into the fixture because the expression can reference runtime state
+  (e.g. `datetime.now()` or an environment-dependent value). Even if
+  the user's expression is pure (`t.a + t.b`), re-evaluating on DuckDB
+  yields the same result as BQ would — backend-parity holds. **No
+  reason to skip.** Keep active on the skip path.
+
+Document this decision explicitly in the CHANGELOG Notes so users know
+computed_columns ISN'T bypassed.
+
+## Gate condition details
+
+The skip should fire when ALL of:
+1. `source.duckdb_fixture_is_transformed is True`
+2. `config.backend == "duckdb"`  (from ResolvedConfig, not from
+   conn.name — ResolvedConfig is the single source of truth for backend
+   identity per pipeline.py conventions)
+3. The source is ACTUALLY reading from `duckdb_path` and not a live
+   table. Check: `source.duckdb_path is not None AND source.table is
+   None`, OR more robustly: match whatever path `source.read_table`
+   would take given the config. If `source.read_table` internally
+   decides between parquet-file and live-table reads, the skip gate
+   should mirror that logic.
+
+Verify by reading `BaseTableSource.read_table` in source.py:105-160 (or
+wherever it lives) and replicating its branch decision.
+
+## Alternative naming considered
+
+- `duckdb_fixture_is_transformed` (chosen) — explicit, long, clear
+- `fixture_is_transformed` — shorter but ambiguous about backend
+- `skip_transforms_on_fixture` — imperative, describes the action not
+  the state
+- `duckdb_fixture_shape: Literal["raw", "transformed"] = "raw"` — more
+  extensible (allows future shapes) but heavier API
+
+Picked `duckdb_fixture_is_transformed` because it describes the FIXTURE
+STATE, not the engine action — matches pydantic model conventions
+(declare state, engine reacts).
+
+## Release discipline
+
+**Minor bump v0.10.0** per release-discipline memory (new API surface).
+Default=False preserves behavior, so no surprise breaking changes. RC
+on TestPyPI is recommended per the memory for semantic API additions —
+planner's call during PR open.
+
+## Release-flow rituals
+
+Mirrors M066/M068/M069 minor-release shape:
+1. `git branch -m release/v0.10.0`
+2. Claim Beads
+3. Implement: field on BaseTableSource + gate in both loaders + logging + tests
+4. `uv lock` + CHANGELOG
+5. Verify clean
+6. Single commit
+7. Close Beads, push, open PR
+8. STOP — human merges/tags/publishes
+
+## Do NOT
+
+- Skip computed_columns on the flag path — they're backend-independent
+  expressions, not transforms
+- Make the flag auto-magic (infer from duckdb_path presence) — explicit
+  opt-in is the point
+- Add per-feature skip flags (skip-transforms, skip-fields, skip-filter
+  separately) — scope creep without use-case justification
+- Modify source_transforms.py internals — the flag gates CALLS to the
+  existing helpers
+- Ship before M071 (v0.9.1 int64 fix) — v0.10.0 should sit on a clean
+  int-shape baseline, and stacking the int bug on top of the new API
+  makes the blast radius harder to reason about
+- Merge, tag, or publish — human post-merge steps
+"""

@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
-from fyrnheim.core.source import EventSource
+from fyrnheim.core.source import EventSource, Rename, SourceTransforms, TypeCast
 from fyrnheim.engine.event_source_loader import _serialize_value, load_event_source
 
 
@@ -448,3 +448,86 @@ class TestLoadEventSourceWithArrayColumns:
         nested = json.loads(payload_0["event_params"])
         assert nested[0]["key"] == "page"
         assert nested[0]["value"] == "/home"
+
+
+class TestLoadEventSourceTransforms:
+    """M068: EventSource.transforms applies at read time."""
+
+    def test_event_source_transforms_rename(self, tmp_path) -> None:
+        """A rename transform lets entity_id_field point at the renamed column.
+
+        Confirms transforms apply BEFORE the entity_id_field mapping —
+        the source column ``customer_id`` is renamed to ``user_id`` at
+        read time, and ``entity_id_field='user_id'`` then picks up the
+        renamed column for the event's entity_id.
+        """
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "customer_id": ["c1", "c2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                "page": ["/home", "/about"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="page_views",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+            transforms=SourceTransforms(
+                renames=[Rename(from_name="customer_id", to_name="user_id")]
+            ),
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 2
+        assert set(result["entity_id"]) == {"c1", "c2"}
+
+    def test_event_source_transforms_type_cast(self, tmp_path) -> None:
+        """type_cast applies before payload packing — cast column round-trips.
+
+        An ``amount`` column stored as numeric-string is cast to float64 at
+        read time; the payload reflects the float value.
+        """
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                # stored as numeric-strings — cast to float64 via transforms
+                "amount": ["10.5", "20.25"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="purchases",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="purchase",
+            transforms=SourceTransforms(
+                type_casts=[TypeCast(field="amount", target_type="float64")]
+            ),
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 2
+        payload_0 = json.loads(result.iloc[0]["payload"])
+        # Cast happened: value is a JSON number (float), not a string.
+        assert isinstance(payload_0["amount"], float)
+        assert payload_0["amount"] == 10.5
+        payload_1 = json.loads(result.iloc[1]["payload"])
+        assert isinstance(payload_1["amount"], float)
+        assert payload_1["amount"] == 20.25

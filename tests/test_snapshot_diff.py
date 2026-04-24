@@ -10,8 +10,9 @@ import ibis
 import pandas as pd
 import pytest
 
+from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
-from fyrnheim.core.source import StateSource
+from fyrnheim.core.source import Rename, SourceTransforms, StateSource
 from fyrnheim.engine.pipeline import _load_state_source
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
@@ -457,3 +458,142 @@ class TestStateSourceFullRefresh:
         # (the dir may or may not exist; either way it must be empty).
         if snapshot_dir.exists():
             assert list(snapshot_dir.rglob("*.parquet")) == []
+
+
+# ---------------------------------------------------------------------------
+# M068: StateSource.transforms and StateSource.computed_columns tests
+# ---------------------------------------------------------------------------
+
+
+class TestStateSourceTransformsAndComputedColumns:
+    """M068: verify `_load_state_source` now honours `transforms` and
+    `computed_columns` (previously dead pydantic fields).
+    """
+
+    def test_state_source_transforms_rename(
+        self, tmp_path: Path, duckdb_conn
+    ) -> None:
+        """A rename transform on a StateSource is visible in the saved
+        snapshot and in the emitted events: ``id_field='account_id'``
+        resolves against the RENAMED column (original column ``id``).
+        """
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "accounts.parquet"
+        df = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="accounts",
+            project="test",
+            dataset="test",
+            table="accounts",
+            duckdb_path=str(parquet_path),
+            id_field="account_id",  # post-transform name
+            transforms=SourceTransforms(
+                renames=[Rename(from_name="id", to_name="account_id")]
+            ),
+        )
+
+        events = _load_state_source(source, config, duckdb_conn)
+        result = events.execute()
+
+        # Entity ids come from the renamed column.
+        assert len(result) == 2
+        assert set(result["entity_id"]) == {"1", "2"}
+        assert set(result["event_type"]) == {"row_appeared"}
+
+        # Saved snapshot reflects the transformed schema (renamed column).
+        snapshot_dir = Path(config.output_dir) / "snapshots" / "accounts"
+        parquet_files = list(snapshot_dir.glob("*.parquet"))
+        assert len(parquet_files) == 1
+        saved = pd.read_parquet(str(parquet_files[0]))
+        assert "account_id" in saved.columns
+        assert "id" not in saved.columns
+
+    def test_state_source_computed_columns_applied(
+        self, tmp_path: Path, duckdb_conn
+    ) -> None:
+        """A StateSource ``computed_columns`` entry appears in the emitted
+        row_appeared event payload (mirrors the existing EventSource
+        behavior — M068 wires this for StateSource).
+        """
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "people.parquet"
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "first": ["Alice", "Bob"],
+                "last": ["Smith", "Jones"],
+            }
+        )
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="people",
+            project="test",
+            dataset="test",
+            table="people",
+            duckdb_path=str(parquet_path),
+            id_field="id",
+            computed_columns=[
+                ComputedColumn(
+                    name="full_name",
+                    expression='t.first + " " + t.last',
+                ),
+            ],
+        )
+
+        events = _load_state_source(source, config, duckdb_conn)
+        result = events.execute()
+
+        assert len(result) == 2
+        assert set(result["event_type"]) == {"row_appeared"}
+        payloads = [json.loads(p) for p in result["payload"].tolist()]
+        full_names = {p["full_name"] for p in payloads}
+        assert full_names == {"Alice Smith", "Bob Jones"}
+
+    def test_computed_columns_see_transformed_columns(
+        self, tmp_path: Path, duckdb_conn
+    ) -> None:
+        """A computed_column expression can reference a column RENAMED by
+        transforms. Proves transforms apply BEFORE computed_columns.
+        """
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "accounts.parquet"
+        df = pd.DataFrame({"id": ["A1", "A2"], "name": ["Alice", "Bob"]})
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="accounts",
+            project="test",
+            dataset="test",
+            table="accounts",
+            duckdb_path=str(parquet_path),
+            id_field="account_id",  # renamed-to name
+            transforms=SourceTransforms(
+                renames=[Rename(from_name="id", to_name="account_id")]
+            ),
+            computed_columns=[
+                ComputedColumn(
+                    name="prefix",
+                    expression="t.account_id",  # resolves post-rename
+                ),
+            ],
+        )
+
+        # If transforms applied AFTER computed_columns, the eval would
+        # fail because ``account_id`` would not exist on the pre-rename
+        # schema. A successful emit proves the ordering.
+        events = _load_state_source(source, config, duckdb_conn)
+        result = events.execute()
+
+        assert len(result) == 2
+        payloads = [json.loads(p) for p in result["payload"].tolist()]
+        prefixes = {p["prefix"] for p in payloads}
+        assert prefixes == {"A1", "A2"}

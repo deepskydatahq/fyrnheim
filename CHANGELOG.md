@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-04-24
+
+### Fixed
+
+- `SourceTransforms` (`renames`, `type_casts`, `divides`, `multiplies`)
+  were declared on `StateSource` and `EventSource` pydantic models but
+  never applied by the engine. They are now honored at source read
+  time, in the order: `type_casts → divides → multiplies → renames`.
+- `StateSource.computed_columns` were similarly declared but ignored
+  by `_load_state_source`. They now apply at read time matching the
+  existing `EventSource` behavior. Computed columns are applied
+  **after** transforms, so expressions can reference renamed or
+  cast columns.
+- Migration note: if you set `transforms` or `computed_columns` on a
+  `StateSource` today expecting them to be silently ignored, this is
+  a behavior change — but that setup contradicts the documented model
+  intent, so it should be rare in practice. Unblocks the first phase
+  of migrating SQL staging views to declarative pydantic sources.
+
 ## [0.8.1] - 2026-04-23
 
 ### Fixed

@@ -1,151 +1,135 @@
-# Mission: v0.9.0 — new source-level API surface for declarative pipelines
-# Minor release. Bundles three NEW pydantic APIs that unblock migrating
-# Pardot SQL staging views to declarative pydantic sources:
+# Mission: v0.9.0 — source-level filter + Field.json_path wiring
+# Minor release. Adds two NEW pydantic APIs that unblock Pardot SQL
+# migration Phases 2 and 3:
 #
 #   FR-3: wire Field.json_path + add Field.source_column convention
 #   FR-4: source-level WHERE filter (new `filter` field on StateSource/EventSource)
-#   FR-5: source-level JOIN declarations (new `joins` field on StateSource)
 #
-# Status=draft. Needs /plan-mission for API design before execution.
+# FR-5 (source-level joins) is DEFERRED to M070 after /plan-mission M069
+# exploration confirmed StagingView already covers that use case for
+# BigQuery production and real-usage data from FR-3/FR-4 will inform the
+# FR-5 API shape better than designing now.
+#
+# Status=ready (scope locked 2026-04-24 via /plan-mission).
 
 id = "M069"
-title = "v0.9.0 — declarative filter + joins + json_path source API"
-status = "draft"
+title = "v0.9.0 — Field.json_path wiring + source-level filter"
+status = "ready"
 created = 2026-04-24
+planned = 2026-04-24
 depends_on = ["M068"]
 
 [outcome]
 description = """
-Follow-up to M068. That patch wired two dead pydantic fields (`transforms`,
-`computed_columns`) so users get what they already declared. This mission
-adds three NEW APIs that give users new expressive power to move SQL
-staging views into the pydantic layer.
+Follow-up to M068. That patch wired the two dead pydantic fields
+(`transforms`, `computed_columns`) so the engine honors the existing
+model surface. This minor release adds TWO new APIs that let users
+declare more pipeline logic in pydantic instead of SQL staging views:
 
-**Field context (timo-data-stack migration investigation 2026-04-24):**
-After M068 ships, 1 of 7 SQL files can migrate (pardot_opportunities.sql
-— pure rename). The remaining Pardot files need:
+1. **FR-3 — `Field.json_path` wiring + new `Field.source_column`.**
+   `Field.json_path` (src/fyrnheim/core/source.py:18) is declared
+   today but never read by any engine code. Wire it at source read
+   time. Add `Field.source_column: str | None = None` — when a Field
+   has `json_path` set and `source_column` is None, the engine
+   extracts from a column matching `Field.name`; when `source_column`
+   is set, it extracts from that column explicitly. Unblocks
+   `pardot_accounts.sql` (~10 JSON_VALUE(custom_type, '$.value')-shape
+   extractions).
 
-- **pardot_accounts.sql** — JSON_VALUE(custom_type, '$.value') extractions
-  for ~10 columns. Needs FR-3.
-- **pardot_prospects.sql** — WHERE _fivetran_deleted != True filter +
-  JOIN lifecycle_history + lifecycle_stage. Needs FR-4 + FR-5.
-- **pardot_lifecycle_history.sql** — computed transition_type CASE
-  (already enabled by M068) + double JOIN lifecycle_stage for prev/next
-  stage names. Needs FR-5.
+2. **FR-4 — source-level `filter`.** New `filter: str | None = None`
+   field on `BaseTableSource` (applies to StateSource + EventSource +
+   DerivedSource). When set, applied after transforms +
+   computed_columns via the existing eval pattern — `eval(source.filter,
+   {"ibis": ibis, "t": table})` then `table.filter(pred)`. Same
+   expression syntax as ComputedColumn. Unblocks `pardot_prospects.sql`
+   (`WHERE _fivetran_deleted != True`-shape row filter). Documented
+   SQL three-valued-logic gotcha: `col != True` drops NULL rows
+   silently — users can `.fillna(False)` if they want different
+   semantics.
 
-This mission bundles the three feature requests because:
-1. All three add new pydantic API surface (minor bump, same release)
-2. Migrating the Pardot SQL files is a coherent user goal — shipping
-   them piecemeal across two minors (e.g. 0.9.0 = filter, 0.10.0 =
-   joins) would stall the migration
-3. The three APIs are orthogonal — filter/joins/json_path don't
-   interact tightly and can be designed independently within one
-   mission
+**FR-5 (source-level joins) deferred to M070.** /plan-mission
+exploration on 2026-04-24 confirmed that StagingView already expresses
+joins fully with arbitrary SQL + Jinja2 params + dependency ordering +
+backend-agnostic execution. For the reporter's BigQuery production
+environment StagingView is the right tool. The only added value from
+source-level joins is "DuckDB-only local-dev users avoid writing SQL
+for simple joins" — real but narrow. Deferring lets us design FR-5 in
+M070 with real usage data from FR-3/FR-4 on the two Pardot migrations
+they unblock.
 
-**GA4 sources stay as SQL** per reporter's own assessment (aggregation-
-heavy, SQL is the right tool for GROUP BY + COUNTIF + ARRAY_AGG).
+**Migration impact after M068 + M069 ship:**
 
-**Three open API design questions (to resolve in /plan-mission):**
+| SQL file | M068 | M069 | Blocks remaining |
+|----------|------|------|------------------|
+| pardot_opportunities.sql | ✓ | — | — |
+| pardot_accounts.sql | — | ✓ (FR-3) | — |
+| pardot_lifecycle_history.sql | partial | partial (FR-4 enables filter half) | joins (→ StagingView or M070) |
+| pardot_prospects.sql | — | partial (FR-4 enables filter half) | joins (→ StagingView or M070) |
+| ga4_* (3 files) | — | — | keep as SQL (aggregation-heavy per reporter) |
 
-**FR-3 — json_path wiring:**
-- Current `Field.json_path` is a dead field (declared, never read).
-- The reporter proposed adding `Field.source_column` so a Field can
-  say "extract `$.value` from the `custom_type` column".
-- Open: should `Field.source_column` default to `Field.name` (i.e. extract
-  from the column that matches the field's name)? That's the
-  simplest case but breaks if multiple JSON extractions target the
-  same source column (pardot_accounts has 10 fields all extracting
-  from different `custom_*` columns).
-- Open: should wiring happen at source-read time (produces columns)
-  or at event-payload-pack time (produces payload keys)? The
-  reporter's brief implies the former but the latter matches how
-  state fields work downstream.
+End state: 2 of 7 SQL files fully migrated after v0.9.0 (opportunities,
+accounts). 2 of 7 partial (lifecycle_history, prospects — filter moves
+to pydantic, joins stay in StagingView). 3 of 7 stay as SQL.
 
-**FR-4 — source-level filter:**
-- New field `filter: str | None = None` (or structured form)
-  on BaseTableSource, applied after read_table + transforms.
-- Open: ibis-expression string (`"t._fivetran_deleted != True"`)
-  evaluated via `eval(...)` — consistent with ComputedColumn's
-  eval pattern but uses string input — OR an Ibis expression
-  object passed directly (harder to serialize in TOML/YAML
-  configs).
-- Open: apply before or after computed_columns? Applying after
-  lets users filter on computed columns; applying before is
-  cheaper (fewer rows through the mutate).
+**Architecture (from /plan-mission exploration):**
 
-**FR-5 — source-level joins:**
-- New field `joins: list[Join] = []` on StateSource.
-- Open: the reporter flagged this as "may be better as a
-  StagingView feature than a source-level feature." StagingView
-  is the existing SQL-file primitive. The question: do we want
-  declarative joins in pydantic at all, or should joins stay in
-  StagingView (SQL) and only simple sources stay in pydantic?
-- Open: if we DO add source-level joins, how do users express
-  join conditions? Ibis joins are rich (left/right/outer/inner,
-  on predicates, multi-column keys). A minimal first-version
-  would support left-join only, single-column key, structured
-  config.
-- Open: interaction with `upstream: StagingView`. Can a source
-  have BOTH an upstream StagingView AND joins? (Probably
-  redundant — the StagingView already expresses the join.)
+- FR-3: extend `_apply_source_transforms` helper in
+  src/fyrnheim/engine/source_transforms.py with a new branch that
+  iterates `source.fields` and applies `json_path` extraction when
+  set. New contract: `source.fields` becomes engine-consumed (today
+  it's read-only metadata — no engine code iterates it).
+- FR-4: new filter application step inside the same helper (or
+  adjacent). Applied AFTER transforms AND computed_columns so users
+  can filter on computed values. Uses the existing
+  `eval(..., {"ibis": ibis, "t": table})` pattern with
+  `# noqa: S307`.
+- Both hooks land in `source_transforms.py` — the M068-landed helper
+  is the natural extension point.
 
-These design questions MUST be resolved in /plan-mission before
-execution. Possible outcomes:
-
-- All three ship in v0.9.0
-- FR-3 + FR-4 ship in v0.9.0; FR-5 deferred (design lands on
-  "joins belong in StagingView, not source-level")
-- FR-3 alone ships in v0.9.0 as a smaller minor; FR-4 + FR-5 ship
-  in v0.10.0 after more design
-
-The planner picks the split based on design-question resolution and
-scope estimates.
-
-**Migration impact after this mission ships (assuming all three):**
-
-| SQL file | Migratable? | Blocking feature |
-|----------|-------------|------------------|
-| pardot_opportunities.sql | Already (M068) | — |
-| pardot_accounts.sql | Yes | FR-3 |
-| pardot_lifecycle_history.sql | Yes | FR-5 (double join) |
-| pardot_prospects.sql | Yes | FR-4 + FR-5 |
-| ga4_marketing.sql | Keep as SQL | — (aggregation) |
-| ga4_sessions.sql | Keep as SQL | — (aggregation) |
-| ga4_anon_attributes.sql | Keep as SQL | — (aggregation) |
-
-End state: 4/7 migrated to pydantic, 3/7 kept as SQL. Matches the
-reporter's pragmatic split.
+**Release discipline:** minor bump v0.9.0 (new API surface). Per the
+release-discipline memory: consider TestPyPI RC release for
+field-team validation before GA, since FR-3 introduces a new `fields`
+engine contract.
 """
 
-user_progress = "From 'after M068 only 1 of 7 SQL files can migrate — JSON extraction / filter / joins all require new pydantic API' to 'Field.json_path wired with clear source-column convention, source-level filter on StateSource/EventSource, source-level joins on StateSource (design-resolved scope), 4 of 7 Pardot SQL files migrated to declarative pydantic'"
+user_progress = "From 'Field.json_path dead, no source-level filter, Pardot SQL migration stuck at 1 of 4 files after M068 ships' to 'json_path wired with source_column convention, declarative source-level filter, 2 of 4 Pardot files fully migratable (opportunities + accounts), 2 of 4 partial (filter half of lifecycle_history + prospects, joins remain in StagingView pending M070)'"
 
 [testing]
 approach = "agent-judgment"
 criteria = [
-    "Phase 1 design document (in the plan): open questions above resolved with rationale. Specifically: (a) Field.source_column default convention, (b) filter expression syntax + order vs. computed_columns, (c) whether FR-5 joins ship in v0.9.0 or defer — and if they ship, the minimum-viable join shape",
-    "FR-3: Field gains `source_column: str | None = None`. When `json_path` is set and `source_column` is None, defaults to Field.name. The engine extracts `json_path` from `source_column` at source read time, producing a typed column named Field.name. Integration test using pardot_accounts-shape fixture",
-    "FR-4: BaseTableSource (or StateSource + EventSource individually) gains `filter: str | None = None`. When set, applied via eval(...) with `{'ibis': ibis, 't': table}` context (same pattern as ComputedColumn), AFTER transforms + computed_columns. Unit tests + integration test with `_fivetran_deleted != True`-shape filter",
-    "FR-5 (if in scope per design resolution): StateSource gains `joins: list[Join] = []`. Join model shape TBD in planning. Left-join-single-key-on-equality minimum. Applied after read_table + transforms + computed_columns, before filter. Integration test covering pardot_lifecycle_history double-join shape",
-    "New unit tests for each new field, covering default behavior (field unset = no-op), happy path, and common error cases (e.g. json_path references a missing source_column)",
-    "New e2e test migrating a SQL-file-shape StateSource into the pydantic equivalent, running it through the full pipeline, asserting identical output to the SQL baseline",
-    "All M068-enabled behavior (SourceTransforms, StateSource.computed_columns) continues to work with the new fields layered on top — transform-order tests still pass",
-    "All existing tests pass unchanged",
+    "FR-3: `Field` in src/fyrnheim/core/source.py gains `source_column: str | None = None` field with docstring. Existing `json_path: str | None = None` field unchanged",
+    "FR-3: `_apply_source_transforms` (src/fyrnheim/engine/source_transforms.py) gains a new branch that iterates `fields: list[Field] | None` and — for each field with `json_path is not None` — extracts the JSON value from `source_column` (defaulting to `field.name`) into a column named `field.name`, typed per `field.type`. Use ibis JSON primitives: `table[source_column].cast('json')[json_path_key].unwrap_as(<type>)` or the equivalent depending on the path format. Applied AFTER renames but BEFORE computed_columns (so users can reference extracted columns in computed expressions)",
+    "FR-3: the helper signature grows to `_apply_source_transforms(table, transforms, fields=None)` OR a sibling helper is added. Both call sites (load_event_source, _load_state_source) pass `source.fields` (which may be None — existing contract is preserved for sources without fields declared)",
+    "FR-3: JSON path format decision locked in the plan/implementation — supported forms at minimum: `$.key` (top-level string), `$.key` (top-level scalar with automatic type coercion per `field.type`). Nested paths (`$.a.b.c`) either supported or explicitly documented as unsupported; pick one and document it in the Field docstring and CHANGELOG",
+    "FR-4: `BaseTableSource` in src/fyrnheim/core/source.py gains `filter: str | None = None` field. Docstring notes the eval semantics and the NULL-gotcha (`col != True` drops NULL rows via SQL three-valued logic; users can `.fillna(False)` for different semantics)",
+    "FR-4: after `_apply_source_transforms` + computed_columns application in BOTH load_event_source and _load_state_source, if `source.filter` is set, apply `table = table.filter(eval(source.filter, {'ibis': ibis, 't': table}))  # noqa: S307`. The filter step is NEW code in both loaders (not inside `_apply_source_transforms` — different semantic layer; helper is for single-table transforms and filter is post-computed-columns)",
+    "New unit tests in tests/test_source_transforms.py: test_json_path_extraction_default_source_column (Field(name='utm_source', json_path='$.utm_source') extracts from column `utm_source`); test_json_path_extraction_explicit_source_column; test_json_path_missing_source_column_raises_or_is_noop (pick behavior, pin it); test_fields_without_json_path_are_ignored (preserves no-op behavior for Field-as-metadata usage)",
+    "New unit tests in tests/test_source_transforms.py or adjacent: test_filter_applied_when_set; test_filter_not_applied_when_none; test_filter_applied_after_computed_columns (compute a flag column, filter on it)",
+    "New unit test in tests/test_event_source_loader.py: EventSource with `filter='t.event_type != \"test\"'`, assert filtered events don't reach the output",
+    "New unit test in tests/test_snapshot_diff.py: StateSource with `filter='t.deleted != True'`, run twice with persistent snapshot, assert deleted rows never appear in emitted events",
+    "New e2e test in tests/test_e2e_identity_projection.py: StateSource with fields=[Field(name='account_type', type='STRING', json_path='$.value', source_column='custom_type')] + filter='t.status == \"active\"', flows through the full pipeline, asserts extracted + filtered schema reaches entity materialization",
+    "All existing tests pass unchanged: M066/M067/M068 regression tests in test_snapshot_diff.py, test_e2e_entity_output.py, test_source_transforms.py (pre-M069 subset), etc.",
     "ruff + mypy clean",
     "pyproject.toml version 0.8.2 -> 0.9.0; uv.lock regenerated",
-    "CHANGELOG.md has `## [0.9.0] - YYYY-MM-DD` section with `### Added` subsection listing each new field. If a feature defers, explicit deferral note",
-    "Branch `release/v0.9.0`, commit history decision in the plan (single commit or one-per-feature — depends on whether the scope is all-three or phased)",
-    "PR opened against main with post-merge-steps block and RC note if the design resolution recommends a TestPyPI RC (per release-discipline memory on semantic shifts)",
+    "CHANGELOG.md has `## [0.9.0] - YYYY-MM-DD` section with `### Added` subsection (Field.json_path wiring + Field.source_column + BaseTableSource.filter) AND a `### Changed` subsection noting that `source.fields` becomes engine-consumed for json_path extraction (was read-only metadata). Document the NULL-gotcha on filter",
+    "Branch `release/v0.9.0`, single commit, message `feat(M069): Field.json_path wiring + source-level filter (v0.9.0)`",
+    "PR opened against main titled `release: v0.9.0 — Field.json_path wiring + source-level filter`. Body describes both features, the Pardot-migration context, the NULL-gotcha on filter, the deferred-FR-5 note pointing at M070. Includes post-merge-steps block. Optionally: consider TestPyPI RC before GA per release-discipline memory",
     "Do NOT merge/tag/publish — human post-merge steps",
+    "Diff scope: src/fyrnheim/core/source.py (Field.source_column + BaseTableSource.filter), src/fyrnheim/engine/source_transforms.py (extended with json_path branch), src/fyrnheim/engine/event_source_loader.py (add filter step), src/fyrnheim/engine/pipeline.py (add filter step in _load_state_source), tests/test_source_transforms.py (+ new tests), tests/test_event_source_loader.py (+ 1 test), tests/test_snapshot_diff.py (+ 1 test), tests/test_e2e_identity_projection.py (+ 1 e2e test), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py",
 ]
 
 validator_context = [
     "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
     "src/fyrnheim/engine/event_source_loader.py",
     "src/fyrnheim/engine/pipeline.py",
-    "src/fyrnheim/engine/source_transforms.py",
     "tests/test_source_transforms.py",
-    "CHANGELOG.md",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
     "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
 ]
 
 [context]
@@ -155,184 +139,140 @@ related_docs = [
 ]
 relevant_paths = [
     "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
     "src/fyrnheim/engine/event_source_loader.py",
     "src/fyrnheim/engine/pipeline.py",
-    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
     "tests/test_source_transforms.py",
+    "tests/test_event_source_loader.py",
     "tests/test_snapshot_diff.py",
-    "tests/test_e2e_entity_output.py",
     "tests/test_e2e_identity_projection.py",
     "pyproject.toml",
     "CHANGELOG.md",
 ]
 related_missions = [
-    "M068 — v0.8.2 wire dead pydantic fields (prerequisite — sets up the shared source_transforms helper)",
-    "M066 — v0.8.0 snapshot-diff replay (semantic shift reference — same RC guidance)",
-    "Prior-release reference: M063 / M064 / M065 patches; M066 minor; M067 patch",
+    "M068 — v0.8.2 wire dead pydantic fields (prerequisite — source_transforms.py helper)",
+    "M070 — source-level joins (deferred from M069 to plan after FR-3/FR-4 real-usage data)",
+    "M066 — v0.8.0 snapshot-diff replay (semantic shift reference — RC guidance)",
 ]
 
 [scope]
 in_scope = [
-    "Phase 1: design resolution for the three API surfaces (source_column convention, filter expression syntax, join minimum viable shape)",
-    "FR-3: Field.source_column + wire Field.json_path extraction at source read time",
-    "FR-4: source-level filter on StateSource + EventSource (eval-based string expression)",
-    "FR-5: source-level joins on StateSource (scope TBD in planning — all, minimum, or defer)",
-    "New Pydantic models as needed (Join — shape TBD)",
-    "Unit + integration tests per feature",
-    "One migration-shape e2e test validating a pydantic source replicates a SQL-file equivalent",
+    "FR-3: Field.source_column: str | None = None on Field pydantic model",
+    "FR-3: extend _apply_source_transforms with json_path extraction branch (iterates source.fields, applies to columns where json_path is set)",
+    "FR-3: JSON path format decision (top-level `$.key` minimum; nested path support is a lock-in-or-defer decision for the implementer per the criteria)",
+    "FR-4: BaseTableSource.filter: str | None = None (applies to StateSource + EventSource + DerivedSource)",
+    "FR-4: filter application step in both loaders after transforms + computed_columns",
+    "Unit + e2e tests for both features",
     "Version bump 0.8.2 → 0.9.0 + uv.lock",
-    "CHANGELOG [0.9.0] Added entry",
+    "CHANGELOG [0.9.0] Added + Changed entries",
     "release/v0.9.0 branch + PR with post-merge-steps block",
-    "Consideration of TestPyPI RC release for field-team validation before GA (per release-discipline memory)",
+    "Optional: TestPyPI RC release recommendation in the PR body per release-discipline memory",
 ]
 out_of_scope = [
-    "FR-6: source-level GROUP BY aggregation (reporter's own assessment — keep as SQL)",
-    "FR-7: BigQuery wildcard table support (reporter's own assessment — keep as SQL)",
-    "Migrating the actual Pardot SQL files to pydantic — that's the user's migration mission, enabled by this work. This mission ships the engine-side primitives; the user consumes them",
-    "Removing or refactoring StagingView — both primitives coexist",
-    "Changes to SnapshotDiffPipeline, diff_engine, analytics_entity_engine, identity_engine — out of scope regardless of where the features land",
-    "DerivedSource new-API support — if relevant, file as follow-up after this mission",
+    "FR-5: source-level joins (StateSource.joins: list[Join]) — deferred to M070. Real usage data from FR-3/FR-4 should inform the join API shape before we lock it in. StagingView already expresses joins fully for BigQuery production",
+    "FR-6: source-level GROUP BY aggregation (keep as SQL per reporter)",
+    "FR-7: BigQuery wildcard table support (keep as SQL)",
+    "Multi-path json_path extraction (single path per Field; if a user needs two extractions from the same column, declare two Fields)",
+    "Field-level type coercion beyond what ibis `.unwrap_as()` / `.cast()` already supports",
+    "Filter expression validation beyond what eval+ibis naturally provides (no static analysis of expressions)",
+    "Performance optimization for many-Field json_path extraction (Ibis handles push-down; no premature engineering)",
+    "Changes to SnapshotDiffPipeline, diff_engine, analytics_entity_engine, identity_engine",
+    "DerivedSource-specific behavior beyond the BaseTableSource.filter inheritance",
+    "Actually migrating the Pardot SQL files — that's the user's follow-up work after this ships",
     "Merge, tag, PyPI publish — human post-merge steps",
 ]
 acceptable_breakage = [
-    "None expected for conforming users — all new fields default to None / empty / skip behavior. Users who do NOT set the new fields see identical behavior to v0.8.2.",
-    "If the plan lands on FR-3 ONLY for v0.9.0 with FR-4 / FR-5 deferred: reporter's migration roadmap Phases 3/4 remain blocked. CHANGELOG must be clear about what's enabled vs deferred so the field team can plan.",
+    "Users who have `Field(name=X, json_path=Y)` declared today and expected it to be silently ignored (unlikely — the field has no other purpose) will see json_path extraction happen. CHANGELOG calls this out. Field-as-pure-metadata usage (json_path unset) is unaffected.",
+    "Users who declare `filter=X` today see no change (new field defaults to None).",
+    "Users who have a `filter` keyword argument elsewhere in their StateSource/EventSource config will get a Pydantic validation error if they were somehow passing an unexpected kwarg through today. Unlikely in practice; Pydantic already rejects unknown fields on these models.",
+    "The NULL-behavior of filter expressions (`col != True` drops NULLs via SQL three-valued logic) is SQL-standard but may surprise users. Documented in CHANGELOG + field docstring; not a framework-level fix.",
 ]
 
 [notes]
 considerations = """
-## Planning-phase priorities
+## /plan-mission exploration findings (2026-04-24)
 
-Three orthogonal API design questions. /plan-mission should tackle them
-in order of blocking-impact-on-migration:
+Four parallel explorations confirmed the scope-B decision:
 
-1. **FR-3 first** — unblocks pardot_accounts.sql (largest Pardot file,
-   ~10 JSON extractions). Design question is contained: just the
-   `source_column` default convention and where extraction fires.
-2. **FR-4 second** — unblocks pardot_prospects.sql (half of it).
-   Design question is mostly eval-syntax vs. structured-form.
-3. **FR-5 last** — biggest scope, most open questions. Whether to
-   defer is a live option.
+### FR-3 (Field.json_path) — low-risk wiring
 
-## FR-3 design sketch
+- `Field` at src/fyrnheim/core/source.py:12-18 has `json_path: str | None = None` already declared
+- Zero engine code reads `.json_path` or iterates `source.fields` today
+- Natural API: add `Field.source_column` defaulting to `Field.name`. When `json_path` is set: extract from `source_column` (or `name` if source_column is None), store as column `name`
+- Existing JSON extraction pattern in analytics_entity_engine.py:106-144: `events.payload.cast("json")[field].unwrap_as("string")` — well-established. FR-3 uses the same pattern.
+- Format decision for the implementer: minimum `$.top_level_key`; nested (`$.a.b.c`) is either supported via chained `[...]` access or explicitly deferred. Pick one, document in Field docstring.
 
-```python
-class Field(BaseModel):
-    name: str
-    type: str = "STRING"
-    json_path: str | None = None
-    source_column: str | None = None  # NEW
-    # ...existing fields...
+### FR-4 (source-level filter) — lowest-risk
 
-# At source read time (in _apply_source_transforms or a sibling helper):
-if source.fields:
-    for f in source.fields:
-        if f.json_path is not None:
-            src_col = f.source_column if f.source_column else f.name
-            table = table.mutate(**{
-                f.name: _extract_json_path(table[src_col], f.json_path, f.type)
-            })
-```
+- eval pattern confirmed at event_source_loader.py:51 and pipeline.py:345 (post-M068): both use `{"ibis": ibis, "t": table}` context with `# noqa: S307`
+- ComputedColumn expressions in practice: `"t.email.lower()"`, `'t.created_at.cast("date")'`, `"t.stage == 'Closed Won'"` — demonstrates users already write Ibis expressions as strings
+- `eval("t._fivetran_deleted != True", {"ibis": ibis, "t": table})` works on both DuckDB and BigQuery (Ibis coerces Python bool to literal)
+- **NULL gotcha**: `col != True` drops NULL rows via SQL three-valued logic. Document, don't fix. Users can `.fillna(False)` for different semantics.
+- Ruff config doesn't include S307 check (bandit), so noqa is future-proofing
 
-Where `_extract_json_path` compiles the JSON path to the backend's
-JSON-extract function (BigQuery JSON_VALUE, DuckDB json_extract, etc.).
-Ibis has `.cast("json")[...]` primitives — use those for portability.
+### FR-5 (joins) — confirmed deferral
 
-Open: what about Fields WITHOUT json_path? Current behavior is they're
-descriptive-only metadata. Does this mission change that? Probably no —
-Field has been "optional field metadata" since the model was added;
-json_path is the only field with implied engine behavior. Keep the
-scope tight.
+- StagingView (core/staging_view.py) is full-featured: arbitrary SQL + Jinja2 params + depends_on + content-hash idempotency + backend-agnostic
+- `BaseTableSource.upstream: StagingView | None` composes cleanly via coord-resolution (source.py:77-103)
+- For BigQuery production (the reporter's environment), StagingView IS the right tool for joins
+- Source-level joins only add value for DuckDB-only local-dev (avoid SQL). Narrow benefit.
+- Designing the API now means locking into a shape before real usage data arrives — high regret risk
+- M070 will plan FR-5 with 3 months of FR-3/FR-4 production usage data
 
-## FR-4 design sketch
+### Architecture (from M068 hook exploration)
 
-```python
-class BaseTableSource(BaseModel):
-    # ...existing fields...
-    filter: str | None = None  # NEW — ibis-expression string
-
-# In _apply_source_transforms (or after computed_columns — TBD):
-if source.filter:
-    pred = eval(source.filter, {"ibis": ibis, "t": table})  # noqa: S307
-    table = table.filter(pred)
-```
-
-Same eval pattern as ComputedColumn. Matches users' mental model of
-"Python-ish expressions against a table proxy `t`."
-
-Open: apply BEFORE or AFTER computed_columns? Arguments both ways:
-- AFTER: users can filter on computed columns (cleaner mental model)
-- BEFORE: fewer rows through mutate (perf)
-
-Recommendation for the planner: apply AFTER computed_columns. Perf
-difference is negligible (Ibis pushes filter down through mutate if
-possible; even if not, compute on N rows is fine). Mental-model
-cleanness wins.
-
-## FR-5 design sketch (if in scope)
-
-```python
-class Join(BaseModel):
-    source: str  # the other source name OR a table reference
-    on: str  # join predicate (ibis-expression string)
-    how: Literal["left", "inner"] = "left"
-
-class StateSource(BaseTableSource):
-    # ...existing fields...
-    joins: list[Join] = PydanticField(default_factory=list)
-```
-
-Bigger scope: the `source` field is the tricky part — does it
-reference another declared source by name (requires registry lookup),
-or a raw ibis.Table (how does the user get an ibis handle before the
-pipeline runs?), or a duckdb path, or...
-
-**Recommendation for /plan-mission**: start the planning session
-biased toward **deferring FR-5** into a later mission. The Pardot
-joins are "enrich with a lookup table" — a simple left-join pattern.
-The right FIRST API for fyrnheim joins might be narrower than a
-full Ibis-join surface, and the design needs real usage data.
-Shipping FR-3 + FR-4 in v0.9.0 gives the field team 3 of 7 SQL
-files migratable; FR-5 in v0.10.0 after design-learning from real
-usage gives us a better join API.
-
-If the planner agrees, M069's scope trims to FR-3 + FR-4 and a new
-mission opens for FR-5 (call it M070 or similar) with explicit
-"we've had X months of real-usage data, here's the minimum viable
-API" framing.
+- M068's `_apply_source_transforms(table, transforms)` is the natural extension point
+- FR-3 grows the helper: new signature `_apply_source_transforms(table, transforms, fields=None)` OR sibling helper — pick whichever keeps the orchestration cleaner
+- FR-4 is a separate step after transforms + computed_columns (different semantic layer — filter operates on a fully-resolved table)
+- Full order after M069: read_table → transforms (casts/divides/multiplies/renames) → json_path extraction → computed_columns → filter → [branch to EventSource-entity-mapping or StateSource-full_refresh/snapshot_diff]
 
 ## Release shape
 
-**If all three ship:** v0.9.0 minor. Large CHANGELOG, consider RC
-release to TestPyPI for field-team validation before GA push (per
-release-discipline memory).
+v0.9.0 minor. Per release-discipline memory:
+- Behavior change visible to users who had `Field(json_path=...)` declared — but that's the intended fix, not a regression
+- Consider TestPyPI RC release before GA (the memory specifically recommends this for semantic shifts with new API surface)
+- Single commit on release/v0.9.0 branch
+- Post-merge-steps block pointing at PyPI verification
 
-**If FR-3 + FR-4 only:** v0.9.0 minor, smaller surface, still worth
-an RC if the json_path convention feels novel.
+If the PR reviewer wants an RC: tag `v0.9.0rc1` from the branch first, verify on TestPyPI, then merge + tag `v0.9.0`. Planner's call during execution.
 
-**If FR-3 only:** v0.9.0 minor (still new API); much smaller, RC
-probably overkill.
+## Architectural placement — json_path inside SourceTransforms vs. separate
 
-The planner should pick the release shape based on scope resolution.
+Open implementation detail (not a blocker):
+- Grow `SourceTransforms` with a json_paths list (reorganizes existing model)
+- Or iterate `source.fields` independently inside the helper (leaves SourceTransforms untouched, adds a separate branch)
 
-## Dependencies
+Recommendation: the latter. `SourceTransforms` is for single-table ops; `Field.json_path` is field-level metadata that happens to trigger an extraction. Keeping them separate preserves the semantic layer: transforms = "how to reshape columns"; Field.json_path = "how to derive this field's value".
 
-Depends on M068 landing first:
-- The shared `_apply_source_transforms` helper from M068 is where the
-  filter / json_path / join application logic lives alongside
-  transforms + computed_columns.
-- Sequencing M068 → M069 avoids two missions touching the same helper
-  in parallel.
+## Pipeline order after M069 (full stage)
+
+```
+table = source.read_table(...)
+table = _apply_source_transforms(table, source.transforms)
+  # casts → divides → multiplies → renames
+table = _apply_json_path_extractions(table, source.fields)  # NEW M069
+  # iterate fields with json_path, extract into named columns
+if source.computed_columns:
+    for cc in source.computed_columns:
+        table = table.mutate(...)
+if source.filter:  # NEW M069
+    table = table.filter(eval(source.filter, {"ibis": ibis, "t": table}))
+# Then: EventSource does entity_id/ts/payload mapping; StateSource goes
+# to full_refresh or snapshot_diff branch.
+```
+
+All five stages apply to both EventSource and StateSource identically.
 
 ## Do NOT
 
-- Skip /plan-mission — this mission has real API design questions
-- Ship FR-5 without deliberate design (it's the biggest surface and
-  the reporter flagged it as "may belong in StagingView")
-- Modify SnapshotDiffPipeline, diff_engine, analytics_entity_engine,
-  identity_engine — these are the pipeline downstream of source
-  loading and aren't affected by the new fields
-- Merge the Pardot SQL migration itself — this mission ships the
-  primitives; the user does the migration
-- Merge, tag, publish — human post-merge steps
+- Add FR-5 (joins) — deferred to M070
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py,
+  analytics_entity_engine.py, identity_engine.py
+- Skip documenting the NULL-gotcha on filter (users will hit it)
+- Attempt framework-level NULL-safety (SQL three-valued logic is the
+  contract; users can `.fillna(False)` per-case)
+- Ship without considering a TestPyPI RC — this is semantic API
+  surface expansion
+- Merge, tag, or publish — human post-merge steps
 """

@@ -14,7 +14,10 @@ import numpy as np
 import pandas as pd
 
 from fyrnheim.core.source import EventSource
-from fyrnheim.engine.source_transforms import _apply_source_transforms
+from fyrnheim.engine.source_transforms import (
+    _apply_json_path_extractions,
+    _apply_source_transforms,
+)
 
 
 def load_event_source(
@@ -45,10 +48,23 @@ def load_event_source(
     # before computed_columns so user expressions can reference the transformed schema.
     table = _apply_source_transforms(table, event_source.transforms)
 
+    # M069: extract json_path fields AFTER renames (users can rename a JSON
+    # column and extract from the renamed name) and BEFORE computed_columns
+    # (so user expressions can reference the extracted typed columns).
+    table = _apply_json_path_extractions(table, event_source.fields)
+
     # Apply computed columns after transforms (users reference post-transform columns)
     if event_source.computed_columns:
         for cc in event_source.computed_columns:
             table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+
+    # M069: source-level filter applied AFTER computed_columns so users can
+    # filter on computed values. See BaseTableSource.filter docstring for
+    # NULL-gotcha and the .fillna(False) escape hatch.
+    if event_source.filter:
+        table = table.filter(
+            eval(event_source.filter, {"ibis": ibis, "t": table})  # noqa: S307
+        )
 
     df = table.execute()
 

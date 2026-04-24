@@ -26,7 +26,7 @@ from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
 from fyrnheim.core.analytics_entity import AnalyticsEntity, StateField
 from fyrnheim.core.identity import IdentityGraph, IdentitySource
-from fyrnheim.core.source import Rename, SourceTransforms, StateSource
+from fyrnheim.core.source import Field, Rename, SourceTransforms, StateSource
 from fyrnheim.engine.analytics_entity_engine import project_analytics_entity
 from fyrnheim.engine.diff_engine import diff_snapshots
 from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
@@ -278,3 +278,127 @@ def test_m068_statesource_transforms_and_computed_columns_flow_e2e(
             continue
         closed_values.add(str(v).lower())
     assert closed_values >= {"true", "false"} or closed_values == {"true", "false"}
+
+
+def test_m069_statesource_json_path_and_filter_e2e(tmp_path: Path) -> None:
+    """M069 e2e: a StateSource with ``Field.json_path`` extraction AND
+    ``filter`` flows through ``_load_state_source`` + identity resolution
+    + ``project_analytics_entity``. The extracted column surfaces in
+    downstream entity projection; the filter excludes inactive rows;
+    identity resolution still works against the primary id_field.
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    parquet_path = data_dir / "accounts.parquet"
+    df = pd.DataFrame(
+        {
+            "account_id": ["A1", "A2", "A3"],
+            "status": ["active", "active", "inactive"],
+            "custom_type": [
+                '{"value": "premium"}',
+                '{"value": "free"}',
+                '{"value": "premium"}',  # filtered out — inactive
+            ],
+        }
+    )
+    df.to_parquet(str(parquet_path))
+
+    state_source = StateSource(
+        name="accounts",
+        project="test",
+        dataset="test",
+        table="accounts",
+        duckdb_path=str(parquet_path),
+        id_field="account_id",
+        fields=[
+            Field(
+                name="account_type",
+                type="STRING",
+                json_path="$.value",
+                source_column="custom_type",
+            )
+        ],
+        filter='t.status == "active"',
+    )
+
+    config = ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=data_dir,
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+
+    conn = ibis.duckdb.connect()
+    state_events = _load_state_source(state_source, config, conn)
+    se_df = state_events.execute()
+
+    # Filter dropped the inactive row; only A1 + A2 emit events.
+    assert len(se_df) == 2
+    assert set(se_df["entity_id"]) == {"A1", "A2"}
+    # Inactive row must not leak through.
+    assert "A3" not in set(se_df["entity_id"])
+
+    # The extracted json_path column is present in each payload.
+    payloads = [json.loads(p) for p in se_df["payload"].tolist()]
+    extracted = {p["account_type"] for p in payloads}
+    assert extracted == {"premium", "free"}
+
+    # --- Add a second source so IdentityGraph is valid (>= 2 sources).
+    evt_events = ibis.memtable(
+        pd.DataFrame(
+            {
+                "source": ["crm_activity"],
+                "entity_id": ["evt-1"],
+                "ts": ["2026-04-22T10:00:00"],
+                "event_type": ["note_added"],
+                "payload": ['{"account_id": "A1"}'],
+            }
+        )
+    )
+    all_events = ibis.memtable(
+        pd.concat([se_df, evt_events.execute()], ignore_index=True)
+    )
+
+    graph = IdentityGraph(
+        name="acct_graph",
+        canonical_id="canonical_account_id",
+        sources=[
+            IdentitySource(
+                source="accounts",
+                id_field="account_id",
+                match_key_field="account_id",
+            ),
+            IdentitySource(
+                source="crm_activity",
+                id_field="event_id",
+                match_key_field="account_id",
+            ),
+        ],
+    )
+    mapping = resolve_identities(all_events, graph)
+    enriched = enrich_events(all_events, mapping)
+
+    entity = AnalyticsEntity(
+        name="account",
+        identity_graph="acct_graph",
+        state_fields=[
+            StateField(
+                name="account_type",
+                source="accounts",
+                field="account_type",
+                strategy="latest",
+            ),
+        ],
+    )
+    projected = project_analytics_entity(enriched, entity).execute()
+
+    # Projected entity materialisation sees the extracted column: at
+    # least one of the two active accounts resolves to "premium" and
+    # the other to "free". No row maps to an inactive account.
+    account_types = set()
+    for v in projected["account_type"].tolist():
+        if v is None:
+            continue
+        account_types.add(str(v))
+    assert account_types == {"premium", "free"}

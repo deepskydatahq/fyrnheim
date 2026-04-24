@@ -10,12 +10,26 @@ from fyrnheim.core.staging_view import StagingView
 
 
 class Field(BaseModel):
-    """Defines a source field with its type and metadata."""
+    """Defines a source field with its type and metadata.
+
+    ``type`` is a BigQuery-style type label. For ``json_path`` extraction,
+    the engine supports: ``STRING``, ``INT64``, ``FLOAT64``, ``BOOLEAN``,
+    ``DATE``, ``TIMESTAMP``, ``BYTES``. Unsupported types raise
+    ``ValueError`` at pipeline setup.
+    """
     name: str
     type: str  # STRING, INT64, FLOAT64, TIMESTAMP, BOOLEAN, DATE, BYTES, etc.
     description: str | None = None
     nullable: bool = True
     json_path: str | None = None  # JSON path for extraction (e.g., "$.utm_source")
+    source_column: str | None = PydanticField(
+        default=None,
+        description=(
+            "When json_path is set, extract from this column. If None, "
+            "defaults to Field.name — extract from a column matching the "
+            "field name."
+        ),
+    )
 
 
 class TypeCast(BaseModel):
@@ -65,6 +79,19 @@ class BaseTableSource(BaseModel):
     table: str | None = None
     duckdb_path: str | None = None
     upstream: StagingView | None = None
+    filter: str | None = PydanticField(
+        default=None,
+        description=(
+            "Ibis-expression string applied after transforms + "
+            "computed_columns to filter rows. Evaluated with "
+            "{'ibis': ibis, 't': table} context (same pattern as "
+            "ComputedColumn.expression). "
+            "NOTE: SQL three-valued logic — expressions like "
+            "`t.col != True` drop NULL rows silently; use "
+            "`t.col.fillna(False) != True` if you want NULLs "
+            "treated as False."
+        ),
+    )
 
     @field_validator("project", "dataset", "table")
     @classmethod

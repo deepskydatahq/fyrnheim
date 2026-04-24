@@ -1,24 +1,31 @@
-"""Unit tests for the ``_apply_source_transforms`` helper (M068).
+"""Unit tests for the ``_apply_source_transforms`` helper (M068) and the
+``_apply_json_path_extractions`` helper (M069).
 
-Exercises the helper directly (not through the loaders) to pin:
+Exercises the helpers directly (not through the loaders) to pin:
   * transforms=None returns the table unchanged
   * each transform category (type_cast, rename, divide, multiply) works
   * transform order: type_casts → divides → multiplies → renames
+  * M069: json_path extraction via Field.json_path / Field.source_column
 """
 
 from __future__ import annotations
 
 import ibis
 import pandas as pd
+import pytest
 
 from fyrnheim.core.source import (
     Divide,
+    Field,
     Multiply,
     Rename,
     SourceTransforms,
     TypeCast,
 )
-from fyrnheim.engine.source_transforms import _apply_source_transforms
+from fyrnheim.engine.source_transforms import (
+    _apply_json_path_extractions,
+    _apply_source_transforms,
+)
 
 
 def _make_table() -> ibis.Table:
@@ -116,3 +123,154 @@ def test_transform_order_cast_then_divide_then_rename() -> None:
     assert "amount_raw" in result.columns
     assert "amount_cents_amount" in result.columns
     assert "amount_cents" not in result.columns
+
+
+# ---------------------------------------------------------------------------
+# M069: _apply_json_path_extractions helper
+# ---------------------------------------------------------------------------
+
+
+def _json_table() -> ibis.Table:
+    """Table with JSON-shaped string columns for extraction tests."""
+    return ibis.memtable(
+        pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "utm_source": [
+                    '{"utm_source": "google"}',
+                    '{"utm_source": "facebook"}',
+                    '{"utm_source": "twitter"}',
+                ],
+                "custom_type": [
+                    '{"value": "premium"}',
+                    '{"value": "free"}',
+                    '{"value": "trial"}',
+                ],
+                "numeric_blob": [
+                    '{"count": 10}',
+                    '{"count": 25}',
+                    '{"count": 42}',
+                ],
+            }
+        )
+    )
+
+
+def test_json_path_fields_none_returns_unchanged() -> None:
+    """fields=None is a no-op — the table is returned unchanged."""
+    t = _json_table()
+    assert _apply_json_path_extractions(t, None) is t
+
+
+def test_json_path_fields_empty_list_returns_unchanged() -> None:
+    """fields=[] is a no-op (distinct from None but same behavior)."""
+    t = _json_table()
+    assert _apply_json_path_extractions(t, []) is t
+
+
+def test_json_path_extraction_default_source_column() -> None:
+    """Field.source_column defaults to Field.name — extract from the
+    column with the same name as the field being produced (overwrites
+    the JSON column with the extracted scalar)."""
+    t = _json_table()
+    fields = [Field(name="utm_source", type="STRING", json_path="$.utm_source")]
+    result = _apply_json_path_extractions(t, fields)
+    df = result.execute()
+    # The utm_source column now holds the extracted string, not the JSON blob.
+    assert list(df["utm_source"]) == ["google", "facebook", "twitter"]
+
+
+def test_json_path_extraction_explicit_source_column() -> None:
+    """Field.source_column lets you extract from a differently-named
+    column (account_type field derived from custom_type JSON column)."""
+    t = _json_table()
+    fields = [
+        Field(
+            name="account_type",
+            type="STRING",
+            json_path="$.value",
+            source_column="custom_type",
+        )
+    ]
+    result = _apply_json_path_extractions(t, fields)
+    df = result.execute()
+    # New column appears with the extracted values; source column untouched.
+    assert "account_type" in df.columns
+    assert list(df["account_type"]) == ["premium", "free", "trial"]
+    # Source column preserved (distinct-column extraction)
+    assert list(df["custom_type"]) == list(t.execute()["custom_type"])
+
+
+def test_json_path_with_int64_type() -> None:
+    """INT64 field extracts as int64 — unwrap_as returns the numeric."""
+    t = _json_table()
+    fields = [
+        Field(
+            name="event_count",
+            type="INT64",
+            json_path="$.count",
+            source_column="numeric_blob",
+        )
+    ]
+    result = _apply_json_path_extractions(t, fields)
+    assert result.schema()["event_count"] == ibis.dtype("int64")
+    df = result.execute()
+    assert [int(v) for v in df["event_count"].tolist()] == [10, 25, 42]
+
+
+def test_fields_without_json_path_are_ignored() -> None:
+    """Field entries without json_path are descriptive-only metadata and
+    do not mutate the table — reassert the pre-M069 model contract."""
+    t = _json_table()
+    fields = [Field(name="id", type="INT64")]  # no json_path
+    result = _apply_json_path_extractions(t, fields)
+    # Table unchanged schema-wise.
+    assert set(result.columns) == set(t.columns)
+
+
+def test_nested_json_path_raises_valueerror() -> None:
+    """Nested paths (``$.a.b``) are deliberately unsupported in M069 —
+    raise a ValueError at pipeline setup pointing at the future
+    enhancement, rather than silently doing the wrong thing."""
+    t = _json_table()
+    fields = [
+        Field(
+            name="nested",
+            type="STRING",
+            json_path="$.a.b",
+            source_column="custom_type",
+        )
+    ]
+    with pytest.raises(ValueError, match="Nested paths"):
+        _apply_json_path_extractions(t, fields)
+
+
+def test_unknown_field_type_raises_valueerror() -> None:
+    """Unsupported Field.type raises a clear error at pipeline setup
+    rather than coercing to a silently-wrong ibis type."""
+    t = _json_table()
+    fields = [
+        Field(
+            name="blob",
+            type="GEOGRAPHY",
+            json_path="$.value",
+            source_column="custom_type",
+        )
+    ]
+    with pytest.raises(ValueError, match="is not supported"):
+        _apply_json_path_extractions(t, fields)
+
+
+def test_json_path_non_toplevel_key_with_bracket_raises() -> None:
+    """Paths that aren't the ``$.<key>`` form (e.g. array indexes) raise."""
+    t = _json_table()
+    fields = [
+        Field(
+            name="first",
+            type="STRING",
+            json_path="$[0]",
+            source_column="custom_type",
+        )
+    ]
+    with pytest.raises(ValueError, match="top-level path"):
+        _apply_json_path_extractions(t, fields)

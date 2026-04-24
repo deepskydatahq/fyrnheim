@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-04-24
+
+### Added
+
+- `BaseTableSource.filter: str | None = None` — declarative source-level
+  row filter. When set, applied after transforms and computed_columns
+  via the `eval()` pattern (same as `ComputedColumn.expression`), with
+  `{'ibis': ibis, 't': table}` context. Applies to `StateSource`,
+  `EventSource`, and `DerivedSource` via inheritance. Unblocks migrating
+  SQL `WHERE`-clause-only staging views to declarative pydantic
+  sources.
+- `Field.source_column: str | None = None` — when `Field.json_path` is
+  set, the engine extracts the JSON value from this column. Defaults
+  to `Field.name` for the common case where the JSON source column is
+  named the same as the field being extracted.
+- `Field.json_path` is now honored by the engine — previously declared
+  on the `Field` model but never applied. Top-level paths (`$.<key>`)
+  are supported; nested paths (`$.a.b`) raise a `ValueError` at
+  pipeline setup with a pointer to file a future-enhancement request.
+  The extracted JSON scalar is typed via `.unwrap_as(<ibis_type>)`
+  based on `Field.type`, where supported types are `STRING`, `INT64`,
+  `FLOAT64`, `BOOLEAN`, `DATE`, `TIMESTAMP`, `BYTES`.
+
+### Changed
+
+- `source.fields` is now engine-consumed for `json_path` extraction.
+  Previously it was read-only metadata — engines never iterated it.
+  Users who declared `Field(name=X, json_path=Y)` expecting the field
+  to be silently ignored will see extraction happen on upgrade. This
+  matches the documented model intent; if you had a non-conforming
+  setup (declared `json_path` + expected it ignored), remove the
+  `json_path` attribute.
+- Pipeline-stage order at source load time is now (load-bearing):
+  `read_table → transforms → json_path → computed_columns → filter`.
+  All five stages apply before the `full_refresh` / snapshot-diff
+  branch in `StateSource`, so both paths and the snapshot store save
+  see the same post-filter table.
+
+### Notes
+
+- **Filter NULL-gotcha**: SQL three-valued logic means `t.col != True`
+  drops NULL rows silently. If you want NULLs to be treated as `False`
+  (kept in the filtered output), write `t.col.fillna(False) != True`
+  instead. This is SQL semantics, not a framework-level issue — the
+  `BaseTableSource.filter` docstring documents the escape hatch.
+- **FR-5 (source-level joins) deferred to M070.** Use `StagingView`
+  for joins in the meantime; the M070 mission will revisit
+  source-level joins after real usage data from v0.9.0 informs the
+  API shape.
+
 ## [0.8.2] - 2026-04-24
 
 ### Fixed

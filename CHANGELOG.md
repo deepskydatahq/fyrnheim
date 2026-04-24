@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-04-24
+
+### Fixed
+
+- `SnapshotDiffPipeline` emitted `entity_id` as `"1.0"` (float-shaped
+  string) instead of `"1"` for `StateSource`s whose `id_field` was an
+  integer column **and** whose DataFrame contained any float-typed
+  sibling column. This silently broke identity resolution: downstream
+  joins and mappings that expected `"1" == "1"` saw `"1.0" != "1"`.
+  **Root cause (M071 Phase 1):** `pd.DataFrame.iterrows()` packs each
+  row into a homogeneous-dtype `Series`; when the row mixes int64 and
+  float64 columns, the int is promoted to `np.float64`, so
+  `str(row[id_field])` produced `"1.0"`. The promotion is _not_ in
+  `ibis.memtable.execute()` or the SnapshotStore parquet round-trip
+  (both preserve `int64`) — it is specifically in the per-row
+  `iterrows()` Series materialization inside
+  `_make_appeared_events` / `_make_disappeared_events`. **Fix:** new
+  `_stringify_id(v)` helper in `src/fyrnheim/engine/diff_engine.py`
+  casts integral-valued floats (`v.is_integer()`) back to `int` before
+  stringifying; applied at both `str(row[id_field])` call sites.
+  Regression tests cover cold-start, M066 empty-diff replay, and
+  `row_disappeared` paths (`TestM071StringifyId` in
+  `tests/test_diff_engine.py`, `TestM071Int64EntityIdIntegration` in
+  `tests/test_snapshot_diff.py`).
+
 ## [0.9.0] - 2026-04-24
 
 ### Added

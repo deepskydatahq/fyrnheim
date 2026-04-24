@@ -80,6 +80,33 @@ def diff_snapshots(
     return ibis.memtable(pd.DataFrame(events))
 
 
+def _stringify_id(v: object) -> str:
+    """Stringify an id-field value, preserving int-shape for pandas-
+    promoted integers.
+
+    Context (M071 / v0.9.1 patch): ``pd.DataFrame.iterrows()`` packs each
+    row into a homogeneous-dtype ``Series``. When a DataFrame has an
+    int64 id column AND any float column, the per-row Series upcasts to
+    float64 — so ``row[id_field]`` arrives here as ``np.float64(1.0)``
+    and a naive ``str(v)`` produces ``'1.0'`` instead of ``'1'``. That
+    silently breaks identity resolution for any StateSource with integer
+    ids.
+
+    This helper detects float values with no fractional part and casts
+    them to int before stringifying, so integer ids surface as ``'1'``
+    end-to-end regardless of sibling-column dtype promotion.
+
+    Preserves ``str()`` default behavior for all non-integral values
+    (true floats, strings, bools, etc.). Note that ``bool`` is NOT
+    special-cased: ``isinstance(True, float)`` is False, so bool values
+    fall through to ``str(v)`` and produce ``'True'`` / ``'False'`` —
+    bool-as-id is pathological and not worth its own branch.
+    """
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+
+
 def _make_appeared_events(
     df: pd.DataFrame,
     source_name: str,
@@ -88,12 +115,21 @@ def _make_appeared_events(
 ) -> list[dict[str, str]]:
     """Create row_appeared events for every row in *df*."""
     events: list[dict[str, str]] = []
-    for _, row in df.iterrows():
-        payload = {k: _serialize_value(v) for k, v in row.items() if k != id_field}
+    # Use df.to_dict(orient="records") rather than iterrows() to preserve
+    # each column's original dtype. iterrows() packs every row into a
+    # homogeneous-dtype Series, which upcasts int64 to float64 when any
+    # sibling column is float — silently corrupting large int ids and any
+    # integer-typed payload field before _stringify_id / _serialize_value
+    # ever see the value.
+    for record in df.to_dict(orient="records"):
+        raw_id = record[id_field]
+        payload = {
+            k: _serialize_value(v) for k, v in record.items() if k != id_field
+        }
         events.append(
             {
                 "source": source_name,
-                "entity_id": str(row[id_field]),
+                "entity_id": _stringify_id(raw_id),
                 "ts": snapshot_date,
                 "event_type": "row_appeared",
                 "payload": json.dumps(payload),
@@ -110,12 +146,17 @@ def _make_disappeared_events(
 ) -> list[dict[str, str]]:
     """Create row_disappeared events for every row in *df*."""
     events: list[dict[str, str]] = []
-    for _, row in df.iterrows():
-        payload = {k: _serialize_value(v) for k, v in row.items() if k != id_field}
+    # See _make_appeared_events for why we iterate via to_dict("records")
+    # rather than iterrows() — it preserves per-column dtypes.
+    for record in df.to_dict(orient="records"):
+        raw_id = record[id_field]
+        payload = {
+            k: _serialize_value(v) for k, v in record.items() if k != id_field
+        }
         events.append(
             {
                 "source": source_name,
-                "entity_id": str(row[id_field]),
+                "entity_id": _stringify_id(raw_id),
                 "ts": snapshot_date,
                 "event_type": "row_disappeared",
                 "payload": json.dumps(payload),
@@ -185,7 +226,13 @@ def _diff_dataframes(
                     events.append(
                         {
                             "source": source_name,
-                            "entity_id": str(eid),
+                            # All event types must share one stringification
+                            # path; otherwise field_changed emits "1" while
+                            # row_appeared emits "1.0" (or vice versa for
+                            # large int64 after float-promotion), and
+                            # enrich_events join on [source, entity_id]
+                            # misses.
+                            "entity_id": _stringify_id(eid),
                             "ts": snapshot_date,
                             "event_type": "field_changed",
                             "payload": json.dumps(payload),

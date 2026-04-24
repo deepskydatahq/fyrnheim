@@ -383,6 +383,107 @@ class TestSnapshotDiffPipelineE2E:
 
 
 # ---------------------------------------------------------------------------
+# M071 regression: int-shape entity_ids end-to-end through SnapshotDiffPipeline
+# ---------------------------------------------------------------------------
+
+
+class TestM071Int64EntityIdIntegration:
+    """M071: integer-typed id columns must emit int-shaped entity_ids
+    (``'1'``, not ``'1.0'``) through the full SnapshotDiffPipeline — both
+    on cold start and across the M066 empty-diff replay path.
+
+    Phase 1 showed the promotion is NOT in ``ibis.memtable.execute()`` or
+    the parquet round-trip (both preserve int64) — it surfaces inside
+    ``pd.DataFrame.iterrows()`` when the row contains any float column,
+    because iterrows packs each row into a homogeneous-dtype ``Series``
+    and promotes the int to float64.
+    """
+
+    def test_int64_id_column_preserves_int_shape_on_cold_start(self, pipeline):
+        """Cold-start run (Phase 1 minimal reproducer): int64 id + float64
+        column → entity_ids must be ``['1', '2', '3']``, not
+        ``['1.0', '2.0', '3.0']``.
+        """
+        df = pd.DataFrame({"id": [1, 2, 3], "score": [3.14, 2.71, 1.41]})
+        events = pipeline.run(
+            source_name="src",
+            current_table=ibis.memtable(df),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 1),
+        )
+
+        result = events.execute()
+        entity_ids = result["entity_id"].tolist()
+        assert entity_ids == ["1", "2", "3"]
+        assert all("." not in eid for eid in entity_ids)
+
+    def test_int64_id_column_preserves_int_shape_on_m066_replay(self, pipeline):
+        """M066 empty-diff replay path: run the pipeline twice with the
+        same int64-id + float-column data. Run 2 hits the replay branch
+        (empty diff + prior snapshot) which re-exercises
+        ``_make_appeared_events`` over the parquet-round-tripped current
+        table. Assert entity_ids remain int-shaped.
+        """
+        df = pd.DataFrame({"id": [1, 2, 3], "score": [3.14, 2.71, 1.41]})
+
+        # Run 1 (cold start)
+        pipeline.run(
+            source_name="src",
+            current_table=ibis.memtable(df),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 1),
+        )
+
+        # Run 2 (empty diff → replay)
+        events = pipeline.run(
+            source_name="src",
+            current_table=ibis.memtable(df),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 2),
+        )
+        result = events.execute()
+        assert len(result) == 3
+        assert set(result["event_type"]) == {"row_appeared"}
+        entity_ids = sorted(result["entity_id"].tolist())
+        assert entity_ids == ["1", "2", "3"]
+        assert all("." not in eid for eid in entity_ids)
+
+    def test_int64_id_column_preserves_int_shape_on_row_disappeared(
+        self, pipeline
+    ):
+        """Disappeared events go through ``_make_disappeared_events`` —
+        same iterrows-promotion hazard. Run 1 with 3 int-id rows, run 2
+        with the same id column dropped (empty current), expect 3
+        row_disappeared events with int-shaped entity_ids.
+        """
+        df1 = pd.DataFrame({"id": [1, 2, 3], "score": [3.14, 2.71, 1.41]})
+        df2 = pd.DataFrame(
+            {
+                "id": pd.Series([], dtype="int64"),
+                "score": pd.Series([], dtype="float64"),
+            }
+        )
+
+        pipeline.run(
+            source_name="src",
+            current_table=ibis.memtable(df1),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 1),
+        )
+        events = pipeline.run(
+            source_name="src",
+            current_table=ibis.memtable(df2),
+            id_field="id",
+            snapshot_date=datetime.date(2026, 1, 2),
+        )
+        result = events.execute()
+        disappeared = result[result["event_type"] == "row_disappeared"]
+        entity_ids = sorted(disappeared["entity_id"].tolist())
+        assert entity_ids == ["1", "2", "3"]
+        assert all("." not in eid for eid in entity_ids)
+
+
+# ---------------------------------------------------------------------------
 # M066: StateSource.full_refresh flag tests
 # ---------------------------------------------------------------------------
 

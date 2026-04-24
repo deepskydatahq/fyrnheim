@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from fyrnheim.core.source import EventSource
+from fyrnheim.engine.source_transforms import _apply_source_transforms
 
 
 def load_event_source(
@@ -40,7 +41,11 @@ def load_event_source(
     """
     table = event_source.read_table(conn, backend, data_dir=data_dir)
 
-    # Apply computed columns before reading data
+    # M068: apply read-time transforms (type_casts, divides, multiplies, renames)
+    # before computed_columns so user expressions can reference the transformed schema.
+    table = _apply_source_transforms(table, event_source.transforms)
+
+    # Apply computed columns after transforms (users reference post-transform columns)
     if event_source.computed_columns:
         for cc in event_source.computed_columns:
             table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307

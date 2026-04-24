@@ -27,6 +27,7 @@ from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
 from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
+from fyrnheim.engine.source_transforms import _apply_source_transforms
 from fyrnheim.engine.staging_runner import materialize_staging_views
 
 log = logging.getLogger("fyrnheim.pipeline")
@@ -333,6 +334,15 @@ def _load_state_source(
     behavior independent of any prior snapshot (M066 escape hatch).
     """
     table = source.read_table(conn, config.backend, data_dir=config.data_dir)
+
+    # M068: apply read-time transforms and computed_columns BEFORE the
+    # full_refresh / snapshot_diff split so both paths see the same
+    # transformed schema (snapshot_store saves the transformed table, so
+    # subsequent runs' diffs are against the same baseline).
+    table = _apply_source_transforms(table, source.transforms)
+    if source.computed_columns:
+        for cc in source.computed_columns:
+            table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
 
     if source.full_refresh:
         # M066: escape hatch — never consult the snapshot store.

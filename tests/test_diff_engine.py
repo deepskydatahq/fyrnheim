@@ -444,6 +444,79 @@ class TestM071StringifyId:
         assert entity_ids == ["1", "2", "3"]
         assert all("." not in eid for eid in entity_ids)
 
+    def test_large_int64_id_preserves_full_precision(self) -> None:
+        """CodeRabbit regression: ids above 2**53 cannot be represented
+        exactly in float64. The previous ``iterrows()`` + ``_stringify_id``
+        chain silently truncated such ids because the Series upcast to
+        float64 happened *before* _stringify_id could see the value.
+
+        The fix extracts ids via ``df[id_field].tolist()`` which preserves
+        the column dtype, so large int64 ids survive intact end-to-end.
+        """
+        import pandas as pd
+
+        # 2**53 + 1 = 9007199254740993 — not representable as float64
+        # (float64 rounds it to 9007199254740992).
+        large_id = 2**53 + 1
+        current = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "id": pd.Series([large_id, large_id + 2], dtype="int64"),
+                    "score": [1.5, 2.5],
+                }
+            )
+        )
+
+        result = diff_snapshots(
+            current,
+            previous=None,
+            source_name="src",
+            id_field="id",
+            snapshot_date="2026-01-01",
+        )
+        df = result.execute()
+        entity_ids = df["entity_id"].tolist()
+        assert entity_ids == [str(large_id), str(large_id + 2)]
+        # Sanity: no precision collapse (both ids must remain distinct).
+        assert len(set(entity_ids)) == 2
+
+    def test_large_int64_id_row_disappeared_preserves_full_precision(
+        self,
+    ) -> None:
+        """Same precision guarantee on the disappeared path."""
+        import pandas as pd
+
+        large_id = 2**53 + 1
+        current = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "id": pd.Series([], dtype="int64"),
+                    "score": pd.Series([], dtype="float64"),
+                }
+            )
+        )
+        previous = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "id": pd.Series([large_id, large_id + 2], dtype="int64"),
+                    "score": [1.5, 2.5],
+                }
+            )
+        )
+
+        result = diff_snapshots(
+            current,
+            previous,
+            source_name="src",
+            id_field="id",
+            snapshot_date="2026-01-02",
+        )
+        df = result.execute()
+        disappeared = df[df["event_type"] == "row_disappeared"]
+        entity_ids = sorted(disappeared["entity_id"].tolist())
+        assert entity_ids == sorted([str(large_id), str(large_id + 2)])
+        assert len(set(entity_ids)) == 2
+
 
 class TestM051ResolveLatestFallsThroughNone:
     """Issue #93: ``latest`` state-field resolution must skip None rows

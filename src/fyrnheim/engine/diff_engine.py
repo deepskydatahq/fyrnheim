@@ -115,12 +115,18 @@ def _make_appeared_events(
 ) -> list[dict[str, str]]:
     """Create row_appeared events for every row in *df*."""
     events: list[dict[str, str]] = []
-    for _, row in df.iterrows():
+    # Extract raw id values via tolist() to preserve original dtype.
+    # iterrows() packs each row into a homogeneous-dtype Series, which
+    # upcasts int64 ids to float64 when any sibling column is float —
+    # for ids >2^53 that promotion irreversibly loses precision before
+    # _stringify_id() can see the value.
+    id_values = df[id_field].tolist()
+    for raw_id, (_, row) in zip(id_values, df.iterrows(), strict=False):
         payload = {k: _serialize_value(v) for k, v in row.items() if k != id_field}
         events.append(
             {
                 "source": source_name,
-                "entity_id": _stringify_id(row[id_field]),
+                "entity_id": _stringify_id(raw_id),
                 "ts": snapshot_date,
                 "event_type": "row_appeared",
                 "payload": json.dumps(payload),
@@ -137,12 +143,15 @@ def _make_disappeared_events(
 ) -> list[dict[str, str]]:
     """Create row_disappeared events for every row in *df*."""
     events: list[dict[str, str]] = []
-    for _, row in df.iterrows():
+    # See _make_appeared_events for why we extract ids via tolist()
+    # rather than reading them from the iterrows() Series.
+    id_values = df[id_field].tolist()
+    for raw_id, (_, row) in zip(id_values, df.iterrows(), strict=False):
         payload = {k: _serialize_value(v) for k, v in row.items() if k != id_field}
         events.append(
             {
                 "source": source_name,
-                "entity_id": _stringify_id(row[id_field]),
+                "entity_id": _stringify_id(raw_id),
                 "ts": snapshot_date,
                 "event_type": "row_disappeared",
                 "payload": json.dumps(payload),

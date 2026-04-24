@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
-from fyrnheim.core.source import EventSource, Rename, SourceTransforms, TypeCast
+from fyrnheim.core.source import EventSource, Field, Rename, SourceTransforms, TypeCast
 from fyrnheim.engine.event_source_loader import _serialize_value, load_event_source
 
 
@@ -531,3 +531,104 @@ class TestLoadEventSourceTransforms:
         payload_1 = json.loads(result.iloc[1]["payload"])
         assert isinstance(payload_1["amount"], float)
         assert payload_1["amount"] == 20.25
+
+
+class TestLoadEventSourceFilterAndJsonPath:
+    """M069: EventSource.filter + Field.json_path wiring."""
+
+    def test_event_source_filter_drops_rows(self, tmp_path) -> None:
+        """EventSource.filter='t.event_type != \"test\"' drops test-tagged rows."""
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2", "u3"],
+                "viewed_at": ["2024-01-01", "2024-01-02", "2024-01-03"],
+                "event_type_col": ["prod", "test", "prod"],
+                "page": ["/home", "/debug", "/about"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="page_views",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type_field="event_type_col",
+            filter='t.event_type_col != "test"',
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 2
+        assert set(result["entity_id"]) == {"u1", "u3"}
+
+    def test_event_source_filter_none_passes_all_rows(self, tmp_path) -> None:
+        """filter=None (default) is a no-op — every row is emitted."""
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                "page": ["/home", "/about"],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="page_views",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+        assert len(result) == 2
+
+    def test_event_source_json_path_extracts_into_payload(self, tmp_path) -> None:
+        """Field.json_path extraction appears in the packed payload."""
+        parquet_file = tmp_path / "events.parquet"
+        df = pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                "custom_data": [
+                    '{"campaign": "spring"}',
+                    '{"campaign": "summer"}',
+                ],
+            }
+        )
+        df.to_parquet(str(parquet_file))
+
+        es = EventSource(
+            name="page_views",
+            project="test",
+            dataset="test",
+            table="test",
+            duckdb_path=str(parquet_file),
+            entity_id_field="user_id",
+            timestamp_field="viewed_at",
+            event_type="page_view",
+            fields=[
+                Field(
+                    name="campaign",
+                    type="STRING",
+                    json_path="$.campaign",
+                    source_column="custom_data",
+                )
+            ],
+        )
+        conn = ibis.duckdb.connect()
+        result = load_event_source(conn, es).execute()
+
+        assert len(result) == 2
+        payloads = [json.loads(p) for p in result["payload"]]
+        campaigns = {p["campaign"] for p in payloads}
+        assert campaigns == {"spring", "summer"}

@@ -12,7 +12,7 @@ import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
-from fyrnheim.core.source import Rename, SourceTransforms, StateSource
+from fyrnheim.core.source import Field, Rename, SourceTransforms, StateSource
 from fyrnheim.engine.pipeline import _load_state_source
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
@@ -597,3 +597,139 @@ class TestStateSourceTransformsAndComputedColumns:
         payloads = [json.loads(p) for p in result["payload"].tolist()]
         prefixes = {p["prefix"] for p in payloads}
         assert prefixes == {"A1", "A2"}
+
+
+# ---------------------------------------------------------------------------
+# M069: StateSource.filter + Field.json_path tests
+# ---------------------------------------------------------------------------
+
+
+class TestStateSourceFilterAndJsonPath:
+    """M069: filter and json_path apply at source load time; the filtered
+    table is what the snapshot store saves, so the replay path respects
+    the filter on subsequent runs."""
+
+    def test_state_source_filter_drops_rows(
+        self, tmp_path: Path, duckdb_conn
+    ) -> None:
+        """StateSource.filter='t.deleted != True' drops deleted rows from
+        the emitted events, and — because the filter runs before the
+        snapshot save — the replay path on run 2 also sees only the
+        non-deleted rows.
+        """
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "records.parquet"
+        df = pd.DataFrame(
+            {
+                "id": ["r1", "r2", "r3"],
+                "name": ["Alice", "Bob", "Ghost"],
+                "deleted": [False, False, True],
+            }
+        )
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="records",
+            project="test",
+            dataset="test",
+            table="records",
+            duckdb_path=str(parquet_path),
+            id_field="id",
+            filter="t.deleted != True",
+        )
+
+        # Run 1: cold-start — filter drops the deleted row.
+        events1 = _load_state_source(source, config, duckdb_conn).execute()
+        assert len(events1) == 2
+        assert set(events1["entity_id"]) == {"r1", "r2"}
+        # The deleted row must not leak into any emitted event.
+        assert "r3" not in set(events1["entity_id"])
+
+        # Run 2: snapshot exists from run 1, same underlying data — the
+        # M066 empty-diff replay emits every current-filtered row as
+        # row_appeared. If the filter had leaked through only on run 1,
+        # run 2's replay would see all 3 raw rows — this asserts the
+        # snapshot store saves the POST-filter table.
+        events2 = _load_state_source(source, config, duckdb_conn).execute()
+        assert len(events2) == 2
+        assert set(events2["event_type"]) == {"row_appeared"}
+        assert set(events2["entity_id"]) == {"r1", "r2"}
+
+    def test_state_source_filter_references_computed_column(
+        self, tmp_path: Path, duckdb_conn
+    ) -> None:
+        """Filter is applied AFTER computed_columns — it can reference
+        columns produced by computed_columns (pipeline-stage order:
+        computed_columns → filter).
+        """
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "items.parquet"
+        df = pd.DataFrame(
+            {"id": ["I1", "I2", "I3"], "cents": [50, 200, 750]}
+        )
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="items",
+            project="test",
+            dataset="test",
+            table="items",
+            duckdb_path=str(parquet_path),
+            id_field="id",
+            computed_columns=[
+                ComputedColumn(name="dollars", expression="t.cents / 100"),
+            ],
+            filter="t.dollars > 1",
+        )
+
+        events = _load_state_source(source, config, duckdb_conn).execute()
+        # cents/100 > 1 keeps I2 (2.0) and I3 (7.5) only. If the filter
+        # applied BEFORE computed_columns, the eval would fail because
+        # ``dollars`` would not exist on the pre-mutate schema.
+        assert set(events["entity_id"]) == {"I2", "I3"}
+
+    def test_state_source_json_path_surfaces_in_payload(
+        self, tmp_path: Path, duckdb_conn
+    ) -> None:
+        """Field.json_path extracts a typed column; the extracted value
+        shows up in the row_appeared event payload."""
+        config = _make_config(tmp_path)
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        parquet_path = data_dir / "accounts.parquet"
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "custom_type": [
+                    '{"value": "premium"}',
+                    '{"value": "free"}',
+                ],
+            }
+        )
+        _write_parquet(parquet_path, df)
+
+        source = StateSource(
+            name="accounts",
+            project="test",
+            dataset="test",
+            table="accounts",
+            duckdb_path=str(parquet_path),
+            id_field="id",
+            fields=[
+                Field(
+                    name="account_type",
+                    type="STRING",
+                    json_path="$.value",
+                    source_column="custom_type",
+                )
+            ],
+        )
+
+        events = _load_state_source(source, config, duckdb_conn).execute()
+        payloads = [json.loads(p) for p in events["payload"].tolist()]
+        extracted = {p["account_type"] for p in payloads}
+        assert extracted == {"premium", "free"}

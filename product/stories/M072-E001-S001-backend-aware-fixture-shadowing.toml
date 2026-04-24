@@ -1,0 +1,367 @@
+id = "M072-E001-S001"
+parent = "M072-E001"
+title = "Backend-aware fixture shadowing + v0.10.0 release"
+status = "ready"
+created = 2026-04-24
+
+[outcome]
+description = """Add BaseTableSource.duckdb_fixture_is_transformed
+bool field; gate transforms/fields/filter skip in both loaders on
+(flag × backend=duckdb × reading duckdb_path); computed_columns still
+apply; diagnostic log on skip; unit + e2e tests; bump 0.9.1 -> 0.10.0
+with CHANGELOG; push release/v0.10.0 branch; open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/source.py: BaseTableSource gains `duckdb_fixture_is_transformed: bool = PydanticField(default=False, description=<see below>)`. Place the field after `duckdb_path` (line 80) for logical grouping. The docstring MUST include: (a) the use case (duckdb_path fixture is already in post-transform shape), (b) the semantics (skip transforms/fields/filter when backend=duckdb AND reading duckdb_path AND this flag is True), (c) the backend-parity warning (wrong-shape fixture = DuckDB-only wrong output, caught only by cross-backend tests), (d) the v0.9.1-behavior-preservation note (default False = no behavior change)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Read src/fyrnheim/core/source.py:BaseTableSource.read_table() to understand the existing backend-branch logic. The skip gate in the loaders MUST mirror that logic — i.e. the skip fires only when read_table() actually reads from the parquet file (DuckDB + duckdb_path present), NOT when it reads from a live DuckDB table. Document the mirror-reasoning in the implementation (comment referencing `BaseTableSource.read_table` line numbers)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/event_source_loader.py: after `table = event_source.read_table(...)` (line 41 post-M069), determine whether the skip path fires via a helper like `_reads_duckdb_fixture(event_source, config_backend)`. The helper returns True iff `event_source.duckdb_fixture_is_transformed AND config_backend == 'duckdb' AND event_source.duckdb_path is not None AND (event_source.table is None OR however BaseTableSource.read_table picks parquet over live-table — mirror that)`. When True: skip `_apply_source_transforms`, `_apply_json_path_extractions`, and the filter step. computed_columns still apply. Log the skip at INFO level."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/pipeline.py _load_state_source: same skip gate as load_event_source, using `config.backend` (from ResolvedConfig) rather than probing the ibis connection. When the skip fires, bypass `_apply_source_transforms`, `_apply_json_path_extractions`, and the filter step. computed_columns still apply. All five post-load stages (transforms / json_path / computed_columns / filter / then full_refresh/snapshot_diff branch) continue to exist in the non-skip path unchanged."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The `_reads_duckdb_fixture` helper (or equivalent logic) lives in src/fyrnheim/engine/source_transforms.py alongside the other source-loading helpers, so both loaders share it. If `source_transforms.py` is not the right home, place it in a new `src/fyrnheim/engine/source_loading.py` module and import from both loaders."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diagnostic INFO log variants (add one, keep existing M068/M069 variants unchanged): `StateSource/EventSource %s: duckdb_fixture_is_transformed=True, skipping transforms/fields/filter (reading duckdb_path fixture)`. Use the existing module-level logger."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "computed_columns explicitly STILL APPLY on the skip path. Rationale documented in a code comment + CHANGELOG: computed expressions are backend-independent (they evaluate the same way against the post-transform shape on any backend), so re-evaluating on DuckDB is semantically consistent with BQ — no reason to skip."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test tests/test_source_transforms.py::test_fixture_is_transformed_defaults_false — `StateSource(name='s', id_field='id').duckdb_fixture_is_transformed is False`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test: test_fixture_is_transformed_flag_skips_when_true_on_duckdb_with_duckdb_path — a StateSource/EventSource with the flag=True, duckdb_path set, backend=duckdb. Spy or instrument `_apply_source_transforms` and `_apply_json_path_extractions` to verify they are NOT called. Assert the returned table matches the raw fixture shape (no transform applied)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test: test_fixture_is_transformed_flag_does_not_skip_when_backend_is_bigquery — the flag=True AND duckdb_path is set but config.backend='bigquery'. Assert transforms ARE applied (the flag is DuckDB-fixture-specific)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test: test_fixture_is_transformed_flag_does_not_skip_when_reading_live_duckdb_table — the flag=True, backend=duckdb, but the source declares `table='live_table'` without `duckdb_path` (DuckDB-as-production-backend, not DuckDB-as-fixture). Assert transforms ARE applied."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test: test_fixture_is_transformed_preserves_computed_columns — flag=True, duckdb_path set, backend=duckdb, source has computed_columns=[ComputedColumn(name='derived', expression='t.base * 2')]. Assert transforms skipped BUT the 'derived' column appears in the output with correct values. Pins the computed-columns-still-apply contract."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "New e2e test tests/test_e2e_identity_projection.py::test_m072_fixture_is_transformed_e2e — a StateSource with `duckdb_fixture_is_transformed=True` + `duckdb_path='fixture.parquet'` (fixture has post-transform shape) + realistic transforms=[Rename(from_name='id', to_name='account_id')] that WOULD FAIL if applied (because the fixture already uses 'account_id', not 'id'). Flow through _load_state_source + identity graph + project_analytics_entity. Assert: downstream entity materializes successfully (which proves transforms were skipped — otherwise the rename would fail with KeyError)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New negative test: test_fixture_is_transformed_with_mismatched_fixture_shape_produces_wrong_output — flag=True but the fixture is in RAW (pre-transform) shape (has 'id' column, not 'account_id'). Transforms skip, so downstream sees the raw shape. Assert the output shape DIFFERS from what the same source would produce on BigQuery (where transforms apply). This documents the trade-off — the test EXPECTS wrong output when the contract is violated. Add a docstring explicitly explaining: 'This test documents what happens when duckdb_fixture_is_transformed=True but the fixture is NOT actually post-transform. The output is visibly wrong — cross-backend tests catch this, not a silent failure.'"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged: tests/test_source_transforms.py (M068/M069), tests/test_event_source_loader.py (M068), tests/test_snapshot_diff.py (M066/M067/M068/M069/M071), tests/test_e2e_entity_output.py (M066/M068), tests/test_e2e_identity_projection.py (M068/M069), tests/test_diff_engine.py (M071), tests/test_analytics_entity_engine.py, tests/test_executor.py. 590-test baseline from v0.9.1 + ~6-8 new M072 tests = ~596-598 green expected."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.9.1 -> 0.10.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated; fyrnheim entry records 0.10.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.10.0] - 2026-04-24` (today's date) above `## [0.9.1]` with `### Added` (the new field with semantics summary), `### Notes` (backend-parity warning + the computed-columns-still-apply decision + the deferred-FR-5 note pointing at M070). Text should explicitly say: 'computed_columns STILL APPLY on the skip path — they are backend-independent expressions, not transforms.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, src/fyrnheim/engine/source_transforms.py (new helper; optional if placed elsewhere), tests/test_source_transforms.py (+ new tests), one e2e test file (+ new e2e test), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.10.0` (rename the auto-worktree branch FIRST). Single commit. Message: `feat(M072): backend-aware fixture shadowing (duckdb_fixture_is_transformed) (v0.10.0)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.10.0 — backend-aware fixture shadowing (FR-8)`. Body describes the reporter's M012 migration gap, the flag semantics, the computed-columns-still-apply decision, the backend-parity warning, the deferred-FR-5 note (M070 weakened further), and includes the post-merge-steps block. Optionally mention TestPyPI RC availability."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_transforms.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- product/missions/M072-v0.10.0-backend-aware-fixture-shadowing.toml
+  (full outcome, design rationale, gate condition details, naming
+  alternatives considered, release discipline)
+- product/epics/M072-E001-backend-aware-fixture-shadowing.toml
+- product/stories/M072-E001-S001-backend-aware-fixture-shadowing.toml
+
+Read all three first.
+
+## Implementation sketch
+
+### 1. Pydantic field (core/source.py)
+
+Place after `duckdb_path` on BaseTableSource (around line 80):
+
+```python
+duckdb_fixture_is_transformed: bool = PydanticField(
+    default=False,
+    description=(
+        \"When True AND the source reads from `duckdb_path` AND the \"
+        \"backend is DuckDB, the engine SKIPS `transforms`, `fields` \"
+        \"(json_path extraction), and `filter` at source read time. \"
+        \"Use this when your parquet fixture is already in the \"
+        \"post-transform shape of the BigQuery output — the fixture \"
+        \"IS the final shape. WARNING: if the fixture does NOT match \"
+        \"the post-transform BQ output, DuckDB-only runs will produce \"
+        \"wrong results with no backend-parity error (cross-backend \"
+        \"tests catch this). `computed_columns` STILL APPLY on the \"
+        \"skip path — they are backend-independent expressions. \"
+        \"Default False preserves v0.9.1 behavior.\"
+    ),
+)
+```
+
+### 2. Gate helper (source_transforms.py or new source_loading.py)
+
+```python
+from fyrnheim.core.source import BaseTableSource
+
+
+def _reads_duckdb_fixture(
+    source: BaseTableSource,
+    backend: str,
+) -> bool:
+    \"\"\"True if the engine is reading the DuckDB fixture parquet path
+    and the source has opted into fixture-shadow mode.
+
+    Mirrors BaseTableSource.read_table's branch: when backend=='duckdb'
+    AND source.duckdb_path is set, read_table reads the parquet; when
+    backend=='duckdb' AND source.table is set AND duckdb_path is None,
+    read_table reads the live DuckDB table. The fixture-shadow skip
+    fires ONLY in the parquet-read case.
+    \"\"\"
+    return (
+        bool(source.duckdb_fixture_is_transformed)
+        and backend == \"duckdb\"
+        and source.duckdb_path is not None
+    )
+```
+
+Verify against `BaseTableSource.read_table` (core/source.py around
+line 105-162 — check current line numbers) that the gate exactly
+mirrors its parquet-vs-live branch. If read_table uses additional
+logic (e.g. checks `data_dir` or env vars), the gate must match.
+
+### 3. Loader gates
+
+**event_source_loader.py** (around lines 41-67 post-M069):
+
+```python
+from fyrnheim.engine.source_transforms import _reads_duckdb_fixture  # or wherever
+
+table = event_source.read_table(conn, backend, data_dir=data_dir)
+
+if _reads_duckdb_fixture(event_source, backend):
+    log.info(
+        \"EventSource %s: duckdb_fixture_is_transformed=True, \"
+        \"skipping transforms/fields/filter (reading duckdb_path fixture)\",
+        event_source.name,
+    )
+else:
+    table = _apply_source_transforms(table, event_source.transforms)
+    table = _apply_json_path_extractions(table, event_source.fields)
+
+# computed_columns ALWAYS apply (regardless of skip)
+if event_source.computed_columns:
+    for cc in event_source.computed_columns:
+        table = table.mutate(**{cc.name: eval(cc.expression, {\"ibis\": ibis, \"t\": table})})  # noqa: S307
+
+# filter skipped in the fixture-shadow path
+if not _reads_duckdb_fixture(event_source, backend) and event_source.filter:
+    table = table.filter(eval(event_source.filter, {\"ibis\": ibis, \"t\": table}))  # noqa: S307
+```
+
+Note: caching `_reads_duckdb_fixture(...)` in a local variable avoids
+calling it twice. Prefer:
+
+```python
+reads_fixture = _reads_duckdb_fixture(event_source, backend)
+if reads_fixture:
+    log.info(...)
+else:
+    table = _apply_source_transforms(...)
+    table = _apply_json_path_extractions(...)
+
+# computed_columns always
+if event_source.computed_columns:
+    ...
+
+if not reads_fixture and event_source.filter:
+    table = table.filter(...)
+```
+
+**pipeline.py _load_state_source** (around lines 336-361 post-M069):
+same structure. Use `config.backend` as the backend arg to the gate.
+`_load_state_source` already has `config: ResolvedConfig` in scope.
+
+### 4. Field logger contract (keep M068/M069 variants unchanged)
+
+Existing log variants (M068 + M069):
+- Normal path: `StateSource/EventSource X: ...` — unchanged
+- Filter applied: `... filter applied, N events/rows` — unchanged
+- M066 replay: `... diff empty, replayed N rows ...` — unchanged
+
+NEW in M072:
+- `StateSource/EventSource %s: duckdb_fixture_is_transformed=True, skipping transforms/fields/filter (reading duckdb_path fixture)`
+
+### 5. Negative test sketch
+
+```python
+def test_fixture_is_transformed_with_mismatched_fixture_shape_produces_wrong_output(tmp_path):
+    \"\"\"Documents the trade-off: flag=True but fixture is RAW shape.
+
+    The engine skips transforms, so downstream sees the RAW fixture
+    shape (pre-rename) instead of the post-transform shape that BQ
+    would produce. This is visibly wrong — the kind of mismatch that
+    cross-backend tests catch. Not a silent failure; flag is
+    explicit opt-in with a WARNING docstring.
+    \"\"\"
+    # Fixture with raw shape: 'id' column (not 'account_id')
+    raw_df = pd.DataFrame({'id': [1, 2], 'name': ['a', 'b']})
+    fixture_path = tmp_path / 'raw.parquet'
+    raw_df.to_parquet(fixture_path)
+
+    source = StateSource(
+        name='s',
+        id_field='account_id',  # expects post-transform id column name
+        duckdb_path=str(fixture_path),
+        duckdb_fixture_is_transformed=True,  # but fixture is NOT post-transform
+        transforms=SourceTransforms(renames=[Rename(from_name='id', to_name='account_id')]),
+    )
+
+    # Pipeline runs but downstream will see 'id' not 'account_id';
+    # identity resolution on 'account_id' will fail or produce empty.
+    # The test documents this as EXPECTED behavior given the misuse.
+    # Exact assertion: the table schema contains 'id' not 'account_id'.
+```
+
+### 6. CHANGELOG [0.10.0]
+
+```
+## [0.10.0] - 2026-04-24
+
+### Added
+
+- `BaseTableSource.duckdb_fixture_is_transformed: bool = False` —
+  when True AND the source reads from its `duckdb_path` parquet AND
+  the backend is DuckDB, the engine SKIPS `transforms`, `fields`
+  (json_path extraction), and `filter` at source read time. Use this
+  when your parquet fixture is a post-transform snapshot of the
+  BigQuery output — the fixture IS the final shape, and re-applying
+  transforms would either fail (pre-rename columns missing) or
+  double-transform. Unblocks migrating SQL staging views to
+  declarative pydantic sources when the DuckDB fixture is
+  post-transform.
+
+### Notes
+
+- **`computed_columns` still apply on the skip path.** Computed
+  expressions are backend-independent — they evaluate the same way
+  against the post-transform shape on DuckDB as on BigQuery. No
+  reason to skip them; applying them keeps backend-parity on the
+  derived-column layer.
+- **Backend-parity warning**: if you set `duckdb_fixture_is_transformed
+  =True` but your fixture is NOT actually in post-transform shape,
+  DuckDB-only runs will produce wrong results with no automatic
+  error. Catch this with cross-backend tests. The flag is explicit
+  opt-in, not auto-detected, so the mistake is visible at the
+  source declaration site.
+- **FR-5 (source-level joins) deferred to M070.** With this flag,
+  the two Pardot sources that need joins can keep their StagingView
+  SQL for the join layer and migrate everything else to pydantic —
+  no urgent need for a source-level `joins` API.
+```
+
+### 7. Release-flow rituals
+
+Same as M066/M068/M069:
+1. `git branch -m release/v0.10.0`
+2. Claim Beads
+3. Implement field + gate helper + both loader gates + tests
+4. `uv lock` + CHANGELOG
+5. Verify clean
+6. Single commit: `feat(M072): backend-aware fixture shadowing (duckdb_fixture_is_transformed) (v0.10.0)`
+7. Close Beads, push, open PR
+8. STOP — human merges/tags/publishes
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory. Do NOT use
+absolute paths starting with `/home/tmo/roadtothebeach/open/fyrnheim/...`
+— those hit the main repo. `pwd` first to confirm worktree location.
+
+## Do NOT
+
+- Auto-detect the fixture shape (infer from duckdb_path) — explicit
+  opt-in is the design decision
+- Skip computed_columns — they are backend-independent
+- Add per-feature skip flags (skip-transforms, skip-fields,
+  skip-filter separately) — all-or-nothing is the design
+- Modify source_transforms.py internals (the helper callers gate
+  whether to call; the helpers themselves don't change)
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py,
+  analytics_entity_engine.py, identity_engine.py
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M072-v0.10.0-backend-aware-fixture-shadowing.toml",
+    "product/epics/M072-E001-backend-aware-fixture-shadowing.toml",
+    "product/stories/M069-E001-S001-json-path-and-filter.toml",
+]

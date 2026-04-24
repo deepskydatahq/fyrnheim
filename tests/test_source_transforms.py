@@ -16,15 +16,18 @@ import pytest
 
 from fyrnheim.core.source import (
     Divide,
+    EventSource,
     Field,
     Multiply,
     Rename,
     SourceTransforms,
+    StateSource,
     TypeCast,
 )
 from fyrnheim.engine.source_transforms import (
     _apply_json_path_extractions,
     _apply_source_transforms,
+    _reads_duckdb_fixture,
 )
 
 
@@ -274,3 +277,88 @@ def test_json_path_non_toplevel_key_with_bracket_raises() -> None:
     ]
     with pytest.raises(ValueError, match="top-level path"):
         _apply_json_path_extractions(t, fields)
+
+
+# ---------------------------------------------------------------------------
+# M072 / FR-8: backend-aware fixture shadowing
+# ---------------------------------------------------------------------------
+
+
+def test_fixture_is_transformed_defaults_false() -> None:
+    """New `duckdb_fixture_is_transformed` field defaults to False on all
+    BaseTableSource subclasses — v0.9.1-behavior-preservation invariant.
+    """
+    state = StateSource(
+        name="s",
+        project="p",
+        dataset="d",
+        table="t",
+        id_field="id",
+    )
+    event = EventSource(
+        name="e",
+        project="p",
+        dataset="d",
+        table="t",
+        entity_id_field="id",
+        timestamp_field="ts",
+    )
+    assert state.duckdb_fixture_is_transformed is False
+    assert event.duckdb_fixture_is_transformed is False
+
+
+def test_reads_duckdb_fixture_flag_true_and_duckdb_and_duckdb_path() -> None:
+    """Gate fires on (flag=True, backend='duckdb', duckdb_path set)."""
+    src = StateSource(
+        name="s",
+        project="p",
+        dataset="d",
+        table="t",
+        id_field="id",
+        duckdb_path="/tmp/fixture.parquet",
+        duckdb_fixture_is_transformed=True,
+    )
+    assert _reads_duckdb_fixture(src, "duckdb") is True
+
+
+def test_reads_duckdb_fixture_false_when_flag_not_set() -> None:
+    """Default flag=False — gate does not fire even with duckdb_path."""
+    src = StateSource(
+        name="s",
+        project="p",
+        dataset="d",
+        table="t",
+        id_field="id",
+        duckdb_path="/tmp/fixture.parquet",
+    )
+    assert _reads_duckdb_fixture(src, "duckdb") is False
+
+
+def test_reads_duckdb_fixture_false_when_backend_is_bigquery() -> None:
+    """Gate never fires on non-DuckDB backends — the flag is
+    DuckDB-fixture-specific, BQ reads the raw upstream table."""
+    src = StateSource(
+        name="s",
+        project="p",
+        dataset="d",
+        table="t",
+        id_field="id",
+        duckdb_path="/tmp/fixture.parquet",
+        duckdb_fixture_is_transformed=True,
+    )
+    assert _reads_duckdb_fixture(src, "bigquery") is False
+    assert _reads_duckdb_fixture(src, "clickhouse") is False
+
+
+def test_reads_duckdb_fixture_false_when_no_duckdb_path() -> None:
+    """Gate does not fire when duckdb_path is None — DuckDB-as-production
+    backend users with live tables still see transforms applied."""
+    src = StateSource(
+        name="s",
+        project="p",
+        dataset="d",
+        table="live_table",
+        id_field="id",
+        duckdb_fixture_is_transformed=True,
+    )
+    assert _reads_duckdb_fixture(src, "duckdb") is False

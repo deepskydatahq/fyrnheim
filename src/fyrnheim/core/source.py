@@ -78,6 +78,25 @@ class BaseTableSource(BaseModel):
     dataset: str | None = None
     table: str | None = None
     duckdb_path: str | None = None
+    duckdb_fixture_is_transformed: bool = PydanticField(
+        default=False,
+        description=(
+            "When True AND the source reads from `duckdb_path` AND the "
+            "backend is DuckDB, the engine SKIPS `transforms`, `fields` "
+            "(json_path extraction), and `filter` at source read time. "
+            "Use this when your parquet fixture is already in the "
+            "post-transform shape of the BigQuery output — the fixture "
+            "IS the final shape. Re-applying transforms would either "
+            "fail (pre-rename columns missing) or double-transform. "
+            "WARNING: if the fixture does NOT match the post-transform "
+            "BQ output, DuckDB-only runs will produce wrong results "
+            "with no backend-parity error (cross-backend tests catch "
+            "this). `computed_columns` STILL APPLY on the skip path — "
+            "they are backend-independent expressions, not transforms. "
+            "Default False preserves v0.9.1 behavior (transforms apply "
+            "uniformly on both backends)."
+        ),
+    )
     upstream: StagingView | None = None
     filter: str | None = PydanticField(
         default=None,

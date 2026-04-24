@@ -30,6 +30,7 @@ from fyrnheim.engine.snapshot_store import SnapshotStore
 from fyrnheim.engine.source_transforms import (
     _apply_json_path_extractions,
     _apply_source_transforms,
+    _reads_duckdb_fixture,
 )
 from fyrnheim.engine.staging_runner import materialize_staging_views
 
@@ -350,12 +351,32 @@ def _load_state_source(
     # * json_path before computed_columns: user expressions can reference
     #   extracted typed columns.
     # * filter after computed_columns: users can filter on computed values.
-    table = _apply_source_transforms(table, source.transforms)
-    table = _apply_json_path_extractions(table, source.fields)
+    #
+    # M072 (FR-8): when the source opts into fixture-shadow mode AND the
+    # engine is reading the duckdb_path parquet (mirrors
+    # BaseTableSource.read_table's parquet-read branch), skip
+    # transforms/json_path/filter. The fixture is assumed to be in
+    # post-transform shape. computed_columns STILL APPLY — they are
+    # backend-independent expressions, not transforms. Uses
+    # config.backend (from ResolvedConfig, the single source of truth
+    # for backend identity in the pipeline).
+    reads_fixture = _reads_duckdb_fixture(source, config.backend)
+
+    if reads_fixture:
+        log.info(
+            "StateSource %s: duckdb_fixture_is_transformed=True, "
+            "skipping transforms/fields/filter (reading duckdb_path fixture)",
+            source.name,
+        )
+    else:
+        table = _apply_source_transforms(table, source.transforms)
+        table = _apply_json_path_extractions(table, source.fields)
+
     if source.computed_columns:
         for cc in source.computed_columns:
             table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
-    if source.filter:
+
+    if not reads_fixture and source.filter:
         table = table.filter(
             eval(source.filter, {"ibis": ibis, "t": table})  # noqa: S307
         )

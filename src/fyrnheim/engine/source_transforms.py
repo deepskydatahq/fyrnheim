@@ -25,7 +25,7 @@ import re
 
 import ibis
 
-from fyrnheim.core.source import Field, SourceTransforms
+from fyrnheim.core.source import BaseTableSource, Field, SourceTransforms
 
 # Regex for allowed json_path: top-level ``$.<key>`` where key is a
 # python-identifier-style token (letters/digits/underscore, leading
@@ -46,6 +46,39 @@ _FIELD_TYPE_TO_IBIS: dict[str, str] = {
     "TIMESTAMP": "timestamp",
     "BYTES": "bytes",
 }
+
+
+def _reads_duckdb_fixture(
+    source: BaseTableSource,
+    backend: str,
+) -> bool:
+    """True iff the engine is reading the DuckDB fixture parquet path and
+    the source has opted into fixture-shadow mode (M072 / FR-8).
+
+    Mirrors the branch in :meth:`BaseTableSource.read_table`
+    (``src/fyrnheim/core/source.py``, ~lines 132-161): when
+    ``backend == "duckdb"`` the ``read_table`` implementation calls
+    ``conn.read_parquet(duckdb_path)`` and requires ``duckdb_path`` to be
+    set — there is no live-DuckDB-table branch today. A future
+    ``read_table`` that added such a branch would need the gate here to
+    mirror the same selector.
+
+    The gate fires only when ALL of:
+
+    * ``source.duckdb_fixture_is_transformed`` is True — explicit opt-in.
+    * ``backend == "duckdb"`` — BigQuery / ClickHouse / other backends
+      read the raw upstream table and must still apply transforms.
+    * ``source.duckdb_path`` is not None — DuckDB-as-production users
+      (live DuckDB tables, no fixture) must still apply transforms.
+
+    Returns False otherwise — preserves v0.9.1 uniform-transform behavior
+    for the non-opt-in and non-fixture-read cases.
+    """
+    return (
+        bool(source.duckdb_fixture_is_transformed)
+        and backend == "duckdb"
+        and source.duckdb_path is not None
+    )
 
 
 def _apply_source_transforms(

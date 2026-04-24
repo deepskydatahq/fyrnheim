@@ -1,0 +1,94 @@
+# Epic: M068 wire SourceTransforms + StateSource.computed_columns + v0.8.2 release
+# Single epic covering the full M068 scope. Mirrors M063/M064/M065/M066/M067 shape:
+# one mission = one branch = one PR = one release.
+
+id = "M068-E001"
+parent = "M068"
+title = "Wire SourceTransforms + StateSource.computed_columns + v0.8.2 release"
+status = "active"
+created = 2026-04-24
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M068 scope: add a shared
+`_apply_source_transforms(table, transforms)` helper in a new
+src/fyrnheim/engine/source_transforms.py module; wire it in both
+load_event_source and _load_state_source after read_table; wire
+StateSource.computed_columns via the same eval pattern EventSource
+already uses; add unit tests for each transform category on each
+source type plus an ordering test plus a computed-columns-see-
+transformed-columns test; add one e2e test running a StateSource
+with transforms + computed_columns through the full pipeline; bump
+0.8.1 -> 0.8.2 with CHANGELOG entry; open release/v0.8.2 PR.
+
+Mirrors the M063/M064/M065/M066/M067 patch shape. Tag + publish are
+post-merge human steps.
+"""
+
+[job_story]
+description = """When I declare `transforms=SourceTransforms(renames=[...])`
+or `computed_columns=[ComputedColumn(...)]` on a StateSource or
+EventSource, I want the engine to actually apply them at source read
+time (matching the documented pydantic model intent) so that my
+declarative pipeline configuration works as written, without me having
+to fall back to SQL staging views for simple renames, casts, or
+computed columns."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 16 testing criteria from the M068 mission TOML pass",
+    "New src/fyrnheim/engine/source_transforms.py module with `_apply_source_transforms(table, transforms)` helper applying type_casts → divides → multiplies → renames in that order",
+    "load_event_source in src/fyrnheim/engine/event_source_loader.py applies source.transforms after read_table and BEFORE the existing computed_columns mutate",
+    "_load_state_source in src/fyrnheim/engine/pipeline.py applies source.transforms then source.computed_columns after read_table, before the full_refresh / snapshot_diff branch",
+    "Unit tests covering each transform category on each source type (8 tests), plus ordering + StateSource computed_columns + computed_columns-see-transformed-columns (3 tests)",
+    "One e2e test: StateSource with transforms (rename) + computed_columns flows through the full pipeline, asserts transformed schema reaches entity materialization",
+    "All existing tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml 0.8.1 -> 0.8.2; uv.lock regenerated",
+    "CHANGELOG [0.8.2] Fixed entry with behavior-change migration note",
+    "Branch release/v0.8.2, single commit, correct message, PR opened with post-merge-steps block, DO NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror the M063/M064/M065/M066/M067 patch-release shape — one commit
+bundling fix + tests + version bump + CHANGELOG on a release/v0.8.2
+branch.
+
+Full implementation sketch (transform-order contract, shared helper
+placement, Ibis op choices, eval pattern) is in the M068 mission TOML
+[notes] section. Read that first.
+
+Safety: users declaring transforms/computed_columns on StateSources
+today see them silently ignored. After this ships, those
+configurations apply — matching documented intent. No conforming user
+behavior change; the CHANGELOG calls out the non-conforming edge case
+(declaring + expecting-ignored) for completeness.
+"""
+
+estimated_stories = 1

@@ -1,0 +1,237 @@
+# Mission: source-level joins on StateSource (deferred from M069)
+# Draft — requires real-usage data from M069's FR-3 + FR-4 before design
+# lock-in. Plan opening this after v0.9.0 has had 3+ months of production
+# usage so the API shape is informed by actual patterns, not speculation.
+#
+# The original M069 feature-request brief (2026-04-24) flagged this as
+# "may be better as a StagingView feature than a source-level feature."
+# /plan-mission M069 confirmed StagingView already covers joins for
+# BigQuery production and deferred FR-5 to get real-usage data first.
+
+id = "M070"
+title = "source-level joins on StateSource (post-M069 design evaluation)"
+status = "draft"
+created = 2026-04-24
+depends_on = ["M069"]
+
+[outcome]
+description = """
+**Deferred from M069.** The original timo-data-stack Pydantic migration
+brief (2026-04-24) requested three new source APIs; /plan-mission M069
+locked M069 scope to FR-3 (`Field.json_path`) and FR-4 (source-level
+filter) and deferred FR-5 (source-level `joins`) to this mission.
+
+**Why deferred:**
+
+- `StagingView` (src/fyrnheim/core/staging_view.py) already expresses
+  arbitrary joins via full SQL + Jinja2 parameterization + dependency
+  ordering + content-hash idempotency + backend-agnostic execution.
+  For BigQuery production users, StagingView IS the right tool for joins.
+- Source-level joins only add value for DuckDB-only local-dev users who
+  want to avoid writing SQL for simple lookup joins. Real but narrow.
+- Designing the Join API before real usage data lands is high
+  regret-risk — `Join(source_name, join_key, how="left")` is the
+  floor per /plan-mission analysis, but we don't yet know whether
+  users need multi-key joins, computed-column joins, or more join
+  types once they start using FR-3/FR-4.
+
+**When to re-evaluate this mission:**
+
+- After M069 (v0.9.0) has been in production for 3+ months
+- When users have declared `Field.json_path` + `filter` on multiple
+  sources and have concrete "I wish I could join this with that" use
+  cases
+- When the reporter (or another field team) comes back with specific
+  join patterns that StagingView doesn't serve cleanly
+
+**Open questions for the planner (to resolve with real-usage data):**
+
+1. **Is the API actually needed?** After M069 ships, do BigQuery users
+   still ask for joins, or is StagingView + FR-4 filter enough? If
+   StagingView-for-joins holds up, this mission closes as
+   "won't-fix — use StagingView."
+
+2. **If needed, what's the minimum shape?** /plan-mission M069 analysis
+   suggested `Join(source_name, join_key, how="left")` — left-join
+   only, single-column equality, source-name lookup only. Confirm or
+   revise with actual user patterns.
+
+3. **Where does the join apply in the pipeline stage?** Before
+   transforms (so transforms can rename joined columns) or as its own
+   layer? /plan-mission M069 suggested "before transforms"; confirm
+   with real implementation.
+
+4. **Interaction with `upstream: StagingView`**: a source can declare
+   both — redundant? Restrictive validation? Same-backend-only?
+
+5. **`source_name` resolution**: how does a Join reference another
+   source? Registry lookup in the pipeline runner? Raw ibis handle?
+   Serialization story for TOML configs?
+
+**What this mission must NOT do:**
+
+- Ship before M069 has real usage data (3+ months minimum)
+- Design for hypothetical unicorns (multi-key joins, inner/outer
+  joins, self-joins) without user-driven justification
+- Expand scope to DerivedSource or StagingView refactoring
+- Compete with StagingView as the recommended primitive for
+  complex joins (StagingView stays the recommended tool for
+  BigQuery production joins)
+
+**Estimated release shape (subject to design):** patch if the Join API
+is truly minimal (just a helper), minor if any new model / validator /
+pipeline-layer change. Lean toward minor given "new pydantic surface."
+"""
+
+user_progress = "From 'M069 shipped FR-3+FR-4; joins remain the only path to full Pardot SQL migration not covered by StagingView' to 'source-level joins designed with 3+ months of FR-3/FR-4 usage data OR closed as won't-fix if StagingView+filter proves sufficient'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Phase 0 (pre-planning): collect actual usage evidence — grep real-world fyrnheim configs (timo-data-stack, any other adopters) for Field.json_path and filter patterns; document which StagingView SQLs might have migrated to source-level joins",
+    "Phase 1 /plan-mission outcome: either (a) concrete Join API design with real-usage justification for each field, OR (b) explicit won't-fix decision with rationale (StagingView suffices)",
+    "If (a) ships: minimum-viable Join model, pipeline-stage placement decision, tests, release-PR flow matching M066/M068 shape",
+    "If (b) closes as won't-fix: document the decision in the mission TOML's [notes] and in a new docs/decisions/ ADR pointing future users at StagingView for joins",
+]
+
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/source_transforms.py",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/pipeline.py",
+]
+related_missions = [
+    "M069 — v0.9.0 json_path + filter (prerequisite; ships before this can reasonably plan)",
+    "M068 — v0.8.2 wire dead pydantic fields (establishes source_transforms.py helper)",
+    "M025 — DerivedSource join mode (unrelated — post-identity-graph composition, not source-level join)",
+]
+
+[scope]
+in_scope = [
+    "Phase 0: usage-data collection from fyrnheim adopters post-M069",
+    "Phase 1 /plan-mission: API design OR won't-fix decision",
+    "If API ships: Join pydantic model + pipeline-stage placement + tests",
+    "If won't-fix: ADR documenting the decision",
+    "Version bump if API ships (likely minor)",
+]
+out_of_scope = [
+    "Designing the Join API before M069 has real usage data",
+    "Multi-key joins, right/outer/inner joins, self-joins (unless user-driven)",
+    "Refactoring StagingView or staging_runner",
+    "Joins on DerivedSource (separate concern)",
+    "Competing with StagingView as the recommended primitive for complex joins",
+    "Merge, tag, PyPI publish — standard human post-merge steps if API ships",
+]
+acceptable_breakage = [
+    "If this mission closes as won't-fix: users who expected source-level joins from the original 2026-04-24 brief get pointed at StagingView. No code change, no breakage — just documentation.",
+    "If this mission ships a Join API: any v0.9.x user who already wrote `joins=[...]` in their StateSource config (impossible today — the field doesn't exist) would not exist, so no real breakage risk.",
+]
+
+[notes]
+considerations = """
+## History
+
+Original feature-request brief 2026-04-24 from the timo-data-stack
+Pardot migration identified three new source APIs:
+- FR-3 (Field.json_path wiring + Field.source_column)
+- FR-4 (source-level filter)
+- FR-5 (source-level joins)
+
+/plan-mission M069 explored FR-5 against the existing StagingView
+primitive and concluded:
+
+1. StagingView (core/staging_view.py) is full-featured — arbitrary SQL
+   + Jinja2 params + depends_on + content-hash idempotency + backend-
+   agnostic execution
+2. For BigQuery production (the reporter's environment), StagingView
+   IS the right tool for joins
+3. Source-level joins only add convenience for DuckDB-only local-dev
+   users who want to avoid SQL
+4. Designing the Join API before real usage data is high regret risk
+
+Per /plan-mission M069 exploration (2026-04-24):
+
+> If users today can put arbitrary JOIN SQL in a StagingView and attach
+> it via upstream=, what's the NEW expressive power a `joins: [Join(...)]`
+> field would add that StagingView doesn't already cover? Be concrete —
+> if the answer is "none for BigQuery users, lets DuckDB-only users
+> avoid writing SQL" that's a fair answer.
+
+The answer was essentially "none for BigQuery users." So M069 shipped
+FR-3 + FR-4 only; FR-5 deferred here.
+
+## When to open /plan-mission M070
+
+Wait for at least one of these signals:
+
+1. **Real-usage data**: M069 ships, timo-data-stack (or another adopter)
+   uses Field.json_path + filter on multiple sources for 3+ months, and
+   reports back with "we wish we could do X join declaratively."
+2. **Second adopter**: a new team hits the same Pardot-shape migration
+   problem and independently wants source-level joins. Two requests beats
+   one speculative design.
+3. **StagingView limitation**: someone hits a concrete StagingView pain
+   point (not joins themselves, but the SQL-file workflow) that would
+   be cleanly solved by source-level joins.
+
+Absent any of these, this mission stays in draft — not a backlog-rot
+risk because StagingView serves the join use case.
+
+## Candidate minimum-viable Join API (from /plan-mission M069 analysis)
+
+If this mission does ship:
+
+```python
+class Join(BaseModel):
+    \"\"\"Declarative left-join of another source for row enrichment.
+
+    Minimum viable shape: left-join only, single-column equality key,
+    source-name-based lookup. For wider join patterns (inner/outer/
+    right, multi-column keys, non-equality predicates), use StagingView.
+    \"\"\"
+    source_name: str  # reference another declared source by name
+    join_key: str  # column present in both tables (single-column equality)
+    how: Literal["left"] = "left"  # locked to left-join for v1
+
+class StateSource(BaseTableSource):
+    # ...existing fields including M068 transforms, M069 json_path + filter...
+    joins: list[Join] = PydanticField(default_factory=list)
+```
+
+Pipeline-stage placement (per M069 analysis):
+
+```
+table = source.read_table(...)
+for j in source.joins:  # NEW M070 — apply BEFORE transforms
+    other = registry.resolve_source(j.source_name).read_table(...)
+    table = table.left_join(other, predicates=table[j.join_key] == other[j.join_key])
+table = _apply_source_transforms(table, source.transforms)
+# ... rest of M068/M069 stages ...
+```
+
+Open: how does the registry get resolved when the pipeline runner
+processes sources in order? Probably requires source-name → ibis.Table
+mapping built during pipeline setup. Design at /plan-mission time, not
+now.
+
+## Do NOT
+
+- Plan this mission before M069 has shipped and had real usage
+- Expand scope to multi-backend join optimization, StagingView refactor,
+  or DerivedSource-style post-identity joins
+- Ship a Join API without a user who actually needs it
+- Compete with StagingView as the recommended tool for complex joins
+"""

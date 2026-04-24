@@ -1,0 +1,330 @@
+id = "M069-E001-S001"
+parent = "M069-E001"
+title = "Field.json_path wiring + source-level filter + v0.9.0 release"
+status = "ready"
+created = 2026-04-24
+
+[outcome]
+description = """Add Field.source_column; wire Field.json_path
+extraction in source_transforms.py after renames/before computed_columns;
+add BaseTableSource.filter with eval-based apply step in both loaders
+after computed_columns; add unit + e2e tests; bump 0.8.2 -> 0.9.0 with
+CHANGELOG entry; push release/v0.9.0 branch; open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/source.py: Field class (lines 12-18) gains `source_column: str | None = PydanticField(default=None, description=\"When json_path is set, extract from this column. If None, defaults to Field.name — extract from a column matching the field name.\")`. Existing `json_path: str | None = None` unchanged."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/source.py: BaseTableSource (starts line 57) gains `filter: str | None = PydanticField(default=None, description=\"Ibis-expression string applied after transforms + computed_columns to filter rows. Evaluated with {'ibis': ibis, 't': table} context. NOTE: SQL three-valued logic — expressions like `t.col != True` drop NULL rows silently; use `t.col.fillna(False) != True` if you want different semantics.\")`. Applies to StateSource, EventSource, and DerivedSource via inheritance."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/source_transforms.py: add a new helper `_apply_json_path_extractions(table: ibis.Table, fields: list[Field] | None) -> ibis.Table` alongside the existing `_apply_source_transforms`. When fields is None or empty, return unchanged. For each field with `json_path is not None`: source_col = field.source_column or field.name. Extract using ibis JSON primitives — minimum support: top-level `$.<key>` path via `table[source_col].cast('json')[key].unwrap_as(<field.type>)` (map field.type to ibis type: STRING→'string', INT64→'int64', FLOAT64→'float64', BOOLEAN→'bool', etc.). Assign the extracted value to column `field.name` (overwriting if the column already exists, which is the default-source_column self-extract case)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "JSON path format decision: support top-level `$.<key>` paths. Nested paths (e.g. `$.a.b.c`) are EXPLICITLY DEFERRED — if a Field has json_path that doesn't match `$.<single_key>` format (regex: `^\\\\$\\\\.[a-zA-Z_][a-zA-Z0-9_]*$`), raise a ValueError at pipeline setup (not at runtime) with a clear message pointing at nested-support as a future M0xx enhancement. This avoids a half-implementation surprise."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Field.type to ibis-type mapping helper (inside source_transforms.py) covering the common cases declared in existing Field usage: STRING→'string', INT64→'int64', FLOAT64→'float64', BOOLEAN→'bool', DATE→'date', TIMESTAMP→'timestamp'. Unknown types fall through with a clear ValueError at pipeline setup. Document the supported set in the Field.type docstring."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/event_source_loader.py: after `_apply_source_transforms` call (line 44 post-M068) and BEFORE the existing computed_columns mutate (line 48-51), insert `table = _apply_json_path_extractions(table, event_source.fields)`. After computed_columns, add a new filter step: `if event_source.filter: table = table.filter(eval(event_source.filter, {'ibis': ibis, 't': table}))  # noqa: S307`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/pipeline.py _load_state_source: same pattern as EventSource. After `_apply_source_transforms` and BEFORE computed_columns, add `table = _apply_json_path_extractions(table, source.fields)`. After computed_columns, add the filter step using `source.filter`. All five M068+M069 stages (read → transforms → json_path → computed_columns → filter) apply BEFORE the full_refresh/snapshot_diff branch so both paths see the post-extraction, post-filter table."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New tests in tests/test_source_transforms.py: test_json_path_extraction_default_source_column asserts Field(name='utm_source', type='STRING', json_path='$.utm_source') extracts from column `utm_source` into column `utm_source`; test_json_path_extraction_explicit_source_column asserts Field(name='account_type', type='STRING', json_path='$.value', source_column='custom_type') extracts from `custom_type` into `account_type`; test_json_path_with_int64_type asserts INT64 field extracts as int64; test_fields_without_json_path_are_ignored asserts Field(name='x', type='STRING') with no json_path leaves the table unchanged; test_nested_json_path_raises_valueerror asserts `$.a.b` raises with a helpful message; test_unknown_field_type_raises_valueerror."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New tests in tests/test_source_transforms.py: test_filter_not_applied_when_none (control); test_filter_applied_when_set (filter='t.id > 2' drops rows with id <= 2); test_filter_applied_after_computed_columns — build a test that first adds a computed column via ComputedColumn, then filter references it; verify the computed column is accessible to the filter expression."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New test in tests/test_event_source_loader.py: test_event_source_filter_drops_rows — EventSource with filter='t.event_type != \"test\"' and a fixture containing 3 rows (2 prod, 1 test), assert only 2 events emitted."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New test in tests/test_snapshot_diff.py: test_state_source_filter_drops_rows — StateSource with filter='t.deleted != True' and a fixture with 3 rows (2 active, 1 deleted), run through SnapshotDiffPipeline twice with persistent snapshot, assert deleted rows never appear in emitted events and both runs emit 2 row_appeared events (the replay path respects the filtered-at-load-time table, not the raw one)."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "New e2e test in tests/test_e2e_identity_projection.py: test_m069_statesource_json_path_and_filter_e2e — StateSource with fields=[Field(name='account_type', type='STRING', json_path='$.value', source_column='custom_type')] AND filter='t.status == \"active\"', flows through _load_state_source + resolve_identities + project_analytics_entity. Assert: extracted `account_type` column appears in downstream entity output; inactive rows filtered out; identity resolution still works on the primary id_field."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged: tests/test_source_transforms.py (pre-M069 6 tests + 2 event-source + 3 state-source from M068); tests/test_event_source_loader.py (pre-M069 tests); tests/test_snapshot_diff.py (M066/M067/M068 regression); tests/test_e2e_entity_output.py; tests/test_e2e_identity_projection.py (M068 e2e); tests/test_executor.py; tests/test_analytics_entity_engine.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.8.2 -> 0.9.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated; fyrnheim entry records 0.9.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has `## [0.9.0] - 2026-04-24` (today's date) above `## [0.8.2]` with TWO subsections. `### Added`: (1) `BaseTableSource.filter: str | None = None` — declarative source-level row filter using eval() pattern with `{'ibis': ibis, 't': table}` context, applied after transforms + computed_columns. (2) `Field.source_column: str | None = None` — when `Field.json_path` is set, extracts from this column; defaults to `Field.name`. (3) `Field.json_path` is now honored by the engine — previously declared but dead. Top-level paths (`$.<key>`) supported; nested paths raise ValueError as a future-enhancement signal. `### Changed`: `source.fields` becomes engine-consumed for json_path extraction — previously read-only metadata. Users who declared `Field(json_path=...)` expecting it to be ignored will see extraction happen on upgrade. Document the filter NULL-gotcha briefly with the `.fillna(False)` escape hatch."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/engine/source_transforms.py, src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, tests/test_source_transforms.py, tests/test_event_source_loader.py, tests/test_snapshot_diff.py, tests/test_e2e_identity_projection.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, or any other source file."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.9.0` (rename the auto-worktree branch FIRST). Single commit. Message: `feat(M069): Field.json_path wiring + source-level filter (v0.9.0)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.9.0 — Field.json_path wiring + source-level filter`. Body describes both features, the Pardot-migration context, the deferred-FR-5 note pointing at M070, the NULL-gotcha on filter, and the post-merge-steps block. Optionally mention TestPyPI RC availability."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_source_transforms.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- product/missions/M069-v0.9.0-new-source-api.toml (full outcome,
+  architecture, pipeline-stage order, /plan-mission exploration
+  findings)
+- product/epics/M069-E001-json-path-and-filter.toml
+- product/stories/M069-E001-S001-json-path-and-filter.toml
+
+Read all three first.
+
+## Pipeline stage order (load-bearing)
+
+After M069 the full source-loading stage is:
+
+```
+table = source.read_table(...)
+table = _apply_source_transforms(table, source.transforms)
+  # M068: casts → divides → multiplies → renames
+table = _apply_json_path_extractions(table, source.fields)
+  # M069 NEW — iterate fields with json_path, extract into named columns
+if source.computed_columns:
+    for cc in source.computed_columns:
+        table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+if source.filter:
+    # M069 NEW — filter after all column derivation
+    table = table.filter(eval(source.filter, {"ibis": ibis, "t": table}))  # noqa: S307
+# EventSource: then entity_id/ts/payload packing
+# StateSource: then full_refresh branch or snapshot_diff pipeline
+```
+
+Placement rationale (do not deviate):
+- json_path AFTER renames: so users can rename a JSON column to a
+  clean name and extract from the renamed column (e.g. rename
+  `raw_custom_1` → `custom_type`, then extract `$.value`)
+- json_path BEFORE computed_columns: so computed_columns can
+  reference extracted columns
+- filter AFTER computed_columns: so filter can reference computed
+  values (e.g., compute `is_deleted` then filter on it)
+- All FIVE stages BEFORE the full_refresh/snapshot_diff branch in
+  StateSource — both paths and the snapshot_store save see the same
+  post-filter table
+
+## JSON path extraction sketch
+
+```python
+import re
+
+# Regex for allowed paths: top-level $.<key> where key is [a-zA-Z_][a-zA-Z0-9_]*
+_JSON_PATH_TOPLEVEL = re.compile(r\"^\\$\\.([a-zA-Z_][a-zA-Z0-9_]*)$\")
+
+# Field.type → ibis type string
+_FIELD_TYPE_TO_IBIS = {
+    "STRING": "string",
+    "INT64": "int64",
+    "FLOAT64": "float64",
+    "BOOLEAN": "bool",
+    "DATE": "date",
+    "TIMESTAMP": "timestamp",
+    "BYTES": "bytes",
+}
+
+
+def _apply_json_path_extractions(
+    table: ibis.Table,
+    fields: list[Field] | None,
+) -> ibis.Table:
+    \"\"\"For each Field with json_path set, extract into a typed column.\"\"\"
+    if not fields:
+        return table
+
+    for f in fields:
+        if f.json_path is None:
+            continue
+        m = _JSON_PATH_TOPLEVEL.match(f.json_path)
+        if not m:
+            raise ValueError(
+                f\"Field {f.name!r}: json_path {f.json_path!r} is not a supported \"
+                \"top-level path ($.<key>). Nested paths are not yet supported — \"
+                \"file a future-enhancement request.\"
+            )
+        key = m.group(1)
+        source_col = f.source_column or f.name
+        ibis_type = _FIELD_TYPE_TO_IBIS.get(f.type)
+        if ibis_type is None:
+            raise ValueError(
+                f\"Field {f.name!r}: type {f.type!r} is not supported for \"
+                f\"json_path extraction. Supported: {sorted(_FIELD_TYPE_TO_IBIS)}\"
+            )
+        table = table.mutate(**{
+            f.name: table[source_col].cast(\"json\")[key].unwrap_as(ibis_type)
+        })
+    return table
+```
+
+Note: `unwrap_as(...)` on a JSON accessor is the right ibis primitive
+here — it returns NULL if the scalar type doesn't match, which is the
+right behavior for best-effort extraction. Verify against the existing
+analytics_entity_engine.py JSON primitives if unsure.
+
+## Filter step sketch
+
+In event_source_loader.py, after computed_columns:
+
+```python
+if event_source.filter:
+    table = table.filter(
+        eval(event_source.filter, {\"ibis\": ibis, \"t\": table})  # noqa: S307
+    )
+```
+
+Same in pipeline.py _load_state_source. Reuse the existing `ibis` and
+(for state source path) `eval` imports; add them if not already present.
+
+## CHANGELOG [0.9.0] entry
+
+```
+## [0.9.0] - 2026-04-24
+
+### Added
+
+- `BaseTableSource.filter: str | None = None` — declarative source-level
+  row filter. When set, applied after transforms and computed_columns
+  via the `eval()` pattern (same as `ComputedColumn.expression`),
+  with `{'ibis': ibis, 't': table}` context. Applies to StateSource,
+  EventSource, and DerivedSource. Unblocks migrating SQL WHERE-clause-
+  only staging views to declarative pydantic sources.
+- `Field.source_column: str | None = None` — when `Field.json_path`
+  is set, the engine extracts from this column. Defaults to
+  `Field.name` (for the common case where the JSON column is named
+  the same as the field being extracted).
+- `Field.json_path` is now honored by the engine — previously declared
+  on the Field model but never applied. Top-level paths (`$.<key>`)
+  are supported; nested paths (`$.a.b`) raise a `ValueError` at
+  pipeline setup with a pointer to file a future-enhancement request.
+
+### Changed
+
+- `source.fields` is now engine-consumed for json_path extraction.
+  Previously it was read-only metadata — engines never iterated it.
+  Users who declared `Field(name=X, json_path=Y)` expecting the field
+  to be silently ignored will see extraction happen on upgrade. This
+  matches the documented model intent; if you had a non-conforming
+  setup (declared json_path + expected it ignored), remove the
+  json_path attribute.
+
+### Notes
+
+- **Filter NULL-gotcha**: SQL three-valued logic means `t.col != True`
+  drops NULL rows. If you want NULLs to be treated as False (keep
+  them in the filtered output), write `t.col.fillna(False) != True`
+  instead. Not a framework-level fix — follow SQL semantics.
+- **FR-5 (source-level joins) deferred to M070.** Use `StagingView`
+  for joins in the meantime; the M070 mission will revisit
+  source-level joins after real usage data from v0.9.0 informs the
+  API shape.
+```
+
+Use today's date. Adjust the `Added` list order if your implementation
+lands features in a different order.
+
+## Release-flow rituals (same as M063/M064/M065/M066/M067/M068)
+
+1. `git branch -m release/v0.9.0`
+2. Claim Beads
+3. Implement: source.py model fields → source_transforms.py helper →
+   event_source_loader.py + pipeline.py wire → tests
+4. `uv lock` + CHANGELOG
+5. Verify: `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+6. Single commit: `feat(M069): Field.json_path wiring + source-level filter (v0.9.0)`
+7. Close Beads, push, open PR with post-merge-steps block
+8. STOP — do not merge/tag/publish
+
+**Release-shape note for the PR body:** per the release-discipline memory,
+minor releases with new API surface are candidates for a TestPyPI RC
+release (tag `v0.9.0rc1` → verify on test-pypi → merge/tag `v0.9.0`).
+Include a line in the PR body saying `RC-on-TestPyPI is available if
+the reviewer wants field-team validation before GA; otherwise merge
+straight to v0.9.0.` — this gives the reviewer the choice rather than
+forcing the RC step.
+
+## Do NOT
+
+- Add FR-5 (source-level joins) — deferred to M070
+- Support nested JSON paths (`$.a.b.c`) — raise ValueError; defer to
+  a future mission
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py,
+  analytics_entity_engine.py, identity_engine.py
+- Grow SourceTransforms with a json_paths list — json_path extraction
+  is field-level metadata, not a transform; keep them separate (see
+  M069 mission TOML [notes] on architectural placement)
+- Skip documenting the NULL-gotcha on filter
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "tests/test_source_transforms.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M069-v0.9.0-new-source-api.toml",
+    "product/missions/M070-source-level-joins-design.toml",
+    "product/epics/M069-E001-json-path-and-filter.toml",
+    "product/stories/M068-E001-S001-wire-dead-pydantic-fields.toml",
+]

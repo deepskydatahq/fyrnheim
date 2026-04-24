@@ -115,14 +115,17 @@ def _make_appeared_events(
 ) -> list[dict[str, str]]:
     """Create row_appeared events for every row in *df*."""
     events: list[dict[str, str]] = []
-    # Extract raw id values via tolist() to preserve original dtype.
-    # iterrows() packs each row into a homogeneous-dtype Series, which
-    # upcasts int64 ids to float64 when any sibling column is float —
-    # for ids >2^53 that promotion irreversibly loses precision before
-    # _stringify_id() can see the value.
-    id_values = df[id_field].tolist()
-    for raw_id, (_, row) in zip(id_values, df.iterrows(), strict=False):
-        payload = {k: _serialize_value(v) for k, v in row.items() if k != id_field}
+    # Use df.to_dict(orient="records") rather than iterrows() to preserve
+    # each column's original dtype. iterrows() packs every row into a
+    # homogeneous-dtype Series, which upcasts int64 to float64 when any
+    # sibling column is float — silently corrupting large int ids and any
+    # integer-typed payload field before _stringify_id / _serialize_value
+    # ever see the value.
+    for record in df.to_dict(orient="records"):
+        raw_id = record[id_field]
+        payload = {
+            k: _serialize_value(v) for k, v in record.items() if k != id_field
+        }
         events.append(
             {
                 "source": source_name,
@@ -143,11 +146,13 @@ def _make_disappeared_events(
 ) -> list[dict[str, str]]:
     """Create row_disappeared events for every row in *df*."""
     events: list[dict[str, str]] = []
-    # See _make_appeared_events for why we extract ids via tolist()
-    # rather than reading them from the iterrows() Series.
-    id_values = df[id_field].tolist()
-    for raw_id, (_, row) in zip(id_values, df.iterrows(), strict=False):
-        payload = {k: _serialize_value(v) for k, v in row.items() if k != id_field}
+    # See _make_appeared_events for why we iterate via to_dict("records")
+    # rather than iterrows() — it preserves per-column dtypes.
+    for record in df.to_dict(orient="records"):
+        raw_id = record[id_field]
+        payload = {
+            k: _serialize_value(v) for k, v in record.items() if k != id_field
+        }
         events.append(
             {
                 "source": source_name,
@@ -221,7 +226,13 @@ def _diff_dataframes(
                     events.append(
                         {
                             "source": source_name,
-                            "entity_id": str(eid),
+                            # All event types must share one stringification
+                            # path; otherwise field_changed emits "1" while
+                            # row_appeared emits "1.0" (or vice versa for
+                            # large int64 after float-promotion), and
+                            # enrich_events join on [source, entity_id]
+                            # misses.
+                            "entity_id": _stringify_id(eid),
                             "ts": snapshot_date,
                             "event_type": "field_changed",
                             "payload": json.dumps(payload),

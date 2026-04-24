@@ -517,6 +517,82 @@ class TestM071StringifyId:
         assert entity_ids == sorted([str(large_id), str(large_id + 2)])
         assert len(set(entity_ids)) == 2
 
+    def test_payload_preserves_large_int_precision(self) -> None:
+        """CodeRabbit round-2: payload values must also preserve precision.
+
+        Before the to_dict("records") switch, payload was built from the
+        iterrows() Series which upcasts any int column to float64 when a
+        sibling column is float. That silently corrupted any integer
+        payload field above 2**53.
+        """
+        import json
+
+        import pandas as pd
+
+        large_payload_int = 2**53 + 1
+        current = ibis.memtable(
+            pd.DataFrame(
+                {
+                    "id": [1, 2],
+                    # int64 payload column alongside a float column — the
+                    # combination that used to trigger the upcast.
+                    "account_id": pd.Series(
+                        [large_payload_int, large_payload_int + 2],
+                        dtype="int64",
+                    ),
+                    "score": [1.5, 2.5],
+                }
+            )
+        )
+
+        result = diff_snapshots(
+            current,
+            previous=None,
+            source_name="src",
+            id_field="id",
+            snapshot_date="2026-01-01",
+        )
+        df = result.execute()
+        payloads = [json.loads(p) for p in df["payload"].tolist()]
+        account_ids = [p["account_id"] for p in payloads]
+        assert account_ids == [large_payload_int, large_payload_int + 2]
+        # Must stay distinct after round-trip: precision was not lost.
+        assert len(set(account_ids)) == 2
+
+    def test_field_changed_entity_id_matches_row_appeared_shape(self) -> None:
+        """CodeRabbit round-2: field_changed must stringify entity_id the
+        same way as row_appeared / row_disappeared. Otherwise the
+        enrich_events join on (source, entity_id) misses for any id that
+        stringifies differently under str() vs _stringify_id() — e.g.,
+        pandas promotes int64 ids to float for the set() lookup, yielding
+        "1.0" from str(eid) but "1" from _stringify_id(raw_id).
+        """
+        import pandas as pd
+
+        previous = ibis.memtable(
+            pd.DataFrame({"id": [1, 2], "score": [1.5, 2.5]})
+        )
+        # Same ids, changed score -> should emit field_changed events.
+        current = ibis.memtable(
+            pd.DataFrame({"id": [1, 2], "score": [9.9, 8.8]})
+        )
+
+        result = diff_snapshots(
+            current,
+            previous,
+            source_name="src",
+            id_field="id",
+            snapshot_date="2026-01-02",
+        )
+        df = result.execute()
+        field_changed = df[df["event_type"] == "field_changed"]
+        entity_ids = sorted(field_changed["entity_id"].tolist())
+        # All field_changed entity_ids must be int-shaped ("1", "2") —
+        # never "1.0" / "2.0" — to match the shape emitted by the
+        # appeared/disappeared paths.
+        assert entity_ids == ["1", "2"]
+        assert all("." not in eid for eid in entity_ids)
+
 
 class TestM051ResolveLatestFallsThroughNone:
     """Issue #93: ``latest`` state-field resolution must skip None rows

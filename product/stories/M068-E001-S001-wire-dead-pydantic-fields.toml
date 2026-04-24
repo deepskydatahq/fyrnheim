@@ -1,0 +1,406 @@
+id = "M068-E001-S001"
+parent = "M068-E001"
+title = "Wire SourceTransforms + StateSource.computed_columns + v0.8.2 release"
+status = "ready"
+created = 2026-04-24
+
+[outcome]
+description = """Add shared _apply_source_transforms helper; wire
+transforms on both EventSource and StateSource load paths; wire
+StateSource.computed_columns; add unit + e2e tests; bump 0.8.1 -> 0.8.2
+with CHANGELOG entry; push release/v0.8.2 branch; open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New file src/fyrnheim/engine/source_transforms.py with a single exported helper `_apply_source_transforms(table: ibis.Table, transforms: SourceTransforms | None) -> ibis.Table`. If transforms is None, return table unchanged. Otherwise apply in order: (1) type_casts via `table.mutate(**{tc.field: table[tc.field].cast(tc.target_type)})`, (2) divides via `table.mutate(**{f'{d.field}{d.suffix}': (table[d.field] / d.divisor).cast(d.target_type)})`, (3) multiplies (same shape as divides), (4) renames via `table.rename({r.to_name: r.from_name})` (ibis rename takes {new: old})."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source in src/fyrnheim/engine/event_source_loader.py imports _apply_source_transforms and applies it after `table = event_source.read_table(...)` and BEFORE the existing computed_columns mutate at lines 44-46. The existing computed_columns application is unchanged."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_load_state_source in src/fyrnheim/engine/pipeline.py imports _apply_source_transforms. After `table = source.read_table(...)` (line 335) and BEFORE the `if source.full_refresh:` branch (line 337), apply transforms then computed_columns: `table = _apply_source_transforms(table, source.transforms)` then `if source.computed_columns: for cc in source.computed_columns: table = table.mutate(**{cc.name: eval(cc.expression, {'ibis': ibis, 't': table})})  # noqa: S307`. Both full_refresh and snapshot_diff paths then see the transformed table."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New test file tests/test_source_transforms.py exercising the helper directly (not through the loaders). Tests: test_apply_transforms_none_returns_unchanged, test_type_cast_applied, test_rename_applied, test_divide_creates_suffixed_column_with_default_suffix, test_multiply_creates_suffixed_column_with_default_suffix, test_transform_order_cast_then_divide_then_rename (verifies the order)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "In tests/test_event_source_loader.py add test_event_source_transforms_rename: an EventSource with transforms=SourceTransforms(renames=[Rename(from_name='customer_id', to_name='user_id')]) and entity_id_field='user_id', assert the emitted events have entity_id from the renamed column. Confirms transforms apply before the entity_id_field mapping."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "In tests/test_event_source_loader.py add test_event_source_transforms_type_cast: an EventSource with a numeric-string `amount` column and transforms=SourceTransforms(type_casts=[TypeCast(field='amount', target_type='float64')]), assert the emitted payload reflects the cast."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "In tests/test_snapshot_diff.py add test_state_source_transforms_rename: a StateSource run through SnapshotDiffPipeline with transforms=SourceTransforms(renames=[Rename(from_name='id', to_name='account_id')]) and id_field='account_id'. Assert the saved snapshot and emitted events use the renamed column."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "In tests/test_snapshot_diff.py add test_state_source_computed_columns_applied: StateSource with computed_columns=[ComputedColumn(name='full_name', expression='t.first + \" \" + t.last')], assert the row_appeared events' payload contains full_name."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "In tests/test_snapshot_diff.py add test_computed_columns_see_transformed_columns: StateSource with transforms=SourceTransforms(renames=[Rename(from_name='id', to_name='account_id')]) AND computed_columns=[ComputedColumn(name='prefix', expression='t.account_id')]. Assert the computed column resolves successfully (proves transforms apply before computed_columns)."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "New e2e test in tests/test_e2e_identity_projection.py (or a dedicated new file if simpler): StateSource with transforms=SourceTransforms(renames=[Rename(from_name='id', to_name='opportunity_id')]) and id_field='opportunity_id', plus a computed_column, flows through SnapshotDiffPipeline + identity graph + project_analytics_entity. Assert the downstream entity materialization contains the transformed schema (the renamed id and the computed column)."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged: test_snapshot_diff.py (M066+M067 behavior), test_snapshot_store.py, test_e2e_entity_output.py (M066 regression test), test_e2e_identity_projection.py, test_analytics_entity_engine.py, test_event_source_loader.py (pre-existing tests)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version field updated from '0.8.1' to '0.8.2'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated via `uv lock`; fyrnheim entry records 0.8.2"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.8.2] - 2026-04-24` section (today's date) above `## [0.8.1]` with a `### Fixed` subsection. Text: 'SourceTransforms (renames, type_casts, divides, multiplies) were declared on StateSource/EventSource pydantic models but never applied by the engine — they are now honored at source read time. StateSource.computed_columns were similarly ignored — they now apply at read time matching EventSource behavior. If you set transforms or computed_columns on a StateSource today expecting them to be ignored, this is a behavior change — but that setup contradicts the documented model intent.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/engine/source_transforms.py (new), src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, tests/test_source_transforms.py (new), tests/test_event_source_loader.py (2 new tests), tests/test_snapshot_diff.py (3 new tests), tests/test_e2e_identity_projection.py (1 new test), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify src/fyrnheim/core/source.py, src/fyrnheim/engine/snapshot_diff.py, src/fyrnheim/engine/diff_engine.py, src/fyrnheim/engine/snapshot_store.py, src/fyrnheim/engine/analytics_entity_engine.py, src/fyrnheim/engine/identity_engine.py, or any other source file."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.8.2` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M068): wire SourceTransforms and StateSource.computed_columns into the engine (v0.8.2)`"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.8.2 — wire dead SourceTransforms + StateSource.computed_columns`. Body includes: dead-field context, migration-unblock context (Pardot SQL migration Phase 1), transform-order contract, post-merge-steps block."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- product/missions/M068-v0.8.2-wire-dead-pydantic-fields.toml (full
+  outcome, transform-order rationale, Ibis op choices, eval pattern)
+- product/epics/M068-E001-wire-dead-pydantic-fields.toml
+- product/stories/M068-E001-S001-wire-dead-pydantic-fields.toml
+
+Read all three before starting.
+
+## Implementation sketch
+
+### 1. New helper: src/fyrnheim/engine/source_transforms.py
+
+```python
+\"\"\"Source-level transforms applied at read time.
+
+Shared by load_event_source and _load_state_source. Applies
+SourceTransforms in a stable order: type_casts → divides → multiplies
+→ renames. Renames last so users can rename any column including ones
+just produced by divides/multiplies.
+\"\"\"
+
+from __future__ import annotations
+
+import ibis
+
+from fyrnheim.core.source import SourceTransforms
+
+
+def _apply_source_transforms(
+    table: ibis.Table,
+    transforms: SourceTransforms | None,
+) -> ibis.Table:
+    \"\"\"Apply read-time transforms to a source table.
+
+    Order: type_casts → divides → multiplies → renames.
+
+    * type_casts first so subsequent divide/multiply operations see
+      the cast column type.
+    * divides / multiplies create suffixed columns; originals are
+      preserved.
+    * renames last so users can rename any column (original or
+      suffixed derived).
+    \"\"\"
+    if transforms is None:
+        return table
+
+    for tc in transforms.type_casts:
+        table = table.mutate(**{tc.field: table[tc.field].cast(tc.target_type)})
+
+    for d in transforms.divides:
+        new_col = f"{d.field}{d.suffix}"
+        table = table.mutate(**{
+            new_col: (table[d.field] / d.divisor).cast(d.target_type)
+        })
+
+    for m in transforms.multiplies:
+        new_col = f"{m.field}{m.suffix}"
+        table = table.mutate(**{
+            new_col: (table[m.field] * m.multiplier).cast(m.target_type)
+        })
+
+    for r in transforms.renames:
+        # ibis .rename takes {new: old}
+        table = table.rename({r.to_name: r.from_name})
+
+    return table
+```
+
+### 2. Wire in event_source_loader.py
+
+Current code at lines 41-46:
+
+```python
+table = event_source.read_table(conn, backend, data_dir=data_dir)
+
+# Apply computed columns before reading data
+if event_source.computed_columns:
+    for cc in event_source.computed_columns:
+        table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+```
+
+New code:
+
+```python
+from fyrnheim.engine.source_transforms import _apply_source_transforms
+
+# ...
+
+table = event_source.read_table(conn, backend, data_dir=data_dir)
+
+# Apply transforms (type_casts, renames, divides, multiplies) at read time
+table = _apply_source_transforms(table, event_source.transforms)
+
+# Apply computed columns after transforms (users reference post-transform columns)
+if event_source.computed_columns:
+    for cc in event_source.computed_columns:
+        table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+```
+
+### 3. Wire in pipeline.py _load_state_source
+
+Current code at lines 323-358:
+
+```python
+def _load_state_source(source, config, conn):
+    table = source.read_table(conn, config.backend, data_dir=config.data_dir)
+
+    if source.full_refresh:
+        # emit replay events ...
+        return events
+
+    snapshot_dir = Path(config.output_dir) / "snapshots"
+    store = SnapshotStore(snapshot_dir, conn)
+    pipeline = SnapshotDiffPipeline(store, conn)
+    return pipeline.run(...)
+```
+
+New code (insert transform + computed_columns application after read_table):
+
+```python
+from fyrnheim.engine.source_transforms import _apply_source_transforms
+
+def _load_state_source(source, config, conn):
+    table = source.read_table(conn, config.backend, data_dir=config.data_dir)
+
+    # M068: apply transforms then computed_columns at read time.
+    # Both full_refresh and snapshot_diff paths see the transformed table.
+    table = _apply_source_transforms(table, source.transforms)
+    if source.computed_columns:
+        for cc in source.computed_columns:
+            table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+
+    if source.full_refresh:
+        # emit replay events over the transformed table ...
+        return events
+
+    # snapshot-diff path over the transformed table
+    snapshot_dir = Path(config.output_dir) / "snapshots"
+    store = SnapshotStore(snapshot_dir, conn)
+    pipeline = SnapshotDiffPipeline(store, conn)
+    return pipeline.run(...)
+```
+
+### 4. Tests
+
+**tests/test_source_transforms.py** (new file): direct tests against
+the helper using `ibis.memtable(pd.DataFrame(...))`.
+
+```python
+import ibis
+import pandas as pd
+import pytest
+
+from fyrnheim.core.source import (
+    SourceTransforms, TypeCast, Rename, Divide, Multiply,
+)
+from fyrnheim.engine.source_transforms import _apply_source_transforms
+
+
+def _make_table():
+    return ibis.memtable(pd.DataFrame({
+        "id": [1, 2, 3],
+        "amount_cents": [1000, 2500, 4200],
+        "name": ["a", "b", "c"],
+    }))
+
+
+def test_apply_transforms_none_returns_unchanged():
+    t = _make_table()
+    result = _apply_source_transforms(t, None)
+    assert result is t
+
+
+def test_type_cast_applied():
+    t = _make_table()
+    transforms = SourceTransforms(type_casts=[
+        TypeCast(field="amount_cents", target_type="float64"),
+    ])
+    result = _apply_source_transforms(t, transforms)
+    assert result.schema()["amount_cents"] == ibis.dtype("float64")
+
+
+def test_rename_applied():
+    t = _make_table()
+    transforms = SourceTransforms(renames=[
+        Rename(from_name="id", to_name="account_id"),
+    ])
+    result = _apply_source_transforms(t, transforms)
+    assert "account_id" in result.columns
+    assert "id" not in result.columns
+
+
+def test_divide_creates_suffixed_column_with_default_suffix():
+    t = _make_table()
+    transforms = SourceTransforms(divides=[
+        Divide(field="amount_cents", divisor=100.0),
+    ])
+    result = _apply_source_transforms(t, transforms)
+    assert "amount_cents_amount" in result.columns
+    # Original preserved
+    assert "amount_cents" in result.columns
+    df = result.execute()
+    assert df["amount_cents_amount"].tolist() == [10.0, 25.0, 42.0]
+
+
+def test_multiply_creates_suffixed_column_with_default_suffix():
+    t = _make_table()
+    transforms = SourceTransforms(multiplies=[
+        Multiply(field="amount_cents", multiplier=2.0),
+    ])
+    result = _apply_source_transforms(t, transforms)
+    assert "amount_cents_value" in result.columns
+
+
+def test_transform_order_cast_then_divide_then_rename():
+    t = _make_table()
+    transforms = SourceTransforms(
+        type_casts=[TypeCast(field="amount_cents", target_type="float64")],
+        divides=[Divide(field="amount_cents", divisor=100.0)],
+        renames=[Rename(from_name="amount_cents", to_name="amount_raw")],
+    )
+    result = _apply_source_transforms(t, transforms)
+    # After cast+divide+rename: amount_cents was divided into amount_cents_amount,
+    # then amount_cents was renamed to amount_raw.
+    assert "amount_raw" in result.columns
+    assert "amount_cents_amount" in result.columns
+    assert "amount_cents" not in result.columns
+```
+
+Verify the exact dtype / schema access pattern works on ibis — if
+`.schema()['col']` returns a different type representation, adjust
+the assertion. The behavior (cast worked) is what matters, not the
+exact API shape.
+
+**tests/test_event_source_loader.py**: add the 2 event source tests.
+**tests/test_snapshot_diff.py**: add the 3 state source tests (near the
+existing TestSnapshotDiffPipelineUnit / TestSnapshotDiffPipelineE2E
+classes). Reuse existing fixtures.
+**tests/test_e2e_identity_projection.py**: add the 1 e2e test.
+
+### 5. CHANGELOG [0.8.2]
+
+```
+## [0.8.2] - 2026-04-24
+
+### Fixed
+
+- `SourceTransforms` (`renames`, `type_casts`, `divides`, `multiplies`)
+  were declared on `StateSource` and `EventSource` pydantic models but
+  never applied by the engine. They are now honored at source read
+  time, in the order: `type_casts → divides → multiplies → renames`.
+- `StateSource.computed_columns` were similarly declared but ignored
+  by `_load_state_source`. They now apply at read time matching the
+  existing `EventSource` behavior. Computed columns are applied
+  **after** transforms, so expressions can reference renamed or
+  cast columns.
+- Migration note: if you set `transforms` or `computed_columns` on a
+  `StateSource` today expecting them to be silently ignored, this is
+  a behavior change — but that setup contradicts the documented model
+  intent, so it should be rare in practice. Unblocks the first phase
+  of migrating SQL staging views to declarative pydantic sources.
+```
+
+### 6. Release-flow rituals (same as M063/M064/M065/M066/M067)
+
+1. `git branch -m release/v0.8.2`
+2. Claim Beads
+3. Implement the helper + wire both loaders + tests
+4. `uv lock` + CHANGELOG
+5. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/` — all clean
+6. Single commit: `fix(M068): wire SourceTransforms and StateSource.computed_columns into the engine (v0.8.2)`
+7. Close Beads, push, open PR with post-merge-steps block
+8. STOP — do not merge/tag/publish
+
+## Do NOT
+
+- Touch src/fyrnheim/core/source.py — no model changes this mission
+  (new fields are M069)
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py,
+  identity_engine.py, analytics_entity_engine.py
+- Use pandas for transforms — ibis ops only (push-down-safe)
+- Add behavior-change flags or opt-outs — the fix IS the default
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M068-v0.8.2-wire-dead-pydantic-fields.toml",
+    "product/epics/M068-E001-wire-dead-pydantic-fields.toml",
+    "product/stories/M067-E001-S001-empty-current-replay-guard.toml",
+]

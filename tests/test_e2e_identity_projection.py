@@ -402,3 +402,139 @@ def test_m069_statesource_json_path_and_filter_e2e(tmp_path: Path) -> None:
             continue
         account_types.add(str(v))
     assert account_types == {"premium", "free"}
+
+
+def test_m072_fixture_is_transformed_e2e(tmp_path: Path) -> None:
+    """M072 e2e: a StateSource with `duckdb_fixture_is_transformed=True`
+    + `duckdb_path` pointing at a post-transform fixture + transforms that
+    WOULD fail if applied (rename targeting a pre-transform column that is
+    already renamed in the fixture).
+
+    Assertion: downstream entity materializes successfully — proving that
+    transforms were skipped. If the flag were not honored, the rename
+    `Rename(from_name='id', to_name='account_id')` would fail because the
+    fixture has `account_id` directly, not `id`.
+
+    This matches the M012 migration-report scenario: a Pardot fixture
+    that is a post-transform snapshot (column `account_id` already
+    renamed from raw BQ `id`). With the flag, the pydantic source model
+    can declare the full transforms (documenting what BQ does) while
+    the DuckDB fixture serves as the final shape.
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    parquet_path = data_dir / "pardot_accounts.parquet"
+    # Post-transform shape: `account_id` (renamed from raw `id`) and
+    # `account_type` (already extracted from the raw `custom_type` JSON).
+    df = pd.DataFrame(
+        {
+            "account_id": ["A1", "A2"],
+            "account_type": ["premium", "free"],
+            "status": ["active", "active"],
+        }
+    )
+    df.to_parquet(str(parquet_path))
+
+    state_source = StateSource(
+        name="pardot_accounts",
+        project="test",
+        dataset="test",
+        table="pardot_accounts",
+        duckdb_path=str(parquet_path),
+        duckdb_fixture_is_transformed=True,  # FR-8: skip transforms on DuckDB
+        id_field="account_id",  # post-rename name
+        # The BQ path WOULD apply these: rename raw `id` to `account_id`,
+        # extract `$.value` from a raw JSON `custom_type` column, filter
+        # inactive rows. On DuckDB with the flag, all three are skipped —
+        # the fixture is assumed to already be in this shape.
+        transforms=SourceTransforms(
+            renames=[Rename(from_name="id", to_name="account_id")]
+        ),
+        fields=[
+            Field(
+                name="account_type",
+                type="STRING",
+                json_path="$.value",
+                source_column="custom_type",
+            )
+        ],
+        filter='t.status == "active"',
+    )
+
+    config = ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=data_dir,
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+
+    conn = ibis.duckdb.connect()
+    # If transforms were applied despite the flag, this would raise.
+    state_events = _load_state_source(state_source, config, conn)
+    se_df = state_events.execute()
+    assert len(se_df) == 2
+    assert set(se_df["entity_id"]) == {"A1", "A2"}
+
+    # Payloads reflect the fixture's raw shape (skip path).
+    payloads = [json.loads(p) for p in se_df["payload"].tolist()]
+    extracted = {p["account_type"] for p in payloads}
+    assert extracted == {"premium", "free"}
+
+    # --- Add a second source so IdentityGraph is valid (>= 2 sources).
+    evt_events = ibis.memtable(
+        pd.DataFrame(
+            {
+                "source": ["crm_activity"],
+                "entity_id": ["evt-1"],
+                "ts": ["2026-04-22T10:00:00"],
+                "event_type": ["note_added"],
+                "payload": ['{"account_id": "A1"}'],
+            }
+        )
+    )
+    all_events = ibis.memtable(
+        pd.concat([se_df, evt_events.execute()], ignore_index=True)
+    )
+
+    graph = IdentityGraph(
+        name="pardot_acct_graph",
+        canonical_id="canonical_account_id",
+        sources=[
+            IdentitySource(
+                source="pardot_accounts",
+                id_field="account_id",
+                match_key_field="account_id",
+            ),
+            IdentitySource(
+                source="crm_activity",
+                id_field="event_id",
+                match_key_field="account_id",
+            ),
+        ],
+    )
+    mapping = resolve_identities(all_events, graph)
+    enriched = enrich_events(all_events, mapping)
+
+    entity = AnalyticsEntity(
+        name="pardot_account",
+        identity_graph="pardot_acct_graph",
+        state_fields=[
+            StateField(
+                name="account_type",
+                source="pardot_accounts",
+                field="account_type",
+                strategy="latest",
+            ),
+        ],
+    )
+    projected = project_analytics_entity(enriched, entity).execute()
+
+    # Downstream entity sees the fixture-as-is: both account_type values
+    # present, proving the skip path produced a correctly-shaped entity.
+    account_types = set()
+    for v in projected["account_type"].tolist():
+        if v is None:
+            continue
+        account_types.add(str(v))
+    assert account_types == {"premium", "free"}

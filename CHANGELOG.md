@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-04-24
+
+### Added
+
+- `BaseTableSource.duckdb_fixture_is_transformed: bool = False` —
+  when True AND the source reads from its `duckdb_path` parquet AND
+  the backend is DuckDB, the engine SKIPS `transforms`, `fields`
+  (json_path extraction), and `filter` at source read time. Use this
+  when your parquet fixture is a post-transform snapshot of the
+  BigQuery output — the fixture IS the final shape, and re-applying
+  transforms would either fail (pre-rename columns missing) or
+  double-transform. Unblocks migrating SQL staging views to
+  declarative pydantic sources when the DuckDB fixture is
+  post-transform. Applies to `StateSource`, `EventSource`,
+  `TableSource`, and `DerivedSource` via inheritance. Gate condition
+  (all three must hold): flag=True AND `config.backend == "duckdb"`
+  AND `source.duckdb_path` is truthy (non-empty string). Mirrors
+  the parquet-read branch of `BaseTableSource.read_table`, which
+  rejects empty strings via `if not self.duckdb_path`.
+- Diagnostic INFO log line on the skip path:
+  `StateSource/EventSource %s: duckdb_fixture_is_transformed=True,
+  skipping transforms/fields/filter (reading duckdb_path fixture)`.
+
+### Notes
+
+- **`computed_columns` still apply on the skip path.** Computed
+  expressions are backend-independent — they evaluate the same way
+  against the post-transform shape on DuckDB as on BigQuery. No
+  reason to skip them; applying them keeps backend-parity on the
+  derived-column layer. The skip is all-or-nothing for the
+  transforms / json_path / filter stages; `computed_columns` is a
+  separate stage with different semantics and remains active.
+- **Backend-parity warning**: if you set
+  `duckdb_fixture_is_transformed=True` but your fixture is NOT
+  actually in post-transform shape, DuckDB-only runs will produce
+  wrong results with no automatic error. Catch this with
+  cross-backend tests. The flag is explicit opt-in, not
+  auto-detected, so the mistake is visible at the source
+  declaration site.
+- **Default `False` preserves v0.9.1 behavior.** Users who do not
+  opt in see identical uniform-transform application on both
+  backends.
+- **FR-5 (source-level joins) deferred to M070.** With this flag,
+  the two Pardot sources that need joins can keep their
+  `StagingView` SQL for the join layer and migrate everything else
+  to pydantic — no urgent need for a source-level `joins` API.
+
 ## [0.9.1] - 2026-04-24
 
 ### Fixed

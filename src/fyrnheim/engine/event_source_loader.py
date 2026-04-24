@@ -7,6 +7,7 @@ source, entity_id, ts, event_type, payload — all as strings.
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 import ibis
@@ -17,7 +18,10 @@ from fyrnheim.core.source import EventSource
 from fyrnheim.engine.source_transforms import (
     _apply_json_path_extractions,
     _apply_source_transforms,
+    _reads_duckdb_fixture,
 )
+
+log = logging.getLogger("fyrnheim.event_source_loader")
 
 
 def load_event_source(
@@ -44,16 +48,35 @@ def load_event_source(
     """
     table = event_source.read_table(conn, backend, data_dir=data_dir)
 
-    # M068: apply read-time transforms (type_casts, divides, multiplies, renames)
-    # before computed_columns so user expressions can reference the transformed schema.
-    table = _apply_source_transforms(table, event_source.transforms)
+    # M072 (FR-8): when the source opts into fixture-shadow mode AND the
+    # engine is reading the duckdb_path parquet (i.e. backend=duckdb +
+    # duckdb_path set — mirrors BaseTableSource.read_table's parquet-read
+    # branch), skip transforms / json_path / filter. The fixture is
+    # assumed to be in post-transform shape; re-applying transforms would
+    # either fail (pre-rename columns missing) or double-transform.
+    # computed_columns STILL APPLY on the skip path — they are
+    # backend-independent expressions, not transforms.
+    reads_fixture = _reads_duckdb_fixture(event_source, backend)
 
-    # M069: extract json_path fields AFTER renames (users can rename a JSON
-    # column and extract from the renamed name) and BEFORE computed_columns
-    # (so user expressions can reference the extracted typed columns).
-    table = _apply_json_path_extractions(table, event_source.fields)
+    if reads_fixture:
+        log.info(
+            "EventSource %s: duckdb_fixture_is_transformed=True, "
+            "skipping transforms/fields/filter (reading duckdb_path fixture)",
+            event_source.name,
+        )
+    else:
+        # M068: apply read-time transforms (type_casts, divides, multiplies, renames)
+        # before computed_columns so user expressions can reference the transformed schema.
+        table = _apply_source_transforms(table, event_source.transforms)
 
-    # Apply computed columns after transforms (users reference post-transform columns)
+        # M069: extract json_path fields AFTER renames (users can rename a JSON
+        # column and extract from the renamed name) and BEFORE computed_columns
+        # (so user expressions can reference the extracted typed columns).
+        table = _apply_json_path_extractions(table, event_source.fields)
+
+    # Apply computed columns after transforms (users reference post-transform columns).
+    # M072: computed_columns ALWAYS apply — they are backend-independent expressions
+    # that evaluate the same way against the post-transform shape on any backend.
     if event_source.computed_columns:
         for cc in event_source.computed_columns:
             table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
@@ -61,7 +84,9 @@ def load_event_source(
     # M069: source-level filter applied AFTER computed_columns so users can
     # filter on computed values. See BaseTableSource.filter docstring for
     # NULL-gotcha and the .fillna(False) escape hatch.
-    if event_source.filter:
+    # M072: skipped on the fixture-shadow path (the fixture is assumed to
+    # already be filtered to the post-transform row set).
+    if not reads_fixture and event_source.filter:
         table = table.filter(
             eval(event_source.filter, {"ibis": ibis, "t": table})  # noqa: S307
         )

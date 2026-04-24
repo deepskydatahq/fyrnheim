@@ -1,0 +1,95 @@
+# Epic: M071 v0.9.1 patch — int64 entity_id fix + regression test
+# Single epic mirroring M063/M064/M065/M067 patch shape.
+
+id = "M071-E001"
+parent = "M071"
+title = "Preserve int-shape for integer id columns + v0.9.1 release"
+status = "active"
+created = 2026-04-24
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M071 scope:
+
+Phase 1: systematic-debugging trace of the int→float promotion
+chain (ibis.memtable.execute / SnapshotStore parquet round-trip /
+_make_appeared_events pandas iteration). Identify the specific layer
+where int64 becomes float64.
+
+Phase 2: narrow fix at the identified layer. Candidate preferred:
+defensive int-aware stringification helper in diff_engine._make_
+appeared_events / _make_disappeared_events — smallest blast radius.
+Planner may override if Phase 1 shows a cleaner layer.
+
+Regression test (written BEFORE the fix per systematic-debugging
+discipline): StateSource with int64 id column, assert entity_ids are
+int-shaped strings (no ".0" suffix).
+
+Bump 0.9.0 → 0.9.1 with CHANGELOG entry. Open release/v0.9.1 PR.
+
+Closes Beads tasks typedata-nfj6 (bug) and typedata-ta1i (regression
+test) when the PR merges.
+"""
+
+[job_story]
+description = """When my StateSource has an integer id column, I want
+downstream identity resolution to receive int-shaped entity_ids ('1',
+'2', '3') matching what I'd get on BigQuery — not float-shaped strings
+('1.0', '2.0', '3.0') that silently break joins and mappings across
+the pipeline."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Phase 1 investigation in the plan/implementation notes identifies the exact layer where int→float promotion happens (ibis / parquet / pandas iteration). Include reproduction evidence (dtypes at each step)",
+    "Failing regression test written BEFORE the fix (systematic-debugging Phase 4 discipline). test_int64_id_column_preserves_int_shape or equivalent in tests/test_snapshot_diff.py or tests/test_diff_engine.py",
+    "Fix applied at the identified layer; regression test passes after fix",
+    "No existing test regresses: full test suite green",
+    "ruff + mypy clean",
+    "pyproject.toml 0.9.0 -> 0.9.1; uv.lock regenerated",
+    "CHANGELOG [0.9.1] Fixed entry citing the bug with concrete reproduction evidence",
+    "Branch release/v0.9.1, single commit, PR with post-merge-steps block",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "tests/test_diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Full Phase 1 investigation checklist, candidate fix layers, and
+release-flow rituals are in the M071 mission TOML [notes] section. Read
+that first.
+
+This epic MUST start with systematic-debugging Phase 1 before proposing
+any fix. Phase 1 is not optional — guessing the layer would produce
+fragile fixes that mask the real dtype-promotion chain.
+
+Safety: patch release per release-discipline memory. No API change;
+fix aligns with documented intent (int-shaped ids were always meant to
+be int-shaped; the promotion is silent wrong behavior).
+"""
+
+estimated_stories = 1

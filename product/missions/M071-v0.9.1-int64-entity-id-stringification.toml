@@ -1,0 +1,259 @@
+# Mission: v0.9.1 patch — preserve int-shape for integer id columns
+# Field bug reported during /retro on 2026-04-24. StateSource with int64
+# id column emits entity_id as "1.0" (float-string) instead of "1"
+# (int-string). Breaks identity resolution silently for any source with
+# integer ids — a core correctness bug that surfaced when the M069 agent
+# flagged it and the evaluator's weak assertion missed it.
+#
+# Status=draft — root cause location is unclear (pandas/ibis/parquet
+# dtype chain). Phase 1 investigation must isolate the layer before
+# Phase 2 fix.
+
+id = "M071"
+title = "v0.9.1 — preserve int-shape for integer id columns in SnapshotDiffPipeline"
+status = "draft"
+created = 2026-04-24
+depends_on = []
+
+[outcome]
+description = """
+**Bug:** SnapshotDiffPipeline emits `entity_id = "1.0"` (float-string)
+instead of `"1"` (int-string) when the source's `id_field` is an int64
+column. Reproduced during /retro 2026-04-24 with a 3-row fixture on
+v0.9.0:
+
+```python
+df = pd.DataFrame({'id': [1, 2, 3], 'score': [3.14, 2.71, 1.41]})
+t = ibis.memtable(df)
+r1 = pipe.run('src', t, id_field='id', snapshot_date=datetime.date(2026,1,1))
+# r1 entity_ids == ['1.0', '2.0', '3.0']  — should be ['1', '2', '3']
+```
+
+**Impact:** Breaks identity resolution for any StateSource with integer
+ids. `identity_engine.resolve_identities` compares entity_ids as strings,
+so `'1.0' != '1'` — any downstream system that expects int-shaped string
+keys (joins, mappings, explicit id references, cross-pipeline entity
+matching) silently produces wrong results.
+
+Pre-existing bug, not caused by M066/M067/M068/M069. Surfaced during
+M069 test-writing; the M069 agent flagged it in their implementation
+notes; the evaluator's probe used weak assertions (`len==2`) that didn't
+reach the exact string shape. Retro reproduced it with a minimal
+fixture.
+
+**Root cause (suspected, needs confirmation in Phase 1):** somewhere in
+the `current_table.execute()` → pandas DataFrame → `_make_appeared_events`
+path, pandas silently promotes int64 → float64. Then
+`diff_engine._make_appeared_events:96` does `str(row[id_field])`, and
+`str(np.float64(1.0))` = `"1.0"`.
+
+Candidate promotion sites (Phase 1 must isolate):
+1. `ibis.memtable(pd.DataFrame).execute()` — ibis memtable → pandas
+2. `SnapshotStore.save/get_previous` parquet round-trip (saving then
+   loading may lose int precision if any null appears)
+3. `_make_appeared_events` iteration over the DataFrame
+
+**Scope (narrow, patch-shaped):**
+
+1. Phase 1: systematic-debugging trace of the int→float promotion.
+   Identify the exact layer and the conditions under which it fires.
+2. Phase 2: fix at the correct layer. Candidate fixes:
+   - Preserve int64 through ibis.memtable.execute() (if that's where it
+     promotes — may require upstream ibis fix or a wrapper)
+   - Preserve int64 through SnapshotStore parquet round-trip (explicit
+     dtype-preserving save/load)
+   - Add an int-aware stringification helper in
+     `_make_appeared_events` (defensive: if value is float-with-no-
+     fractional-part, cast to int before str)
+3. Regression test (`typedata-ta1i` already filed): StateSource with
+   int64 id column, assert entity_ids are int-shaped strings.
+4. Ship as v0.9.1 patch via release-PR flow.
+
+**Not in scope:**
+- Broader dtype-preservation refactor (M020-adjacent; keep narrow)
+- Changes to identity_engine or analytics_entity_engine
+- Any new API surface (patch = no API changes)
+- Batching with other patches (snapshot_grain / UnionSource decisions are
+  separate missions; do not mix with a narrow bug fix)
+
+**Release discipline:** patch v0.9.1 per release-discipline memory. This
+is strictly fix-aligns-with-intent — identity_ids for int sources were
+always meant to be int-shaped strings; the promotion is silent wrong
+behavior.
+"""
+
+user_progress = "From 'SnapshotDiffPipeline emits entity_id as 1.0 for int64 id columns, silently breaking identity resolution' to 'int-shape preserved through the pipeline with a pinned regression test, shipped as v0.9.1 patch'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Phase 1 investigation documented in the plan: specific layer where int→float promotion happens (ibis.memtable.execute, SnapshotStore round-trip, or pandas iteration), with reproduction evidence",
+    "Failing regression test in place BEFORE the fix: tests/test_snapshot_diff.py (or test_diff_engine.py) asserts entity_ids == ['1', '2', '3'] for a fixture with df = pd.DataFrame({'id': [1,2,3], ...})",
+    "Fix applied at the correct layer per Phase 1. Documented rationale for why the chosen layer vs alternatives",
+    "Regression test passes after fix",
+    "No other test regresses: 577-test suite green (M069 baseline)",
+    "ruff + mypy clean",
+    "pyproject.toml 0.9.0 -> 0.9.1; uv.lock regenerated",
+    "CHANGELOG.md has `## [0.9.1] - YYYY-MM-DD` above `## [0.9.0]` with `### Fixed` citing the int64 entity_id bug + its identity-resolution impact + the concrete reproduction evidence",
+    "Branch `release/v0.9.1`, single commit, message matching patch convention",
+    "PR opened with post-merge-steps block. Do NOT merge/tag/publish",
+    "Diff scope: whichever file(s) host the correct fix layer (likely diff_engine.py OR snapshot_diff.py OR snapshot_store.py — Phase 1 determines) + the regression test file + pyproject.toml + uv.lock + CHANGELOG.md. Do NOT touch core/source.py, identity_engine.py, analytics_entity_engine.py, source_transforms.py, pipeline.py unless Phase 1 concludes the fix belongs there",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "tests/test_diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/snapshot_store.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_diff_engine.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M066 / M067 / M068 / M069 — v0.8.0-v0.9.0 release arc (bug is pre-existing, surfaced during this arc's test writing)",
+]
+related_tasks = [
+    "typedata-nfj6 — Beads bug task (int64 entity_id '1.0' — this mission is the planned fix)",
+    "typedata-ta1i — Beads regression-test task (pairs with this mission; the failing test goes in the same PR)",
+]
+
+[scope]
+in_scope = [
+    "Phase 1 systematic-debugging trace of the int→float promotion chain",
+    "Phase 2 fix at the identified layer",
+    "Regression test: int64 id column → entity_ids are int-shaped strings",
+    "Version bump 0.9.0 → 0.9.1 + uv.lock regen",
+    "CHANGELOG [0.9.1] Fixed entry with reproduction evidence",
+    "release/v0.9.1 branch + PR with post-merge-steps block",
+    "Close typedata-nfj6 + typedata-ta1i when the PR merges",
+]
+out_of_scope = [
+    "Broader dtype-preservation refactor (this is one specific bug; avoid scope creep)",
+    "Changes to identity_engine or analytics_entity_engine (not the bug layer)",
+    "Any new API surface (patch = no API changes)",
+    "Batching with snapshot_grain / UnionSource retro findings (those are design decisions; don't mix with a narrow bug fix)",
+    "FR-8 backend-aware fixture shadowing (M072 — separate mission)",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "If the fix preserves int through a previously-float-promoted path, any test that was asserting float-shape strings (like '1.0') as correct behavior breaks. Only one such test may exist (the M069 evaluator's probe used len-assertions, not string-shape — so there may be no affected tests). Retro identified the bug as real; any test asserting float-shape was codifying the bug.",
+    "Users whose pipelines depended on entity_ids being '1.0'-shaped (implausible — that's the bug) will see the correct int-shape post-upgrade. Document as a CHANGELOG note.",
+]
+
+[notes]
+considerations = """
+## Phase 1 investigation checklist
+
+Use the superpowers:systematic-debugging skill.
+
+1. Minimal reproduction (already captured during retro):
+   ```python
+   df = pd.DataFrame({'id': [1, 2, 3], 'score': [3.14, 2.71, 1.41]})
+   t = ibis.memtable(df)
+   ```
+   → `ibis.memtable(df).execute()['id'].dtype` — what does this return?
+   If float64, the promotion happens in the ibis memtable path.
+   If int64, the promotion happens later.
+
+2. Check the SnapshotStore round-trip:
+   ```python
+   store.save('src', date, t)
+   back = store.get_previous('src', date + timedelta(days=1))
+   back.execute()['id'].dtype
+   ```
+   → if int64 going in but float64 coming out, parquet round-trip is
+   the culprit.
+
+3. Check `_make_appeared_events`:
+   ```python
+   events = _make_appeared_events(cur_df, 'src', 'id', '2026-01-01')
+   events[0]['entity_id']
+   ```
+   → what does this return given the df has int64 dtype?
+
+4. Narrow to the smallest layer. Fix there.
+
+## Candidate fix shapes per layer
+
+**Layer A (ibis.memtable.execute preserves int):** may require wrapping
+`current_table.execute()` with an explicit dtype-preservation step, or
+filing upstream ibis if their memtable implementation promotes ints.
+Check ibis version first — 12.0.0 may have a known issue.
+
+**Layer B (SnapshotStore round-trip preserves int):** explicit dtype
+passing through parquet. pandas `to_parquet` preserves int64; `read_parquet`
+might promote on null. Check for nulls in id columns.
+
+**Layer C (`_make_appeared_events` preserves int):** defensive at the
+stringification point. Add a helper:
+
+```python
+def _stringify_id(v) -> str:
+    \"\"\"Stringify a scalar preserving int-shape.
+
+    Pandas may silently promote int64 columns to float64 during
+    round-trips — str(np.float64(1.0)) = '1.0'. When a value is
+    a float with no fractional part, treat it as int for the
+    purposes of building a stable id string.
+    \"\"\"
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+```
+
+Layer C is the most defensive and has the smallest blast radius. Layer
+A / B are more principled but may require upstream fixes. **Recommend
+Layer C** for the v0.9.1 patch; file a follow-up for A/B if worth
+fixing there.
+
+## Why patch (not minor)
+
+- No API change
+- Fix aligns with documented intent (entity_ids for int sources were
+  always meant to be int-shaped — the bug is silent wrong behavior)
+- Users upgrading see correct behavior on their next run; any dependent
+  system that cached float-shaped ids sees a one-time correction
+- Per release-discipline memory: "patch = fix aligns with
+  documented/intended behavior"
+
+## Release-flow rituals (same as M063/M064/M065/M066/M067/M068)
+
+1. `git branch -m release/v0.9.1`
+2. Claim Beads: `bd update typedata-nfj6 --status in_progress` AND
+   `bd update typedata-ta1i --status in_progress` (this mission closes
+   both)
+3. Phase 1 investigation — trace the promotion layer
+4. Phase 2 fix + regression test
+5. `uv lock` + CHANGELOG
+6. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+7. Single commit: `fix(M071): preserve int-shape for integer id columns (v0.9.1)`
+8. Close both Beads tasks, push, open PR with post-merge-steps block
+9. STOP — do not merge/tag/publish
+
+## Do NOT
+
+- Skip Phase 1 — guessing the layer will thrash and produce fragile
+  fixes
+- Expand scope to other dtype-preservation concerns (M020 territory)
+- Touch identity_engine, analytics_entity_engine, source_transforms.py,
+  pipeline.py (unless Phase 1 concludes the fix belongs there)
+- Ship before the failing regression test passes
+- Merge, tag, or publish — human post-merge steps
+"""

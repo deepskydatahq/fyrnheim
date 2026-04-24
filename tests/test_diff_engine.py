@@ -330,6 +330,121 @@ class TestM051SerializeValue:
         assert result == str(u)
 
 
+# ---------------------------------------------------------------------------
+# M071 regression: int-shape stringification for integer id columns
+# ---------------------------------------------------------------------------
+
+
+class TestM071StringifyId:
+    """M071 regression: when a DataFrame mixes an int64 id column with a
+    float64 data column, ``pd.DataFrame.iterrows()`` packs each row into a
+    homogeneous-dtype ``Series`` — promoting the int to float64. A naive
+    ``str(row[id_field])`` then emits ``'1.0'`` instead of ``'1'``,
+    silently breaking identity resolution for any StateSource with an
+    integer id column.
+
+    Phase 1 evidence (see commit body): the promotion is NOT in
+    ``ibis.memtable.execute()`` or the parquet round-trip — both preserve
+    int64. It surfaces exclusively in the ``iterrows()`` loop inside
+    ``_make_appeared_events`` / ``_make_disappeared_events``.
+
+    Fix: a small ``_stringify_id`` helper that casts integral-valued floats
+    back to int before ``str()``.
+    """
+
+    def test_stringify_id_preserves_int_shape_for_integral_float(self) -> None:
+        # The exact shape produced by iterrows when id is int64 but the
+        # DataFrame has at least one float column.
+        import numpy as np
+
+        from fyrnheim.engine.diff_engine import _stringify_id
+
+        assert _stringify_id(np.float64(1.0)) == "1"
+        assert _stringify_id(np.float64(2.0)) == "2"
+        assert _stringify_id(np.float64(3.0)) == "3"
+
+    def test_stringify_id_preserves_true_float_shape(self) -> None:
+        """Non-integral floats keep their natural str() representation."""
+        import numpy as np
+
+        from fyrnheim.engine.diff_engine import _stringify_id
+
+        assert _stringify_id(1.5) == "1.5"
+        assert _stringify_id(np.float64(3.14)) == "3.14"
+
+    def test_stringify_id_preserves_int_and_str_unchanged(self) -> None:
+        import numpy as np
+
+        from fyrnheim.engine.diff_engine import _stringify_id
+
+        assert _stringify_id(1) == "1"
+        assert _stringify_id(np.int64(1)) == "1"
+        assert _stringify_id("abc") == "abc"
+
+    def test_stringify_id_does_not_special_case_bool(self) -> None:
+        """bool-as-id is pathological; fall back to ``str(bool)`` default.
+        ``isinstance(True, int)`` is True in Python but not ``isinstance
+        (True, float)`` — so bool values skip the integral-float branch
+        and hit the default ``str()`` path returning ``'True'`` / ``'False'``.
+        """
+        from fyrnheim.engine.diff_engine import _stringify_id
+
+        assert _stringify_id(True) == "True"
+        assert _stringify_id(False) == "False"
+
+    def test_int64_id_column_with_float_column_preserves_int_shape(self) -> None:
+        """End-to-end regression through diff_snapshots: a cold-start diff
+        over a DataFrame whose id column is int64 and whose data column is
+        float64 must emit int-shaped ``entity_id`` strings (``'1'``, not
+        ``'1.0'``).
+        """
+        import pandas as pd
+
+        current = ibis.memtable(
+            pd.DataFrame({"id": [1, 2, 3], "score": [3.14, 2.71, 1.41]})
+        )
+
+        result = diff_snapshots(
+            current,
+            previous=None,
+            source_name="src",
+            id_field="id",
+            snapshot_date="2026-01-01",
+        )
+        df = result.execute()
+        entity_ids = df["entity_id"].tolist()
+        assert entity_ids == ["1", "2", "3"]
+        assert all("." not in eid for eid in entity_ids)
+
+    def test_row_disappeared_preserves_int_shape(self) -> None:
+        """The disappeared path goes through a separate iterrows loop —
+        confirm the fix applies there too."""
+        import pandas as pd
+
+        current = ibis.memtable(
+            pd.DataFrame(
+                {"id": pd.Series([], dtype="int64"),
+                 "score": pd.Series([], dtype="float64")}
+            )
+        )
+        previous = ibis.memtable(
+            pd.DataFrame({"id": [1, 2, 3], "score": [3.14, 2.71, 1.41]})
+        )
+
+        result = diff_snapshots(
+            current,
+            previous,
+            source_name="src",
+            id_field="id",
+            snapshot_date="2026-01-02",
+        )
+        df = result.execute()
+        disappeared = df[df["event_type"] == "row_disappeared"]
+        entity_ids = sorted(disappeared["entity_id"].tolist())
+        assert entity_ids == ["1", "2", "3"]
+        assert all("." not in eid for eid in entity_ids)
+
+
 class TestM051ResolveLatestFallsThroughNone:
     """Issue #93: ``latest`` state-field resolution must skip None rows
     instead of returning them as a present value.

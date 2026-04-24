@@ -1,0 +1,335 @@
+# Mission: v0.8.2 — wire dead SourceTransforms + StateSource.computed_columns
+# Patch release. Two pydantic fields (`SourceTransforms` on both StateSource
+# and EventSource; `computed_columns` on StateSource) are declared on the
+# model layer but not read by the engine. They're dead code. Users who set
+# them today see their configuration silently ignored. Wire them up so the
+# engine honors the documented model surface.
+
+id = "M068"
+title = "v0.8.2 — wire SourceTransforms + StateSource.computed_columns"
+status = "ready"
+created = 2026-04-24
+depends_on = []
+
+[outcome]
+description = """
+Two pydantic model fields are currently dead code:
+
+1. **`SourceTransforms`** (src/fyrnheim/core/source.py:49-54, attached to
+   BaseTableSource subclasses — StateSource, EventSource, and DerivedSource).
+   Contains four transform categories: `type_casts`, `renames`, `divides`,
+   `multiplies`. Declared in the pydantic layer with a full API surface;
+   **never applied by the engine on ANY source path.** Neither
+   `load_event_source` (src/fyrnheim/engine/event_source_loader.py:19-106)
+   nor `_load_state_source` (src/fyrnheim/engine/pipeline.py:323-358) reads
+   `source.transforms`.
+
+2. **`StateSource.computed_columns`** (src/fyrnheim/core/source.py:170 —
+   inherited from the `computed_columns: list[ComputedColumn]` field).
+   EventSource's `load_event_source` already applies computed_columns via
+   `table.mutate(**{cc.name: eval(cc.expression, ...)})` at
+   event_source_loader.py:44-46. `_load_state_source` does NOT do the same
+   — StateSource's computed_columns are silently dropped.
+
+**Field report (2026-04-24, timo-data-stack Pydantic migration investigation):**
+A migration effort to replace 7 SQL staging views with pydantic-declared
+sources found that 0 of 7 files can migrate today, specifically because
+these two fields are dead. FR-1 (SourceTransforms) and FR-2
+(StateSource.computed_columns) from the feature-request brief are the
+unblock for Phase 1 of the migration roadmap — `pardot_opportunities.sql`
+(a pure column rename) and the computed-column half of
+`pardot_lifecycle_history.sql`.
+
+**Why this is a patch (v0.8.2) and not a minor:** no new API surface. The
+fields are already documented in the pydantic models. Users setting them
+today reasonably expect them to work. Enabling the engine to honor the
+documented model surface is the fix-aligns-with-intent patch case. Per
+the release-discipline memory: "patch = fix aligns with
+documented/intended behavior, no behavior change visible to conforming
+users."
+
+**Scope (narrow):**
+
+1. Add transform-application logic after `source.read_table(...)` in BOTH
+   `load_event_source` and `_load_state_source`. Apply in a stable order:
+   `type_casts` first (so downstream renames refer to the new type),
+   then `divides` / `multiplies` (create `_amount` / `_value` suffixed
+   columns), then `renames` last (so users can rename any column
+   including the ones just added).
+2. Copy the 3-line `computed_columns` application pattern from
+   `event_source_loader.py:44-46` into `_load_state_source` (applied
+   AFTER transforms, so users can reference transformed columns in
+   their expressions).
+3. New unit tests for each transform category on both source types.
+4. New e2e test: a StateSource with transforms + computed_columns
+   declared, assert the emitted events reflect the transformed schema.
+5. Bump 0.8.1 -> 0.8.2 via the release-PR flow.
+
+**What this mission must NOT do:**
+
+- Add any new pydantic field (FR-3 `Field.json_path` wiring, FR-4
+  source-level filter, FR-5 source-level joins). Those are minor-bump
+  territory and will be handled in a separate mission M069 v0.9.0
+  that needs `/plan-mission` for API design.
+- Change how transforms compile — use Ibis-native ops only
+  (`table.cast`, `table.rename`, `table.mutate`). No client-side pandas
+  work that would break push-down.
+- Touch DerivedSource. It inherits `transforms` from BaseTableSource but
+  is loaded through a different path (source resolution in the staging
+  layer); if applicable there, consider in a follow-up.
+"""
+
+user_progress = "From 'SourceTransforms and StateSource.computed_columns are dead pydantic fields — users set them, engine silently ignores them, 0 of 7 SQL files migratable' to 'both fields honored by the engine on both source types with transform-order-safe application (casts → divides/multiplies → renames → computed_columns), regression tests, v0.8.2 patch release'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "`load_event_source` in src/fyrnheim/engine/event_source_loader.py applies `event_source.transforms` after `read_table` and BEFORE the existing `computed_columns` mutate. Application order: type_casts → divides → multiplies → renames. Each category maps to the corresponding Ibis op: cast via `.cast()`, rename via `.rename()`, divide/multiply via `.mutate(new_col=table[field] / divisor)` with the suffixed column name per the Divide/Multiply model defaults",
+    "`_load_state_source` in src/fyrnheim/engine/pipeline.py applies `source.transforms` then `source.computed_columns` after `read_table` and BEFORE any snapshot_diff or full_refresh branch. Same transform order as EventSource. The computed_columns application mirrors event_source_loader.py:44-46 exactly (`table = table.mutate(**{cc.name: eval(cc.expression, {'ibis': ibis, 't': table})})`)",
+    "New helper `_apply_source_transforms(table: ibis.Table, transforms: SourceTransforms | None) -> ibis.Table` placed in a shared location (e.g. src/fyrnheim/engine/source_transforms.py or as a module-level helper at the top of event_source_loader.py). Both call sites (load_event_source, _load_state_source) import the same helper — do not duplicate the transform logic",
+    "New unit tests in tests/test_source_transforms.py (new file) covering EACH category on EACH source type: EventSource + type_cast, EventSource + rename, EventSource + divide, EventSource + multiply, StateSource + type_cast, StateSource + rename, StateSource + divide, StateSource + multiply. Each test declares the transform, runs the loader, asserts the output table schema + values reflect the transform",
+    "New unit test `test_transform_application_order`: a single source with transforms specifying a type_cast on column `X`, a rename from `X` → `Y`, and a divide on `Y` (suffix `_amount`). Asserts the output schema contains `Y` with the cast type and `Y_amount` with the divided value. Confirms the order: cast → divide → rename (rename sees the divide's output column name or NOT, depending on the final chosen order — the test pins whichever order is implemented)",
+    "New unit test `test_state_source_computed_columns_applied` asserting a StateSource with `computed_columns=[ComputedColumn(name='full_name', expression='t.first + \" \" + t.last')]` emits row_appeared events whose payload contains `full_name`. Reuses the existing TestSnapshotDiffPipelineE2E fixture pattern",
+    "New unit test `test_computed_columns_see_transformed_columns`: StateSource with `transforms=SourceTransforms(renames=[Rename(from_name='id', to_name='account_id')])` AND `computed_columns=[ComputedColumn(name='is_internal', expression='t.account_id.startswith(\"INT-\")')]`. Asserts the computed column sees the RENAMED column (transforms applied before computed_columns)",
+    "New e2e test in tests/test_e2e_*.py (co-located with existing e2e tests — consider test_e2e_identity_projection.py): a StateSource with transforms (rename `id` → `opportunity_id`) + computed_columns flows through the full pipeline, identity resolution works on the renamed `opportunity_id`, downstream entity materialization reflects the transformed schema",
+    "All existing tests pass unchanged: test_snapshot_diff.py, test_snapshot_store.py, test_e2e_entity_output.py, test_e2e_identity_projection.py, test_analytics_entity_engine.py, test_executor.py",
+    "ruff + mypy clean",
+    "pyproject.toml version 0.8.1 -> 0.8.2; uv.lock regenerated",
+    "CHANGELOG.md has a new `## [0.8.2] - YYYY-MM-DD` section above `## [0.8.1]` with `### Fixed` subsection. Call out: 'SourceTransforms (renames, type_casts, divides, multiplies) were declared on StateSource/EventSource pydantic models but never applied by the engine — they are now honored at source read time. StateSource.computed_columns were similarly ignored — they now apply at read time matching EventSource behavior.' Include a migration note: 'If you set transforms or computed_columns on a StateSource today expecting them to be ignored, this is a behavior change — but that setup contradicts the documented model intent, so it is unlikely in practice'",
+    "Branch `release/v0.8.2`, single commit, message `fix(M068): wire SourceTransforms and StateSource.computed_columns into the engine (v0.8.2)`",
+    "PR opened against main titled `release: v0.8.2 — wire dead SourceTransforms + StateSource.computed_columns`. Body describes the dead-field issue, the migration-unblock context, the transform-order contract, and includes the post-merge-steps block",
+    "Do NOT merge. Do NOT tag. Do NOT publish. Post-merge actions are human steps",
+    "Diff scope: exactly these files may be modified — src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, NEW src/fyrnheim/engine/source_transforms.py (or whichever shared-helper location is chosen), tests/test_source_transforms.py (new), one existing e2e test file (add the new e2e test there), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify snapshot_diff.py, diff_engine.py, snapshot_store.py, identity_engine.py, analytics_entity_engine.py, core/source.py, or any other source file",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_snapshot_diff.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M069 — v0.9.0 new source API (FR-3 json_path, FR-4 filter, FR-5 joins) — minor bump, needs /plan-mission for API design",
+    "M065 / M066 / M067 — patch/minor release shape reference",
+]
+
+[scope]
+in_scope = [
+    "Shared helper `_apply_source_transforms(table, transforms)` applying type_casts → divides → multiplies → renames",
+    "Wire transforms in `load_event_source` after `read_table`, before computed_columns mutate",
+    "Wire transforms + computed_columns in `_load_state_source` after `read_table`, before full_refresh / snapshot_diff branch",
+    "8 unit tests covering each transform category × each source type",
+    "3 additional unit tests for transform ordering, StateSource computed_columns, and computed_columns-see-transformed-columns",
+    "1 e2e test wiring a StateSource with transforms + computed_columns through the full pipeline",
+    "Version bump 0.8.1 → 0.8.2 + uv.lock regen",
+    "CHANGELOG [0.8.2] Fixed entry with behavior-change migration note",
+    "release/v0.8.2 branch + PR with post-merge-steps block",
+]
+out_of_scope = [
+    "FR-3: wiring Field.json_path (requires new Field.source_column attribute — new API, minor bump territory, filed as M069)",
+    "FR-4: source-level WHERE filter (new API, minor bump, M069)",
+    "FR-5: source-level JOIN declarations (new API, minor bump, M069)",
+    "FR-6: source-level GROUP BY aggregation (keep as SQL per reporter's own assessment)",
+    "FR-7: BigQuery wildcard table support (keep as SQL)",
+    "DerivedSource transforms — inherits the field but loaded through a different path; investigate as follow-up if needed",
+    "Changes to the ComputedColumn model or its expression evaluation (the eval pattern at event_source_loader.py:44-46 is the contract we replicate)",
+    "Push-down verification beyond what Ibis provides automatically — `.cast()`, `.rename()`, `.mutate()` are all push-down-safe by Ibis default",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "Users who set `transforms=SourceTransforms(...)` on a StateSource or EventSource today expecting it to be silently ignored (contradictory setup — why declare it if you don't want it applied?) will see their transforms now apply. CHANGELOG calls this out as a behavior change but frames it as a fix-aligns-with-intent. Practical impact: near-zero; this mission exists specifically because real users (timo-data-stack reporter) want these fields to work.",
+    "Users who set `computed_columns=[...]` on a StateSource will see them applied. Same framing.",
+]
+
+[notes]
+considerations = """
+## Transform application order (load-bearing decision)
+
+The mission prescribes: `type_casts → divides → multiplies → renames →
+computed_columns`. Rationale:
+
+1. **type_casts first**: if a user casts `amount_cents` from int to
+   decimal, the subsequent `divide` needs to operate on the cast type.
+   Casting AFTER dividing would either fail or double-cast.
+2. **divides / multiplies next**: these create suffixed columns
+   (`amount_cents_amount` for a divide-by-100 into dollars). The
+   original column stays. Renames can then touch either the original
+   or the derived column.
+3. **renames last** (among transforms): users can rename any column
+   including the ones just produced by divides/multiplies.
+4. **computed_columns AFTER transforms**: users write computed
+   expressions against the post-transform schema. This matches how
+   `computed_columns` already works on EventSource today — the current
+   EventSource implementation has no transforms, so there's no existing
+   contract to preserve; we're establishing the order forward-going.
+
+The `test_computed_columns_see_transformed_columns` test pins this
+order — if someone later reorders, the test fails loudly.
+
+## Shared helper placement
+
+Two reasonable options:
+- **Option A**: module-level function at the top of
+  `event_source_loader.py`. Pro: minimal file churn. Con: module name
+  is misleading (it's not only event-specific).
+- **Option B**: new file `src/fyrnheim/engine/source_transforms.py`
+  with `_apply_source_transforms` (and any future helpers). Pro:
+  clear scope. Con: +1 file.
+
+Pick Option B. The helper is reused across both loaders and deserves
+its own module; renaming later if we add more helpers (FR-4 filter,
+FR-5 joins in M069) would touch both call sites anyway.
+
+## Ibis ops per transform category
+
+```python
+def _apply_source_transforms(
+    table: ibis.Table,
+    transforms: SourceTransforms | None,
+) -> ibis.Table:
+    if transforms is None:
+        return table
+
+    # 1. type_casts
+    for tc in transforms.type_casts:
+        table = table.mutate(**{tc.field: table[tc.field].cast(tc.target_type)})
+
+    # 2. divides (create suffixed column)
+    for d in transforms.divides:
+        new_col = f"{d.field}{d.suffix}"
+        table = table.mutate(**{new_col: (table[d.field] / d.divisor).cast(d.target_type)})
+
+    # 3. multiplies (create suffixed column)
+    for m in transforms.multiplies:
+        new_col = f"{m.field}{m.suffix}"
+        table = table.mutate(**{new_col: (table[m.field] * m.multiplier).cast(m.target_type)})
+
+    # 4. renames
+    for r in transforms.renames:
+        table = table.rename({r.to_name: r.from_name})  # ibis: new:old
+
+    return table
+```
+
+Note on `table.rename` arg order: ibis's `.rename()` takes a dict of
+`{new_name: old_name}`. The `Rename` model has `from_name` / `to_name`,
+so the helper maps them correctly.
+
+Double-check the Divide/Multiply model's `target_type` default: it's
+`"decimal"` (source.py:37, 45). The cast step after the arithmetic
+forces the result to decimal so downstream code gets a stable type
+regardless of the source column's type.
+
+## Computed column application in StateSource
+
+Copy from event_source_loader.py:44-46:
+
+```python
+# In _load_state_source after _apply_source_transforms:
+if source.computed_columns:
+    for cc in source.computed_columns:
+        table = table.mutate(**{cc.name: eval(  # noqa: S307
+            cc.expression, {"ibis": ibis, "t": table}
+        )})
+```
+
+The `eval` with `{"ibis": ibis, "t": table}` context is the existing
+contract for EventSource. No behavior change; we're replicating it on
+StateSource. The `noqa: S307` matches the existing EventSource code.
+
+## Placement in `_load_state_source`
+
+Current structure (pipeline.py:323-358):
+
+```python
+def _load_state_source(...):
+    table = source.read_table(...)
+    if source.full_refresh:
+        # emit replay events ...
+        return events
+    # snapshot-diff path
+```
+
+New structure:
+
+```python
+def _load_state_source(...):
+    table = source.read_table(...)
+    table = _apply_source_transforms(table, source.transforms)
+    if source.computed_columns:
+        for cc in source.computed_columns:
+            table = table.mutate(**{cc.name: eval(...)})
+    if source.full_refresh:
+        # emit replay events over TRANSFORMED table ...
+        return events
+    # snapshot-diff path over TRANSFORMED table
+```
+
+The transforms apply BEFORE the full_refresh / snapshot-diff split so
+both paths see the same schema. This matters because:
+- The snapshot is saved from the CURRENT table. If transforms apply
+  only in the replay path, cold-start snapshots would store the
+  pre-transform schema and the next run's diff would be against that
+  pre-transform baseline — inconsistent.
+- Identity resolution depends on `id_field`. If a user renames their
+  id_field via transforms, `source.id_field` must reflect the
+  post-transform name. The mission assumes users declare `id_field`
+  as the POST-transform name; document this explicitly in the e2e
+  test's implementation hint.
+
+## Release-discipline rationale
+
+Per feedback_release_discipline.md memory (2026-04-23):
+- Patch = fix aligns with documented/intended behavior, no behavior
+  change visible to CONFORMING users
+- Users who set `transforms=...` on a StateSource today reasonably
+  expect it to apply (that's the entire purpose of the field)
+- Users who set `transforms=...` AND expected it to be ignored are
+  non-conforming (contradictory setup)
+- Therefore patch is correct
+
+The release-discipline memory also says "batch patches, don't chain
+patch releases." This mission bundles FR-1 and FR-2 into a single
+patch — it does NOT chain with FR-3/FR-4/FR-5 (those are minor-bump
+territory and go in M069). This is the correct batching: related
+dead-field fixes in one patch.
+
+## Release-flow rituals (same as M063/M064/M065/M066/M067)
+
+1. `git branch -m release/v0.8.2`
+2. Claim Beads
+3. Implement the helper + wire both loaders + tests
+4. `uv lock` + CHANGELOG
+5. Verify all checks clean
+6. Single commit
+7. Close Beads, push, open PR with post-merge-steps block
+8. STOP — human merges/tags/publishes
+
+## Do NOT
+
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py,
+  identity_engine.py, analytics_entity_engine.py, core/source.py
+- Add new pydantic fields (that's M069)
+- Use pandas for transforms (break push-down) — ibis ops only
+- Add behavior-change flags or opt-outs — the fix IS the default
+- Merge, tag, or publish
+"""

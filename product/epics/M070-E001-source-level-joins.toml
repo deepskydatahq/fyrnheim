@@ -1,0 +1,108 @@
+# Epic: M070 v0.12.0 minor — minimum-viable source-level joins
+# Single epic mirroring M066/M068/M069/M072/M074 minor-release shape.
+
+id = "M070-E001"
+parent = "M070"
+title = "Minimum-viable source-level joins + v0.12.0 release"
+status = "active"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+Single epic covering the full M070 scope: add `Join(source_name,
+join_key)` Pydantic model + `joins: list[Join] = []` field on
+StateSource (and EventSource if e2e demands); Pydantic validator
+making `upstream` and `joins` mutually exclusive; lazy
+`name → ibis.Table` source registry populated during Phase 1; topological
+sort of sources inferred from `joins[].source_name` (mirrors
+`staging_runner._topo_sort`); cycle detection with clear error;
+`_apply_joins` helper in source_transforms.py applied at the
+`transforms → [JOINS] → json_path → computed_columns → filter` stage;
+M072 fixture-shadow gate extended to skip joins on the fixture-shadow
+path; diagnostic INFO log; ~10 new tests; bump 0.11.0 → 0.12.0; open
+release/v0.12.0 PR.
+
+Mirrors the M066/M068/M069/M072/M074 minor-release shape.
+TestPyPI RC optional per release-discipline memory.
+"""
+
+[job_story]
+description = """When my StateSource needs to enrich its rows by
+joining a sibling source declared in the same pipeline (e.g. join
+`lifecycle_stage` to get the human-readable `name` column for a
+`previous_stage_id` foreign key), I want to declare it as
+`joins=[Join(source_name='lifecycle_stage', join_key='id')]` —
+without writing SQL StagingViews — so my pipeline stays declarative
+and portable across DuckDB and BigQuery."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All ~18 testing criteria from the M070 mission TOML pass",
+    "Join Pydantic model with source_name + join_key fields (no how field — left-only is implicit)",
+    "joins: list[Join] = [] on StateSource (and EventSource if e2e needs it)",
+    "Pydantic validator: upstream + joins mutually exclusive",
+    "_apply_joins helper applied AFTER transforms, BEFORE json_path in both loaders",
+    "Source registry (name → ibis.Table) populated as Phase 1 progresses",
+    "Topological sort of sources inferred from joins[].source_name; cycle detection raises a clear error",
+    "M072 fixture-shadow path skips joins alongside transforms/fields/filter",
+    "Diagnostic INFO log when joins fire",
+    "Unit + topological-sort + validator + e2e tests for the lifecycle_history-shape double-join",
+    "All M066/M067/M068/M069/M071/M072/M073/M074 regression tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml 0.11.0 -> 0.12.0; uv.lock regenerated",
+    "CHANGELOG [0.12.0] Added + Notes (FR-5 close-out, ROW_NUMBER caveat for prospects-shape sources)",
+    "Branch release/v0.12.0, single commit, PR with post-merge-steps + optional TestPyPI RC note",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_source_transforms.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M066/M068/M069/M072/M074 minor-release shape — one commit
+bundling fix + tests + version bump + CHANGELOG on a release/v0.12.0
+branch.
+
+Full design rationale (Pardot SQL pattern analysis, why minimum-viable
+is enough, ROW_NUMBER caveat for prospects-shape sources, pipeline-
+stage placement, M072 fixture-shadow interaction, source registry
+design, topological sort algorithm choice) is in the M070 mission TOML
+[notes] section. Read that first.
+
+Safety: new fields default to empty list. Users who don't declare
+joins see identical behavior to v0.11.0. The topological-sort
+introduction preserves declaration order when no joins are declared
+(stable sort by name). Cycle detection raises at pipeline load — a
+hard error, not silent.
+"""
+
+estimated_stories = 1

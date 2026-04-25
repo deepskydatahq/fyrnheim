@@ -1,0 +1,292 @@
+id = "M070-E001-S001"
+parent = "M070-E001"
+title = "Minimum-viable source-level joins + v0.12.0 release"
+status = "ready"
+created = 2026-04-25
+
+[outcome]
+description = """Add Join model + joins field on StateSource;
+Pydantic validator for upstream-vs-joins mutex; _apply_joins helper;
+source registry + topological sort in Phase 1; cycle detection;
+M072 fixture-shadow gate extension; diagnostic log; ~10 tests; bump
+0.11.0 → 0.12.0 with CHANGELOG; push release/v0.12.0; open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/source.py: new `Join(BaseModel)` class with `source_name: str = PydanticField(min_length=1, description=...)` and `join_key: str = PydanticField(min_length=1, description=...)`. Place near the other small models (Rename, TypeCast, etc.) at the top of the file. Docstring documents: left-join only (implicit), single-column equality, source_name must reference another declared source in the same pipeline."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "StateSource gains `joins: list[Join] = PydanticField(default_factory=list, description=...)`. Docstring documents the load-order / registry behavior: joins are applied AFTER transforms and BEFORE json_path; the joined source must be declared in the same pipeline (the runner topologically sorts sources by inferred join dependencies)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource decision: read the e2e test you'll write — does it need joins on EventSource? If lifecycle_history-shape e2e is StateSource-only, scope joins to StateSource for v0.12.0 and document EventSource as future-enhancement. If e2e needs EventSource joins, add joins to EventSource too. Document the decision explicitly in the commit body."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pydantic validator on StateSource (or BaseTableSource if both classes get joins): `model_validator(mode='after')` that raises ValueError if BOTH `upstream` is non-None AND `joins` is non-empty. Message: '`upstream` (StagingView) and `joins` are mutually exclusive — `upstream` already provides a pre-joined warehouse view; declarative `joins` apply at the engine layer. Pick one.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/source_transforms.py: new helper `_apply_joins(table: ibis.Table, joins: list[Join], source_registry: dict[str, ibis.Table]) -> ibis.Table`. For each Join in declaration order: lookup the joined table in source_registry; raise a clear ValueError if source_name is missing (with hint about declaration order); apply `table = table.left_join(other, predicates=[table[j.join_key] == other[j.join_key]])`. Returns the (potentially multi-)joined table."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/event_source_loader.py and src/fyrnheim/engine/pipeline.py:_load_state_source — both gain a `source_registry: dict[str, ibis.Table]` parameter (or read from a closure / config field). The pipeline-stage chain becomes: `read_table → _apply_source_transforms → _apply_joins(joins, source_registry) → _apply_json_path_extractions → computed_columns → filter`. Joins skip on the M072 fixture-shadow path same as transforms/fields/filter."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/pipeline.py Phase 1: build a `loaded_sources: dict[str, ibis.Table] = {}` BEFORE the source-loading loop. After each source's full pipeline (transforms → joins → json_path → computed_columns → filter) completes, store its post-pipeline table in `loaded_sources[source.name] = table`. The next source's `_apply_joins` reads from this registry."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/pipeline.py Phase 1: BEFORE entering the source-loading loop, topologically sort sources by inferred join dependencies. Build dep graph: `{src.name: {j.source_name for j in src.joins}}` for each StateSource/EventSource. Reuse the algorithm from `staging_runner._topo_sort` (don't import it directly unless trivial — copying the Kahn-style sort is fine). On a cycle: raise `ValueError(f'Cycle detected in source joins: {a} → {b} → {a}')` with the actual cycle nodes. The sort must be STABLE — sources with no inferred dependencies preserve declaration order"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diagnostic INFO log when joins fire: `log.info('StateSource %s: applying %d join(s) to %s', source.name, len(joins), [j.source_name for j in joins])`. Mirrors M068/M072/M074 logging discipline."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unit tests in tests/test_source_transforms.py: test_apply_joins_no_joins_returns_unchanged; test_apply_joins_single_left_join (one Join → joined column appears in output); test_apply_joins_multiple_joins_to_same_source (lifecycle_history-shape: two Joins to lifecycle_stage with prev_stage_id and next_stage_id keys; both prev_name + next_name appear in output — note: this requires the join_key be the SAME on both sides, so test fixture should use a shared 'id' column on both sides, with the LEFT side's join key implied by table layout); test_apply_joins_missing_source_raises_clear_error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Note on the lifecycle_history double-join shape: ibis `.left_join(other, predicate)` requires the joined column NAMES to match in the predicate. For the prev_stage_id case, the LEFT side has 'previous_stage_id' and the RIGHT side has 'id' — they're different column names. The minimum-viable Join API uses `join_key='id'` (column on the joined source), but the LEFT side needs to know which left-column to compare against. Decision: `Join.join_key` refers to the LEFT side column (the foreign key in the source declaring the join); the joined source's KEY column is assumed to match `join_key` OR the joined source has an `id_field` that's the de-facto primary key. Pick one: (a) use `join_key` as the LEFT-side FK and assume the joined source's `id_field` as the RIGHT-side PK, OR (b) require both sides to use the same column name. Lock the decision in the Join docstring + the tests"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Topological-sort tests in tests/test_pipeline_topo_sort.py (new file) or co-located in test_pipeline.py: test_sources_no_joins_preserve_declaration_order; test_source_with_join_to_earlier_source_orders_correctly; test_source_with_join_to_later_source_gets_reordered (the runner moves the dependency forward); test_cycle_in_joins_raises_clear_error (A joins B; B joins A → ValueError mentioning both)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pydantic validator test in tests/test_state_event_source.py: test_state_source_upstream_and_joins_mutually_exclusive — declaring StateSource(upstream=<StagingView>, joins=[Join(...)]) raises ValueError on construction. Message contains 'mutually exclusive'."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "E2E test in tests/test_e2e_identity_projection.py (or new tests/test_e2e_joins.py): mirrors pardot_lifecycle_history shape. Define two StateSources: 'lifecycle_stage' (id, name) and 'lifecycle_history' (id, prospect_id, previous_stage_id, next_stage_id). The history StateSource declares two Joins to lifecycle_stage (one per FK). Run through full pipeline + identity graph + project_analytics_entity. Assert downstream entity output has both joined name columns visible (whatever ibis names them after the duplicate-column resolution; document the actual naming in the test). This is the reporter-facing regression test — docstring cites client-flowable 2026-04-25 for traceability."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass: 610 baseline post-M074 + ~10 new = ~620 expected. Specifically verify M066/M067/M068/M069/M071/M072/M073/M074 regression suites stay green."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.11.0 -> 0.12.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated; fyrnheim entry records 0.12.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has `## [0.12.0] - 2026-04-25` (today's date) above `## [0.11.0]` with `### Added` (Join model, joins field, validator, source registry, topological sort) and `### Notes` (FR-5 close-out for the lifecycle_history-shape, ROW_NUMBER caveat for pardot_prospects-shape — that file still needs a StagingView for the CTE; and a reminder that the topological sort preserves declaration order when no joins are declared, so existing pipelines see no behavior change)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/engine/source_transforms.py, src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, tests/test_source_transforms.py, tests/test_state_event_source.py, tests/test_e2e_identity_projection.py (or new tests/test_e2e_joins.py), tests/test_pipeline_topo_sort.py (new) or test_pipeline.py extension, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py (importing topo-sort algorithm OK; modifying it is not). Do NOT modify cli.py beyond what's strictly required for the source-load order"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.12.0` (rename worktree branch FIRST). Single commit. Message: `feat(M070): minimum-viable source-level joins (v0.12.0)` with body explaining the lifecycle_history-shape unblock + the ROW_NUMBER caveat + the EventSource scope decision"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.12.0 — minimum-viable source-level joins (FR-5)`. Body describes the reporter context, the API shape, the pardot_lifecycle_history full migration, the pardot_prospects partial migration (StagingView for ROW_NUMBER + pydantic for the rest), the M072 fixture-shadow + topological-sort + cycle-detection mechanics, and post-merge-steps block. Optional TestPyPI RC note per release-discipline memory."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec (read via absolute path)
+
+These TOMLs are uncommitted on main when your worktree forks. Read via absolute path:
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/missions/M070-source-level-joins-design.toml`
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/epics/M070-E001-source-level-joins.toml`
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/stories/M070-E001-S001-source-level-joins.toml`
+
+Mission TOML [notes] has the full design rationale, candidate code sketches, and the ROW_NUMBER-caveat reasoning.
+
+## Implementation order (tight)
+
+### 1. Pydantic models (core/source.py)
+
+```python
+class Join(BaseModel):
+    \"\"\"Declarative left-join of another source for row enrichment.
+
+    Minimum viable shape: left-join only, single-column equality on
+    `join_key`. The joined source must be declared in the same
+    pipeline; the runner topologically sorts sources by inferred
+    dependencies. For richer joins (multi-key, inner/right/outer,
+    ON predicates), use a StagingView.
+    \"\"\"
+    source_name: str = PydanticField(min_length=1, description=\"Name of another declared source to left-join.\")
+    join_key: str = PydanticField(min_length=1, description=\"Column name present in BOTH this source's read shape AND the joined source — used for left-join equality.\")
+
+
+class StateSource(BaseTableSource):
+    # ...existing fields...
+    joins: list[Join] = PydanticField(default_factory=list)
+
+    @model_validator(mode=\"after\")
+    def _validate_joins_vs_upstream(self) -> \"StateSource\":
+        if self.upstream is not None and self.joins:
+            raise ValueError(
+                \"`upstream` (StagingView) and `joins` are mutually exclusive — \"
+                \"`upstream` already provides a pre-joined warehouse view; \"
+                \"declarative `joins` apply at the engine layer. Pick one.\"
+            )
+        return self
+```
+
+If existing model_validator chain on StateSource exists, chain this one alongside.
+
+### 2. Helper (source_transforms.py)
+
+```python
+def _apply_joins(
+    table: ibis.Table,
+    joins: list[Join],
+    source_registry: dict[str, ibis.Table],
+) -> ibis.Table:
+    \"\"\"Left-join a series of sibling source tables onto `table`.\"\"\"
+    if not joins:
+        return table
+    for j in joins:
+        if j.source_name not in source_registry:
+            raise ValueError(
+                f\"Join references source {j.source_name!r} which has not \"
+                \"been loaded. The pipeline runner topologically sorts sources \"
+                \"by inferred join dependencies; if you see this error, the \"
+                \"named source is either misspelled or not declared in this \"
+                \"pipeline.\"
+            )
+        other = source_registry[j.source_name]
+        table = table.left_join(
+            other,
+            predicates=[table[j.join_key] == other[j.join_key]],
+        )
+    return table
+```
+
+### 3. Topological sort (in pipeline.py — algorithm copy from staging_runner)
+
+Mirror `staging_runner._topo_sort` but for sources. Build dep graph from `joins[].source_name`. On cycle: raise ValueError with the cycle path.
+
+### 4. Phase 1 wiring (pipeline.py)
+
+```python
+# Before the source-loading loop:
+loaded_sources: dict[str, ibis.Table] = {}
+ordered_sources = _topo_sort_sources(sources)  # NEW
+
+# Per source (sequential to respect dep order):
+for src in ordered_sources:
+    table = src.read_table(...)
+    reads_fixture = _reads_duckdb_fixture(src, config.backend)
+    if not reads_fixture:
+        table = _apply_source_transforms(table, src.transforms)
+        table = _apply_joins(table, src.joins, loaded_sources)  # NEW M070
+        table = _apply_json_path_extractions(table, src.fields)
+    if src.computed_columns:
+        for cc in src.computed_columns:
+            table = table.mutate(...)
+    if not reads_fixture and src.filter:
+        table = table.filter(...)
+    loaded_sources[src.name] = table  # populate registry AFTER pipeline
+```
+
+If Phase 1 currently uses ThreadPoolExecutor: keep parallelism for sources at the SAME topological level. Within a level, sources can load in parallel; across levels, serialize. (The staging_runner does this for StagingViews — copy that pattern.)
+
+### 5. Same wiring in event_source_loader.py for EventSource path (if EventSource gets joins; otherwise document the deferral)
+
+### 6. Tests
+
+See acceptance criteria for the full test list. Focus the e2e on the lifecycle_history double-join shape — that's the reporter-facing regression.
+
+## Critical decision: join_key column-name semantics
+
+The acceptance criterion #11 flags this: ibis `.left_join(other, predicate)` requires that the predicate references columns existing in EACH side. For pardot_lifecycle_history's case:
+
+- LEFT side (lifecycle_history): has `previous_stage_id` and `next_stage_id`
+- RIGHT side (lifecycle_stage): has `id`
+
+The two FK columns differ. Two ways to model:
+
+**Option A (LEFT-side column)**: `join_key='previous_stage_id'`. Engine knows the RIGHT side's PK is `lifecycle_stage.id_field` (which Pydantic already declares). Predicate becomes `table[j.join_key] == other[other.id_field]`. Requires looking up the joined source's `id_field` from the StateSource declaration.
+
+**Option B (RIGHT-side column)**: `join_key='id'`. The LEFT side must already have a column named `id` (renamed via transforms if needed). Predicate becomes `table[j.join_key] == other[j.join_key]`. Symmetric and simple.
+
+**Recommendation**: Option A — looks up the joined source's `id_field` from the declared source. This matches the user's mental model: \"join lifecycle_history.previous_stage_id to lifecycle_stage's primary key\". Document in the Join docstring that `join_key` is the LEFT-side foreign-key column; the right side is implicitly `joined_source.id_field`. This requires resolving `id_field` from the source registry, which means the registry stores the Source object (not just the table) — adjust the data structure.
+
+If the implementation finds Option A awkward, fall back to Option B and document the rename requirement. Either way, lock the decision in the docstring + tests.
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory for EDITS. Absolute paths to /home/tmo/roadtothebeach/open/fyrnheim/ hit the main repo (M068 lesson). `pwd` to confirm worktree.
+
+## Release-flow rituals (same as M066/M068/M069/M072/M074)
+
+1. `git branch -m release/v0.12.0`
+2. Claim Beads
+3. Implement Pydantic models + validator + helper + Phase 1 wiring + topo sort
+4. Tests (~10)
+5. `uv lock` + CHANGELOG
+6. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+7. Single commit: `feat(M070): minimum-viable source-level joins (v0.12.0)`
+8. Close Beads, push, open PR (orchestrator)
+9. STOP — do not merge/tag/publish
+
+## Do NOT
+
+- Add multi-key joins, inner/right/outer joins, ON-predicate filters, raw-table refs (deferred per Option A)
+- Add window functions in computed_columns (separate mission)
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py internals
+- Migrate the actual Pardot SQL files (user's follow-up after v0.12.0 ships)
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M070-source-level-joins-design.toml",
+    "product/epics/M070-E001-source-level-joins.toml",
+    "product/stories/M072-E001-S001-backend-aware-fixture-shadowing.toml",
+]

@@ -1,104 +1,164 @@
-# Mission: source-level joins on StateSource (deferred from M069)
-# Draft — requires real-usage data from M069's FR-3 + FR-4 before design
-# lock-in. Plan opening this after v0.9.0 has had 3+ months of production
-# usage so the API shape is informed by actual patterns, not speculation.
+# Mission: v0.12.0 — minimum-viable source-level joins on StateSource (FR-5)
+# Originally drafted 2026-04-24 as a deferred design-evaluation mission.
+# Re-planned 2026-04-25 after the client-flowable reporter exercised
+# FR-3+FR-4 in production and explicitly requested FR-5. /plan-mission
+# M070 (2026-04-25) ran parallel codebase exploration on actual SQL
+# patterns + pipeline orchestration + M072 fixture-shadow interaction
+# and locked Option A (minimum viable: left-join + single-key equality).
 #
-# The original M069 feature-request brief (2026-04-24) flagged this as
-# "may be better as a StagingView feature than a source-level feature."
-# /plan-mission M069 confirmed StagingView already covers joins for
-# BigQuery production and deferred FR-5 to get real-usage data first.
+# Status=ready (scope locked 2026-04-25, user picked Option A).
 
 id = "M070"
-title = "source-level joins on StateSource (post-M069 design evaluation)"
-status = "draft"
+title = "v0.12.0 — minimum-viable source-level joins (FR-5)"
+status = "ready"
 created = 2026-04-24
-depends_on = ["M069"]
+planned = 2026-04-25
+depends_on = ["M069", "M074"]
 
 [outcome]
 description = """
-**Deferred from M069.** The original timo-data-stack Pydantic migration
-brief (2026-04-24) requested three new source APIs; /plan-mission M069
-locked M069 scope to FR-3 (`Field.json_path`) and FR-4 (source-level
-filter) and deferred FR-5 (source-level `joins`) to this mission.
+Add a source-level join API to fyrnheim. Closes FR-5 from the
+client-flowable M012 Pydantic migration brief (originally 2026-04-24,
+revisited with real-usage data 2026-04-25).
 
-**Why deferred:**
+**Scope (Option A from /plan-mission, minimum viable):**
 
-- `StagingView` (src/fyrnheim/core/staging_view.py) already expresses
-  arbitrary joins via full SQL + Jinja2 parameterization + dependency
-  ordering + content-hash idempotency + backend-agnostic execution.
-  For BigQuery production users, StagingView IS the right tool for joins.
-- Source-level joins only add value for DuckDB-only local-dev users who
-  want to avoid writing SQL for simple lookup joins. Real but narrow.
-- Designing the Join API before real usage data lands is high
-  regret-risk — `Join(source_name, join_key, how="left")` is the
-  floor per /plan-mission analysis, but we don't yet know whether
-  users need multi-key joins, computed-column joins, or more join
-  types once they start using FR-3/FR-4.
+```python
+class Join(BaseModel):
+    \"\"\"Declarative left-join of another source for row enrichment.\"\"\"
+    source_name: str  # name of another StateSource/EventSource declared in the same pipeline
+    join_key: str  # column name present in BOTH the left source and the right source
 
-**When to re-evaluate this mission:**
+class StateSource(BaseTableSource):
+    # ...existing fields...
+    joins: list[Join] = PydanticField(default_factory=list)
+```
 
-- After M069 (v0.9.0) has been in production for 3+ months
-- When users have declared `Field.json_path` + `filter` on multiple
-  sources and have concrete "I wish I could join this with that" use
-  cases
-- When the reporter (or another field team) comes back with specific
-  join patterns that StagingView doesn't serve cleanly
+Left-join only, single-column equality, source-name-based lookup,
+multiple joins per source allowed. Bigger ambitions (multi-key,
+inner/right/outer, ON-predicate filters, raw-table refs) are
+deliberately out of scope; if a user hits them, they'll come back
+and we'll plan a follow-up.
 
-**Open questions for the planner (to resolve with real-usage data):**
+**Why this scope (locked 2026-04-25 via /plan-mission):**
 
-1. **Is the API actually needed?** After M069 ships, do BigQuery users
-   still ask for joins, or is StagingView + FR-4 filter enough? If
-   StagingView-for-joins holds up, this mission closes as
-   "won't-fix — use StagingView."
+Reporter has 2 SQL files blocked by FR-5 absence:
 
-2. **If needed, what's the minimum shape?** /plan-mission M069 analysis
-   suggested `Join(source_name, join_key, how="left")` — left-join
-   only, single-column equality, source-name lookup only. Confirm or
-   revise with actual user patterns.
+1. **`pardot_lifecycle_history.sql`** — TWO LEFT JOINs on `lifecycle_stage`
+   (self-join, prev/next stages), single-column equality each. Plus
+   CASE expressions referencing joined columns (covered by existing
+   `computed_columns`). **Minimum-viable Join API covers this fully.**
 
-3. **Where does the join apply in the pipeline stage?** Before
-   transforms (so transforms can rename joined columns) or as its own
-   layer? /plan-mission M069 suggested "before transforms"; confirm
-   with real implementation.
+2. **`pardot_prospects.sql`** — LEFT JOIN with `lh.prospect_id = p.id
+   AND lh.rn = 1`. The `rn = 1` is a filter on a `ROW_NUMBER()`
+   window-function CTE result. **Minimum-viable Join API does NOT
+   cover this** — but the blocker isn't the join syntax, it's
+   `ROW_NUMBER()` in a CTE. That's a window-function concern (separate
+   mission). Workaround: keep a tiny StagingView for the ROW_NUMBER
+   CTE, then source-level join from that.
 
-4. **Interaction with `upstream: StagingView`**: a source can declare
-   both — redundant? Restrictive validation? Same-backend-only?
+So the reporter's framing in their 2026-04-25 table ("FR-5 unblocks
+the last 2 SQL files") is overoptimistic. **FR-5 alone unblocks
+`pardot_lifecycle_history.sql`. `pardot_prospects.sql` becomes
+StagingView-for-ROW_NUMBER + source-level-joins-for-the-rest.** This
+is a partial migration but cleaner than the current full-SQL state.
 
-5. **`source_name` resolution**: how does a Join reference another
-   source? Registry lookup in the pipeline runner? Raw ibis handle?
-   Serialization story for TOML configs?
+**Pipeline-stage placement (locked, load-bearing):**
 
-**What this mission must NOT do:**
+```
+read_table → transforms → [JOINS] → json_path → computed_columns → filter → branch
+                          ↑ NEW (M070)
+```
 
-- Ship before M069 has real usage data (3+ months minimum)
-- Design for hypothetical unicorns (multi-key joins, inner/outer
-  joins, self-joins) without user-driven justification
-- Expand scope to DerivedSource or StagingView refactoring
-- Compete with StagingView as the recommended primitive for
-  complex joins (StagingView stays the recommended tool for
-  BigQuery production joins)
+Joins after `transforms` so users can join on renamed columns. Joins
+before `json_path` so users can extract JSON from joined columns if
+they want. Joins skip on the M072 fixture-shadow path (the fixture is
+post-everything, including post-join).
 
-**Estimated release shape (subject to design):** patch if the Join API
-is truly minimal (just a helper), minor if any new model / validator /
-pipeline-layer change. Lean toward minor given "new pydantic surface."
+**Source-load-order: NEW topological sort.**
+
+Today sources load in user-declared order (see `pipeline.py:153-181`,
+ThreadPoolExecutor with conn-lock). With joins, source B's
+`Join(source_name="A")` requires A loaded first. The pipeline runner
+must topologically sort sources by their inferred join dependencies.
+Reuses the algorithm pattern from `staging_runner._topo_sort()` (which
+already does this for StagingViews). Cycles raise a clear error.
+
+**Lazy source registry: NEW `name → ibis.Table` dict.**
+
+Phase 1 of the pipeline builds a dict as sources load. When a source
+with `joins=[...]` is processed, it looks up each `source_name` in the
+dict to get the joined ibis.Table. Same connection (`conn`), same
+backend (`config.backend`), same `data_dir` — so the joined-side read
+already happened with the same context.
+
+**Validation: `upstream` + `joins` mutually exclusive.**
+
+Pydantic validator on BaseTableSource (or on the source classes
+individually) raises a validation error if both `upstream:
+StagingView` AND `joins: list[Join]` are non-empty. Reason: `upstream`
+already provides a pre-joined warehouse view; adding declarative
+joins on top is ambiguous (which applies first?). Document migration
+path: pick one or the other.
+
+**Migration impact after v0.12.0:**
+
+| SQL file | M068 | M069 | M072 | M074 | M070 | Status |
+|----------|------|------|------|------|------|--------|
+| pardot_opportunities.sql | ✓ | — | — | — | — | fully migrated |
+| pardot_accounts.sql | — | partial | ✓ | ✓ | — | fully migrated |
+| pardot_lifecycle_history.sql | partial | partial | ✓ | — | **✓** | fully migrated |
+| pardot_prospects.sql | — | partial | partial | — | partial | StagingView-for-ROW_NUMBER + pydantic |
+| ga4_* (3 files) | — | — | — | — | — | keep as SQL (aggregation) |
+
+End state after v0.12.0: 4/7 fully migrated, 1/7 partial (StagingView
++ pydantic), 3/7 stay as SQL. **All 4 Pardot sources move into the
+pydantic layer to some degree.**
+
+**Release shape:** minor v0.12.0 (new API surface). Per release-
+discipline memory: TestPyPI RC available for field-team validation
+before GA — planner's call during PR.
 """
 
-user_progress = "From 'M069 shipped FR-3+FR-4; joins remain the only path to full Pardot SQL migration not covered by StagingView' to 'source-level joins designed with 3+ months of FR-3/FR-4 usage data OR closed as won't-fix if StagingView+filter proves sufficient'"
+user_progress = "From 'pardot_lifecycle_history.sql is blocked by lack of source-level joins; lives as a StagingView SQL file' to 'minimum-viable Join(source_name, join_key) API ships in v0.12.0; pardot_lifecycle_history fully migrated to pydantic; the reporter can also reduce pardot_prospects.sql to a small StagingView for the ROW_NUMBER CTE plus pydantic source-level joins for the rest'"
 
 [testing]
 approach = "agent-judgment"
 criteria = [
-    "Phase 0 (pre-planning): collect actual usage evidence — grep real-world fyrnheim configs (timo-data-stack, any other adopters) for Field.json_path and filter patterns; document which StagingView SQLs might have migrated to source-level joins",
-    "Phase 1 /plan-mission outcome: either (a) concrete Join API design with real-usage justification for each field, OR (b) explicit won't-fix decision with rationale (StagingView suffices)",
-    "If (a) ships: minimum-viable Join model, pipeline-stage placement decision, tests, release-PR flow matching M066/M068 shape",
-    "If (b) closes as won't-fix: document the decision in the mission TOML's [notes] and in a new docs/decisions/ ADR pointing future users at StagingView for joins",
+    "New `Join` Pydantic model in src/fyrnheim/core/source.py: `source_name: str`, `join_key: str`. No `how` field for v0.12.0 (left-only is implicit; document in docstring)",
+    "New `joins: list[Join] = []` field on `StateSource` (and `EventSource` if the e2e test demands it; otherwise StateSource only — narrowest minimum)",
+    "Pydantic validator on the source class(es) raising `ValueError` if BOTH `upstream` AND `joins` are non-empty — mutually exclusive declaration. Validator message points users to pick one",
+    "Pipeline runner builds a `loaded_sources: dict[str, ibis.Table]` registry as sources load (Phase 1 in pipeline.py). The dict is populated AFTER each source's transforms+json_path+computed_columns+filter pipeline completes, and BEFORE downstream source-level joins consume it",
+    "Source-load-order: pipeline runner pre-computes a topological sort of sources based on inferred join dependencies (`source.joins[i].source_name` → dependencies). Reuses or mirrors the `staging_runner._topo_sort` algorithm. Cycles raise a clear error: `'Cycle detected in source joins: A → B → A'`",
+    "New helper `_apply_joins(table, joins, source_registry)` in src/fyrnheim/engine/source_transforms.py. For each Join: `joined_table = source_registry[j.source_name]`; `table = table.left_join(joined_table, predicates=[table[j.join_key] == joined_table[j.join_key]])`. Apply joins in declaration order if a source has multiple",
+    "Pipeline-stage order locked: `read_table → transforms → [JOINS] → json_path → computed_columns → filter → branch`. Joins fire AFTER transforms (rename) and BEFORE json_path. Both load_event_source and _load_state_source apply joins at the same stage",
+    "M072 fixture-shadow interaction: when `_reads_duckdb_fixture(source, backend)` is True, joins skip alongside transforms+json_path+filter. The skip path remains: only `computed_columns` apply on a fixture-shadow read",
+    "New diagnostic INFO log: `'StateSource %s: applying %d join(s): %s'` (or similar — list the source_names being joined)",
+    "Unit tests in tests/test_source_transforms.py covering `_apply_joins`: test_apply_joins_none_returns_unchanged, test_apply_joins_single_left_join, test_apply_joins_multiple_joins_to_same_source (lifecycle_history-shape: prev + next), test_apply_joins_propagates_join_key_resolution",
+    "New test file tests/test_source_topological_sort.py (or co-located in pipeline tests): test_sources_with_no_joins_run_in_declaration_order, test_source_with_join_to_earlier_source_loads_in_order, test_source_with_join_to_later_source_gets_reordered, test_cycle_detection_raises_clear_error",
+    "Pydantic validator tests in tests/test_state_event_source.py: test_state_source_upstream_and_joins_mutually_exclusive raises ValueError",
+    "E2E test mirroring pardot_lifecycle_history shape: a primary StateSource with two `Join` declarations to the same secondary source (prev + next stage names). Flow through full pipeline + identity graph + project_analytics_entity. Assert downstream entity output contains the joined columns named appropriately",
+    "All M066/M067/M068/M069/M071/M072/M073/M074 regression tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml 0.11.0 -> 0.12.0; uv.lock regenerated",
+    "CHANGELOG [0.12.0] Added subsection (Join model, joins field, validator, source-load topological sort) + Notes (closes M070; minimum-viable scope; ROW_NUMBER caveat for prospects-shape sources; reporter's pardot_prospects.sql still needs a StagingView for the CTE)",
+    "Branch `release/v0.12.0`, single commit, message `feat(M070): minimum-viable source-level joins (v0.12.0)`",
+    "PR opened with post-merge-steps block + TestPyPI RC note. Do NOT merge/tag/publish",
+    "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/engine/source_transforms.py, src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, tests/test_source_transforms.py, tests/test_state_event_source.py, tests/test_e2e_identity_projection.py (or new test_e2e_joins.py), pyproject.toml, uv.lock, CHANGELOG.md. May also need to add a topological-sort utility — pick: import from staging_runner OR copy the algorithm. Do NOT modify snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py (importing is OK, modifying is not)",
 ]
 
 validator_context = [
     "src/fyrnheim/core/source.py",
-    "src/fyrnheim/core/staging_view.py",
-    "src/fyrnheim/engine/staging_runner.py",
     "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_source_transforms.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
 ]
 
 [context]
@@ -110,128 +170,171 @@ relevant_paths = [
     "src/fyrnheim/core/source.py",
     "src/fyrnheim/core/staging_view.py",
     "src/fyrnheim/engine/source_transforms.py",
-    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/event_source_loader.py",
     "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_identity_projection.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
 ]
 related_missions = [
-    "M069 — v0.9.0 json_path + filter (prerequisite; ships before this can reasonably plan)",
-    "M068 — v0.8.2 wire dead pydantic fields (establishes source_transforms.py helper)",
-    "M025 — DerivedSource join mode (unrelated — post-identity-graph composition, not source-level join)",
+    "M068 — source_transforms helper (extension point)",
+    "M069 — json_path + filter (M070's pipeline stage placement borrows the M069 + M072 + M074 conventions)",
+    "M072 — backend-aware fixture shadowing (joins must skip on the fixture path same as transforms/fields/filter)",
+    "M074 — nested json_path (interacts: post-M070, json_path can extract from joined columns)",
 ]
 
 [scope]
 in_scope = [
-    "Phase 0: usage-data collection from fyrnheim adopters post-M069",
-    "Phase 1 /plan-mission: API design OR won't-fix decision",
-    "If API ships: Join pydantic model + pipeline-stage placement + tests",
-    "If won't-fix: ADR documenting the decision",
-    "Version bump if API ships (likely minor)",
+    "Join Pydantic model with source_name + join_key fields",
+    "joins: list[Join] = [] on StateSource (and EventSource if the e2e demands)",
+    "Pydantic validator: upstream + joins mutually exclusive",
+    "_apply_joins helper in source_transforms.py",
+    "Pipeline-stage gate: joins applied AFTER transforms, BEFORE json_path",
+    "M072 fixture-shadow gate extended: skip joins when fixture-shadow fires",
+    "Source-load-order topological sort inferred from joins[].source_name",
+    "Cycle detection with clear error message",
+    "Lazy source registry (name → ibis.Table) populated as Phase 1 progresses",
+    "Diagnostic INFO log when joins fire",
+    "Unit tests + topological-sort tests + validator tests + e2e (pardot_lifecycle_history-shape)",
+    "Version bump 0.11.0 → 0.12.0 + uv.lock",
+    "CHANGELOG [0.12.0] Added + Notes",
+    "release/v0.12.0 branch + PR with post-merge-steps block",
+    "Optional TestPyPI RC release recommendation in PR body",
 ]
 out_of_scope = [
-    "Designing the Join API before M069 has real usage data",
-    "Multi-key joins, right/outer/inner joins, self-joins (unless user-driven)",
-    "Refactoring StagingView or staging_runner",
-    "Joins on DerivedSource (separate concern)",
-    "Competing with StagingView as the recommended primitive for complex joins",
-    "Merge, tag, PyPI publish — standard human post-merge steps if API ships",
+    "Multi-key joins (Join(on={left_col: right_col, ...})) — speculative; defer until a user asks",
+    "Inner / right / full-outer / cross joins — left-only is the v1 contract",
+    "ON-predicate filters beyond equality (e.g. lh.rn = 1, range conditions, NULL-aware) — same speculative-defer",
+    "Raw ibis.Table or duckdb_path references in Join (only declared source names) — speculative",
+    "Window-function support in computed_columns (ROW_NUMBER, RANK, etc.) — separate mission, would unblock pardot_prospects.sql but is its own design surface",
+    "Joins on event-shaped sources for analytics-entity activity matching — separate concern",
+    "DerivedSource interaction (DerivedSource lives in M025 territory; joins on derived sources is a follow-up)",
+    "Migrating the actual Pardot SQL files — that's the user's follow-up after v0.12.0 ships",
+    "Merge, tag, PyPI publish — human post-merge steps",
 ]
 acceptable_breakage = [
-    "If this mission closes as won't-fix: users who expected source-level joins from the original 2026-04-24 brief get pointed at StagingView. No code change, no breakage — just documentation.",
-    "If this mission ships a Join API: any v0.9.x user who already wrote `joins=[...]` in their StateSource config (impossible today — the field doesn't exist) would not exist, so no real breakage risk.",
+    "Users who declare BOTH `upstream=StagingView` AND `joins=[Join...]` get a Pydantic validation error on pipeline load. That combination was undocumented before; raising loudly is the intended behavior. CHANGELOG calls this out.",
+    "Source-load order may change for users who declared sources in a specific order AND happen to have implicit ordering dependencies (e.g. shared write-side state). Today's order is purely declaration-order; v0.12.0 inserts a topological sort that preserves declaration-order for the no-joins case (stable by name) but reorders when joins are present. Users with joins will see their dependent sources move; that's the intent.",
+    "Cycle-in-joins raises `ValueError` at pipeline load. Previously you could declare a cycle and never see it because joins didn't apply; now you'll see an error.",
+    "M072 fixture-shadow path skips joins. If a user declares joins AND has `duckdb_fixture_is_transformed=True`, the fixture must already be in post-join shape — same backend-parity contract as M072 documented for transforms/fields/filter.",
 ]
 
 [notes]
 considerations = """
-## History
+## /plan-mission exploration findings (2026-04-25)
 
-Original feature-request brief 2026-04-24 from the timo-data-stack
-Pardot migration identified three new source APIs:
-- FR-3 (Field.json_path wiring + Field.source_column)
-- FR-4 (source-level filter)
-- FR-5 (source-level joins)
+Three parallel explorations confirmed the Option A scope decision:
 
-/plan-mission M069 explored FR-5 against the existing StagingView
-primitive and concluded:
+### Source registry / pipeline orchestration
 
-1. StagingView (core/staging_view.py) is full-featured — arbitrary SQL
-   + Jinja2 params + depends_on + content-hash idempotency + backend-
-   agnostic execution
-2. For BigQuery production (the reporter's environment), StagingView
-   IS the right tool for joins
-3. Source-level joins only add convenience for DuckDB-only local-dev
-   users who want to avoid SQL
-4. Designing the Join API before real usage data is high regret risk
+- Sources discovered via `_discover_assets()` (cli.py:106-187) into a flat list in declaration order
+- Phase 1 loads sources sequentially via ThreadPoolExecutor with conn-lock (pipeline.py:153-181)
+- NO topological sort for sources today (StagingView has one in staging_runner.py:40-72; sources don't)
+- Cleanest design: lazy registry pattern (`name → ibis.Table` dict) populated as Phase 1 progresses + topological sort inferred from `joins[].source_name`
+- Reuse staging_runner._topo_sort algorithm; the cycle-detection logic is already battle-tested
 
-Per /plan-mission M069 exploration (2026-04-24):
+### Actual SQL patterns (key decision-driver)
 
-> If users today can put arbitrary JOIN SQL in a StagingView and attach
-> it via upstream=, what's the NEW expressive power a `joins: [Join(...)]`
-> field would add that StagingView doesn't already cover? Be concrete —
-> if the answer is "none for BigQuery users, lets DuckDB-only users
-> avoid writing SQL" that's a fair answer.
+**pardot_lifecycle_history.sql** (full SQL excerpts captured during exploration):
+- TWO LEFT JOINs on lifecycle_stage (self-join — prev_ls + next_ls)
+- Single-column equality each: `prev_ls.id = lh.previous_stage_id`, `next_ls.id = lh.next_stage_id`
+- Plus CASE expressions referencing joined columns (already supported by computed_columns)
+- **Fully covered by `Join(source_name='lifecycle_stage', join_key='id')` × 2**
 
-The answer was essentially "none for BigQuery users." So M069 shipped
-FR-3 + FR-4 only; FR-5 deferred here.
+**pardot_prospects.sql**:
+- LEFT JOIN with multi-part ON clause: `lh.prospect_id = p.id AND lh.rn = 1`
+- `rn` comes from a `ROW_NUMBER() OVER (PARTITION BY prospect_id ORDER BY created_at DESC)` in a CTE
+- **Window function is the actual blocker, NOT join syntax**. Even if we shipped multi-key joins or ON-predicate filters, ROW_NUMBER would still need a window-function expression — separate mission
 
-## When to open /plan-mission M070
+### Pipeline-stage interaction (M072 + M074 contracts)
 
-Wait for at least one of these signals:
+- Joins go BETWEEN transforms and json_path: `transforms → [JOINS] → json_path → computed_columns → filter`
+- M072 fixture-shadow path: skip transforms+json_path+filter currently; M070 extends to skip joins too
+- `upstream + joins` validator: Pydantic validation error (mutually exclusive declarative paths)
 
-1. **Real-usage data**: M069 ships, timo-data-stack (or another adopter)
-   uses Field.json_path + filter on multiple sources for 3+ months, and
-   reports back with "we wish we could do X join declaratively."
-2. **Second adopter**: a new team hits the same Pardot-shape migration
-   problem and independently wants source-level joins. Two requests beats
-   one speculative design.
-3. **StagingView limitation**: someone hits a concrete StagingView pain
-   point (not joins themselves, but the SQL-file workflow) that would
-   be cleanly solved by source-level joins.
+## Implementation order (tight)
 
-Absent any of these, this mission stays in draft — not a backlog-rot
-risk because StagingView serves the join use case.
+1. **Pydantic models** in core/source.py:
+   - Add `Join` BaseModel with `source_name: str` and `join_key: str`
+   - Add `joins: list[Join] = []` to StateSource (and EventSource if e2e needs it)
+   - Add `model_validator` checking mutual exclusion of `upstream` and `joins`
 
-## Candidate minimum-viable Join API (from /plan-mission M069 analysis)
+2. **Helper** `_apply_joins(table, joins, source_registry)` in source_transforms.py:
+   ```python
+   def _apply_joins(
+       table: ibis.Table,
+       joins: list[Join],
+       source_registry: dict[str, ibis.Table],
+   ) -> ibis.Table:
+       for j in joins:
+           if j.source_name not in source_registry:
+               raise ValueError(
+                   f\"Join references source {j.source_name!r} which has not \"
+                   \"been loaded. Check declaration order or for a typo.\"
+               )
+           other = source_registry[j.source_name]
+           table = table.left_join(
+               other,
+               predicates=[table[j.join_key] == other[j.join_key]],
+           )
+       return table
+   ```
 
-If this mission does ship:
+3. **Topological sort** for source-load order in pipeline.py:
+   - Build dep graph: `{src.name: {j.source_name for j in src.joins} for src in sources}`
+   - Kahn-style sort (mirror staging_runner._topo_sort)
+   - Return ordered list; raise on cycle
 
-```python
-class Join(BaseModel):
-    \"\"\"Declarative left-join of another source for row enrichment.
+4. **Pipeline registry** in pipeline.py Phase 1:
+   - `loaded_sources: dict[str, ibis.Table] = {}` initialized at Phase 1 start
+   - Each source's loaded table written to registry AFTER all its transforms/joins/json_path/computed_columns/filter complete
+   - Joins look up dependencies in the registry — by topological order this is always populated
 
-    Minimum viable shape: left-join only, single-column equality key,
-    source-name-based lookup. For wider join patterns (inner/outer/
-    right, multi-column keys, non-equality predicates), use StagingView.
-    \"\"\"
-    source_name: str  # reference another declared source by name
-    join_key: str  # column present in both tables (single-column equality)
-    how: Literal["left"] = "left"  # locked to left-join for v1
+5. **Pipeline gates** in event_source_loader.py + pipeline.py _load_state_source:
+   ```python
+   reads_fixture = _reads_duckdb_fixture(source, backend)
+   if not reads_fixture:
+       table = _apply_source_transforms(table, source.transforms)
+       table = _apply_joins(table, source.joins, source_registry)  # NEW M070
+       table = _apply_json_path_extractions(table, source.fields)
+   if source.computed_columns:
+       for cc in source.computed_columns: ...
+   if not reads_fixture and source.filter:
+       table = table.filter(...)
+   ```
 
-class StateSource(BaseTableSource):
-    # ...existing fields including M068 transforms, M069 json_path + filter...
-    joins: list[Join] = PydanticField(default_factory=list)
-```
+6. **Diagnostic logging** when joins fire (similar shape to M068/M072 patterns)
 
-Pipeline-stage placement (per M069 analysis):
+7. **Tests**:
+   - 4 unit tests for `_apply_joins` helper
+   - 4 topological-sort tests
+   - 1 Pydantic validator test (upstream+joins mutex)
+   - 1 e2e test for pardot_lifecycle_history-shape (double-join on the same source)
+   - Total: ~10 new tests
 
-```
-table = source.read_table(...)
-for j in source.joins:  # NEW M070 — apply BEFORE transforms
-    other = registry.resolve_source(j.source_name).read_table(...)
-    table = table.left_join(other, predicates=table[j.join_key] == other[j.join_key])
-table = _apply_source_transforms(table, source.transforms)
-# ... rest of M068/M069 stages ...
-```
+8. **Version bump + CHANGELOG**: 0.11.0 → 0.12.0; CHANGELOG Added + Notes including the ROW_NUMBER caveat for pardot_prospects-shape sources
 
-Open: how does the registry get resolved when the pipeline runner
-processes sources in order? Probably requires source-name → ibis.Table
-mapping built during pipeline setup. Design at /plan-mission time, not
-now.
+## Pre-execution dependency: M074 must merge first
+
+M070 stacks on the M074 nested-json_path baseline. Before launching M070 execution, merge PRs #141 + #142 (v0.11.0) so v0.12.0 starts from a clean v0.11.0 main. If the user wants to plan further before merging M074, that's fine — execution can wait.
+
+## Release shape
+
+v0.12.0 minor — new API surface (Pydantic Join model, joins field, validator, source registry, topological sort). Per release-discipline memory: minor with new API → consider TestPyPI RC for field-team validation. Recommend offering RC in the PR body; reviewer (or user) decides.
+
+## Why scoped this tight
+
+The exploration showed that even \"minimum viable\" gets the user 1 of 2 unblocked files cleanly. Going wider (multi-key, ON-predicates) doesn't help the OTHER file (which is blocked by ROW_NUMBER, a separate concern). So expanding scope buys nothing for the reporter. Ship Option A; if the reporter then says \"now we need window functions in computed_columns,\" that's a clean follow-up mission with its own design space.
 
 ## Do NOT
 
-- Plan this mission before M069 has shipped and had real usage
-- Expand scope to multi-backend join optimization, StagingView refactor,
-  or DerivedSource-style post-identity joins
-- Ship a Join API without a user who actually needs it
-- Compete with StagingView as the recommended tool for complex joins
+- Add multi-key joins, inner/right/outer joins, ON-predicate filters, or raw-table refs (deferred per Option A scope)
+- Add window-function support in computed_columns (separate mission)
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py internals (importing topo-sort algorithm is OK, modifying it is not)
+- Migrate the actual Pardot SQL files (user's work after v0.12.0 ships)
+- Merge, tag, or publish — human post-merge steps
 """

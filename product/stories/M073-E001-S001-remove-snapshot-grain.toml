@@ -1,0 +1,218 @@
+id = "M073-E001-S001"
+parent = "M073-E001"
+title = "Remove StateSource.snapshot_grain + v0.10.1 release"
+status = "ready"
+created = 2026-04-25
+
+[outcome]
+description = """Remove snapshot_grain field from StateSource; remove 4
+DAG viz reader sites; remove TestStateSourceSnapshotGrain class; bump
+0.10.0 → 0.10.1 with CHANGELOG; push release/v0.10.1; open PR. Closes
+typedata-9qus."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/core/source.py: remove the line `snapshot_grain: Literal[\"hourly\", \"daily\", \"weekly\"] = \"daily\"` from the StateSource class (currently around line 194). After removal, check whether `Literal` is still imported and used elsewhere in source.py via grep — if NOT used elsewhere, also remove the `Literal` import. Run mypy after to verify no unused-import warnings."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/visualization/dag.py: remove the 4 reader sites (line numbers per /retro task were 30, 173, 302, 767 — confirm current line numbers via grep before editing). Specifically: (1) the `lines.append(f\"Snapshot Grain: {s.snapshot_grain}\")` text-output line, (2) the `\"snapshot_grain\": s.snapshot_grain` JSON-export entry, (3) the `grain = s.snapshot_grain if isinstance(s, StateSource) else \"\"` line and any downstream use of `grain`, (4) the HTML panel field block referencing snapshot_grain."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "After removing dag.py reader sites, verify no orphan code: dead variable assignments, broken HTML/JSON syntax, or missing context. The DAG output should still render correctly without the snapshot_grain line — just one less attribute displayed."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_state_event_source.py: locate `class TestStateSourceSnapshotGrain` and delete the entire class plus all 5 of its test methods (test_snapshot_grain_defaults_to_daily, test_snapshot_grain_hourly, test_snapshot_grain_daily, test_snapshot_grain_weekly, test_snapshot_grain_invalid_raises). Other test classes in the file unaffected."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Pre-removal test count was 609 (post-M072). After removing 5 snapshot_grain tests: expected 604 tests pass. ruff + mypy clean. No other tests modified or skipped."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.10.0 -> 0.10.1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated; fyrnheim entry records 0.10.1"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has a new `## [0.10.1] - 2026-04-25` (today's date) section above `## [0.10.0]` with a `### Removed` subsection. Text MUST include: (a) `StateSource.snapshot_grain` was declared on the model but never read by the engine — only daily snapshots were ever produced; (b) the silent-lie nature (no error or warning when users set hourly/weekly); (c) the migration path: existing `snapshot_grain=...` declarations can be dropped; Pydantic's default `extra='ignore'` means they parse without error on v0.10.1+; (d) DAG visualization no longer shows the Snapshot Grain line; (e) sub-daily snapshots are a future enhancement; users with that need should file a feature request."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/visualization/dag.py, tests/test_state_event_source.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify any other source file or test file."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.10.1` (rename the auto-worktree branch FIRST). Single commit. Message: `fix(M073): remove dead snapshot_grain field (v0.10.1)` with a brief body explaining the silent-lie history and the Pydantic extras=ignore soft-upgrade story."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.10.1 — remove dead snapshot_grain field`. Body describes the silent-lie behavior, the Option-B-from-retro decision, the soft-upgrade story (Pydantic extras=ignore), the future-enhancement pointer, and the post-merge-steps block."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Close Beads task: `bd close typedata-9qus` after push."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/visualization/dag.py",
+    "tests/test_state_event_source.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- product/missions/M073-v0.10.1-remove-snapshot-grain.toml (full
+  outcome, /retro option analysis, Pydantic extras handling, release-
+  flow rituals)
+- product/epics/M073-E001-remove-snapshot-grain.toml
+- product/stories/M073-E001-S001-remove-snapshot-grain.toml
+
+## Implementation steps (tight)
+
+### 1. core/source.py
+
+```python
+# Find and remove this line (currently around line 194 inside StateSource class):
+snapshot_grain: Literal["hourly", "daily", "weekly"] = "daily"
+```
+
+After removal, check Literal usage:
+```bash
+grep -n "Literal" src/fyrnheim/core/source.py
+```
+
+If Literal is not used elsewhere, remove from the import line at the top:
+```python
+from typing import Literal  # remove if unused
+```
+
+### 2. visualization/dag.py
+
+Search-and-destroy: `grep -n "snapshot_grain" src/fyrnheim/visualization/dag.py`
+
+For each match:
+- Line ~30: `lines.append(f"Snapshot Grain: {s.snapshot_grain}")` — remove the line
+- Line ~173: in a JSON-export dict, remove `"snapshot_grain": s.snapshot_grain,` entry
+- Line ~302: `grain = s.snapshot_grain if isinstance(s, StateSource) else ""` — remove this line AND any downstream use of `grain`. If `grain` is used in a subsequent f-string or logic, remove that usage too (the variable goes away).
+- Line ~767: HTML panel field — remove the `content +=` line that builds the snapshot_grain HTML element
+
+Verify no orphan code by reading the surrounding context after each removal. Run `uv run pytest tests/test_dag*.py 2>&1` if there are dag tests.
+
+### 3. tests/test_state_event_source.py
+
+```python
+# Find and delete the entire class:
+class TestStateSourceSnapshotGrain:
+    def test_snapshot_grain_defaults_to_daily(self): ...
+    def test_snapshot_grain_hourly(self): ...
+    def test_snapshot_grain_daily(self): ...
+    def test_snapshot_grain_weekly(self): ...
+    def test_snapshot_grain_invalid_raises(self): ...
+```
+
+Plus any imports that were only used by this class (e.g. `Literal` import in tests, if any).
+
+### 4. CHANGELOG [0.10.1]
+
+```
+## [0.10.1] - 2026-04-25
+
+### Removed
+
+- `StateSource.snapshot_grain` — declared on the model since M041 but
+  never read by the engine. `SnapshotStore` always wrote per-date
+  parquet snapshots regardless of the configured grain. Setting
+  `snapshot_grain="hourly"` or `"weekly"` produced daily snapshots
+  silently with no error or warning.
+
+  **Migration**: users with `snapshot_grain=...` in their
+  `StateSource` declarations can drop the attribute. Pydantic's
+  default `extra='ignore'` means existing declarations continue to
+  load without error on v0.10.1+ — no urgent upgrade pressure. DAG
+  visualization no longer displays a "Snapshot Grain" line.
+
+  Sub-daily snapshots are a future enhancement. File a feature
+  request if you need hourly or weekly snapshots; the engine wiring
+  (datetime-granular filenames, grain-aware diff baseline selection)
+  is non-trivial and was deferred until there's concrete demand.
+```
+
+### 5. Version bump + lock
+
+```bash
+# Edit pyproject.toml: version = "0.10.0" → "0.10.1"
+uv lock
+```
+
+### 6. Verify
+
+```bash
+uv run pytest
+uv run ruff check src/ tests/
+uv run mypy src/
+```
+
+Expected: 604 pass (609 - 5 removed), ruff clean, mypy clean (especially watch for unused-import warnings if Literal was only used by snapshot_grain).
+
+### 7. Commit + push + Beads close
+
+```bash
+git branch -m release/v0.10.1
+bd update typedata-9qus --status in_progress
+# ... do the work ...
+git add -A
+git commit -m "fix(M073): remove dead snapshot_grain field (v0.10.1)" -m "Per /retro 2026-04-24 + user-confirmed Option B 2026-04-25, ..."
+bd close typedata-9qus
+git push -u origin release/v0.10.1
+```
+
+Then orchestrator opens the PR.
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory. Do NOT use
+absolute paths starting with `/home/tmo/roadtothebeach/open/fyrnheim/...`
+— those hit the main repo. `pwd` to confirm worktree.
+
+## Do NOT
+
+- Re-introduce the field with a deprecation warning
+- Wire the field (Option A from /retro — separate future mission)
+- Narrow the field (Option C from /retro)
+- Touch any non-listed file
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/visualization/dag.py",
+    "tests/test_state_event_source.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M073-v0.10.1-remove-snapshot-grain.toml",
+    "product/epics/M073-E001-remove-snapshot-grain.toml",
+    "product/stories/M067-E001-S001-empty-current-replay-guard.toml",
+]

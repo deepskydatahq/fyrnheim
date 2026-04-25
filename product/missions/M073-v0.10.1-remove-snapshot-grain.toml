@@ -1,0 +1,271 @@
+# Mission: v0.10.1 patch — remove dead StateSource.snapshot_grain field
+# Closes retro Beads task typedata-9qus (P2). The field is declared on
+# StateSource (Literal["hourly","daily","weekly"] = "daily") but the
+# engine never reads it — SnapshotStore always writes per-date regardless
+# of grain. Only DAG visualization displays the attribute. Silent-lie
+# pattern: users setting snapshot_grain="hourly" get daily snapshots with
+# no warning. Option B from /retro analysis: remove + document.
+#
+# Status=ready (scope locked from /retro Beads analysis 2026-04-24, user
+# picked Option B 2026-04-25).
+
+id = "M073"
+title = "v0.10.1 — remove dead StateSource.snapshot_grain field"
+status = "ready"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+Closes retro Beads `typedata-9qus`. `StateSource.snapshot_grain:
+Literal["hourly", "daily", "weekly"] = "daily"` (src/fyrnheim/core/
+source.py:194) is declared but the engine never reads it. Verified
+during /retro 2026-04-24:
+
+- 4 reader sites — all in `src/fyrnheim/visualization/dag.py` for
+  DISPLAY only (lines 30, 173, 302, 767)
+- Zero engine readers in snapshot_store.py / snapshot_diff.py /
+  diff_engine.py / pipeline.py
+- `SnapshotStore.save()` writes per-date parquet regardless of grain
+
+Silent-lie semantic: a user declaring `snapshot_grain="hourly"`
+expects hourly snapshots; gets daily ones with no error or warning.
+Same pattern as M068's `transforms` + `computed_columns` (which we
+chose to wire) and M069's `Field.json_path` (which we chose to wire).
+
+**For snapshot_grain we choose Option B (remove)** based on /retro
+analysis (2026-04-24, user-confirmed 2026-04-25):
+
+1. **Wiring (Option A)** is non-trivial. SnapshotStore would need
+   datetime-granular filenames; diff_engine would need to know which
+   previous snapshot to compare against per grain (today's-hour vs.
+   yesterday-end vs. last-week — picks differ). Real implementation,
+   not a small wiring fix.
+2. **Narrowing to Literal["daily"] (Option C)** lies-by-omission. We
+   still display "Snapshot Grain: daily" in DAG viz; users see the
+   attribute and ask "why can't I set hourly?" The cleaner signal is
+   to remove the surface entirely.
+3. **Removal (Option B)** is honest: "we don't support sub-daily
+   granularity yet; here's the path forward when there's demand."
+   Smallest change, no silent-lie risk, leaves a clean opening for a
+   future M0xx that wires it properly when a real user asks for it.
+
+**Why patch (v0.10.1) and not minor:**
+
+Pydantic v2 default is `extra='ignore'`. No `model_config` overrides it
+on BaseTableSource/StateSource (verified 2026-04-25). So removing the
+field means:
+- Users who NEVER set `snapshot_grain`: identical behavior (still daily)
+- Users who set `snapshot_grain="hourly"` expecting hourly: continue
+  to get daily (the silent-lie was the bug; removal preserves the
+  exact pre-removal behavior since the field was a no-op anyway)
+- Users who set it expecting it to be ignored: continue to have it
+  ignored (Pydantic now ignores it via extra='ignore' default rather
+  than via a declared-but-unused field)
+
+**Zero observable behavior change for any user category.** This is
+strictly fix-aligns-with-intent — the documented intent was "you can
+declare snapshot grain"; the actual behavior was "daily only." Removing
+the field aligns the surface with the actual behavior. Per release-
+discipline memory: patch release.
+
+**Migration note for CHANGELOG:** if you have `snapshot_grain="..."`
+in your StateSource declarations, you can remove it. Pydantic will
+silently ignore the unknown field if you don't, so no immediate
+upgrade pressure.
+
+**Scope (narrow):**
+1. Remove the field declaration from StateSource (source.py:194)
+2. Remove 4 reader sites in dag.py (lines 30, 173, 302, 767)
+3. Remove TestStateSourceSnapshotGrain class from tests/test_state_event_source.py (5 tests: defaults_to_daily, hourly, daily, weekly, invalid_raises)
+4. CHANGELOG [0.10.1] Removed entry with the silent-lie context + future-enhancement pointer
+5. Version bump 0.10.0 → 0.10.1 via release-PR flow
+"""
+
+user_progress = "From 'StateSource.snapshot_grain declared on the model with Literal hourly/daily/weekly options but engine silently ignores non-daily values — users setting snapshot_grain=hourly get daily snapshots with no warning' to 'snapshot_grain field removed in v0.10.1; documented as future enhancement when there's demand for sub-daily snapshots; user upgrade is no-op (Pydantic extras=ignore default)'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "src/fyrnheim/core/source.py: `snapshot_grain` field on StateSource removed (line ~194). The Literal import may also be removable if no longer used elsewhere in the file — check before removing the import",
+    "src/fyrnheim/visualization/dag.py: all 4 reader sites removed cleanly (lines 30, 173, 302, 767 per the retro task — confirm current line numbers before editing). DAG text/JSON/HTML output should no longer reference snapshot_grain",
+    "tests/test_state_event_source.py: TestStateSourceSnapshotGrain class removed entirely (5 tests). Other StateSource tests unaffected",
+    "Other tests pass unchanged: test_snapshot_diff.py, test_snapshot_store.py, test_e2e_*.py, test_source_transforms.py, test_diff_engine.py, etc. 609-test baseline post-M072 minus 5 removed = 604 expected (or thereabouts depending on count of removed tests)",
+    "ruff + mypy clean. Specifically: if `Literal` import becomes unused after the removal, also remove that import",
+    "pyproject.toml 0.10.0 -> 0.10.1; uv.lock regenerated",
+    "CHANGELOG.md has `## [0.10.1] - YYYY-MM-DD` section above `## [0.10.0]` with `### Removed` subsection. Text should: (a) cite the silent-lie behavior on v0.10.0 and earlier (engine never read the field; only daily snapshots produced), (b) say users with `snapshot_grain=...` declarations can remove them (Pydantic extras=ignore default means existing declarations are silently ignored on v0.10.1+, no upgrade error), (c) point at a future M0xx mission for sub-daily snapshots when there's demand",
+    "Branch `release/v0.10.1`, single commit, message `fix(M073): remove dead snapshot_grain field (v0.10.1)`",
+    "PR opened with post-merge-steps block. Do NOT merge/tag/publish",
+    "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/visualization/dag.py, tests/test_state_event_source.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT touch any other source file or test file",
+    "Close Beads task typedata-9qus on push",
+]
+
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/visualization/dag.py",
+    "tests/test_state_event_source.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/visualization/dag.py",
+    "tests/test_state_event_source.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M041 — snapshot grain (original mission that added the field declaratively; that mission's wiring intent was never completed)",
+    "M068 / M069 — wiring dead pydantic fields (chose Option A 'wire' for transforms/computed_columns/json_path; this mission chooses Option B 'remove' for snapshot_grain because wiring is non-trivial)",
+    "M027 — snapshot diff engine (the engine that ignored the grain)",
+]
+related_tasks = [
+    "typedata-9qus — retro Beads task with the 3-option analysis; this mission is the planned execution of Option B",
+]
+
+[scope]
+in_scope = [
+    "Remove `snapshot_grain` field from StateSource pydantic model",
+    "Remove 4 DAG visualization reader sites in dag.py",
+    "Remove TestStateSourceSnapshotGrain test class (5 tests)",
+    "Remove the `Literal` import from core/source.py if no longer used elsewhere",
+    "Version bump 0.10.0 → 0.10.1 + uv.lock regen",
+    "CHANGELOG [0.10.1] Removed entry",
+    "release/v0.10.1 branch + PR with post-merge-steps block",
+    "Close Beads task typedata-9qus",
+]
+out_of_scope = [
+    "Wiring snapshot_grain (Option A) — defer to a future mission when there's user demand for sub-daily snapshots",
+    "Narrowing the field to Literal['daily'] (Option C) — rejected per /retro analysis",
+    "Any change to SnapshotStore date semantics or storage format",
+    "Any change to snapshot_diff.py, diff_engine.py — unrelated layer",
+    "DAG visualization redesign — only minimal removal of the snapshot_grain references",
+    "Other dead-field cleanup (typedata-qrsw UnionSource, typedata-hw1o + typedata-3yxa CLAUDE.md notes) — separate missions",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "Users who declared `snapshot_grain=...` on a StateSource will continue to have it silently ignored on v0.10.1+ via Pydantic extras=ignore. No upgrade error. CHANGELOG calls this out and recommends removing the declaration.",
+    "Users who relied on DAG visualization output displaying 'Snapshot Grain: ...' will see the line gone. Low impact — nobody appears to rely on this for tooling integrations.",
+    "Users on a forked branch that strict-validates StateSource (model_config extra='forbid' override) and pre-bakes `snapshot_grain` would get a Pydantic error. Unlikely; not a documented use case.",
+]
+
+[notes]
+considerations = """
+## Pre-removal verification (already done during /retro 2026-04-24)
+
+```
+$ grep -rn "snapshot_grain" src/fyrnheim/engine/
+(no matches)
+
+$ grep -rn "snapshot_grain" src/fyrnheim/
+src/fyrnheim/visualization/dag.py:30:    lines.append(f"Snapshot Grain: {s.snapshot_grain}")
+src/fyrnheim/visualization/dag.py:173:                "snapshot_grain": s.snapshot_grain,
+src/fyrnheim/visualization/dag.py:302:        grain = s.snapshot_grain if isinstance(s, StateSource) else ""
+src/fyrnheim/visualization/dag.py:767:        content += '<div class="panel-field"><span class="panel-field-name">snapshot_grain</span>...';
+src/fyrnheim/core/source.py:194:    snapshot_grain: Literal["hourly", "daily", "weekly"] = "daily"
+```
+
+Confirmed: ONLY display sites in dag.py + the field declaration. No engine wiring. No other tests beyond the dedicated TestStateSourceSnapshotGrain class.
+
+## Pydantic extras handling (verified 2026-04-25)
+
+```
+$ grep -n "model_config\|extra=" src/fyrnheim/core/source.py
+(no matches)
+```
+
+No `model_config` set → Pydantic v2 default `extra='ignore'`. Removing
+the field means existing configs with `snapshot_grain=...` silently
+ignore the value on v0.10.1+. No upgrade error. This is the soft-
+landing path that justifies a patch release rather than a minor.
+
+## Why this is a patch and not a minor
+
+Per release-discipline memory:
+- Patch = fix aligns with documented intent, no behavior change visible to conforming users
+- Minor = new features OR semantic shifts
+
+Removing `snapshot_grain`:
+- For users who never set it: identical behavior (still daily — never anything else)
+- For users who set it to "hourly"/"weekly": continue getting daily (the silent-lie WAS the bug)
+- For users who set it to "daily" and never expected anything else: continue getting daily
+- The model surface shrinks, but no observable behavior changes
+
+→ patch v0.10.1 is correct. The "API surface shrinks" concern is mitigated by Pydantic's extras=ignore default.
+
+## Implementation order (tight)
+
+1. `src/fyrnheim/core/source.py`:
+   - Remove `snapshot_grain: Literal[...] = "daily"` line
+   - Check if `Literal` is still imported and used elsewhere; if not, remove the import too (run mypy after to catch unused-import errors)
+
+2. `src/fyrnheim/visualization/dag.py`:
+   - Line 30: remove the f-string append
+   - Line 173: remove the "snapshot_grain" key from JSON export dict
+   - Line 302: remove the `grain = ...` line and any downstream use of `grain`
+   - Line 767: remove the HTML panel field block
+   - Re-check the dag.py output rendering still makes sense without the line (no orphan whitespace, no broken HTML)
+
+3. `tests/test_state_event_source.py`:
+   - Locate `class TestStateSourceSnapshotGrain` and delete the whole class (5 tests)
+
+4. CHANGELOG [0.10.1]:
+   ```
+   ## [0.10.1] - YYYY-MM-DD
+
+   ### Removed
+
+   - `StateSource.snapshot_grain` — declared on the model since M041
+     but never read by the engine; `SnapshotStore` always wrote
+     per-date parquet snapshots regardless of the configured grain.
+     Setting `snapshot_grain="hourly"` or `"weekly"` produced daily
+     snapshots silently. Removed in this patch to align the API with
+     the actual behavior.
+
+     Migration: users with `snapshot_grain=...` in their StateSource
+     declarations can drop the attribute. Pydantic's default
+     `extra='ignore'` means existing declarations continue to load
+     without error on v0.10.1+ — no urgent upgrade pressure. DAG
+     visualization no longer displays a "Snapshot Grain" line.
+
+     Sub-daily snapshots are a future enhancement; file a feature
+     request if you need them.
+   ```
+
+5. `pyproject.toml` 0.10.0 → 0.10.1 + `uv lock`
+
+## Release-flow rituals
+
+Same as M063/M064/M065/M067/M071:
+1. `git branch -m release/v0.10.1`
+2. Claim Beads `typedata-9qus`
+3. Implement the 4 deletions + CHANGELOG + version bump
+4. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+5. Single commit: `fix(M073): remove dead snapshot_grain field (v0.10.1)`
+6. Close Beads `typedata-9qus`
+7. Push release/v0.10.1
+8. Open PR with post-merge-steps block
+9. STOP — human merges/tags/publishes
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory. Do NOT use
+absolute paths starting with `/home/tmo/roadtothebeach/open/fyrnheim/...`
+— those hit the main repo. `pwd` to confirm worktree location.
+
+## Do NOT
+
+- Re-introduce the field with a deprecation warning — the user picked
+  remove, not deprecate
+- Wire the field (Option A from /retro)
+- Narrow the field to Literal["daily"] (Option C from /retro)
+- Touch any non-listed file
+- Merge, tag, or publish
+"""

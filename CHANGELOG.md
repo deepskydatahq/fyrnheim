@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-04-25
+
+### Removed
+
+- `StateSource.snapshot_grain: Literal["hourly", "daily", "weekly"] = "daily"`
+  — declared in M041 with the intent that the engine would orchestrate
+  loads at the configured grain (hourly/daily/weekly), but the engine
+  never read the field. `SnapshotStore` always wrote per-date parquet
+  regardless of the declared grain, so setting `snapshot_grain="hourly"`
+  silently produced daily snapshots with no warning. This was a silent
+  lie in the API surface for ~30 versions (v0.4.x → v0.10.0).
+  Discovered during /retro on 2026-04-24; user confirmed removal on
+  2026-04-25 (Option B: remove now, re-introduce only when the engine
+  is ready to honor it).
+- The four corresponding reader sites in
+  `src/fyrnheim/visualization/dag.py`: the source tooltip line
+  ("Snapshot Grain: …"), the `node_details` dict entry, the per-node
+  `node-detail` HTML span, and the JS detail-panel field. The grain
+  was decorative-only (display, never executed against), so removing
+  the readers is a pure cleanup with no behavior change.
+- `TestStateSourceSnapshotGrain` (5 tests) in
+  `tests/test_state_event_source.py` — the only tests that pinned the
+  field's existence. Test suite drops from 609 → 604.
+
+### Migration
+
+- **Soft upgrade — no user code changes required.** Pydantic v2 defaults
+  to `extra="ignore"` and `BaseTableSource` / `StateSource` do not
+  override the model config. Existing
+  `StateSource(..., snapshot_grain="daily")` declarations continue to
+  parse without error after this upgrade — the kwarg is silently
+  dropped. Verified by inspection: no `model_config = ConfigDict(extra=...)`
+  exists on either class. Users may remove the kwarg at their leisure
+  to reflect that it never had effect; there is no urgency.
+- If you had read `StateSource.snapshot_grain` in custom code, that
+  attribute access now raises `AttributeError`. The field was never
+  honored by the engine, so any code that branched on it was
+  branching on a dead value.
+
+### Notes
+
+- **Why patch (not major).** Per Pydantic v2 `extra="ignore"` default,
+  removing a never-honored field is a non-breaking change at the API
+  parsing surface — existing TOML/code declarations parse identically
+  to before, just with the kwarg silently dropped. The semantic
+  contract was already broken (the field claimed to control grain but
+  never did), so removing it aligns the surface with documented intent.
+  Patch-shaped per release-discipline memory: "fix aligns with intent".
+- **Future enhancement:** when grain-aware orchestration is actually
+  implemented (engine reads the field, snapshot store writes
+  hour-bucketed parquet for `hourly`, week-bucketed for `weekly`),
+  the field can be re-introduced as part of that mission with the
+  semantics it always claimed to have. File a follow-up mission at
+  that time.
+
 ## [0.10.0] - 2026-04-24
 
 ### Added

@@ -1,0 +1,436 @@
+# Mission: v0.13.0 — EventSource joins (FR-10) + remove dead TableSource fields
+# Bundles two narrow concerns:
+#
+#   1. FR-10 (reporter follow-up 2026-04-25): wire `_apply_joins` for
+#      EventSource, mirroring M070's StateSource implementation. Reporter
+#      hit this trying to migrate pardot_lifecycle_history (which is an
+#      EventSource because downstream activities use EventOccurred(
+#      event_type="lead_created") dispatch). M070 explicitly scoped joins
+#      to StateSource and deferred EventSource as future-enhancement.
+#      Time to deliver.
+#
+#   2. typedata-qrsw (P2 retro): remove TableSource.field_mappings +
+#      literal_columns dead fields. They reference a UnionSource class
+#      that doesn't exist anywhere in the codebase. Same pattern as
+#      M073's snapshot_grain removal — Option A "remove" picked by user.
+
+id = "M076"
+title = "v0.13.0 — EventSource joins (FR-10) + remove dead TableSource fields"
+status = "ready"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+Bundle two narrow concerns into one minor release.
+
+**Part 1 — FR-10: EventSource joins**
+
+M070 (v0.12.0) shipped source-level joins scoped to StateSource only.
+The agent's notes explicitly flagged: \"EventSource as a join source OR
+target is documented as a future enhancement.\" Reporter (client-flowable
+2026-04-25) hit this gap migrating `pardot_lifecycle_history.sql`:
+that file is an EventSource (downstream activities use
+`EventOccurred(event_type=\"lead_created\")` dispatch). M070's
+`_apply_joins` only fires in `_build_state_source_table` — not in
+`load_event_source` — so EventSources can't declare joins.
+
+**The fix (Option a from reporter's brief — wire `_apply_joins` for
+EventSource, mirroring StateSource):**
+
+1. Add `joins: list[Join] = []` field to EventSource (same shape as
+   StateSource gained in M070)
+2. In `load_event_source` (event_source_loader.py): insert
+   `_apply_joins(table, joins, source_registry, right_pk_registry)`
+   between transforms and json_path — same pipeline-stage placement
+   as `_build_state_source_table` (per M070's locked order:
+   `read_table → transforms → joins → json_path → computed_columns →
+   filter`)
+3. Joins skip on M072 fixture-shadow path (same gate as StateSource)
+4. M075's computed_columns skip-if-output-exists also applies (already
+   in event_source_loader.py post-M075)
+5. Move the `upstream + joins` mutex validator to BaseTableSource if
+   it's currently StateSource-only (so EventSource inherits it)
+6. Verify Phase 1 topological sort handles EventSource (M070's graph
+   builder probably already iterates `getattr(src, 'joins', [])` on
+   ALL sources — empty for EventSource pre-M076, populated post-M076)
+7. **Out of scope: EventSource as join TARGET** (someone joining TO
+   an EventSource). The `right_pk_registry` looks up `id_field` —
+   EventSources don't have `id_field` in the same sense (they have
+   `entity_id_field` + `timestamp_field`). Defer to a future
+   enhancement; reporter only needs EventSource-as-LEFT.
+
+After M076, joined columns appear in the post-pipeline table BEFORE
+event-shape conversion (the existing payload-pack at
+event_source_loader.py:71-92 packs all non-excluded columns into
+the JSON payload). So joined columns become part of the event payload
+naturally — no extra wiring needed for the event-conversion step.
+
+**Part 2 — typedata-qrsw: remove dead TableSource fields (Option A)**
+
+`TableSource.field_mappings: dict[str, str]` and `TableSource.
+literal_columns: dict[str, Any]` are declared at src/fyrnheim/core/
+source.py:181-182 with detailed docstrings explaining their role
+\"when used inside a UnionSource\" — but `UnionSource` does not exist
+in the codebase (verified via grep during /retro 2026-04-24).
+
+Same dead-field pattern as M073's `snapshot_grain` removal. User
+picked Option A (remove). Pydantic v2 default `extra='ignore'`
+provides a soft-upgrade: existing `field_mappings={...}` declarations
+silently parse without error post-removal. CHANGELOG calls out the
+removal + future-enhancement pointer.
+
+Cleanup scope:
+1. Remove `field_mappings` field from TableSource (source.py:181)
+2. Remove `literal_columns` field from TableSource (source.py:182)
+3. Remove the \"When used inside a UnionSource...\" docstring
+   paragraph (source.py:167-178)
+4. Grep for any other reference to either field (probably zero) and
+   clean
+
+**Why minor (v0.13.0):**
+
+Both concerns add/remove API surface:
+- FR-10: new `joins` field on EventSource (additive)
+- typedata-qrsw: removal of `field_mappings` + `literal_columns`
+  (removal — but Pydantic extras=ignore softens it, same as M073)
+
+Per release-discipline memory: \"new API surface = minor.\" Combined
+with the API removal, v0.13.0 is correct. Default behavior preserved
+for users who don't declare `joins=[...]` and don't set the dead
+fields.
+
+**Migration impact:**
+
+After v0.13.0, reporter can migrate `pardot_lifecycle_history.sql`
+fully:
+
+```python
+pardot_lifecycle_history = EventSource(
+    name=\"pardot_lifecycle_history\",
+    project=\"flowable-marketing-datahub\",
+    dataset=\"pardotch\",
+    table=\"lifecycle_history\",
+    entity_id_field=\"prospect_id\",
+    timestamp_field=\"created_at\",
+    event_type_field=\"transition_type\",  # or static event_type
+    joins=[
+        Join(source_name=\"lifecycle_stage\", join_key=\"previous_stage_id\"),
+        Join(source_name=\"lifecycle_stage\", join_key=\"next_stage_id\"),
+    ],
+    computed_columns=[
+        ComputedColumn(name=\"transition_type\", expression=\"...\"),
+    ],
+    duckdb_path=\"pardot_lifecycle_history.parquet\",
+    duckdb_fixture_is_transformed=True,
+)
+```
+
+End state v0.13.0: 4/7 Pardot SQL files fully migrated, 1/7 partial
+(prospects — ROW_NUMBER blocker), 3/7 stay as SQL by design (GA4
+aggregations).
+"""
+
+user_progress = "From 'EventSource joins are a future enhancement (M070 deferred); pardot_lifecycle_history.sql migration blocked because it's an EventSource and joins are StateSource-only; TableSource.field_mappings + literal_columns are dead fields documenting a UnionSource class that does not exist' to 'EventSource gains joins=[Join] field with the same machinery as StateSource; pardot_lifecycle_history.sql fully migratable; dead TableSource fields removed via M073-pattern Option A'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "FR-10: EventSource gains `joins: list[Join] = PydanticField(default_factory=list)` with docstring documenting same semantics as StateSource (left-only, single-key equality, source_name references same-pipeline source). Place near other EventSource fields",
+    "FR-10: `upstream + joins` mutex validator moved to BaseTableSource (or duplicated on EventSource if move is awkward). EventSource inherits the mutex behavior",
+    "FR-10: `load_event_source` in src/fyrnheim/engine/event_source_loader.py applies `_apply_joins(table, event_source.joins, source_registry, right_pk_registry)` between `_apply_source_transforms` and `_apply_json_path_extractions`. Skip on M072 fixture-shadow path same as StateSource (use existing reads_fixture local). Diagnostic INFO log: `'EventSource %s: applying %d join(s) to %s'` mirrors the StateSource log shape",
+    "FR-10: Phase 1 source-load orchestration in pipeline.py — verify that `loaded_sources` registry populates from `load_event_source`'s post-pipeline table same as `_build_state_source_table`. EventSources with `joins=[...]` participate in topological sort. If M070's implementation only iterates `for src in sources: getattr(src, 'joins', [])`, no changes needed. If it's StateSource-typed, generalize",
+    "FR-10: EventSource as join TARGET is OUT of scope — if a Join's `source_name` references an EventSource, raise a clear ValueError at sort time or at `_apply_joins` time pointing at the future-enhancement deferral. Document in the Join model's docstring update",
+    "FR-10: post-pipeline payload contains joined columns. Verify by reading `load_event_source` lines 71-92 — the payload-pack step packs all non-excluded columns; joined columns naturally surface there. New e2e test asserts the joined columns appear in the event payload",
+    "FR-10: new e2e test `test_m076_lifecycle_history_eventsource_joins_e2e` (in tests/test_e2e_joins.py): EventSource with two Joins to a StateSource lookup table (lifecycle_stage), runs through full pipeline, asserts emitted events have the joined columns in their payloads. Mirror the StateSource e2e test's shape but on the EventSource path. Docstring cites client-flowable 2026-04-25 reporter for traceability",
+    "FR-10: validator test in tests/test_state_event_source.py: `test_event_source_upstream_and_joins_mutually_exclusive` raises ValueError",
+    "FR-10: validator test: `test_event_source_joins_defaults_empty_list`",
+    "typedata-qrsw: TableSource.field_mappings and TableSource.literal_columns fields removed from src/fyrnheim/core/source.py. The 'When used inside a UnionSource...' docstring paragraph removed. Grep for any other code references to these fields (expected: zero — verified pre-removal during /retro)",
+    "typedata-qrsw: any tests that constructed `TableSource(field_mappings=...)` or `literal_columns=...` are updated/removed. Verify via grep across tests/ that no test references these fields. If any do, they need cleanup",
+    "All M066/M067/M068/M069/M070/M071/M072/M073/M074/M075 regression tests pass unchanged. 633 v0.12.1 baseline + ~5 new (validator + e2e for FR-10) = ~638 expected",
+    "ruff + mypy clean",
+    "pyproject.toml 0.12.1 -> 0.13.0; uv.lock regenerated; src/fyrnheim/__init__.py __version__ = '0.13.0' (stays in sync per the M075 convention)",
+    "CHANGELOG.md has `## [0.13.0] - 2026-04-25` (today's date) above `## [0.12.1]` with `### Added` (FR-10 EventSource.joins, full description of same-as-StateSource semantics), `### Removed` (TableSource.field_mappings + literal_columns dead fields with M073-style migration note), and `### Notes` for any caveats (e.g. EventSource as join target out of scope)",
+    "Branch `release/v0.13.0`, single commit, message `feat(M076): EventSource joins (FR-10) + remove dead TableSource fields (v0.13.0)`",
+    "PR opened with post-merge-steps block. Body describes the reporter context for FR-10, the M073 precedent for the dead-fields cleanup, and the migration impact (lifecycle_history fully migratable). Optional TestPyPI RC note per release-discipline memory",
+    "Do NOT merge/tag/publish",
+    "Diff scope: src/fyrnheim/core/source.py (EventSource.joins + remove TableSource fields + validator placement), src/fyrnheim/engine/event_source_loader.py (wire _apply_joins), src/fyrnheim/engine/pipeline.py (verify topo-sort already handles EventSource — likely zero changes), src/fyrnheim/__init__.py (version sync to 0.13.0), tests/test_state_event_source.py (validator tests), tests/test_e2e_joins.py (new e2e test), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify source_transforms.py, snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py",
+]
+
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_joins.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_event_source_loader.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M070 — v0.12.0 source-level joins (StateSource only; M076 extends to EventSource)",
+    "M072 — v0.10.0 backend-aware fixture shadowing (M076 extends gate to EventSource joins)",
+    "M073 — v0.10.1 remove dead snapshot_grain field (precedent for typedata-qrsw cleanup pattern)",
+    "M075 — v0.12.1 FR-9 + cherry-picks (M076 builds on the StateSource computed_columns skip-if-exists rule which event_source_loader.py already inherits)",
+]
+related_tasks = [
+    "typedata-qrsw — retro Beads task (P2) closed by this mission",
+]
+
+[scope]
+in_scope = [
+    "FR-10: EventSource.joins field with same shape as StateSource.joins",
+    "_apply_joins wired in load_event_source between transforms and json_path",
+    "M072 fixture-shadow gate extended to EventSource joins (skip when fixture-shadow fires)",
+    "Validator: upstream + joins mutex moved to BaseTableSource (or duplicated)",
+    "Topological sort verification (likely no changes needed — graph builder probably uses getattr already)",
+    "Diagnostic INFO log on EventSource join apply",
+    "Validator + e2e tests for EventSource joins",
+    "typedata-qrsw: remove TableSource.field_mappings + literal_columns + UnionSource docstring",
+    "Version bump 0.12.1 → 0.13.0 + uv.lock + __version__ sync",
+    "CHANGELOG [0.13.0] Added + Removed + Notes",
+    "release/v0.13.0 branch + PR with post-merge-steps block",
+    "Close Beads typedata-qrsw on push",
+]
+out_of_scope = [
+    "EventSource as join TARGET — right_pk_registry id_field semantic doesn't apply cleanly; defer to a future enhancement",
+    "Multi-key joins, inner/right/outer joins, ON-predicate filters — same M070 deferrals carry forward to EventSource",
+    "Implementing UnionSource (Option B for typedata-qrsw) — user picked Option A (remove)",
+    "Pydantic validator that errors when field_mappings/literal_columns are set (Option C for typedata-qrsw) — user picked Option A (remove)",
+    "ROW_NUMBER / window-function support in computed_columns (still blocks pardot_prospects.sql full migration; separate future mission)",
+    "CLAUDE.md sub-agent conventions docs (typedata-hw1o + typedata-3yxa + new cleanup-timing lesson) — separate docs PR, no version bump, can ship independently",
+    "Changes to source_transforms.py helper internals (FR-10 reuses _apply_joins as-is)",
+    "Changes to snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py",
+    "Migrating __version__ to importlib.metadata (separate enhancement, file as Beads if worth)",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "Users who declared `field_mappings={...}` or `literal_columns={...}` on a TableSource expecting them to be silently ignored will continue to have them silently ignored (Pydantic v2 extras='ignore' default — same as M073's snapshot_grain removal). No upgrade error. CHANGELOG calls this out and recommends removal.",
+    "Users who try to use an EventSource as a join TARGET (`Join(source_name='some_eventsource', ...)`) will get a clear ValueError at pipeline-load time. This case wasn't supported pre-M076 either (joins didn't exist on EventSource at all), so this is a clarifying error, not a regression.",
+    "FR-10's new EventSource.joins field defaults to empty list; users who don't declare it see no change.",
+]
+
+[notes]
+considerations = """
+## Pre-flight verification (during execution)
+
+Before implementing, the agent should grep for:
+
+1. **Where is the upstream+joins validator on StateSource (post-M070)?**
+   ```
+   grep -n \"upstream\\|joins\\|model_validator\" src/fyrnheim/core/source.py
+   ```
+   If it's on StateSource only, move to BaseTableSource so EventSource inherits.
+   If it's already on BaseTableSource, no move needed.
+
+2. **Does M070's topological sort already iterate ALL sources?**
+   Read `pipeline.py` Phase 1 source-load orchestration. Look for the
+   graph-building code (something like `_topo_sort_sources` or
+   `_infer_source_graph`). Verify it uses `getattr(src, 'joins', [])`
+   or similar duck-typing rather than `isinstance(src, StateSource)`.
+   If it's hardcoded to StateSource, generalize.
+
+3. **Does the `loaded_sources` registry get populated by load_event_source today?**
+   M070 added registry population in `_build_state_source_table`. The
+   EventSource path may or may not populate the registry. After M076,
+   EventSources with joins must register their post-pipeline table.
+
+## Implementation sketch
+
+### EventSource.joins field
+
+```python
+class EventSource(BaseTableSource):
+    # ...existing fields...
+    joins: list[Join] = PydanticField(default_factory=list)
+```
+
+If the upstream+joins validator is currently `model_validator` on
+StateSource only, move it to BaseTableSource:
+
+```python
+class BaseTableSource(BaseModel):
+    # ...existing fields...
+
+    @model_validator(mode=\"after\")
+    def _validate_joins_vs_upstream(self):
+        joins = getattr(self, \"joins\", [])
+        if self.upstream is not None and joins:
+            raise ValueError(\"upstream and joins are mutually exclusive...\")
+        return self
+```
+
+### load_event_source wiring
+
+Mirror `_build_state_source_table`:
+
+```python
+# In load_event_source, after read_table:
+table = event_source.read_table(conn, backend, data_dir=data_dir)
+reads_fixture = _reads_duckdb_fixture(event_source, backend)
+
+if not reads_fixture:
+    table = _apply_source_transforms(table, event_source.transforms)
+    if event_source.joins:
+        log.info(
+            \"EventSource %s: applying %d join(s) to %s\",
+            event_source.name, len(event_source.joins),
+            [j.source_name for j in event_source.joins],
+        )
+        table = _apply_joins(
+            table, event_source.joins, source_registry, right_pk_registry,
+        )
+    table = _apply_json_path_extractions(table, event_source.fields)
+
+# computed_columns (with M075 skip-if-exists) and filter — already there
+# ...
+
+# Then existing event-shape conversion (df.iterrows + payload pack)
+```
+
+The `source_registry` and `right_pk_registry` parameters need to be
+threaded into `load_event_source`. They were threaded into
+`_build_state_source_table` in M070 — same pattern.
+
+### EventSource as join target (out-of-scope guard)
+
+In `_apply_joins` or in the topological-sort step, when a Join's
+`source_name` resolves to an EventSource, raise:
+
+```python
+raise ValueError(
+    f\"Join target {j.source_name!r} is an EventSource. Joining TO an \"
+    \"EventSource is not yet supported (the right_pk_registry's id_field \"
+    \"lookup assumes StateSource semantics). File a future-enhancement \"
+    \"request if you need this.\"
+)
+```
+
+The check belongs at sort time (before any worker runs) so the error
+surfaces early.
+
+### typedata-qrsw cleanup
+
+```python
+# REMOVE these from TableSource (currently around source.py:181-182):
+field_mappings: dict[str, str] = PydanticField(default_factory=dict)
+literal_columns: dict[str, Any] = PydanticField(default_factory=dict)
+
+# REMOVE this docstring paragraph from TableSource (currently around source.py:167-178):
+\"\"\"
+When used inside a UnionSource, the optional field_mappings and
+literal_columns enable per-source normalization before union:
+
+- field_mappings: Rename source columns before union.
+  ...
+- literal_columns: Inject constant values as new columns.
+  ...
+\"\"\"
+```
+
+After removal, simplify TableSource's docstring to whatever remains
+relevant. If the entire docstring was only about UnionSource, it can
+be replaced with a brief one-liner.
+
+Grep for `field_mappings` and `literal_columns` across tests/ and
+src/ to verify no other consumers. If found, those references need
+to be cleaned up too — but expected: zero (verified during /retro
+2026-04-24).
+
+## CHANGELOG [0.13.0]
+
+```
+## [0.13.0] - 2026-04-25
+
+### Added
+
+- **EventSource.joins** (FR-10) — `EventSource` now supports the same
+  `joins: list[Join] = []` field that `StateSource` got in M070
+  (v0.12.0). Joins are applied between transforms and json_path on
+  the EventSource read path; joined columns become part of the
+  emitted event payload after the existing payload-pack step.
+  Closes the M070 future-enhancement request for EventSource joins.
+
+  Reporter use case (client-flowable 2026-04-25 follow-up): the
+  `pardot_lifecycle_history.sql` migration was blocked because that
+  source is an `EventSource` (downstream activities use
+  `EventOccurred(event_type=\"lead_created\")` dispatch) and M070's
+  joins were StateSource-only. With v0.13.0 it can migrate fully.
+
+  **Out of scope**: `EventSource` as a join TARGET. The
+  `right_pk_registry`'s `id_field` lookup assumes StateSource
+  semantics; EventSources don't have `id_field` in the same sense.
+  Joining TO an EventSource raises `ValueError` at pipeline-load
+  time with a future-enhancement pointer. EventSource as the LEFT
+  side (the source declaring the joins) IS supported.
+
+### Removed
+
+- **`TableSource.field_mappings`** and **`TableSource.literal_columns`** —
+  declared on the model with detailed docstrings explaining their role
+  \"when used inside a UnionSource\", but `UnionSource` does not exist
+  in the codebase. Same dead-field pattern as M073's
+  `snapshot_grain` removal.
+
+  **Migration**: users with `field_mappings={...}` or `literal_columns=
+  {...}` declarations can drop the attributes. Pydantic v2's default
+  `extra='ignore'` means existing declarations continue to load
+  without error on v0.13.0+ — no urgent upgrade pressure. If
+  union-source-style normalization is something you need, file a
+  feature request.
+```
+
+## Release-flow rituals
+
+Same as M066/M068/M069/M070/M072/M074:
+1. `git branch -m release/v0.13.0`
+2. Claim Beads
+3. Pre-flight grep checks
+4. Implement EventSource.joins + wire load_event_source + move/dup validator + EventSource-as-target guard
+5. Remove TableSource.field_mappings + literal_columns + UnionSource docstring
+6. Tests (validator + e2e)
+7. `__version__` to 0.13.0; `uv lock`; CHANGELOG
+8. Verify clean
+9. Single commit
+10. Close Beads typedata-qrsw, push, open PR (orchestrator)
+11. STOP — human merges/tags/publishes
+
+## Worktree path reminder
+
+Use relative paths for EDITS. Absolute paths to /home/tmo/roadtothebeach/open/fyrnheim/ hit the main repo (M068 lesson). `pwd` to confirm worktree first.
+
+## Wait-for-feedback-agents reminder (M075 lesson)
+
+When implementation is done and pushed, do NOT clean up worktrees while
+fix-pr-feedback agents are still running. M075 had to recover from
+this exact mistake. The cleanup step is HUMAN-driven post-merge.
+
+## Do NOT
+
+- Add EventSource as join TARGET support — defer to future enhancement
+- Add multi-key joins, inner/right/outer, ON-predicate filters — M070 deferrals stand
+- Implement UnionSource — typedata-qrsw user picked remove (Option A)
+- Touch source_transforms.py helper internals (FR-10 reuses _apply_joins as-is)
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py
+- Bundle CLAUDE.md docs into this mission — separate docs PR
+- Merge, tag, or publish
+"""

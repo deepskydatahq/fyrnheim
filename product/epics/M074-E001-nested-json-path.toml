@@ -1,0 +1,78 @@
+# Epic: M074 v0.11.0 minor — nested json_path dot-notation support
+# Single epic mirroring M069/M072 minor-release shape.
+
+id = "M074-E001"
+parent = "M074"
+title = "Nested json_path dot-notation support + v0.11.0 release"
+status = "active"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+Update `_apply_json_path_extractions` regex to accept multi-segment
+dot-notation paths (`$.user.email`); update extraction logic to chain
+subscript access across all segments; update Field + helper docstrings;
+add 6 unit tests including a reporter-shape regression; bump 0.10.1 →
+0.11.0 with CHANGELOG entry; open release/v0.11.0 PR.
+
+Closes the M069 future-enhancement request for nested paths. Bracket
+notation explicitly stays out of scope for v0.11.0.
+"""
+
+[job_story]
+description = """When my source's JSON column has nested structure
+(e.g. `{\"user\": {\"email\": \"a@b.com\"}}`) and I declare
+`Field(json_path=\"$.user.email\")`, I want the engine to extract the
+nested value cleanly — not raise a ValueError or silently produce NULL
+in my downstream entity output."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 14 testing criteria from the M074 mission TOML pass",
+    "Regex relaxation: nested dot-notation paths accepted",
+    "Extraction chains subscripts across all segments via ibis",
+    "Field + helper docstrings updated to remove top-level-only caveat",
+    "6 new unit tests (positive + negative + reporter-shape regression)",
+    "All existing tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml 0.10.1 -> 0.11.0; uv.lock regenerated",
+    "CHANGELOG [0.11.0] Added entry",
+    "Branch release/v0.11.0, single commit, PR with post-merge-steps block",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M069/M072 minor-release shape — single commit on
+release/v0.11.0. DuckDB chained-subscript verified during planning.
+
+Full implementation sketch + regex + reporter-shape test are in the
+M074 mission TOML [notes] section.
+
+Release discipline: minor (0.11.0) because M069 explicitly documented
+nested-path support as a future enhancement; this mission delivers it.
+Strictly additive change — no behavior change for existing users.
+"""
+
+estimated_stories = 1

@@ -1,0 +1,301 @@
+# Mission: v0.11.0 — nested json_path support ($.user.email)
+# Reporter (client-flowable, 2026-04-25) flagged that assigned_to_email
+# is silently NULL on BigQuery because M069's json_path wiring deliberately
+# rejected nested paths and raised ValueError. Production data loss.
+# Lifts the M069 scope limit; ships nested path support for the dot-
+# notation case.
+
+id = "M074"
+title = "v0.11.0 — nested json_path support ($.a.b.c)"
+status = "ready"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+**Production impact**: client-flowable reporter (2026-04-25) flagged
+that `assigned_to_email` (extracted via `Field(json_path="$.user.email",
+source_column="created_by")`) is silently NULL on their BigQuery
+pipeline. Root cause: M069's `_apply_json_path_extractions` regex
+rejects multi-segment paths and raises ValueError at pipeline setup —
+the reporter's BigQuery run is presumably masking the ValueError as
+a NULL column somewhere in their wrapper.
+
+M069 documented this as a deliberate scope limit:
+> "Top-level paths (`$.<key>`) are supported; nested paths (`$.a.b`)
+>  raise ValueError as a future-enhancement signal — file a future-
+>  enhancement request to extend fyrnheim's json_path wiring."
+
+The reporter has filed it. M074 ships nested path support.
+
+**Scope (narrow)**:
+
+1. **Regex update** in `src/fyrnheim/engine/source_transforms.py`:
+   - From: `^\\$\\.[a-zA-Z_][a-zA-Z0-9_]*$` (single segment only)
+   - To: `^\\$(\\.[a-zA-Z_][a-zA-Z0-9_]*)+$` (one OR more dot-segments)
+2. **Extraction logic update**: parse all segments, chain
+   `[key1][key2]...[keyN]` subscripts on the JSON value before
+   `unwrap_as(ibis_type)`. Verified on DuckDB 2026-04-25 with ibis
+   12.0.0: `t.payload.cast('json')['user']['email'].unwrap_as('string')`
+   compiles cleanly and round-trips correctly.
+3. **Field docstring update** to remove the "top-level only" caveat;
+   document the new dot-notation contract + the still-unsupported
+   bracket notation.
+4. **Tests**: 2-segment, 3-segment, single-segment regression,
+   invalid forms (bracket notation, empty segment, trailing dot).
+5. **CHANGELOG [0.11.0] entry** noting the relaxation + the M069
+   future-enhancement request close-out.
+6. **Bracket notation deferred**: `$['key']` and `$.array[0]` still
+   raise ValueError. Document as a separate future enhancement.
+   Single user (the reporter) needs dot-notation only; brackets are
+   speculative.
+
+**Why minor (v0.11.0) not patch:**
+
+M069 explicitly documented nested paths as raising ValueError and
+called the future enhancement out by name. This mission delivers the
+documented future feature. Per release-discipline memory: "new
+features OR semantic shifts → minor."
+
+The relaxation is strictly additive: existing top-level paths
+continue to work unchanged; previously-rejected nested paths now
+succeed; bracket notation continues to raise (still scope-limited).
+No behavior change for existing users; new capability for users with
+nested-shape JSON.
+
+**Backend coverage**:
+
+DuckDB chained-subscript verified during planning. BigQuery should
+work the same way — `BQ.JSON_VALUE(col, '$.user.email')` is the
+established BQ pattern, and ibis maps `cast('json')['user']['email']`
+to it. If the reporter validates on BQ post-merge, file any
+discrepancy as a v0.11.1 patch.
+"""
+
+user_progress = "From 'M069's nested-path ValueError silently NULLs assigned_to_email on the reporter's BigQuery pipeline; production data loss' to 'nested dot-notation paths ($.user.email, $.a.b.c) supported via chained subscript; bracket notation still scope-limited as future enhancement'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Regex `_JSON_PATH_TOPLEVEL` in src/fyrnheim/engine/source_transforms.py renamed to `_JSON_PATH_DOT_NOTATION` (or similar — pick a name that reflects multi-segment support) and updated to `^\\\\$(\\\\.[a-zA-Z_][a-zA-Z0-9_]*)+$`",
+    "Extraction logic: parse all segments via the regex's group capture (or split on `.`); chain subscript access in order: `expr = table[source_col].cast('json')`; for each key in segments: `expr = expr[key]`; finally `expr.unwrap_as(ibis_type)`. Result assigned to column `field.name` via `table.mutate`",
+    "Field.json_path docstring (in src/fyrnheim/core/source.py) updated to remove the 'top-level only' caveat and document: (a) supported form `$.<key>` or `$.<key1>.<key2>...`, (b) bracket notation `$['key']` / `$.array[0]` is NOT supported (raises ValueError, future enhancement)",
+    "Helper docstring in source_transforms.py updated to match: nested dot-notation supported; bracket notation deferred",
+    "New unit tests in tests/test_source_transforms.py: test_json_path_two_segment_extraction (`$.user.email`), test_json_path_three_segment_extraction (`$.a.b.c`), test_json_path_single_segment_still_works (regression — M069's existing `$.utm_source`-shape test still passes), test_json_path_bracket_notation_raises_valueerror (`$.foo[0]`), test_json_path_empty_segment_raises_valueerror (`$..foo`), test_json_path_trailing_dot_raises_valueerror (`$.foo.`)",
+    "Test fixture for the 2-segment case mirrors the reporter's shape: `pd.DataFrame({'created_by': ['{\"user\":{\"email\":\"a@b.com\"}}', '{\"user\":{\"email\":\"c@d.com\"}}']})` extracted via `Field(name='assigned_to_email', json_path='$.user.email', source_column='created_by')` → output column has the email strings. Names the assertion in the test docstring as the 'reporter regression' for traceability",
+    "All existing tests pass unchanged: M066/M067/M068/M069/M071/M072/M073 regression coverage. Should be 604 baseline post-M073; new tests bring count to ~610-612",
+    "ruff + mypy clean",
+    "pyproject.toml 0.10.1 -> 0.11.0; uv.lock regenerated",
+    "CHANGELOG.md has `## [0.11.0] - 2026-04-25` (today's date) above `## [0.10.1]` with `### Added` subsection. Text MUST: (a) acknowledge the M069 future-enhancement request close-out, (b) cite the reporter's `$.user.email`-shape use case, (c) document the dot-notation form + the still-unsupported bracket notation, (d) note no behavior change for users with existing single-segment paths",
+    "Branch `release/v0.11.0`, single commit, message `feat(M074): nested json_path support for dot-notation paths (v0.11.0)`",
+    "PR opened with post-merge-steps block. Body mentions reporter's production NULL issue and the BQ-validation followup expectation. Optionally mention TestPyPI RC availability per release-discipline memory",
+    "Do NOT merge/tag/publish",
+    "Diff scope: src/fyrnheim/engine/source_transforms.py, src/fyrnheim/core/source.py (Field docstring update), tests/test_source_transforms.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT touch any other source or test file",
+]
+
+validator_context = [
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "CHANGELOG.md",
+]
+relevant_paths = [
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+related_missions = [
+    "M069 — v0.9.0 json_path + filter (this mission removes M069's nested-path scope limit)",
+    "M072 — v0.10.0 backend-aware fixture shadowing (no interaction; the json_path step still applies / skips on the same gates)",
+]
+
+[scope]
+in_scope = [
+    "Regex relaxation to accept nested dot-notation paths",
+    "Extraction logic update: chain subscripts across all segments",
+    "Field + helper docstring updates",
+    "6 new unit tests (positive + negative)",
+    "Reporter-shape regression test for traceability",
+    "Version bump 0.10.1 → 0.11.0 + uv.lock",
+    "CHANGELOG [0.11.0] Added entry",
+    "release/v0.11.0 branch + PR with post-merge-steps block",
+]
+out_of_scope = [
+    "Bracket notation `$['key']` / `$.array[0]` — speculative second feature; defer until a user asks",
+    "Array indexing `$.users[0]` — same",
+    "JSONPath wildcards `$.users[*]` — same",
+    "BigQuery integration test — ibis chained subscript should map to BQ JSON_VALUE; if it doesn't, file a v0.11.1 patch",
+    "M070 (source-level joins) — still gated on real-usage data",
+    "Changes to non-listed files",
+    "Merge, tag, PyPI publish — human post-merge steps",
+]
+acceptable_breakage = [
+    "None expected. Top-level paths continue to work; bracket notation continues to raise; only the previously-rejected nested-dot case becomes accepted.",
+    "If a user had wrapper code that caught the M069 ValueError and did something downstream (e.g. fall back to NULL — likely the reporter's case), that code path no longer fires. The result: their nested-path Fields now extract values instead of producing NULL. This is the fix, not a regression. CHANGELOG calls it out.",
+]
+
+[notes]
+considerations = """
+## DuckDB chained-subscript verification (2026-04-25)
+
+```python
+import ibis, pandas as pd
+df = pd.DataFrame({'payload': ['{\"user\":{\"email\":\"a@b.com\",\"id\":1}}',
+                                '{\"user\":{\"email\":\"c@d.com\",\"id\":2}}']})
+t = ibis.memtable(df)
+result = t.mutate(email=t.payload.cast('json')['user']['email'].unwrap_as('string'))
+print(result.execute())
+#                                payload    email
+# 0  {\"user\":{\"email\":\"a@b.com\",\"id\":1}}  a@b.com
+# 1  {\"user\":{\"email\":\"c@d.com\",\"id\":2}}  c@d.com
+```
+
+Works cleanly. Implementation is just iteration over the captured
+segments.
+
+## Implementation sketch
+
+```python
+# src/fyrnheim/engine/source_transforms.py
+import re
+
+# Old: single-segment only
+# _JSON_PATH_TOPLEVEL = re.compile(r\"^\\$\\.[a-zA-Z_][a-zA-Z0-9_]*$\")
+
+# New: one or more dot-segments
+_JSON_PATH_DOT_NOTATION = re.compile(
+    r\"^\\$(\\.[a-zA-Z_][a-zA-Z0-9_]*)+$\"
+)
+
+
+def _parse_json_path_segments(json_path: str) -> list[str]:
+    \"\"\"Return the list of dot-segment keys, or raise ValueError.\"\"\"
+    if not _JSON_PATH_DOT_NOTATION.match(json_path):
+        raise ValueError(
+            f\"json_path {json_path!r} is not a supported dot-notation path. \"
+            \"Supported forms: $.<key> or $.<key1>.<key2>... where each key is \"
+            \"a Python-identifier-style token. Bracket notation \"
+            \"($['key'], $.array[0]) is not yet supported — file a \"
+            \"future-enhancement request if needed.\"
+        )
+    # Strip leading '$' and split on '.'
+    return [seg for seg in json_path[1:].split(\".\") if seg]
+
+
+def _apply_json_path_extractions(table, fields):
+    if not fields:
+        return table
+    for f in fields:
+        if f.json_path is None:
+            continue
+        segments = _parse_json_path_segments(f.json_path)
+        ibis_type = _FIELD_TYPE_TO_IBIS.get(f.type)
+        if ibis_type is None:
+            raise ValueError(...)  # existing logic
+        source_col = f.source_column or f.name
+        # Chain subscript access
+        expr = table[source_col].cast(\"json\")
+        for key in segments:
+            expr = expr[key]
+        expr = expr.unwrap_as(ibis_type)
+        table = table.mutate(**{f.name: expr})
+    return table
+```
+
+Note: the regex uses `(\\.<segment>)+` so the segments list is
+non-empty after parsing (the regex requires at least one segment).
+The empty-segment filter in `_parse_json_path_segments` is defense-
+in-depth — the regex shouldn't allow them through, but the filter
+handles edge cases like `$.` (rejected by regex) or `$..a` (rejected
+by regex because `..` produces an empty segment between two dots,
+which fails `[a-zA-Z_][a-zA-Z0-9_]*`).
+
+## Reporter-shape test
+
+```python
+def test_json_path_two_segment_reporter_regression():
+    \"\"\"Reporter regression test: $.user.email shape.
+
+    Client-flowable reporter (2026-04-25) flagged that
+    assigned_to_email was silently NULL on BigQuery because M069's
+    nested-path ValueError fired. M074 supports the dot-notation
+    form so this case extracts correctly.
+    \"\"\"
+    df = pd.DataFrame({
+        \"created_by\": [
+            '{\"user\":{\"email\":\"alice@flowable.com\"}}',
+            '{\"user\":{\"email\":\"bob@flowable.com\"}}',
+        ],
+    })
+    table = ibis.memtable(df)
+
+    fields = [Field(
+        name=\"assigned_to_email\",
+        type=\"STRING\",
+        json_path=\"$.user.email\",
+        source_column=\"created_by\",
+    )]
+
+    result = _apply_json_path_extractions(table, fields)
+    assert \"assigned_to_email\" in result.columns
+    assert result.execute()[\"assigned_to_email\"].tolist() == [
+        \"alice@flowable.com\",
+        \"bob@flowable.com\",
+    ]
+```
+
+## Why bracket notation stays out of scope
+
+- Single requesting user (the reporter) needs dot-notation only
+- JSONPath bracket syntax is a separate spec scope (quoted strings,
+  numeric indices, slices)
+- ibis chained subscript on JSON arrays might or might not work the
+  same way; needs separate verification
+- Adding both at once doubles the test matrix and design surface
+- Per the release-discipline memory: ship the smallest minor that
+  unblocks the reporter; iterate on bracket notation if a second user
+  asks
+
+## Release-flow rituals (same as M063/M067/M071/M073)
+
+1. `git branch -m release/v0.11.0`
+2. Claim Beads
+3. Update regex + extraction + docstrings
+4. Add tests (6 new)
+5. `uv lock` + CHANGELOG
+6. Verify clean
+7. Single commit
+8. Close Beads, push, open PR
+9. STOP — human merges/tags/publishes
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory. Do NOT use
+absolute paths starting with `/home/tmo/roadtothebeach/open/fyrnheim/...`
+— those hit the main repo. `pwd` to confirm.
+
+## TOML-availability reminder (M073 lesson)
+
+Spec TOMLs must be committed to main BEFORE launching the worktree
+agent, or written inside the worktree, otherwise the agent can't read
+them via the worktree path. Workaround: pass absolute paths in the
+agent prompt for TOML reads.
+
+## Do NOT
+
+- Add bracket notation support — separate feature, separate user demand
+- Touch identity_engine, snapshot_diff, diff_engine, snapshot_store,
+  analytics_entity_engine, pipeline.py, event_source_loader.py
+- Add any other API surface — narrow this mission to nested paths
+- Merge, tag, or publish
+"""

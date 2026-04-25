@@ -1,0 +1,274 @@
+id = "M075-E001-S001"
+parent = "M075-E001"
+title = "FR-9 computed_column skip-if-exists + v0.12.0 cherry-picks + v0.12.1 release"
+status = "ready"
+created = 2026-04-25
+
+[outcome]
+description = """Skip computed_column on fixture-shadow path when
+output column already exists in table.columns; cherry-pick 4 fixes
+from orphan release/v0.12.0 commit 488d6eb (__version__ sync,
+test_package pin, test_e2e_joins production path, missing-right-pk
+test); bump 0.12.0 → 0.12.1 with CHANGELOG; push release/v0.12.1;
+open PR. Closes reporter's lifecycle_history migration gap."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/event_source_loader.py: in the computed_columns loop, change `for cc in event_source.computed_columns: table = table.mutate(...)` to first check `if reads_fixture and cc.name in table.columns: log.info(skip-message); continue` BEFORE calling mutate. The `reads_fixture` local should already be in scope from M072. Use `table.columns` (the list of column names on the ibis Table)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/pipeline.py::_build_state_source_table: same change applied to the equivalent computed_columns loop. Both call sites must use the same condition AND the same log message format for consistency."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "INFO log message shape: `'StateSource %s: computed_column %s skipped (output already in fixture)'` for StateSource path; `'EventSource %s: computed_column %s skipped (output already in fixture)'` for EventSource path. Mirrors M068/M072/M074 logging discipline."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New FR-9 unit test test_computed_column_skipped_when_output_exists_in_fixture in tests/test_m072_fixture_shadowing.py: fixture parquet contains a 'transition_type' column with sentinel value 'fixture-value'; StateSource declares ComputedColumn(name='transition_type', expression='t.this_column_does_not_exist + 1') with duckdb_fixture_is_transformed=True. The expression is INTENTIONALLY invalid — would raise if evaluated. Assert: pipeline runs without error AND output table has transition_type == 'fixture-value' (not the expression result). The expression's invalidity is what proves the skip happened."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_computed_column_applies_when_output_missing_from_fixture: fixture parquet does NOT have 'transition_type' column; StateSource declares same ComputedColumn but with a VALID expression (e.g. 'ibis.literal(\"computed-value\")'); duckdb_fixture_is_transformed=True. Assert: output table HAS transition_type column with 'computed-value' (the expression DID evaluate)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Verify existing M072 tests still pass: tests/test_m072_fixture_shadowing.py has test_event_source_computed_columns_apply_on_skip_path AND test_state_source_computed_columns_apply_on_skip_path. Read both tests' fixtures — they assert computed_columns APPLY on the fixture-shadow path. Their fixtures should NOT contain the computed-column output (otherwise they'd break under M075). If a fixture DOES contain the output column, update the test to either remove the column OR rename the computed_column. Document in commit body which (if any) tests needed touching"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "New e2e regression test test_m075_lifecycle_history_computed_column_with_joins_e2e (in tests/test_e2e_joins.py or new file): fixture parquet has all post-everything columns INCLUDING transition_type; StateSource declares joins=[Join] (which would skip on fixture-shadow) AND ComputedColumn(name='transition_type', expression='...references t.name_pardot_lifecycle_stage_next_stage_id...'); duckdb_fixture_is_transformed=True. Without M075 fix this would fail because the joined-suffix column doesn't exist on the fixture path. With M075: pipeline runs cleanly, output preserves fixture's transition_type. Docstring cites client-flowable 2026-04-25 reporter for traceability"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Cherry-pick (1) __version__ sync: src/fyrnheim/__init__.py — locate the `__version__` assignment (was '0.1.0' on v0.12.0 PyPI). Update to '0.12.1'. Add a code comment near it: '# Manually synced with pyproject.toml. TODO(future): derive from importlib.metadata to prevent drift.' OR similar. The comment is to flag the manual-sync contract for future maintainers"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Cherry-pick (2) test_package version pin: tests/test_package.py — locate the version assertion (was checking '0.1.0' or stale value). Update to assert '0.12.1' OR import from a dynamic source. Pick whichever is cleaner; the goal is no manual update needed for future patch releases if dynamic"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Cherry-pick (3) test_e2e_joins production path: tests/test_e2e_joins.py — find the lifecycle_history e2e test that previously bypassed `_build_state_source_table` by re-reading the parquet directly. Update to import `_build_state_source_table` and `_run_state_source_diff` from `fyrnheim.engine.pipeline` and use them to register the pre-diff table with the source registry properly. Strengthen the assertion: pin the joined column's specific values (e.g. `assert {\"Lead\", \"Qualified\"}.issubset(set(row0_joined_names))`) instead of just counting name-like keys. Reference the PR #143 feedback agent's commit 488d6eb for context — this fix exists there"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Cherry-pick (4) missing-right-pk test: tests/test_source_transforms.py adds test_apply_joins_missing_right_pk_registry_raises_clear_error — calls `_apply_joins(table, joins, source_registry, right_pk_registry)` where joins[0].source_name IS in source_registry but NOT in right_pk_registry. Asserts ValueError with 'right primary key' or similar in the message. Pin the exact error wording the helper actually raises"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass unchanged: M066/M067/M068/M069/M071/M072/M073/M074/M070 regression coverage. 627 v0.12.0 baseline + ~5 new (3 FR-9 + 1 missing-right-pk + 1 e2e) = ~632 expected"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.12.0 -> 0.12.1; uv.lock regenerated; src/fyrnheim/__init__.py __version__ = '0.12.1' (in sync)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has `## [0.12.1] - 2026-04-25` (today's date) above `## [0.12.0]` with `### Fixed` subsection. Required content: (a) FR-9 — refines M072's computed_columns rule: when fixture-shadow fires AND the computed_column's output is already in the fixture, preserve the fixture's value instead of recomputing; cite the reporter's lifecycle_history use case (computed expression referenced joined-suffix column not present on fixture path); (b) `fyrnheim.__version__` was '0.1.0' across v0.8.0-v0.12.0 PyPI releases; now correctly synced to pyproject.toml; (c) test improvements brief mention (production path + new coverage). Optional: a sentence or short reference linking the M072 [0.10.0] entry to clarify the contract refinement"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff check src/ tests/ clean; mypy src/ clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py, src/fyrnheim/__init__.py, tests/test_e2e_joins.py, tests/test_source_transforms.py, tests/test_m072_fixture_shadowing.py, tests/test_package.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify source_transforms.py (FR-9 lives in the loader call sites), source.py (no model changes), snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py. May read those files for context but not modify"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.12.1` (rename worktree branch FIRST). Single commit. Message: `fix(M075): FR-9 computed_column skip-if-exists + v0.12.0 misses (v0.12.1)` with body covering: FR-9 Option A rationale, the v0.12.0 cherry-pick origin (commit 488d6eb on orphan release/v0.12.0), the lifecycle_history migration unblock, and any M072 test fixtures that needed updating"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.12.1 — FR-9 computed_column skip-if-exists + v0.12.0 fixes`. Body sections: (1) FR-9 explanation + reporter context; (2) v0.12.0 misses + their root cause (worktree-cleaned-up-while-feedback-running); (3) Pardot migration impact (lifecycle_history now fully migratable); (4) post-merge-steps block including `git push origin --delete release/v0.12.0` to clean up the orphan branch"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Close Beads task: `bd close <story-task-id>` after push. (Beads task ID will be assigned during execution.)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish. Do NOT delete the orphan release/v0.12.0 branch — that's a human post-merge step."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/__init__.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_source_transforms.py",
+    "tests/test_package.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec (read via absolute path)
+
+Spec TOMLs are uncommitted on main when your worktree forks. Read via absolute path:
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/missions/M075-v0.12.1-fr9-and-cherry-picks.toml`
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/epics/M075-E001-fr9-and-cherry-picks.toml`
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/stories/M075-E001-S001-fr9-and-cherry-picks.toml`
+
+Mission TOML [notes] has the full design rationale, cherry-pick mechanics, M072 test verification guidance, and orphan-branch context.
+
+## FR-9 implementation
+
+```python
+# In event_source_loader.py and _build_state_source_table:
+reads_fixture = _reads_duckdb_fixture(source, backend)
+if not reads_fixture:
+    table = _apply_source_transforms(table, source.transforms)
+    table = _apply_joins(table, source.joins, source_registry, right_pk_registry)  # only StateSource
+    table = _apply_json_path_extractions(table, source.fields)
+
+# computed_columns: NEW M075 — skip if fixture-shadow AND output already exists
+if source.computed_columns:
+    for cc in source.computed_columns:
+        if reads_fixture and cc.name in table.columns:
+            log.info(
+                \"StateSource %s: computed_column %s skipped (output already in fixture)\",
+                source.name, cc.name,
+            )
+            continue
+        table = table.mutate(**{cc.name: eval(cc.expression, {\"ibis\": ibis, \"t\": table})})
+
+# filter — unchanged from M072
+if not reads_fixture and source.filter:
+    table = table.filter(eval(source.filter, {\"ibis\": ibis, \"t\": table}))
+```
+
+For EventSource path use `'EventSource %s: ...'` log prefix.
+
+## Cherry-pick approach
+
+Two options:
+
+**Option A — git cherry-pick:**
+```bash
+git fetch origin release/v0.12.0
+git cherry-pick 488d6eb  # the agent's fix commit
+# resolve any conflicts
+# update __version__ from '0.12.0' to '0.12.1' (the cherry-pick will set 0.12.0 from the agent)
+```
+
+**Option B — manual re-apply:** read the diff at `gh pr diff 143` (after merge) or `git show 488d6eb` and re-apply the 4 changes by hand:
+1. `src/fyrnheim/__init__.py` — `__version__ = \"0.12.1\"` (was 0.1.0)
+2. `tests/test_package.py` — version pin update
+3. `tests/test_e2e_joins.py` — production path + strengthened assertion
+4. `tests/test_source_transforms.py` — new missing-right-pk test
+
+Recommend Option A (cherry-pick) for attribution + cleanliness. Manually patch the version string after.
+
+## M072 existing test verification
+
+Read tests/test_m072_fixture_shadowing.py. Find:
+- `test_event_source_computed_columns_apply_on_skip_path`
+- `test_state_source_computed_columns_apply_on_skip_path`
+
+Verify their fixtures do NOT contain the computed-column output column. If they do, the M075 behavior would skip the recomputation and the test's assertion would fail. Update the fixture to remove the column OR rename the computed_column. Document in commit body which (if any) needed touching.
+
+## CHANGELOG [0.12.1]
+
+```
+## [0.12.1] - 2026-04-25
+
+### Fixed
+
+- **`fyrnheim.__version__`** was `\"0.1.0\"` across v0.8.0–v0.12.0 PyPI
+  releases — never synced from `pyproject.toml`. Now correctly
+  reflects the package version. Users introspecting via
+  `import fyrnheim; print(fyrnheim.__version__)` get the right value
+  starting v0.12.1.
+
+- **`computed_columns` on the fixture-shadow path** now respects
+  fixture-resident output columns. M072 (v0.10.0) shipped
+  `duckdb_fixture_is_transformed` with the rule \"computed_columns
+  always apply\" — but computed expressions can reference
+  upstream-pipeline outputs (joins, json_path extracts, renames)
+  that DID skip on the fixture-shadow path. When the computed
+  expression references a missing input, it failed. M075 refines
+  the rule: when the fixture-shadow path fires AND the
+  computed_column's output column already exists in the fixture,
+  preserve the fixture's value instead of recomputing. Per-column
+  granularity — columns missing from the fixture still get
+  computed.
+
+  Reporter case: a `transition_type` computed_column referencing
+  `t.name_<source>_<key>` (a join-suffixed column from M070's
+  source-level joins). On BigQuery, joins applied → expression
+  evaluated. On DuckDB+fixture, joins skipped → suffix column
+  missing → expression failed; but the fixture had `transition_type`
+  pre-computed anyway, so the right behavior is preserve-from-fixture.
+
+- **Test improvements**:
+  - `tests/test_e2e_joins.py` lifecycle_history e2e now uses
+    `_build_state_source_table` + `_run_state_source_diff` to register
+    the pre-diff table properly, instead of bypassing the production
+    path by re-reading the parquet. Strengthened assertion to pin
+    specific joined values (`{\"Lead\", \"Qualified\"}` etc.).
+  - `tests/test_source_transforms.py` adds
+    `test_apply_joins_missing_right_pk_registry_raises_clear_error`
+    for a previously-uncovered branch in `_apply_joins`.
+
+  Both originated from PR #143's CodeRabbit review; the fixes
+  reached the orphan `release/v0.12.0` branch (commit 488d6eb)
+  but never landed on main pre-tag. M075 cherry-picks them.
+```
+
+Reference the M072 [0.10.0] entry's \"computed_columns STILL APPLY\" wording — link to the M075 refinement.
+
+## Release-flow rituals
+
+Same as M063/M067/M071/M073:
+1. `git branch -m release/v0.12.1`
+2. Claim Beads
+3. Cherry-pick `488d6eb` (or manual re-apply)
+4. FR-9 in event_source_loader.py + pipeline.py
+5. Update __version__ to '0.12.1'
+6. FR-9 tests + verify M072 tests still pass + the e2e regression
+7. `uv lock` + CHANGELOG
+8. Verify clean
+9. Single commit
+10. Close Beads, push, open PR
+11. STOP — human merges/tags/publishes; human deletes orphan branch
+
+## Worktree path reminder
+
+Use relative paths for EDITS. Absolute paths to /home/tmo/roadtothebeach/open/fyrnheim/ hit the main repo (M068 lesson). `pwd` to confirm worktree first.
+
+## Do NOT
+
+- Implement Option B (uniform skip) or Option C (per-column opt-out) — user picked Option A
+- Touch source_transforms.py helper internals
+- Touch source.py / no Pydantic model changes
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py
+- Migrate __version__ to importlib.metadata (separate enhancement)
+- Delete the orphan release/v0.12.0 branch (post-merge human step)
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_source_transforms.py",
+    "tests/test_package.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M075-v0.12.1-fr9-and-cherry-picks.toml",
+    "product/epics/M075-E001-fr9-and-cherry-picks.toml",
+]

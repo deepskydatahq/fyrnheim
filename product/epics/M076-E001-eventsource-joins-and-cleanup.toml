@@ -1,0 +1,92 @@
+id = "M076-E001"
+parent = "M076"
+title = "EventSource joins (FR-10) + remove dead TableSource fields + v0.13.0 release"
+status = "active"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+Single epic mirroring M070's release-shape (single mission = single
+PR). Bundles two narrow concerns:
+
+1. **FR-10**: EventSource joins — wire `_apply_joins` for EventSource,
+   mirror M070's StateSource implementation. Closes M070's
+   future-enhancement deferral. Unblocks reporter's
+   pardot_lifecycle_history migration.
+
+2. **typedata-qrsw**: remove `TableSource.field_mappings` and
+   `literal_columns` dead fields per Option A. Same M073 pattern.
+
+Ship as v0.13.0 minor release.
+"""
+
+[job_story]
+description = """When my EventSource needs to enrich its events by
+joining a sibling source (e.g. `lifecycle_history` events joining
+`lifecycle_stage` for human-readable stage names), I want to declare
+`joins=[Join(...)]` directly on the EventSource — the same way I can
+on StateSource since v0.12.0 — without having to keep a SQL StagingView
+just for the join layer."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 18 testing criteria from the M076 mission TOML pass",
+    "EventSource gains joins: list[Join] = [] field; same shape as StateSource.joins from M070",
+    "_apply_joins wired in load_event_source between transforms and json_path",
+    "M072 fixture-shadow gate extends to EventSource joins (skip when fixture-shadow fires)",
+    "upstream + joins mutex validator works on EventSource (moved to BaseTableSource OR duplicated)",
+    "EventSource as join TARGET raises clear ValueError",
+    "Phase 1 topological sort handles EventSource sources",
+    "Diagnostic INFO log on EventSource join apply",
+    "TableSource.field_mappings and literal_columns removed; UnionSource docstring paragraph removed",
+    "All existing tests pass (633 v0.12.1 baseline + ~5 new)",
+    "ruff + mypy clean",
+    "pyproject.toml 0.12.1 -> 0.13.0; uv.lock regenerated; __init__.py __version__ in sync",
+    "CHANGELOG [0.13.0] with Added (FR-10) + Removed (dead fields) + Notes",
+    "Branch release/v0.13.0, single commit, PR with post-merge-steps + optional RC note",
+    "Close typedata-qrsw on push",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_joins.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_joins.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirror M070's release-shape — single commit, single PR. Full
+implementation guide + pre-flight checks + CHANGELOG copy are in the
+M076 mission TOML [notes] section.
+
+Safety: FR-10 default empty list = backward-compatible for non-
+joining EventSources. typedata-qrsw cleanup is Pydantic-extras=ignore
+soft (M073 pattern).
+
+Wait-for-feedback-agents-before-cleanup discipline applies (M075
+lesson).
+"""
+
+estimated_stories = 1

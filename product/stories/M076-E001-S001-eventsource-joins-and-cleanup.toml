@@ -1,0 +1,224 @@
+id = "M076-E001-S001"
+parent = "M076-E001"
+title = "EventSource joins (FR-10) + remove dead TableSource fields + v0.13.0 release"
+status = "ready"
+created = 2026-04-25
+
+[outcome]
+description = """Add joins field to EventSource; wire _apply_joins in
+load_event_source mirroring M070's StateSource path; M072 gate +
+upstream-mutex + EventSource-as-target guard; remove
+TableSource.field_mappings + literal_columns + UnionSource docstring;
+bump 0.12.1 -> 0.13.0 with CHANGELOG; push release/v0.13.0; open PR.
+Closes typedata-qrsw."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pre-flight grep: locate the upstream+joins validator added in M070. If it's on StateSource only (`@model_validator` decorated method on StateSource class), MOVE it to BaseTableSource so EventSource inherits. If it's already on BaseTableSource, no move needed. Document the location in the commit body. Use `getattr(self, 'joins', [])` in the validator body to handle subclasses that may or may not have joins."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Pre-flight grep: locate Phase 1 topological sort in pipeline.py (likely `_topo_sort_sources` or similar). Verify the graph-building code uses `getattr(src, 'joins', [])` or duck-typing across ALL sources (StateSource AND EventSource). If it's StateSource-typed (`isinstance(src, StateSource)`), generalize to handle EventSource. Document the verification in the commit body"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource gains `joins: list[Join] = PydanticField(default_factory=list)` in src/fyrnheim/core/source.py. Place the field after existing EventSource fields (e.g. after `payload_exclude` or wherever fits the existing field grouping). Docstring documents same semantics as StateSource: left-only, single-key equality, source_name references same-pipeline source"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source wiring (src/fyrnheim/engine/event_source_loader.py): after `_apply_source_transforms` and BEFORE `_apply_json_path_extractions`, insert: `if event_source.joins: log.info('EventSource %s: applying %d join(s) to %s', event_source.name, len(event_source.joins), [j.source_name for j in event_source.joins]); table = _apply_joins(table, event_source.joins, source_registry, right_pk_registry)`. The skip on M072 fixture-shadow path applies (entire transforms-and-joins block already gated by `if not reads_fixture`)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source signature gains `source_registry` and `right_pk_registry` parameters threaded from Phase 1 — mirror how _build_state_source_table receives them. Phase 1 in pipeline.py passes them to load_event_source same as it does to _build_state_source_table. The post-pipeline EventSource table (post-transforms-joins-json_path-computed_columns-filter, BEFORE event-shape conversion) is captured into source_registry[event_source.name]"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource-as-join-target guard: at sort time OR in _apply_joins, when a Join's source_name resolves to an EventSource, raise ValueError with message including: (a) the offending source_name, (b) explicit note that joining TO an EventSource is unsupported, (c) future-enhancement pointer mentioning right_pk_registry id_field semantics. Place the check at sort time (early failure beats runtime failure). Add a unit test test_join_target_eventsource_raises_clear_error"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Validator test in tests/test_state_event_source.py: test_event_source_upstream_and_joins_mutually_exclusive — declaring EventSource(upstream=<StagingView>, joins=[Join(...)]) raises ValueError on construction. Same pattern as the existing StateSource version"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Validator test: test_event_source_joins_defaults_empty_list — `EventSource(name='s', entity_id_field='eid', timestamp_field='ts').joins == []`"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "New e2e test test_m076_lifecycle_history_eventsource_joins_e2e in tests/test_e2e_joins.py: an EventSource (lifecycle_history-shape) declaring two Joins to a StateSource lookup table (lifecycle_stage), running through the full pipeline (Phase 1 source-load → identity graph → analytics_entity OR raw event-stream check). Assert: emitted events have the joined columns in their payloads (the existing payload-pack step at event_source_loader.py:71-92 handles this naturally — joined columns become payload keys after the join applies). Docstring explicitly cites client-flowable 2026-04-25 follow-up for traceability"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "TableSource cleanup in src/fyrnheim/core/source.py: remove `field_mappings: dict[str, str] = PydanticField(default_factory=dict)` line; remove `literal_columns: dict[str, Any] = PydanticField(default_factory=dict)` line; remove the docstring paragraph (currently around lines 167-178) that says 'When used inside a UnionSource, the optional field_mappings and literal_columns enable per-source normalization before union:' through the literal_columns example. Replace with a minimal one-line TableSource docstring: `'Standard table source with optional field definitions and transforms.'` if not already that"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Cleanup verification: grep across src/ and tests/ for `field_mappings` and `literal_columns`. Expected: zero hits after removal. If any tests construct `TableSource(field_mappings=...)` or `literal_columns=...`, those constructor calls need updating (drop the kwargs). Document any test updates in the commit body"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All M066/M067/M068/M069/M070/M071/M072/M073/M074/M075 regression tests pass unchanged. 633 v0.12.1 baseline + ~5 new (3 validator + 1 e2e + 1 EventSource-as-target guard) = ~638 expected"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.12.1 -> 0.13.0; uv.lock regenerated; src/fyrnheim/__init__.py __version__ = '0.13.0' (in sync per M075 convention)"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has `## [0.13.0] - 2026-04-25` (today's date) above `## [0.12.1]` with `### Added` (FR-10 EventSource.joins with reporter context + same-as-StateSource semantics + EventSource-as-target out-of-scope note), `### Removed` (TableSource.field_mappings + literal_columns dead fields + M073-style migration note about Pydantic extras=ignore softening), and optionally `### Notes` for caveats. Use the verbatim copy from the M076 mission TOML [notes] section as the starting point"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff + mypy clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/core/source.py, src/fyrnheim/engine/event_source_loader.py, src/fyrnheim/engine/pipeline.py (likely small generalization for topo-sort if needed), src/fyrnheim/__init__.py (version sync), tests/test_state_event_source.py (validator tests), tests/test_e2e_joins.py (e2e test), pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify src/fyrnheim/engine/source_transforms.py (FR-10 reuses _apply_joins as-is), snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.13.0` (rename worktree branch FIRST). Single commit. Message: `feat(M076): EventSource joins (FR-10) + remove dead TableSource fields (v0.13.0)` with body covering: M070 follow-up rationale, reporter's lifecycle_history migration unblock, the EventSource-as-target deferral, the typedata-qrsw cleanup (M073 pattern), any test/validator-placement decisions made during implementation"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.13.0 — EventSource joins (FR-10) + remove dead TableSource fields`. Body sections: (1) FR-10 explanation + reporter context (M070 deferral close-out); (2) typedata-qrsw cleanup + M073 precedent; (3) Pardot migration impact (lifecycle_history fully migratable); (4) post-merge-steps block. Optional TestPyPI RC note per release-discipline memory"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Close Beads task: `bd close <story-task-id>` AND `bd close typedata-qrsw` after push"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_event_source_loader.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec (read via absolute path)
+
+Spec TOMLs are uncommitted on main when your worktree forks. Read via absolute path:
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/missions/M076-v0.13.0-eventsource-joins-and-dead-fields.toml` — full design rationale, M070 architecture context, CHANGELOG copy
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/epics/M076-E001-eventsource-joins-and-cleanup.toml`
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/stories/M076-E001-S001-eventsource-joins-and-cleanup.toml`
+
+## Pre-flight grep checks (do these FIRST before editing)
+
+```
+grep -n "model_validator\\|upstream\\|joins" src/fyrnheim/core/source.py
+grep -n "_topo_sort_sources\\|getattr.*joins\\|isinstance.*StateSource" src/fyrnheim/engine/pipeline.py
+grep -n "field_mappings\\|literal_columns\\|UnionSource" src/ tests/
+```
+
+Document findings in the commit body before/after.
+
+## Implementation order
+
+1. Move/dup the upstream+joins validator from StateSource to BaseTableSource (or wherever pre-flight finds it)
+2. Add `joins: list[Join] = []` to EventSource
+3. Add EventSource-as-join-target guard in topological sort (or `_apply_joins`)
+4. Wire `_apply_joins` in `load_event_source` between transforms and json_path; thread `source_registry` and `right_pk_registry` parameters through
+5. Update Phase 1 in pipeline.py to populate `loaded_sources[event_source.name]` from the load_event_source post-pipeline table (BEFORE event conversion)
+6. Remove TableSource.field_mappings + literal_columns + UnionSource docstring
+7. Tests
+8. Version bump + CHANGELOG
+
+## Pipeline-stage placement (CRITICAL — load-bearing)
+
+EventSource pipeline-stage order after M076:
+
+```
+read_table → transforms → [JOINS] → json_path → computed_columns (with M075 skip-if-exists) → filter → event-shape conversion (entity_id mapping + payload pack)
+```
+
+Joins go BEFORE event-shape conversion. The post-join table is what gets registered in `loaded_sources` (so other sources can join to this EventSource — though that case is OUT OF SCOPE for M076 per the EventSource-as-target guard).
+
+## EventSource-as-join-target guard
+
+```python
+# In _topo_sort_sources or wherever source dependencies are resolved:
+for src in sources:
+    for j in getattr(src, 'joins', []):
+        target = next((s for s in sources if s.name == j.source_name), None)
+        if isinstance(target, EventSource):
+            raise ValueError(
+                f"Join in source {src.name!r} references {j.source_name!r} "
+                "which is an EventSource. Joining TO an EventSource is "
+                "not yet supported (the right_pk_registry's id_field lookup "
+                "assumes StateSource semantics). File a future-enhancement "
+                "request if you need this."
+            )
+```
+
+Add a unit test that exercises this guard.
+
+## CHANGELOG [0.13.0] — full text in mission TOML [notes]
+
+Use the verbatim copy from the M076 mission TOML's [notes] section. Both the Added (FR-10) and Removed (typedata-qrsw) entries are spelled out there.
+
+## Release-flow rituals (same as M066/M068/M069/M070/M072/M074)
+
+1. `git branch -m release/v0.13.0`
+2. Claim Beads (story task + typedata-qrsw)
+3. Pre-flight grep
+4. Implement (order above)
+5. Tests
+6. `__version__` to '0.13.0'; `uv lock`
+7. CHANGELOG
+8. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+9. Single commit
+10. Close all Beads tasks
+11. Push (do NOT open PR)
+
+## Worktree path reminder (M068 lesson)
+
+Use relative paths for EDITS. Absolute paths to /home/tmo/roadtothebeach/open/fyrnheim/ hit the main repo. `pwd` to confirm worktree first. Spec TOMLs ARE OK to read via absolute path.
+
+## M075 cleanup-timing lesson
+
+Do NOT clean up worktrees after pushing. The orchestrator handles all cleanup AFTER fix-pr-feedback agents complete. Premature cleanup caused the orphan branch issue in M075.
+
+## Do NOT
+
+- Add EventSource as join TARGET — guard raises ValueError; defer
+- Add multi-key joins, inner/right/outer, ON-predicate filters
+- Implement UnionSource (typedata-qrsw user picked remove)
+- Touch source_transforms.py helper internals (FR-10 reuses _apply_joins)
+- Touch snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, staging_runner.py
+- Bundle CLAUDE.md docs into this PR — separate docs PR
+- Merge, tag, or publish
+- Clean up worktree after pushing — orchestrator handles it
+"""
+reference_files = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/__init__.py",
+    "tests/test_state_event_source.py",
+    "tests/test_e2e_joins.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M076-v0.13.0-eventsource-joins-and-dead-fields.toml",
+    "product/epics/M076-E001-eventsource-joins-and-cleanup.toml",
+    "product/stories/M070-E001-S001-source-level-joins.toml",
+]

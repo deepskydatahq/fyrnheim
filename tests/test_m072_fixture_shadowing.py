@@ -547,3 +547,200 @@ def test_event_source_and_state_source_field_declared_on_base() -> None:
     )
     assert state.duckdb_fixture_is_transformed is True
     assert event.duckdb_fixture_is_transformed is True
+
+
+# ---------------------------------------------------------------------------
+# M075 (FR-9): computed_column skip-if-output-already-in-fixture
+# ---------------------------------------------------------------------------
+#
+# Refines M072's "computed_columns ALWAYS APPLY on the skip path" rule.
+# When fixture-shadow fires AND the computed_column's output column is
+# already present in the fixture, preserve the fixture's value instead of
+# recomputing. Per-column granularity: columns missing from the fixture
+# still get computed.
+#
+# Reporter context (client-flowable 2026-04-25): a `transition_type`
+# computed_column referenced a join-suffixed column from M070's source-
+# level joins. On BigQuery joins applied → suffix column existed →
+# expression evaluated. On DuckDB+fixture, joins skipped → suffix column
+# missing → expression failed; but the fixture had `transition_type`
+# pre-computed anyway.
+
+
+def test_state_source_computed_column_skipped_when_output_exists_in_fixture(
+    tmp_path,
+) -> None:
+    """M075 (FR-9, StateSource): fixture has 'transition_type' column with
+    sentinel value; ComputedColumn expression is intentionally invalid
+    (references a non-existent column). The skip preserves the fixture's
+    value — proven by the lack of error and the sentinel surviving.
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    fixture = data_dir / "accounts.parquet"
+    pd.DataFrame(
+        {
+            "account_id": ["A1", "A2"],
+            "transition_type": ["fixture-value", "fixture-value"],
+        }
+    ).to_parquet(str(fixture))
+
+    state_source = StateSource(
+        name="accounts",
+        project="test",
+        dataset="test",
+        table="accounts",
+        duckdb_path=str(fixture),
+        duckdb_fixture_is_transformed=True,
+        id_field="account_id",
+        computed_columns=[
+            # Intentionally invalid — would raise NameError / IbisError if
+            # evaluated. The skip is what proves the fixture's value won.
+            ComputedColumn(
+                name="transition_type",
+                expression="t.this_column_does_not_exist + 1",
+            ),
+        ],
+    )
+    config = ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=data_dir,
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+    conn = ibis.duckdb.connect()
+    events = _load_state_source(state_source, config, conn).execute()
+    assert len(events) == 2
+    payloads = [json.loads(p) for p in events["payload"]]
+    transition_types = sorted(p["transition_type"] for p in payloads)
+    assert transition_types == ["fixture-value", "fixture-value"]
+
+
+def test_state_source_computed_column_applies_when_output_missing_from_fixture(
+    tmp_path,
+) -> None:
+    """M075 (FR-9, StateSource): fixture does NOT have 'transition_type'
+    column; ComputedColumn has a VALID expression. The expression IS
+    evaluated and the output column is created."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    fixture = data_dir / "accounts.parquet"
+    pd.DataFrame(
+        {
+            "account_id": ["A1", "A2"],
+            "base": [10, 20],
+        }
+    ).to_parquet(str(fixture))
+
+    state_source = StateSource(
+        name="accounts",
+        project="test",
+        dataset="test",
+        table="accounts",
+        duckdb_path=str(fixture),
+        duckdb_fixture_is_transformed=True,
+        id_field="account_id",
+        computed_columns=[
+            ComputedColumn(
+                name="transition_type",
+                expression='ibis.literal("computed-value")',
+            ),
+        ],
+    )
+    config = ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=data_dir,
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+    conn = ibis.duckdb.connect()
+    events = _load_state_source(state_source, config, conn).execute()
+    assert len(events) == 2
+    payloads = [json.loads(p) for p in events["payload"]]
+    transition_types = sorted(p["transition_type"] for p in payloads)
+    assert transition_types == ["computed-value", "computed-value"]
+
+
+def test_event_source_computed_column_skipped_when_output_exists_in_fixture(
+    tmp_path,
+) -> None:
+    """M075 (FR-9, EventSource): mirror of the StateSource skip test.
+    Fixture has the computed-column output baked in; expression is
+    intentionally invalid; skip preserves the fixture's value."""
+    fixture = _write_parquet(
+        tmp_path,
+        "events.parquet",
+        pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                "transition_type": ["fixture-value", "fixture-value"],
+            }
+        ),
+    )
+    es = EventSource(
+        name="page_views",
+        project="test",
+        dataset="test",
+        table="test",
+        duckdb_path=fixture,
+        duckdb_fixture_is_transformed=True,
+        entity_id_field="user_id",
+        timestamp_field="viewed_at",
+        event_type="page_view",
+        computed_columns=[
+            ComputedColumn(
+                name="transition_type",
+                expression="t.this_column_does_not_exist + 1",
+            ),
+        ],
+    )
+    conn = ibis.duckdb.connect()
+    result = load_event_source(conn, es, backend="duckdb").execute()
+    assert len(result) == 2
+    payloads = [json.loads(p) for p in result["payload"]]
+    transition_types = sorted(p["transition_type"] for p in payloads)
+    assert transition_types == ["fixture-value", "fixture-value"]
+
+
+def test_event_source_computed_column_applies_when_output_missing_from_fixture(
+    tmp_path,
+) -> None:
+    """M075 (FR-9, EventSource): mirror of the StateSource apply test.
+    Fixture missing the column; valid expression; column gets computed."""
+    fixture = _write_parquet(
+        tmp_path,
+        "events.parquet",
+        pd.DataFrame(
+            {
+                "user_id": ["u1", "u2"],
+                "viewed_at": ["2024-01-01", "2024-01-02"],
+                "base": [10, 20],
+            }
+        ),
+    )
+    es = EventSource(
+        name="page_views",
+        project="test",
+        dataset="test",
+        table="test",
+        duckdb_path=fixture,
+        duckdb_fixture_is_transformed=True,
+        entity_id_field="user_id",
+        timestamp_field="viewed_at",
+        event_type="page_view",
+        computed_columns=[
+            ComputedColumn(
+                name="transition_type",
+                expression='ibis.literal("computed-value")',
+            ),
+        ],
+    )
+    conn = ibis.duckdb.connect()
+    result = load_event_source(conn, es, backend="duckdb").execute()
+    assert len(result) == 2
+    payloads = [json.loads(p) for p in result["payload"]]
+    transition_types = sorted(p["transition_type"] for p in payloads)
+    assert transition_types == ["computed-value", "computed-value"]

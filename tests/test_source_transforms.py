@@ -231,23 +231,6 @@ def test_fields_without_json_path_are_ignored() -> None:
     assert set(result.columns) == set(t.columns)
 
 
-def test_nested_json_path_raises_valueerror() -> None:
-    """Nested paths (``$.a.b``) are deliberately unsupported in M069 —
-    raise a ValueError at pipeline setup pointing at the future
-    enhancement, rather than silently doing the wrong thing."""
-    t = _json_table()
-    fields = [
-        Field(
-            name="nested",
-            type="STRING",
-            json_path="$.a.b",
-            source_column="custom_type",
-        )
-    ]
-    with pytest.raises(ValueError, match="Nested paths"):
-        _apply_json_path_extractions(t, fields)
-
-
 def test_unknown_field_type_raises_valueerror() -> None:
     """Unsupported Field.type raises a clear error at pipeline setup
     rather than coercing to a silently-wrong ibis type."""
@@ -265,7 +248,8 @@ def test_unknown_field_type_raises_valueerror() -> None:
 
 
 def test_json_path_non_toplevel_key_with_bracket_raises() -> None:
-    """Paths that aren't the ``$.<key>`` form (e.g. array indexes) raise."""
+    """Paths that aren't the dot-notation form (e.g. ``$[0]`` array
+    indexes) raise — bracket notation stays out of scope in M074."""
     t = _json_table()
     fields = [
         Field(
@@ -275,8 +259,172 @@ def test_json_path_non_toplevel_key_with_bracket_raises() -> None:
             source_column="custom_type",
         )
     ]
-    with pytest.raises(ValueError, match="top-level path"):
+    with pytest.raises(ValueError, match="dot-notation"):
         _apply_json_path_extractions(t, fields)
+
+
+# ---------------------------------------------------------------------------
+# M074: nested json_path dot-notation support
+# ---------------------------------------------------------------------------
+
+
+def _nested_json_table() -> ibis.Table:
+    """Table with nested-shape JSON columns for M074 extraction tests."""
+    return ibis.memtable(
+        pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "payload": [
+                    '{"user":{"email":"a@b.com","id":1}}',
+                    '{"user":{"email":"c@d.com","id":2}}',
+                    '{"user":{"email":"e@f.com","id":3}}',
+                ],
+                "deep": [
+                    '{"a":{"b":{"c":42}}}',
+                    '{"a":{"b":{"c":99}}}',
+                    '{"a":{"b":{"c":7}}}',
+                ],
+            }
+        )
+    )
+
+
+def test_json_path_two_segment_extraction() -> None:
+    """M074: two-segment dot-notation path ($.user.email) chains
+    subscripts and extracts the nested string value."""
+    t = _nested_json_table()
+    fields = [
+        Field(
+            name="email",
+            type="STRING",
+            json_path="$.user.email",
+            source_column="payload",
+        )
+    ]
+    result = _apply_json_path_extractions(t, fields)
+    df = result.execute()
+    assert "email" in df.columns
+    assert list(df["email"]) == ["a@b.com", "c@d.com", "e@f.com"]
+
+
+def test_json_path_three_segment_extraction() -> None:
+    """M074: three-segment dot-notation path ($.a.b.c) chains three
+    subscripts and unwraps the int64 value at the leaf."""
+    t = _nested_json_table()
+    fields = [
+        Field(
+            name="deep_value",
+            type="INT64",
+            json_path="$.a.b.c",
+            source_column="deep",
+        )
+    ]
+    result = _apply_json_path_extractions(t, fields)
+    assert result.schema()["deep_value"] == ibis.dtype("int64")
+    df = result.execute()
+    assert [int(v) for v in df["deep_value"].tolist()] == [42, 99, 7]
+
+
+def test_json_path_single_segment_still_works() -> None:
+    """M074 regression: the M069 single-segment shape ($.utm_source)
+    still extracts identically through the new chained-subscript code
+    path. Single-segment is now just a one-iteration loop."""
+    t = _json_table()
+    fields = [Field(name="utm_source", type="STRING", json_path="$.utm_source")]
+    result = _apply_json_path_extractions(t, fields)
+    df = result.execute()
+    assert list(df["utm_source"]) == ["google", "facebook", "twitter"]
+
+
+def test_json_path_bracket_notation_raises_valueerror() -> None:
+    """M074: bracket notation ($.foo[0]) stays unsupported — separate
+    future enhancement. The error message must mention bracket
+    notation so users know how to file the feature request."""
+    t = _nested_json_table()
+    fields = [
+        Field(
+            name="first_user",
+            type="STRING",
+            json_path="$.foo[0]",
+            source_column="payload",
+        )
+    ]
+    with pytest.raises(ValueError, match="[Bb]racket notation"):
+        _apply_json_path_extractions(t, fields)
+
+
+def test_json_path_empty_segment_raises_valueerror() -> None:
+    """M074: empty segment ($..foo) is malformed dot-notation —
+    rejected by the regex with the dot-notation grammar message."""
+    t = _nested_json_table()
+    fields = [
+        Field(
+            name="bad",
+            type="STRING",
+            json_path="$..foo",
+            source_column="payload",
+        )
+    ]
+    with pytest.raises(ValueError, match="dot-notation"):
+        _apply_json_path_extractions(t, fields)
+
+
+def test_json_path_trailing_dot_raises_valueerror() -> None:
+    """M074: trailing dot ($.foo.) is malformed dot-notation —
+    rejected by the regex (last segment fails the identifier rule)."""
+    t = _nested_json_table()
+    fields = [
+        Field(
+            name="bad",
+            type="STRING",
+            json_path="$.foo.",
+            source_column="payload",
+        )
+    ]
+    with pytest.raises(ValueError, match="dot-notation"):
+        _apply_json_path_extractions(t, fields)
+
+
+def test_json_path_two_segment_reporter_regression() -> None:
+    """Reporter regression: $.user.email shape on a `created_by` column.
+
+    Client-flowable reporter (2026-04-25) flagged that
+    ``Field(json_path="$.user.email", source_column="created_by")``
+    was silently producing NULL for ``assigned_to_email`` on their
+    BigQuery pipeline because M069's regex rejected nested paths and
+    raised ``ValueError`` at pipeline setup — masked downstream as a
+    NULL column. M074 supports the dot-notation form so this exact
+    use case extracts correctly. Pinned here for traceability so any
+    future regression that breaks nested extraction surfaces against
+    the reporter's exact shape.
+    """
+    df = pd.DataFrame(
+        {
+            "id": [1, 2],
+            "created_by": [
+                '{"user":{"email":"alice@flowable.com"}}',
+                '{"user":{"email":"bob@flowable.com"}}',
+            ],
+        }
+    )
+    table = ibis.memtable(df)
+
+    fields = [
+        Field(
+            name="assigned_to_email",
+            type="STRING",
+            json_path="$.user.email",
+            source_column="created_by",
+        )
+    ]
+
+    result = _apply_json_path_extractions(table, fields)
+    assert "assigned_to_email" in result.columns
+    out = result.execute()
+    assert list(out["assigned_to_email"]) == [
+        "alice@flowable.com",
+        "bob@flowable.com",
+    ]
 
 
 # ---------------------------------------------------------------------------

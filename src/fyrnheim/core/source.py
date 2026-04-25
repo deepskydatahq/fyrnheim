@@ -21,7 +21,12 @@ class Field(BaseModel):
     type: str  # STRING, INT64, FLOAT64, TIMESTAMP, BOOLEAN, DATE, BYTES, etc.
     description: str | None = None
     nullable: bool = True
-    json_path: str | None = None  # JSON path for extraction (e.g., "$.utm_source")
+    # JSON dot-notation path for extraction. Supported forms:
+    # ``$.<key>`` (e.g. "$.utm_source") for top-level extraction or
+    # ``$.<key1>.<key2>...`` (e.g. "$.user.email") for nested extraction.
+    # Bracket notation (``$['key']``, ``$.array[0]``) is NOT supported —
+    # raises ValueError at pipeline setup as a future-enhancement signal.
+    json_path: str | None = None
     source_column: str | None = PydanticField(
         default=None,
         description=(

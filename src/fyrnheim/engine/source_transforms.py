@@ -27,11 +27,19 @@ import ibis
 
 from fyrnheim.core.source import BaseTableSource, Field, SourceTransforms
 
-# Regex for allowed json_path: top-level ``$.<key>`` where key is a
-# python-identifier-style token (letters/digits/underscore, leading
-# letter or underscore). Nested paths like ``$.a.b`` are deliberately
-# rejected — M069 scope limit, documented in the CHANGELOG.
-_JSON_PATH_TOPLEVEL = re.compile(r"^\$\.([a-zA-Z_][a-zA-Z0-9_]*)$")
+# Regex for allowed json_path: dot-notation paths with one or more
+# segments where each segment is a python-identifier-style token
+# (letters/digits/underscore, leading letter or underscore). Accepts
+# ``$.foo``, ``$.foo.bar``, ``$.foo.bar.baz`` etc. Bracket notation
+# (``$['key']``, ``$.array[0]``, ``$.users[*]``) is deliberately
+# rejected — M074 supports nested dot-notation only; bracket notation
+# is a separate future enhancement.
+#
+# M069 originally rejected nested paths (``$.a.b``); M074 lifts that
+# scope limit for the dot-notation case after the client-flowable
+# reporter (2026-04-25) hit silent NULLs on BigQuery from
+# ``Field(json_path="$.user.email", ...)``.
+_JSON_PATH_DOT_NOTATION = re.compile(r"^\$(\.[a-zA-Z_][a-zA-Z0-9_]*)+$")
 
 # Mapping from Field.type (BigQuery-style labels) to ibis type strings
 # for use with ``JSONValue.unwrap_as``. Keep this list narrow —
@@ -130,6 +138,49 @@ def _apply_source_transforms(
     return table
 
 
+def _parse_json_path_segments(json_path: str) -> list[str]:
+    """Validate a ``json_path`` and return its dot-notation segment keys.
+
+    Accepts dot-notation paths with one or more segments where each
+    segment is a python-identifier-style token. Bracket notation
+    (``$['key']``, ``$.array[0]``) is NOT yet supported — it raises
+    ``ValueError`` as a future-enhancement signal.
+
+    Examples
+    --------
+    >>> _parse_json_path_segments("$.utm_source")
+    ['utm_source']
+    >>> _parse_json_path_segments("$.user.email")
+    ['user', 'email']
+    >>> _parse_json_path_segments("$.a.b.c")
+    ['a', 'b', 'c']
+
+    Args:
+        json_path: The path string from ``Field.json_path``.
+
+    Returns:
+        Ordered list of segment keys (leading ``$`` stripped, dots
+        consumed). Always non-empty when validation passes.
+
+    Raises:
+        ValueError: when ``json_path`` does not match the dot-notation
+            grammar — bracket notation, empty segments (``$..foo``),
+            trailing dots (``$.foo.``), bare ``$`` etc.
+    """
+    if not _JSON_PATH_DOT_NOTATION.match(json_path):
+        raise ValueError(
+            f"json_path {json_path!r} is not a supported dot-notation path. "
+            "Supported forms: $.<key> or $.<key1>.<key2>... where each key "
+            "is a Python-identifier-style token. Bracket notation "
+            "($['key'], $.array[0]) is not yet supported — file a "
+            "future-enhancement request if needed."
+        )
+    # Strip leading '$' and split on '.'. The regex guarantees no empty
+    # segments, but the filter is defense-in-depth in case the grammar
+    # ever loosens.
+    return [seg for seg in json_path[1:].split(".") if seg]
+
+
 def _apply_json_path_extractions(
     table: ibis.Table,
     fields: list[Field] | None,
@@ -145,14 +196,16 @@ def _apply_json_path_extractions(
 
     * ``source_column`` defaults to ``field.name`` when unset (the
       common "extract into a column with the same name" case).
-    * Only top-level ``$.<key>`` paths are supported; nested paths
-      (``$.a.b``) raise ``ValueError`` with a pointer at the
-      future-enhancement request.
+    * Dot-notation paths are supported: ``$.<key>`` for top-level
+      extraction or ``$.<key1>.<key2>...`` for nested extraction. The
+      engine chains ibis JSON subscripts (``cast('json')[k1][k2]...``)
+      across all segments. Bracket notation (``$['key']``,
+      ``$.array[0]``) is not yet supported; raises ``ValueError`` as a
+      future-enhancement signal.
     * The extracted JSON scalar is unwrapped to the ibis type
-      corresponding to ``field.type`` via
-      ``.cast("json")[<key>].unwrap_as(<ibis_type>)`` — which returns
-      NULL when the JSON scalar's type does not match (best-effort
-      extraction).
+      corresponding to ``field.type`` via ``unwrap_as(<ibis_type>)`` —
+      which returns NULL when the JSON scalar's type does not match
+      (best-effort extraction).
 
     Args:
         table: The source Ibis table (post-transforms).
@@ -166,7 +219,8 @@ def _apply_json_path_extractions(
 
     Raises:
         ValueError: if a field declares an unsupported ``json_path``
-            (nested path) or an unsupported ``type``.
+            (bracket notation, malformed dot-notation) or an
+            unsupported ``type``.
     """
     if not fields:
         return table
@@ -175,15 +229,12 @@ def _apply_json_path_extractions(
         if f.json_path is None:
             continue
 
-        m = _JSON_PATH_TOPLEVEL.match(f.json_path)
-        if not m:
-            raise ValueError(
-                f"Field {f.name!r}: json_path {f.json_path!r} is not a supported "
-                "top-level path ($.<key>). Nested paths (e.g. '$.a.b') are not "
-                "yet supported — file a future-enhancement request to extend "
-                "fyrnheim's json_path wiring."
-            )
-        key = m.group(1)
+        try:
+            segments = _parse_json_path_segments(f.json_path)
+        except ValueError as exc:
+            # Re-raise with the field name prefixed so users can locate
+            # the offending Field in their source declaration.
+            raise ValueError(f"Field {f.name!r}: {exc}") from exc
 
         ibis_type = _FIELD_TYPE_TO_IBIS.get(f.type)
         if ibis_type is None:
@@ -194,10 +245,12 @@ def _apply_json_path_extractions(
             )
 
         source_col = f.source_column or f.name
-        table = table.mutate(
-            **{
-                f.name: table[source_col].cast("json")[key].unwrap_as(ibis_type),
-            }
-        )
+        # Chain subscript access across all dot-notation segments. The
+        # single-segment case (``$.foo``) iterates once and matches the
+        # M069 behavior bit-for-bit.
+        expr = table[source_col].cast("json")
+        for key in segments:
+            expr = expr[key]
+        table = table.mutate(**{f.name: expr.unwrap_as(ibis_type)})
 
     return table

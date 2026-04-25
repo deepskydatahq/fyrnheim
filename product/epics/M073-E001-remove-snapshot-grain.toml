@@ -1,0 +1,76 @@
+# Epic: M073 v0.10.1 patch — remove dead snapshot_grain field
+# Single epic mirroring the patch-release shape of M063/M064/M065/M067/M071.
+
+id = "M073-E001"
+parent = "M073"
+title = "Remove StateSource.snapshot_grain + v0.10.1 release"
+status = "active"
+created = 2026-04-25
+depends_on = []
+
+[outcome]
+description = """
+Remove the dead `snapshot_grain` field from StateSource and its 4 DAG
+visualization reader sites. Remove the dedicated test class. CHANGELOG
+[0.10.1] Removed entry with the silent-lie history + future-enhancement
+pointer. Bump 0.10.0 → 0.10.1 via release-PR flow.
+
+Closes Beads `typedata-9qus`.
+"""
+
+[job_story]
+description = """When I read the StateSource pydantic model, I want
+the declared API surface to match what the engine actually does — so
+declaring `snapshot_grain="hourly"` either works or raises an error,
+not silently produces daily snapshots."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "All 11 testing criteria from the M073 mission TOML pass",
+    "snapshot_grain field removed from StateSource (core/source.py)",
+    "All 4 DAG visualization reader sites removed cleanly (dag.py)",
+    "TestStateSourceSnapshotGrain class removed (test_state_event_source.py)",
+    "Literal import in source.py either retained (if used elsewhere) or removed (if no longer used)",
+    "Test count drops by 5 (the 5 removed tests); all other tests pass unchanged",
+    "ruff + mypy clean",
+    "pyproject.toml 0.10.0 -> 0.10.1; uv.lock regenerated",
+    "CHANGELOG [0.10.1] Removed entry with migration note + future-enhancement pointer",
+    "Branch release/v0.10.1, single commit, PR with post-merge-steps block",
+    "Do NOT merge/tag/publish",
+]
+validator_context = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/visualization/dag.py",
+    "tests/test_state_event_source.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/visualization/dag.py",
+    "tests/test_state_event_source.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+dependencies = []
+
+[notes]
+considerations = """
+Mirrors the M063/M064/M065/M067/M071 patch-release shape — one commit
+bundling the deletion + CHANGELOG + version bump on a release/v0.10.1
+branch.
+
+Full removal sites + Pydantic extras=ignore rationale + CHANGELOG
+copy are in the M073 mission TOML [notes] section. Read that first.
+
+Safety: Pydantic v2 default `extra='ignore'` means existing
+`snapshot_grain=...` declarations silently parse without error on
+v0.10.1+ — no upgrade surprise. DAG viz output drops the line.
+"""
+
+estimated_stories = 1

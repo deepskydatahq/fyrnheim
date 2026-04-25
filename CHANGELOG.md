@@ -5,6 +5,102 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-04-25
+
+### Added
+
+- **Source-level joins (FR-5).** `StateSource` gains a new `joins:
+  list[Join]` field. Each `Join(source_name=..., join_key=...)` declares
+  a left-join of another `StateSource` declared in the same pipeline,
+  using a single-column equality predicate. The minimum-viable shape
+  closes FR-5 from the M012 client-flowable Pydantic-migration brief
+  for the `pardot_lifecycle_history.sql` shape — TWO LEFT JOINs to a
+  shared dimension source (lifecycle_stage), one per FK column.
+
+  ```python
+  StateSource(
+      name="lifecycle_history",
+      ...,
+      joins=[
+          Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+          Join(source_name="lifecycle_stage", join_key="next_stage_id"),
+      ],
+  )
+  ```
+
+  **`Join.join_key` semantics (Option A, locked in v0.12.0).**
+  `join_key` is the LEFT-side foreign-key column on the source
+  declaring the join. The RIGHT-side primary-key column comes from
+  the joined source's declared `id_field`. Predicate emitted:
+  `table[join_key] == other[joined_source.id_field]`. This matches
+  the user's mental model — "join lifecycle_history.previous_stage_id
+  to lifecycle_stage's primary key" — at the cost of requiring the
+  joined source to be a `StateSource` (so `id_field` is known).
+  EventSource as a join target is a future enhancement.
+
+- **Pydantic validator: `upstream` and `joins` are mutually exclusive.**
+  `upstream` (StagingView) already provides a pre-joined warehouse
+  view; layering declarative `joins` on top is ambiguous (which
+  applies first?). Declaring both raises `ValidationError` at source
+  construction with a message pointing the user to pick one.
+
+- **`_apply_joins` helper in `engine/source_transforms.py`.** Applied
+  AFTER `_apply_source_transforms` (rename) and BEFORE
+  `_apply_json_path_extractions` (json_path) in the source pipeline-
+  stage chain — so users can join on transform-renamed columns and
+  extract JSON from joined columns. Multiple joins to the same source
+  work via `ibis.Table.view()` per-join + a per-join `rname` suffix
+  (`{name}_{source_name}_{join_key}`) so duplicate column names
+  surface unambiguously to downstream computed_columns / projections.
+
+- **Source registry + topological sort in Phase 1.** The pipeline
+  runner now builds a `loaded_sources: dict[str, ibis.Table]`
+  registry as Phase 1 progresses, populated with each source's
+  POST-pipeline (post-transform / post-join / post-json_path /
+  post-computed_columns / post-filter) Ibis table BEFORE the
+  snapshot-diff step turns it into the universal event schema.
+  Sources are pre-sorted into "levels" by inferred join dependencies
+  (mirrors `staging_runner._topo_sort`); each level loads in parallel
+  (preserves the v0.11.0 ThreadPoolExecutor parallelism for
+  independent sources), and levels serialize between each other.
+  Cycles raise `SourceJoinCycleError` at pipeline-load time with the
+  cycle path.
+
+- **M072 fixture-shadow gate extended to skip joins.** When a
+  StateSource opts into `duckdb_fixture_is_transformed=True` AND the
+  engine reads its `duckdb_path` parquet, the joins step skips
+  alongside transforms / json_path / filter. The fixture is assumed
+  to be in post-join shape — same backend-parity contract as M072.
+
+### Notes
+
+- **FR-5 close-out for the lifecycle_history shape.** The reporter's
+  `pardot_lifecycle_history.sql` (TWO LEFT JOINs on lifecycle_stage
+  via prev/next stage IDs, single-column equality) is fully
+  expressible in pydantic now — no remaining SQL-StagingView
+  scaffolding required.
+
+- **ROW_NUMBER caveat for the prospects shape.** The reporter's
+  `pardot_prospects.sql` uses `LEFT JOIN ... ON lh.prospect_id = p.id
+  AND lh.rn = 1`, where `rn` comes from a `ROW_NUMBER() OVER (...)`
+  in a CTE. The minimum-viable Join API does NOT cover this — but the
+  blocker is `ROW_NUMBER()` (a window function), NOT join syntax.
+  Recommended migration: keep a small StagingView for the ROW_NUMBER
+  CTE and source-level-join from there. Window-function support in
+  `computed_columns` is a separate follow-up mission.
+
+- **Multi-key joins, inner / right / full-outer / cross joins, and
+  ON-predicate filters are deliberately out of scope** for v0.12.0.
+  Use a `StagingView` (which can express any SQL join shape) and
+  point `upstream` at it if you need them. File a follow-up if you
+  hit a case where StagingView is too heavyweight.
+
+- **Topological sort preserves declaration order when no joins are
+  declared.** Pipelines that don't opt into joins see exactly the
+  v0.11.0 Phase 1 behavior — single level, declaration order, full
+  ThreadPoolExecutor parallelism. The sort only reshapes the load
+  order when at least one source declares a `Join`.
+
 ## [0.11.0] - 2026-04-25
 
 ### Added

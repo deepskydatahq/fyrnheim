@@ -28,6 +28,7 @@ from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
 from fyrnheim.engine.source_transforms import (
+    _apply_joins,
     _apply_json_path_extractions,
     _apply_source_transforms,
     _reads_duckdb_fixture,
@@ -35,6 +36,152 @@ from fyrnheim.engine.source_transforms import (
 from fyrnheim.engine.staging_runner import materialize_staging_views
 
 log = logging.getLogger("fyrnheim.pipeline")
+
+
+class SourceJoinCycleError(ValueError):
+    """Raised when the inferred source-level-join graph contains a cycle.
+
+    Cycles surface at pipeline-load time (before Phase 1) so users see
+    the structural problem before any source actually executes. The
+    cycle path is preserved on the exception for debugging.
+    """
+
+    def __init__(self, cycle: list[str]) -> None:
+        self.cycle = cycle
+        super().__init__(
+            "Cycle detected in source joins: "
+            f"{' -> '.join(cycle)}"
+        )
+
+
+def _topo_sort_sources(sources: list[Any]) -> list[list[Any]]:
+    """Topologically partition ``sources`` into levels by inferred joins.
+
+    Mirrors the staging_runner Kahn-style sort but returns LEVELS so
+    the pipeline runner can preserve Phase 1 parallelism within a
+    level (sources at the same dependency depth load in parallel) and
+    serialize between levels (a level only fires after every source in
+    every prior level has its post-pipeline table in the registry).
+
+    The dependency graph is inferred from each source's
+    ``joins[i].source_name`` — only StateSources expose ``joins`` in
+    v0.12.0; EventSources contribute zero out-edges. Edges that point
+    at sources outside the provided list are ignored (they would be
+    caught by the missing-source error inside ``_apply_joins`` —
+    surfaced there with the helpful "topological sort guarantees this
+    name is present; if you see this it's a typo" message).
+
+    Stability: within a level, sources retain their declaration order
+    relative to ``sources``. So pipelines with NO joins declared see
+    a single level whose order is exactly ``sources`` — no behavior
+    change relative to v0.11.0.
+
+    Args:
+        sources: The flat declaration-order source list (StateSource
+            and EventSource instances mixed).
+
+    Returns:
+        A list of levels; each level is a list of source instances.
+        Concatenating the levels reconstructs a valid topological
+        order.
+
+    Raises:
+        SourceJoinCycleError: when a cycle is detected. The exception
+            ``cycle`` attribute holds the cycle path.
+    """
+    by_name = {getattr(s, "name", None): s for s in sources}
+    by_name.pop(None, None)
+    declaration_index = {id(s): i for i, s in enumerate(sources)}
+
+    # remaining_deps[name] = set of as-yet-unresolved join sources that
+    # this source depends on. Edges pointing outside `sources` (no name
+    # match) are dropped — _apply_joins surfaces those at runtime.
+    remaining_deps: dict[str, set[str]] = {}
+    for s in sources:
+        joins = getattr(s, "joins", None) or []
+        deps = {j.source_name for j in joins if j.source_name in by_name}
+        # A source must not list itself as a join dependency. ibis
+        # would reject the resulting predicate with a column-name
+        # collision long before we got to the pipeline run, but we
+        # guard up front so the error message is structural.
+        deps.discard(s.name)
+        remaining_deps[s.name] = deps
+
+    levels: list[list[Any]] = []
+    placed: set[str] = set()
+
+    while len(placed) < len(remaining_deps):
+        # A "level" is every source whose remaining_deps is fully
+        # contained in `placed`. Order within the level mirrors the
+        # original declaration index so the no-joins-case is a no-op.
+        level = [
+            s
+            for s in sources
+            if s.name not in placed
+            and remaining_deps[s.name].issubset(placed)
+        ]
+        if not level:
+            # Cycle: at least one source still has unresolved deps but
+            # no source is ready. Find the cycle path through the
+            # remaining sub-graph.
+            remaining_names = {
+                n for n in remaining_deps if n not in placed
+            }
+            cycle = _find_source_cycle(remaining_names, sources)
+            raise SourceJoinCycleError(cycle)
+        # Stable sort by declaration order (already preserved by the
+        # `for s in sources` iteration; explicit for clarity).
+        level.sort(key=lambda s: declaration_index[id(s)])
+        levels.append(level)
+        placed.update(s.name for s in level)
+
+    return levels
+
+
+def _find_source_cycle(
+    nodes: set[str], sources: list[Any]
+) -> list[str]:
+    """Return a cycle path among ``nodes`` in the source-join graph.
+
+    DFS from each node in declaration order so the reported cycle is
+    deterministic. The returned list is the cycle path with the start
+    node repeated at the end (e.g. ``['a', 'b', 'a']``) — matches the
+    staging_runner cycle-error convention.
+    """
+    by_name: dict[str, Any] = {
+        s.name: s for s in sources if s.name in nodes
+    }
+
+    visited: set[str] = set()
+    stack: list[str] = []
+    on_stack: set[str] = set()
+
+    def dfs(n: str) -> list[str] | None:
+        if n in on_stack:
+            idx = stack.index(n)
+            return stack[idx:] + [n]
+        if n in visited:
+            return None
+        visited.add(n)
+        stack.append(n)
+        on_stack.add(n)
+        joins = getattr(by_name[n], "joins", None) or []
+        for j in joins:
+            if j.source_name in nodes:
+                result = dfs(j.source_name)
+                if result is not None:
+                    return result
+        stack.pop()
+        on_stack.discard(n)
+        return None
+
+    # Iterate in declaration order for deterministic cycle reporting.
+    for s in sources:
+        if s.name in nodes:
+            result = dfs(s.name)
+            if result is not None:
+                return result
+    return sorted(nodes)
 
 
 @dataclass
@@ -136,11 +283,29 @@ def run_pipeline(
         result.elapsed_seconds = time.monotonic() - start
         return result
 
-    # --- Phase 1: Load sources into events (parallel) ---
-    # Sources fan out via ThreadPoolExecutor bounded by max_parallel_io.
-    # The resulting event_tables list preserves sources order via
-    # index-based assignment (no as_completed). The first worker exception
-    # surfaces to the caller of run_pipeline (future.result() re-raises).
+    # --- Phase 1: Load sources into events (level-parallel) ---
+    # M070 (v0.12.0) introduces source-level joins, so Phase 1 now
+    # topologically sorts sources by their inferred join dependencies
+    # before loading. The sort produces "levels" — buckets of sources
+    # that have no remaining dependencies at the same depth — and the
+    # runner loads each level in parallel (mirrors staging_runner) and
+    # serializes between levels. Pipelines with NO joins declared
+    # collapse to a single level whose order is exactly declaration
+    # order, so the v0.11.0 behavior is preserved bit-for-bit.
+    #
+    # Two registries flow alongside Phase 1:
+    #   * loaded_sources: ``name → post-pipeline ibis.Table`` for each
+    #     source that has finished its full transforms/joins/json_path/
+    #     computed_columns/filter chain. Source-level joins read this
+    #     registry to resolve the right-side joined table — populated
+    #     AFTER each source's chain completes, so a join always sees
+    #     the post-pipeline shape of its dependency.
+    #   * right_pk_registry: ``name → id_field`` for StateSource targets
+    #     so ``_apply_joins`` can build ``table[fk] == other[pk]``
+    #     equality predicates without re-reading the source declaration.
+    #     Only StateSources are valid join targets in v0.12.0;
+    #     EventSources are absent from this registry, and any join
+    #     pointing at one surfaces a clear ValueError from _apply_joins.
     #
     # DuckDB's embedded Python connection is NOT thread-safe at the
     # connection level, so we reuse the executor's connection lock
@@ -149,36 +314,82 @@ def run_pipeline(
     # google.cloud client is already thread-safe, so parallelism is
     # preserved.
     phase1_lock = executor._conn_lock
+    loaded_sources: dict[str, ibis.Table] = {}
+    right_pk_registry: dict[str, str] = {
+        s.name: s.id_field for s in sources if isinstance(s, StateSource)
+    }
 
-    def _load_one_source(src: object) -> ibis.Table | None:
+    try:
+        source_levels = _topo_sort_sources(sources)
+    except SourceJoinCycleError as exc:
+        result.errors.append(f"Source joins: {exc}")
+        log.error("%s", exc)
+        result.elapsed_seconds = time.monotonic() - start
+        return result
+
+    def _load_one_source(
+        src: object,
+    ) -> tuple[ibis.Table | None, ibis.Table | None]:
+        """Load one source. Returns ``(events, pre_diff_table)`` where
+        ``events`` is the universal-schema event table (or None for
+        unsupported source types) and ``pre_diff_table`` is the
+        post-transform / pre-snapshot-diff Ibis table that downstream
+        joins should consume from the registry. EventSources contribute
+        no pre_diff_table (they are not valid join targets in v0.12.0)."""
         if isinstance(src, StateSource):
             with phase1_lock:
-                return _load_state_source(src, config, conn)
+                pre_diff = _build_state_source_table(
+                    src,
+                    config,
+                    conn,
+                    source_registry=loaded_sources,
+                    right_pk_registry=right_pk_registry,
+                )
+                # Populate the registry BEFORE running snapshot-diff so
+                # any same-level race-loser would still see this source
+                # available — but topo-sort guarantees no same-level
+                # source has a cross-level dep. The lock makes this
+                # write race-safe with the registry reads of subsequent
+                # levels.
+                loaded_sources[src.name] = pre_diff
+                events = _run_state_source_diff(src, config, conn, pre_diff)
+                return events, pre_diff
         if isinstance(src, EventSource):
             with phase1_lock:
-                return load_event_source(
+                events = load_event_source(
                     conn, src, data_dir=config.data_dir, backend=config.backend,
                 )
-        return None
+                return events, None
+        return None, None
 
-    def _phase1_worker(src: object) -> tuple[ibis.Table | None, float]:
+    def _phase1_worker(
+        src: object,
+    ) -> tuple[ibis.Table | None, float]:
         t_source = time.monotonic()
-        tbl = _load_one_source(src)
-        return tbl, time.monotonic() - t_source
+        events, _pre_diff = _load_one_source(src)
+        return events, time.monotonic() - t_source
 
-    loaded_tables: list[ibis.Table | None] = [None] * len(sources)
+    loaded_tables_by_name: dict[str, ibis.Table | None] = {}
     max_workers = max(1, int(config.max_parallel_io))
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [pool.submit(_phase1_worker, src) for src in sources]
-        for i, fut in enumerate(futures):
-            source = sources[i]
-            tbl, elapsed = fut.result()
-            loaded_tables[i] = tbl
-            timings.source_loads[source.name] = elapsed
-            if tbl is not None:
-                result.source_count += 1
-                log.info("Loaded source: %s", source.name)
+    for level in source_levels:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                src.name: pool.submit(_phase1_worker, src) for src in level
+            }
+            for src in level:
+                tbl, elapsed = futures[src.name].result()
+                loaded_tables_by_name[src.name] = tbl
+                timings.source_loads[src.name] = elapsed
+                if tbl is not None:
+                    result.source_count += 1
+                    log.info("Loaded source: %s", src.name)
 
+    # Preserve declaration order in the event-table list so existing
+    # downstream consumers (and tests that assume declaration order)
+    # see no behavior change in the no-joins case.
+    loaded_tables: list[ibis.Table | None] = [
+        loaded_tables_by_name.get(src.name) for src in sources
+    ]
     event_tables: list[ibis.Table] = [t for t in loaded_tables if t is not None]
 
     if not event_tables:
@@ -325,51 +536,71 @@ def run_pipeline(
     return result
 
 
-def _load_state_source(
+def _build_state_source_table(
     source: StateSource,
     config: ResolvedConfig,
     conn: ibis.BaseBackend,
+    *,
+    source_registry: dict[str, ibis.Table] | None = None,
+    right_pk_registry: dict[str, str] | None = None,
 ) -> ibis.Table:
-    """Load a StateSource through SnapshotDiffPipeline.
+    """Apply the full read → transforms → joins → json_path → computed_columns → filter
+    chain to a StateSource and return the resulting Ibis table.
 
-    When ``source.full_refresh`` is True, bypass the snapshot-diff machinery
-    entirely and emit ``row_appeared`` for every current row. No snapshot
-    read, no snapshot save — deterministic "entity reflects current state"
-    behavior independent of any prior snapshot (M066 escape hatch).
+    Extracted from :func:`_load_state_source` (M070, v0.12.0) so the
+    Phase 1 pipeline runner can stash the post-pipeline table in the
+    join-source-registry BEFORE the snapshot-diff step turns it into
+    the universal event schema (source/entity_id/ts/event_type/payload).
+    Other StateSources whose ``joins`` reference this one need the
+    *transformed* table, not the event-shape view.
+
+    Calling :func:`_load_state_source` continues to work without a
+    registry — the registry args are optional and the helper
+    short-circuits on empty joins.
+
+    Stage order (load-bearing):
+
+      read → transforms → joins → json_path → computed_columns → filter
+
+    * transforms before joins: users can rename a column and use the
+      new name as the join_key.
+    * joins before json_path: users can extract JSON from columns
+      contributed by a joined source.
+    * json_path before computed_columns: user expressions can reference
+      extracted typed columns.
+    * filter after computed_columns: users can filter on computed
+      values (and on joined / extracted columns).
+
+    M072 (FR-8): when the source opts into fixture-shadow mode AND the
+    engine is reading the duckdb_path parquet, skip
+    transforms/joins/json_path/filter. The fixture is assumed to be in
+    post-transform (and post-join) shape. computed_columns STILL APPLY —
+    they are backend-independent expressions, not transforms.
     """
     table = source.read_table(conn, config.backend, data_dir=config.data_dir)
-
-    # M068 + M069: apply all source-level stages BEFORE the full_refresh /
-    # snapshot_diff split so both paths see the same transformed schema
-    # (snapshot_store saves the transformed table, so subsequent runs'
-    # diffs are against the same baseline). Stage order is load-bearing:
-    #
-    #   read → transforms → json_path → computed_columns → filter
-    #
-    # * transforms before json_path: users can rename a JSON column and
-    #   extract from the renamed name.
-    # * json_path before computed_columns: user expressions can reference
-    #   extracted typed columns.
-    # * filter after computed_columns: users can filter on computed values.
-    #
-    # M072 (FR-8): when the source opts into fixture-shadow mode AND the
-    # engine is reading the duckdb_path parquet (mirrors
-    # BaseTableSource.read_table's parquet-read branch), skip
-    # transforms/json_path/filter. The fixture is assumed to be in
-    # post-transform shape. computed_columns STILL APPLY — they are
-    # backend-independent expressions, not transforms. Uses
-    # config.backend (from ResolvedConfig, the single source of truth
-    # for backend identity in the pipeline).
     reads_fixture = _reads_duckdb_fixture(source, config.backend)
 
     if reads_fixture:
         log.info(
             "StateSource %s: duckdb_fixture_is_transformed=True, "
-            "skipping transforms/fields/filter (reading duckdb_path fixture)",
+            "skipping transforms/joins/fields/filter (reading duckdb_path fixture)",
             source.name,
         )
     else:
         table = _apply_source_transforms(table, source.transforms)
+        if source.joins:
+            log.info(
+                "StateSource %s: applying %d join(s) to %s",
+                source.name,
+                len(source.joins),
+                [j.source_name for j in source.joins],
+            )
+            table = _apply_joins(
+                table,
+                source.joins,
+                source_registry or {},
+                right_pk_registry or {},
+            )
         table = _apply_json_path_extractions(table, source.fields)
 
     if source.computed_columns:
@@ -381,6 +612,60 @@ def _load_state_source(
             eval(source.filter, {"ibis": ibis, "t": table})  # noqa: S307
         )
 
+    return table
+
+
+def _load_state_source(
+    source: StateSource,
+    config: ResolvedConfig,
+    conn: ibis.BaseBackend,
+    *,
+    source_registry: dict[str, ibis.Table] | None = None,
+    right_pk_registry: dict[str, str] | None = None,
+) -> ibis.Table:
+    """Load a StateSource through SnapshotDiffPipeline.
+
+    When ``source.full_refresh`` is True, bypass the snapshot-diff machinery
+    entirely and emit ``row_appeared`` for every current row. No snapshot
+    read, no snapshot save — deterministic "entity reflects current state"
+    behavior independent of any prior snapshot (M066 escape hatch).
+
+    M070 (v0.12.0): when ``source.joins`` is non-empty, ``_apply_joins``
+    fires AFTER ``_apply_source_transforms`` and BEFORE
+    ``_apply_json_path_extractions`` — so users can join on
+    transform-renamed columns and extract JSON from joined columns.
+    The two registry dicts (``source_registry`` for ``name → table``
+    and ``right_pk_registry`` for ``name → id_field``) are populated
+    by ``run_pipeline`` Phase 1 and passed in here. When called
+    directly (e.g. from tests with no joins declared), passing ``None``
+    for both is fine — the helper short-circuits on empty joins.
+    """
+    table = _build_state_source_table(
+        source,
+        config,
+        conn,
+        source_registry=source_registry,
+        right_pk_registry=right_pk_registry,
+    )
+    return _run_state_source_diff(source, config, conn, table)
+
+
+def _run_state_source_diff(
+    source: StateSource,
+    config: ResolvedConfig,
+    conn: ibis.BaseBackend,
+    table: ibis.Table,
+) -> ibis.Table:
+    """Convert a post-pipeline StateSource table into the universal
+    event-schema view (source/entity_id/ts/event_type/payload).
+
+    Either replays every current row as ``row_appeared`` (when
+    ``source.full_refresh`` is True) or runs the SnapshotDiffPipeline
+    against the on-disk snapshot store. Extracted from
+    :func:`_load_state_source` for M070 so the run_pipeline orchestrator
+    can stash the post-pipeline ``table`` in the join-source registry
+    BEFORE the diff turns it into events.
+    """
     if source.full_refresh:
         # M066: escape hatch — never consult the snapshot store.
         today = datetime.date.today().isoformat()

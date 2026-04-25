@@ -25,7 +25,7 @@ import re
 
 import ibis
 
-from fyrnheim.core.source import BaseTableSource, Field, SourceTransforms
+from fyrnheim.core.source import BaseTableSource, Field, Join, SourceTransforms
 
 # Regex for allowed json_path: dot-notation paths with one or more
 # segments where each segment is a python-identifier-style token
@@ -253,4 +253,92 @@ def _apply_json_path_extractions(
             expr = expr[key]
         table = table.mutate(**{f.name: expr.unwrap_as(ibis_type)})
 
+    return table
+
+
+def _apply_joins(
+    table: ibis.Table,
+    joins: list[Join],
+    source_registry: dict[str, ibis.Table],
+    right_pk_registry: dict[str, str],
+) -> ibis.Table:
+    """Left-join sibling source tables onto ``table`` (M070 / v0.12.0).
+
+    The minimum-viable Join API ships with a single column-name
+    semantic (Option A, locked here for v0.12.0):
+
+    * ``Join.join_key`` is the LEFT-side foreign-key column on
+      ``table``.
+    * The RIGHT-side primary-key column is resolved from the joined
+      source's declared ``id_field``, supplied via ``right_pk_registry``.
+    * Predicate emitted: ``table[j.join_key] == other[right_pk]``.
+
+    Multiple joins on the same source apply in declaration order — the
+    pardot_lifecycle_history shape (two left joins to lifecycle_stage
+    via ``previous_stage_id`` and ``next_stage_id``) is the canonical
+    test case.
+
+    Args:
+        table: The source Ibis table (post-transforms).
+        joins: List of :class:`Join` declarations in declaration order.
+            When empty / falsy the table is returned unchanged.
+        source_registry: Mapping ``source_name → ibis.Table`` for the
+            sibling sources already loaded in this pipeline run. The
+            pipeline's topological sort guarantees that every
+            ``j.source_name`` referenced here is present.
+        right_pk_registry: Mapping ``source_name → id_field`` (the
+            right-side primary-key column) for the same sibling
+            sources. Looked up alongside ``source_registry`` so the
+            engine can build the equality predicate without re-reading
+            the StateSource declaration here.
+
+    Returns:
+        The (potentially multi-)joined Ibis table. ibis resolves
+        duplicate column names using its standard ``_right`` /
+        positional-index suffix rules — callers that care about the
+        joined-column naming should reference the ibis docs.
+
+    Raises:
+        ValueError: when a ``Join.source_name`` is not present in
+            ``source_registry``. This is normally prevented by the
+            topological sort; if it surfaces it usually means a typo
+            in ``source_name`` or a source that lives outside this
+            pipeline.
+    """
+    if not joins:
+        return table
+    for j in joins:
+        if j.source_name not in source_registry:
+            raise ValueError(
+                f"Join references source {j.source_name!r} which has not "
+                "been loaded. The pipeline runner topologically sorts "
+                "sources by their inferred join dependencies; if you "
+                "see this error, the named source is either misspelled "
+                "or not declared in this pipeline."
+            )
+        other = source_registry[j.source_name]
+        right_pk = right_pk_registry.get(j.source_name)
+        if right_pk is None:
+            raise ValueError(
+                f"Join references source {j.source_name!r} but no "
+                "right-side primary key was registered for it. Only "
+                "StateSource targets are supported for join targets in "
+                "v0.12.0."
+            )
+        # ibis 11+ requires distinct identities when the same right
+        # table is joined more than once (e.g. lifecycle_history's
+        # double-join to lifecycle_stage). ``.view()`` produces a
+        # fresh op-tree node that ibis treats as a separate join
+        # target. The per-join ``rname`` suffix ensures the resulting
+        # column names are unambiguous when right-side columns
+        # collide with the LEFT shape (or with prior joined columns).
+        # Left column names are preserved via ``lname='{name}'``.
+        other_view = other.view()
+        suffix = f"_{j.source_name}_{j.join_key}"
+        table = table.left_join(
+            other_view,
+            predicates=[table[j.join_key] == other_view[right_pk]],
+            lname="{name}",
+            rname="{name}" + suffix,
+        )
     return table

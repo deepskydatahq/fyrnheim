@@ -34,6 +34,7 @@ from .source import (
     Divide as Divide,
     EventSource as EventSource,
     Field as Field,
+    Join as Join,
     Multiply as Multiply,
     Rename as Rename,
     SourceTransforms as SourceTransforms,

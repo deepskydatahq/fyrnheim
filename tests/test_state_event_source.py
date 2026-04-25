@@ -7,10 +7,12 @@ from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.source import (
     EventSource,
     Field,
+    Join,
     SourceTransforms,
     StateSource,
     TypeCast,
 )
+from fyrnheim.core.staging_view import StagingView
 
 
 class TestStateSource:
@@ -411,3 +413,100 @@ class TestEventSourceComputedColumns:
         )
         assert src.event_type == "pageview"
         assert len(src.computed_columns) == 1
+
+
+# ---------------------------------------------------------------------------
+# M070 (v0.12.0) — joins field + upstream-vs-joins mutex validator
+# ---------------------------------------------------------------------------
+
+
+class TestStateSourceJoins:
+    """Tests for the new ``joins`` field and the upstream-vs-joins mutex."""
+
+    def test_joins_default_is_empty_list(self):
+        s = StateSource(
+            name="lifecycle_history",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+        )
+        assert s.joins == []
+
+    def test_joins_accepts_single_join_declaration(self):
+        s = StateSource(
+            name="lifecycle_history",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            joins=[
+                Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+            ],
+        )
+        assert len(s.joins) == 1
+        assert s.joins[0].source_name == "lifecycle_stage"
+        assert s.joins[0].join_key == "previous_stage_id"
+
+    def test_joins_accepts_multiple_joins_to_same_source(self):
+        """The lifecycle_history shape: TWO Joins to lifecycle_stage,
+        one for previous_stage_id and one for next_stage_id."""
+        s = StateSource(
+            name="lifecycle_history",
+            project="p",
+            dataset="d",
+            table="t",
+            id_field="id",
+            joins=[
+                Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+                Join(source_name="lifecycle_stage", join_key="next_stage_id"),
+            ],
+        )
+        assert len(s.joins) == 2
+        assert {j.join_key for j in s.joins} == {
+            "previous_stage_id",
+            "next_stage_id",
+        }
+
+    def test_state_source_upstream_and_joins_mutually_exclusive(self):
+        """Declaring StateSource(upstream=..., joins=[...]) raises a
+        Pydantic ValidationError. The error message points users to
+        pick one — ``upstream`` already provides a pre-joined view, so
+        layering declarative joins on top is ambiguous.
+        """
+        upstream = StagingView(
+            name="lifecycle_history_view",
+            project="p",
+            dataset="d",
+            sql="SELECT * FROM raw.lifecycle_history",
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            StateSource(
+                name="lifecycle_history",
+                upstream=upstream,
+                id_field="id",
+                joins=[
+                    Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+                ],
+            )
+        msg = str(excinfo.value)
+        assert "mutually exclusive" in msg
+
+    def test_state_source_upstream_with_no_joins_still_valid(self):
+        """Declaring upstream WITHOUT joins must continue to work — the
+        validator only fires when both are non-empty. Regression guard
+        for the M070 validator interaction with M068's upstream-coord
+        resolver."""
+        upstream = StagingView(
+            name="lifecycle_history_view",
+            project="p",
+            dataset="d",
+            sql="SELECT * FROM raw.lifecycle_history",
+        )
+        s = StateSource(
+            name="lifecycle_history",
+            upstream=upstream,
+            id_field="id",
+        )
+        assert s.joins == []
+        assert s.upstream is not None

@@ -18,6 +18,7 @@ from fyrnheim.core.source import (
     Divide,
     EventSource,
     Field,
+    Join,
     Multiply,
     Rename,
     SourceTransforms,
@@ -25,6 +26,7 @@ from fyrnheim.core.source import (
     TypeCast,
 )
 from fyrnheim.engine.source_transforms import (
+    _apply_joins,
     _apply_json_path_extractions,
     _apply_source_transforms,
     _reads_duckdb_fixture,
@@ -530,3 +532,150 @@ def test_reads_duckdb_fixture_false_when_duckdb_path_is_empty_string() -> None:
         duckdb_fixture_is_transformed=True,
     )
     assert _reads_duckdb_fixture(src, "duckdb") is False
+
+
+# ---------------------------------------------------------------------------
+# M070 (v0.12.0) — _apply_joins helper unit tests
+# ---------------------------------------------------------------------------
+#
+# The Join API ships with Option A column-name semantics: ``Join.join_key``
+# is the LEFT-side foreign-key column on the source declaring the join;
+# the RIGHT-side primary-key column comes from the joined source's
+# declared ``id_field`` and is supplied via the ``right_pk_registry``
+# argument. These tests exercise that contract directly.
+
+
+def _lifecycle_history_left() -> ibis.Table:
+    """Test fixture mirroring pardot_lifecycle_history's left-side shape:
+    a row per lifecycle change with two FK columns (previous / next)."""
+    return ibis.memtable(
+        pd.DataFrame(
+            {
+                "id": ["lh-1", "lh-2", "lh-3"],
+                "prospect_id": ["P-1", "P-1", "P-2"],
+                "previous_stage_id": [10, 20, 10],
+                "next_stage_id": [20, 30, 20],
+            }
+        )
+    )
+
+
+def _lifecycle_stage_right() -> ibis.Table:
+    """Test fixture mirroring pardot_lifecycle_stage: id + name only."""
+    return ibis.memtable(
+        pd.DataFrame(
+            {
+                "id": [10, 20, 30],
+                "name": ["Lead", "Qualified", "Customer"],
+            }
+        )
+    )
+
+
+def test_apply_joins_no_joins_returns_unchanged() -> None:
+    """An empty ``joins`` list returns the table unchanged (identity)."""
+    t = _lifecycle_history_left()
+    result = _apply_joins(t, [], {}, {})
+    assert result is t
+
+
+def test_apply_joins_single_left_join() -> None:
+    """A single Join produces a left-join on the FK → PK predicate.
+
+    join_key='previous_stage_id' targets lifecycle_stage.id (looked up
+    from the right_pk_registry). The resulting table contains the
+    LEFT row count and the joined ``name`` column.
+    """
+    left = _lifecycle_history_left()
+    right = _lifecycle_stage_right()
+    joins = [Join(source_name="lifecycle_stage", join_key="previous_stage_id")]
+    result = _apply_joins(
+        left,
+        joins,
+        {"lifecycle_stage": right},
+        {"lifecycle_stage": "id"},
+    )
+    df = result.execute()
+    # Left-join preserves all left rows.
+    assert len(df) == 3
+    # The joined ``name`` column is present and resolves correctly:
+    #   lh-1 prev_stage 10 → Lead
+    #   lh-2 prev_stage 20 → Qualified
+    #   lh-3 prev_stage 10 → Lead
+    by_lh = {row["id"]: row["name"] for _, row in df.iterrows()}
+    assert by_lh["lh-1"] == "Lead"
+    assert by_lh["lh-2"] == "Qualified"
+    assert by_lh["lh-3"] == "Lead"
+
+
+def test_apply_joins_multiple_joins_to_same_source() -> None:
+    """Mirrors pardot_lifecycle_history: TWO LEFT JOINs on lifecycle_stage,
+    one for each FK (previous_stage_id, next_stage_id). Both joined
+    rows must surface — the prev_name and next_name are different
+    columns of the same right-side table joined twice.
+    """
+    left = _lifecycle_history_left()
+    right = _lifecycle_stage_right()
+    joins = [
+        Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+        Join(source_name="lifecycle_stage", join_key="next_stage_id"),
+    ]
+    result = _apply_joins(
+        left,
+        joins,
+        {"lifecycle_stage": right},
+        {"lifecycle_stage": "id"},
+    )
+    df = result.execute()
+    # Three left rows preserved.
+    assert len(df) == 3
+    # ibis resolves duplicate ``name`` columns by suffixing one of them.
+    # We don't pin the exact suffix (ibis-version-dependent) — instead
+    # assert that we now have AT LEAST TWO ``name``-derived columns
+    # bringing the prev + next stage names visible to downstream
+    # computed_columns / projections.
+    name_like = [c for c in df.columns if c.startswith("name")]
+    assert len(name_like) >= 2, (
+        f"expected 2+ name-like columns from double-join; got {df.columns.tolist()}"
+    )
+
+
+def test_apply_joins_missing_source_raises_clear_error() -> None:
+    """Joining to a source that's not in the registry raises a clear
+    ValueError mentioning the missing source name. Normally the
+    pipeline runner's topological sort prevents this, but the helper's
+    runtime guard is what users see if the typo escapes the validator.
+    """
+    left = _lifecycle_history_left()
+    joins = [Join(source_name="lifecycle_stage", join_key="previous_stage_id")]
+    with pytest.raises(ValueError, match="lifecycle_stage"):
+        _apply_joins(left, joins, {}, {})
+
+
+def test_apply_joins_propagates_join_key_resolution() -> None:
+    """Option A semantics: ``Join.join_key`` is the LEFT-side FK; the
+    RIGHT-side PK comes from ``right_pk_registry``. Swap the registry
+    PK to a non-default name and confirm the predicate uses it.
+    """
+    left = _lifecycle_history_left()
+    # Build a "right" side whose PK is named ``stage_pk`` instead of
+    # ``id`` — declaring lifecycle_stage with a non-default id_field.
+    right = ibis.memtable(
+        pd.DataFrame(
+            {
+                "stage_pk": [10, 20, 30],
+                "name": ["Lead", "Qualified", "Customer"],
+            }
+        )
+    )
+    joins = [Join(source_name="lifecycle_stage", join_key="previous_stage_id")]
+    result = _apply_joins(
+        left,
+        joins,
+        {"lifecycle_stage": right},
+        {"lifecycle_stage": "stage_pk"},
+    )
+    df = result.execute()
+    by_lh = {row["id"]: row["name"] for _, row in df.iterrows()}
+    assert by_lh["lh-1"] == "Lead"
+    assert by_lh["lh-2"] == "Qualified"

@@ -12,6 +12,7 @@ from fyrnheim.core import (
     FieldChanged as FieldChanged,
     IdentityGraph as IdentityGraph,
     IdentitySource as IdentitySource,
+    Join as Join,
     Measure as Measure,
     MetricField as MetricField,
     MetricsModel as MetricsModel,
@@ -94,6 +95,7 @@ __all__ = [
     "Rename",
     "Divide",
     "Multiply",
+    "Join",
     # Identity
     "IdentityGraph",
     "IdentitySource",

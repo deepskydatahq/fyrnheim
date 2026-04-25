@@ -65,6 +65,66 @@ class Multiply(BaseModel):
     suffix: str = "_value"
 
 
+class Join(BaseModel):
+    """Declarative left-join of another declared source for row enrichment.
+
+    Minimum-viable shape (M070, v0.12.0):
+
+    * **Left-join only.** ``how`` is implicit — the engine emits a
+      ``left_join`` and there is no toggle to switch to inner / right /
+      full-outer / cross. If you need a different join type, use a
+      ``StagingView`` (which can express any SQL join shape) and point
+      ``upstream`` at it instead.
+    * **Single-column equality.** Joins are always
+      ``table[left_fk] == other[right_pk]``. Multi-key joins, range
+      predicates, NULL-aware predicates, and ON-clause filters are
+      deliberately out of scope — file a follow-up if you hit them.
+    * **Source-name based lookup.** ``source_name`` must reference
+      another ``StateSource`` declared in the same pipeline. The
+      pipeline runner topologically sorts sources by their inferred
+      join dependencies (cycles raise a clear error at pipeline load).
+    * **``join_key`` is the LEFT-side foreign-key column** — the column
+      on THIS source's read shape (post-transforms) that points at the
+      joined source's primary key. The runner resolves the RIGHT-side
+      primary-key column from the joined source's declared ``id_field``.
+
+      Example: ``lifecycle_history`` has ``previous_stage_id`` /
+      ``next_stage_id`` columns; ``lifecycle_stage`` has ``id`` as its
+      ``id_field``. Declaring two joins —
+      ``Join(source_name="lifecycle_stage", join_key="previous_stage_id")``
+      and ``Join(source_name="lifecycle_stage", join_key="next_stage_id")``
+      — left-joins lifecycle_stage twice using the appropriate FK each
+      time. The runner generates predicates
+      ``table.previous_stage_id == lifecycle_stage.id`` and
+      ``table.next_stage_id == lifecycle_stage.id``.
+
+    Multiple ``Join`` entries on the same source are allowed and apply
+    in declaration order (so e.g. duplicate-self-join shapes like
+    lifecycle_history's prev/next pair are supported).
+
+    The ``upstream`` (StagingView) and ``joins`` declarations are
+    mutually exclusive on a source — ``upstream`` already provides a
+    pre-joined warehouse view, so layering declarative joins on top is
+    ambiguous (which applies first?). The validator on
+    :class:`BaseTableSource` raises ``ValueError`` if both are set.
+    """
+    source_name: str = PydanticField(
+        min_length=1,
+        description=(
+            "Name of another declared source (StateSource) to left-join. "
+            "Must match the joined source's `name` field exactly."
+        ),
+    )
+    join_key: str = PydanticField(
+        min_length=1,
+        description=(
+            "LEFT-side foreign-key column name on THIS source's read "
+            "shape (post-transforms). The RIGHT-side primary-key column "
+            "is resolved from the joined source's declared `id_field`."
+        ),
+    )
+
+
 class SourceTransforms(BaseModel):
     """Read-time transformations applied to source data."""
     type_casts: list[TypeCast] = PydanticField(default_factory=list)
@@ -124,6 +184,27 @@ class BaseTableSource(BaseModel):
         if v is not None and not v:
             raise ValueError("project, dataset, and table cannot be empty strings")
         return v
+
+    @model_validator(mode="after")
+    def _validate_joins_vs_upstream(self) -> "BaseTableSource":
+        """``upstream`` (StagingView) and ``joins`` are mutually exclusive.
+
+        ``upstream`` already provides a pre-joined warehouse view;
+        declarative ``joins`` apply at the engine layer. Mixing both
+        leaves the ordering ambiguous. We surface this at construction
+        time (rather than silently picking one) so the user picks
+        explicitly. Sources without a ``joins`` field (e.g. the union
+        helpers) are unaffected — ``getattr`` returns ``None`` and the
+        check no-ops.
+        """
+        joins = getattr(self, "joins", None)
+        if self.upstream is not None and joins:
+            raise ValueError(
+                "`upstream` (StagingView) and `joins` are mutually exclusive — "
+                "`upstream` already provides a pre-joined warehouse view; "
+                "declarative `joins` apply at the engine layer. Pick one."
+            )
+        return self
 
     @model_validator(mode="after")
     def _resolve_upstream_coords(self) -> "BaseTableSource":
@@ -229,6 +310,20 @@ class StateSource(BaseTableSource):
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
     computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)
+    joins: list[Join] = PydanticField(
+        default_factory=list,
+        description=(
+            "Declarative left-joins to other StateSources declared in "
+            "the same pipeline. Applied AFTER `transforms` (rename) and "
+            "BEFORE `json_path` extraction in the source pipeline stage "
+            "chain. The pipeline runner topologically sorts sources by "
+            "their inferred join dependencies — declaration order is "
+            "preserved when no joins are declared. See :class:`Join` for "
+            "the join_key column-name semantics. Mutually exclusive with "
+            "`upstream` (StagingView). M070 / v0.12.0; EventSource is a "
+            "future enhancement (file a follow-up if needed)."
+        ),
+    )
 
 
 class EventSource(BaseTableSource):

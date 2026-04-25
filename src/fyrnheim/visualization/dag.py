@@ -27,7 +27,6 @@ def _source_tooltip(s: StateSource | EventSource) -> str:
     ]
     if isinstance(s, StateSource):
         lines.append(f"ID Field: {s.id_field}")
-        lines.append(f"Snapshot Grain: {s.snapshot_grain}")
         lines.append(f"Computed Columns: {len(s.computed_columns)}")
     else:
         lines.append(f"Entity ID Field: {s.entity_id_field}")
@@ -170,7 +169,6 @@ def _build_node_details(
                 "name": s.name,
                 "table": f"{s.project}.{s.dataset}.{s.table}",
                 "id_field": s.id_field,
-                "snapshot_grain": s.snapshot_grain,
                 "computed_columns": [cc.name for cc in s.computed_columns],
                 "transforms": s.transforms is not None,
             }
@@ -299,15 +297,12 @@ def generate_dag_html(
     source_nodes = ""
     for s in sources:
         kind = "STATE" if isinstance(s, StateSource) else "EVENT"
-        grain = s.snapshot_grain if isinstance(s, StateSource) else ""
-        grain_html = f'<span class="node-detail">{_esc(grain)}</span>' if grain else ""
         tooltip = _source_tooltip(s)
         source_nodes += (
             f'<div class="node source-node" id="source-{_esc(s.name)}" '
             f'title="{_esc(tooltip)}">'
             f'<span class="node-badge badge-{kind.lower()}">{kind}</span>'
             f'<span class="node-name">{_esc(s.name)}</span>'
-            f"{grain_html}"
             f"</div>\n"
         )
 
@@ -764,7 +759,6 @@ svg#edges path {{
       if (d.subtype === "STATE") {{
         content += '<div class="panel-section-title">Fields</div>';
         content += '<div class="panel-field"><span class="panel-field-name">id_field</span><span class="panel-field-detail">' + esc(d.id_field) + '</span></div>';
-        content += '<div class="panel-field"><span class="panel-field-name">snapshot_grain</span><span class="panel-field-detail">' + esc(d.snapshot_grain) + '</span></div>';
       }} else {{
         content += '<div class="panel-section-title">Fields</div>';
         content += '<div class="panel-field"><span class="panel-field-name">entity_id_field</span><span class="panel-field-detail">' + esc(d.entity_id_field) + '</span></div>';

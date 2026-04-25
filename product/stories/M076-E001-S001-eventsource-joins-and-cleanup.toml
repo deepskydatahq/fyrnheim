@@ -187,7 +187,7 @@ Use the verbatim copy from the M076 mission TOML's [notes] section. Both the Add
 8. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
 9. Single commit
 10. Close all Beads tasks
-11. Push (do NOT open PR)
+11. Push and open PR (orchestrator handles this)
 
 ## Worktree path reminder (M068 lesson)
 

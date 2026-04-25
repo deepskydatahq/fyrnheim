@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-04-25
+
+### Added
+
+- Nested `Field.json_path` dot-notation support. M069 introduced
+  json_path wiring with a deliberate scope limit to single-segment
+  paths (`$.<key>`); nested paths (`$.<key1>.<key2>...`) raised
+  `ValueError` at pipeline setup with a "future-enhancement request"
+  pointer. This release closes that future-enhancement request — paths
+  like `$.user.email` and `$.a.b.c` now extract via chained ibis JSON
+  subscripts (`cast('json')[k1][k2]...`) on both DuckDB and BigQuery
+  (verified on DuckDB with ibis 12.0.0; BigQuery uses the same chained
+  subscript pattern, which maps to `JSON_VALUE` under the hood — file
+  a v0.11.1 patch if you hit a backend discrepancy).
+
+  Closes the M069 future-enhancement request named in the v0.9.0
+  CHANGELOG. The client-flowable reporter (2026-04-25) flagged that
+  `Field(name="assigned_to_email", json_path="$.user.email",
+  source_column="created_by")` was silently producing NULL for
+  `assigned_to_email` on their BigQuery pipeline because M069's regex
+  raised `ValueError` and a downstream wrapper masked it as a NULL
+  column. That exact reporter shape is now pinned as a regression
+  test (`test_json_path_two_segment_reporter_regression` in
+  `tests/test_source_transforms.py`).
+
+  **Supported form**: `$.<key>` (single segment, M069 behavior
+  preserved) or `$.<key1>.<key2>...` (M074, new). Each segment must
+  be a Python-identifier-style token (letters/digits/underscore,
+  leading letter or underscore).
+
+  **Bracket notation remains unsupported.** `$['key']`, `$.array[0]`,
+  and `$.users[*]` continue to raise `ValueError` with a future-
+  enhancement pointer — file a feature request if you need any of
+  these. Single-user (the reporter) demand for dot-notation only;
+  bracket syntax is a separate spec scope (quoted strings, numeric
+  indices, slices, wildcards) that doubles the test matrix and
+  ibis-mapping risk surface.
+
+  **No behavior change for users with single-segment paths.** Paths
+  like `$.utm_source` continue to extract identically to v0.9.x /
+  v0.10.x — the M074 implementation reduces the single-segment case
+  to a one-iteration loop over the same chained-subscript code path,
+  bit-for-bit equivalent at the engine level.
+
+### Notes
+
+- **Why minor (not patch).** M069 explicitly documented nested-path
+  support as a future enhancement and called the request out by name
+  in the v0.9.0 CHANGELOG. This mission delivers the documented
+  future feature. Per release-discipline memory: "new features OR
+  semantic shifts → minor." The relaxation is strictly additive: no
+  existing path becomes invalid, and bracket notation continues to
+  raise as before.
+
 ## [0.10.1] - 2026-04-25
 
 ### Removed

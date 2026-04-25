@@ -1,0 +1,249 @@
+id = "M074-E001-S001"
+parent = "M074-E001"
+title = "Nested json_path dot-notation support + v0.11.0 release"
+status = "ready"
+created = 2026-04-25
+
+[outcome]
+description = """Relax M069's nested-path ValueError; chain subscript
+access for multi-segment dot-notation paths; update docstrings; add 6
+tests; bump 0.10.1 -> 0.11.0 with CHANGELOG; push release/v0.11.0;
+open PR."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/source_transforms.py: rename `_JSON_PATH_TOPLEVEL` regex to `_JSON_PATH_DOT_NOTATION` (or similar — pick a name that reflects multi-segment support). Update the pattern from `^\\\\$\\\\.[a-zA-Z_][a-zA-Z0-9_]*$` to `^\\\\$(\\\\.[a-zA-Z_][a-zA-Z0-9_]*)+$` (one or more dot-segments). The new regex MUST: (a) accept `$.foo`, `$.foo.bar`, `$.foo.bar.baz`; (b) reject `$.foo[0]`, `$..foo`, `$.foo.`, `$`."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Add a helper `_parse_json_path_segments(json_path: str) -> list[str]` that validates against the regex and returns the list of segment keys (e.g. `'$.user.email'` → `['user', 'email']`). On invalid input, raises ValueError with a message including: (a) the offending path, (b) the supported form description, (c) explicit note that bracket notation is not yet supported with a pointer to file a future-enhancement request. Use `json_path[1:].split('.')` to split (drop the leading `$`)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Update `_apply_json_path_extractions`: replace the single-segment extraction `table[source_col].cast('json')[key].unwrap_as(ibis_type)` with a chained loop: `expr = table[source_col].cast('json'); for key in segments: expr = expr[key]; expr = expr.unwrap_as(ibis_type)`. The single-segment case remains a special case of the loop (segments=['key'] iterates once)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Update Field.json_path docstring in src/fyrnheim/core/source.py: remove the implicit 'top-level only' implication if present; if there's no specific docstring on json_path beyond the inline comment, leave the inline comment as-is or update to 'JSON dot-notation path for extraction (e.g. \"$.utm_source\" or \"$.user.email\")'. Bracket notation explicitly NOT supported."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Update the `_apply_json_path_extractions` docstring in source_transforms.py to remove the 'Only top-level paths are supported' line and replace with: 'Dot-notation paths are supported: `$.<key>` for top-level extraction or `$.<key1>.<key2>...` for nested extraction. Bracket notation (`$['key']`, `$.array[0]`) is not yet supported; raises ValueError as a future-enhancement signal.'"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_json_path_two_segment_extraction in tests/test_source_transforms.py: fixture with `pd.DataFrame({'payload': ['{\"user\":{\"email\":\"a@b.com\"}}', '{\"user\":{\"email\":\"c@d.com\"}}']})`, Field(name='email', type='STRING', json_path='$.user.email', source_column='payload'). Apply, assert output table has 'email' column with values ['a@b.com', 'c@d.com']."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_json_path_three_segment_extraction: 3-level nesting like `{\"a\":{\"b\":{\"c\":42}}}` with json_path='$.a.b.c' and type='INT64'. Assert extracted value is int 42 (not string)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_json_path_single_segment_still_works (regression): identical to the M069 existing test for `$.utm_source`-shape — a single-segment path through the new code path. Assert behavior unchanged from M069."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_json_path_bracket_notation_raises_valueerror: `Field(json_path='$.foo[0]')` raises ValueError with a message mentioning bracket notation is not yet supported. Use pytest.raises(ValueError, match=...)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_json_path_empty_segment_raises_valueerror: `Field(json_path='$..foo')` raises ValueError. Use pytest.raises(ValueError)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New unit test test_json_path_trailing_dot_raises_valueerror: `Field(json_path='$.foo.')` raises ValueError. Use pytest.raises(ValueError)."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "New reporter-regression test test_json_path_two_segment_reporter_regression: docstring explicitly references the client-flowable 2026-04-25 report and the assigned_to_email NULL issue. Fixture matches the reporter's shape: `created_by` column with `'{\"user\":{\"email\":\"...\"}}'` payloads. Field(name='assigned_to_email', json_path='$.user.email', source_column='created_by'). Assert extracted column has the email strings — provides traceable regression coverage if anyone later breaks the nested-path code."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "All existing tests pass: 604-test baseline post-M073 + 6 new M074 tests = 610 expected. Specifically verify the M069 existing nested-path-rejection test (test_json_path_nested_path_raises_valueerror or whatever it's named) is REMOVED OR RENAMED to test_json_path_bracket_notation_raises (since nested dot-notation is no longer rejected). Document the test rename in the commit body."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "pyproject.toml version 0.10.1 -> 0.11.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "uv.lock regenerated; fyrnheim entry records 0.11.0"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "CHANGELOG.md has `## [0.11.0] - 2026-04-25` (today's date) above `## [0.10.1]` with `### Added` subsection. Text MUST: (a) name the M069 future-enhancement request that this closes, (b) cite the client-flowable reporter's `$.user.email` use case, (c) document the supported form (`$.<key>` or `$.<key1>.<key2>...`), (d) document that bracket notation `$['key']` and `$.array[0]` are still NOT supported, (e) note no behavior change for existing single-segment users."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff + mypy clean"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Diff scope: src/fyrnheim/engine/source_transforms.py, src/fyrnheim/core/source.py (Field docstring/comment update), tests/test_source_transforms.py, pyproject.toml, uv.lock, CHANGELOG.md. Do NOT modify event_source_loader.py, pipeline.py, snapshot_diff.py, diff_engine.py, snapshot_store.py, analytics_entity_engine.py, identity_engine.py, or any other test file."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch named `release/v0.11.0` (rename worktree branch FIRST). Single commit. Message: `feat(M074): nested json_path support for dot-notation paths (v0.11.0)` with a body explaining the reporter-NULL case + the dot-notation/bracket-notation split."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Branch pushed; PR opened against main titled `release: v0.11.0 — nested json_path support for dot-notation paths`. Body describes the reporter's production NULL on BigQuery, the M069 close-out, the dot-notation+bracket-notation split, the BQ-validation followup expectation, and post-merge-steps block."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Do NOT merge. Do NOT tag. Do NOT publish."
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "uv.lock",
+    "CHANGELOG.md",
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """
+## Authoritative spec
+
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/missions/M074-v0.11.0-nested-json-path.toml`
+  (full outcome, DuckDB verification, implementation sketch, reporter-
+  regression test code)
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/epics/M074-E001-nested-json-path.toml`
+- `/home/tmo/roadtothebeach/open/fyrnheim/product/stories/M074-E001-S001-nested-json-path.toml`
+
+NOTE: read these via absolute path on the main repo. They were uncommitted
+when your worktree was forked (M073-style limitation). The orchestrator
+prompt below is self-sufficient.
+
+## Implementation sketch
+
+### 1. Regex update (source_transforms.py)
+
+```python
+# OLD:
+_JSON_PATH_TOPLEVEL = re.compile(r\"^\\$\\.[a-zA-Z_][a-zA-Z0-9_]*$\")
+
+# NEW:
+_JSON_PATH_DOT_NOTATION = re.compile(r\"^\\$(\\.[a-zA-Z_][a-zA-Z0-9_]*)+$\")
+
+
+def _parse_json_path_segments(json_path: str) -> list[str]:
+    \"\"\"Validate a json_path and return the list of segment keys.\"\"\"
+    if not _JSON_PATH_DOT_NOTATION.match(json_path):
+        raise ValueError(
+            f\"json_path {json_path!r} is not a supported dot-notation path. \"
+            \"Supported forms: $.<key> or $.<key1>.<key2>... where each key \"
+            \"is a Python-identifier-style token. Bracket notation \"
+            \"($['key'], $.array[0]) is not yet supported — file a \"
+            \"future-enhancement request if needed.\"
+        )
+    return [seg for seg in json_path[1:].split(\".\") if seg]
+```
+
+### 2. Extraction logic update
+
+```python
+def _apply_json_path_extractions(table, fields):
+    if not fields:
+        return table
+    for f in fields:
+        if f.json_path is None:
+            continue
+        segments = _parse_json_path_segments(f.json_path)  # raises if invalid
+        ibis_type = _FIELD_TYPE_TO_IBIS.get(f.type)
+        if ibis_type is None:
+            raise ValueError(...)  # existing logic unchanged
+        source_col = f.source_column or f.name
+        # Chain subscript access across all segments
+        expr = table[source_col].cast(\"json\")
+        for key in segments:
+            expr = expr[key]
+        table = table.mutate(**{f.name: expr.unwrap_as(ibis_type)})
+    return table
+```
+
+### 3. Test renames + additions
+
+Find the M069 test for nested-path rejection (likely
+`test_nested_json_path_raises_valueerror` or similar) and either:
+- DELETE it (since nested paths no longer raise)
+- RENAME to `test_json_path_bracket_notation_raises_valueerror` and
+  update the fixture to use bracket-notation input
+
+The `test_json_path_empty_segment_raises_valueerror` and
+`test_json_path_trailing_dot_raises_valueerror` are NEW additions
+(they test forms the regex still rejects).
+
+### 4. CHANGELOG [0.11.0]
+
+```
+## [0.11.0] - 2026-04-25
+
+### Added
+
+- Nested `Field.json_path` dot-notation support. M069 introduced
+  json_path wiring with a deliberate scope limit to single-segment
+  paths (`$.<key>`); nested paths (`$.<key1>.<key2>...`) raised
+  `ValueError`. This release lifts that limit — paths like
+  `$.user.email` and `$.a.b.c` now extract via chained ibis JSON
+  subscript on both DuckDB and BigQuery (verified on DuckDB; BigQuery
+  uses the same chained pattern, which maps to JSON_VALUE under the
+  hood — file a v0.11.1 patch if you hit a discrepancy).
+
+  Closes the M069 future-enhancement request. The client-flowable
+  reporter's `Field(json_path=\"$.user.email\", source_column=\"created_by\")`
+  pattern (which silently NULLed `assigned_to_email` on v0.10.x) now
+  works.
+
+  **Bracket notation (`$['key']`, `$.array[0]`, `$.users[*]`)
+  remains unsupported** — raises `ValueError` with a future-
+  enhancement pointer. File a feature request if needed.
+
+  No behavior change for users with single-segment paths — they
+  continue to work exactly as before.
+```
+
+### 5. Release-flow rituals
+
+1. `git branch -m release/v0.11.0`
+2. Claim Beads
+3. Update regex + extraction + docstrings + tests
+4. `uv lock` + CHANGELOG
+5. `uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/`
+6. Single commit: `feat(M074): nested json_path support for dot-notation paths (v0.11.0)`
+7. Close Beads, push, open PR
+8. STOP — do not merge/tag/publish
+
+## Worktree path reminder
+
+Use relative paths or paths under the worktree directory. Do NOT use
+absolute paths starting with `/home/tmo/roadtothebeach/open/fyrnheim/...`
+— those hit the main repo. `pwd` to confirm.
+
+## Do NOT
+
+- Add bracket notation support (`$['key']`, `$.array[0]`)
+- Touch event_source_loader.py, pipeline.py, snapshot_diff.py,
+  diff_engine.py, snapshot_store.py, analytics_entity_engine.py,
+  identity_engine.py
+- Add any other API surface
+- Merge, tag, or publish
+"""
+reference_files = [
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "product/missions/M074-v0.11.0-nested-json-path.toml",
+    "product/epics/M074-E001-nested-json-path.toml",
+    "product/stories/M073-E001-S001-remove-snapshot-grain.toml",
+]

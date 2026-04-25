@@ -510,3 +510,113 @@ class TestStateSourceJoins:
         )
         assert s.joins == []
         assert s.upstream is not None
+
+
+# ---------------------------------------------------------------------------
+# M076 (v0.13.0) — EventSource.joins field + upstream-vs-joins mutex on
+# EventSource (inherits BaseTableSource validator).
+# ---------------------------------------------------------------------------
+
+
+class TestEventSourceJoins:
+    """Tests for EventSource's new ``joins`` field (FR-10, M076).
+
+    Mirrors the StateSource shape: the field defaults to an empty list,
+    accepts single + multiple Joins, and the BaseTableSource
+    upstream-vs-joins mutex applies via inheritance.
+    """
+
+    def test_event_source_joins_defaults_empty_list(self):
+        """An EventSource constructed without a `joins=` kwarg defaults
+        to an empty list (same shape as StateSource.joins)."""
+        e = EventSource(
+            name="lifecycle_history",
+            project="p",
+            dataset="d",
+            table="t",
+            entity_id_field="prospect_id",
+            timestamp_field="created_at",
+        )
+        assert e.joins == []
+
+    def test_event_source_joins_accepts_single_join_declaration(self):
+        e = EventSource(
+            name="lifecycle_history",
+            project="p",
+            dataset="d",
+            table="t",
+            entity_id_field="prospect_id",
+            timestamp_field="created_at",
+            joins=[
+                Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+            ],
+        )
+        assert len(e.joins) == 1
+        assert e.joins[0].source_name == "lifecycle_stage"
+        assert e.joins[0].join_key == "previous_stage_id"
+
+    def test_event_source_joins_accepts_multiple_joins_to_same_source(self):
+        """The lifecycle_history shape: TWO Joins to lifecycle_stage,
+        one for previous_stage_id and one for next_stage_id. Identical
+        shape to the StateSource regression — but here on the
+        EventSource side (FR-10 reporter case 2026-04-25)."""
+        e = EventSource(
+            name="lifecycle_history",
+            project="p",
+            dataset="d",
+            table="t",
+            entity_id_field="prospect_id",
+            timestamp_field="created_at",
+            joins=[
+                Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+                Join(source_name="lifecycle_stage", join_key="next_stage_id"),
+            ],
+        )
+        assert len(e.joins) == 2
+        assert {j.join_key for j in e.joins} == {
+            "previous_stage_id",
+            "next_stage_id",
+        }
+
+    def test_event_source_upstream_and_joins_mutually_exclusive(self):
+        """Declaring EventSource(upstream=..., joins=[...]) raises a
+        Pydantic ValidationError — the BaseTableSource mutex validator
+        (already in place from M070) applies via inheritance now that
+        EventSource has its own joins field (FR-10 / M076)."""
+        upstream = StagingView(
+            name="lifecycle_history_view",
+            project="p",
+            dataset="d",
+            sql="SELECT * FROM raw.lifecycle_history",
+        )
+        with pytest.raises(ValidationError) as excinfo:
+            EventSource(
+                name="lifecycle_history",
+                upstream=upstream,
+                entity_id_field="prospect_id",
+                timestamp_field="created_at",
+                joins=[
+                    Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+                ],
+            )
+        msg = str(excinfo.value)
+        assert "mutually exclusive" in msg
+
+    def test_event_source_upstream_with_no_joins_still_valid(self):
+        """Declaring EventSource(upstream=...) WITHOUT joins continues
+        to work — the validator only fires when both are non-empty.
+        Regression guard mirroring the StateSource case."""
+        upstream = StagingView(
+            name="lifecycle_history_view",
+            project="p",
+            dataset="d",
+            sql="SELECT * FROM raw.lifecycle_history",
+        )
+        e = EventSource(
+            name="lifecycle_history",
+            upstream=upstream,
+            entity_id_field="prospect_id",
+            timestamp_field="created_at",
+        )
+        assert e.joins == []
+        assert e.upstream is not None

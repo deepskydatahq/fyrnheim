@@ -79,7 +79,7 @@ from fyrnheim.quality import (
 # Manually synced with pyproject.toml on every release.
 # TODO(future): derive from importlib.metadata("fyrnheim").version to
 # prevent drift (was "0.1.0" across v0.8.0–v0.12.0 PyPI releases).
-__version__ = "0.12.1"
+__version__ = "0.13.0"
 
 __all__ = [
     # Core types

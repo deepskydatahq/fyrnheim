@@ -21,7 +21,10 @@ from fyrnheim.core.source import EventSource, StateSource
 from fyrnheim.engine.activity_engine import apply_activity_definitions
 from fyrnheim.engine.analytics_entity_engine import project_analytics_entity
 from fyrnheim.engine.diff_engine import _make_appeared_events
-from fyrnheim.engine.event_source_loader import load_event_source
+from fyrnheim.engine.event_source_loader import (
+    _build_event_source_table,
+    load_event_source,
+)
 from fyrnheim.engine.executor import IbisExecutor
 from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
 from fyrnheim.engine.metrics_engine import aggregate_metrics
@@ -64,17 +67,25 @@ def _topo_sort_sources(sources: list[Any]) -> list[list[Any]]:
     every prior level has its post-pipeline table in the registry).
 
     The dependency graph is inferred from each source's
-    ``joins[i].source_name`` — only StateSources expose ``joins`` in
-    v0.12.0; EventSources contribute zero out-edges. Edges that point
-    at sources outside the provided list are ignored (they would be
-    caught by the missing-source error inside ``_apply_joins`` —
-    surfaced there with the helpful "topological sort guarantees this
-    name is present; if you see this it's a typo" message).
+    ``joins[i].source_name`` — both StateSources (since M070 / v0.12.0)
+    and EventSources (since M076 / v0.13.0) can expose ``joins``; the
+    sort uses ``getattr(src, 'joins', [])`` to remain source-type
+    agnostic. Edges that point at sources outside the provided list
+    are ignored (they would be caught by the missing-source error
+    inside ``_apply_joins`` — surfaced there with the helpful
+    "topological sort guarantees this name is present; if you see
+    this it's a typo" message).
 
     Stability: within a level, sources retain their declaration order
     relative to ``sources``. So pipelines with NO joins declared see
     a single level whose order is exactly ``sources`` — no behavior
     change relative to v0.11.0.
+
+    M076 (v0.13.0): EventSource as a join TARGET is OUT of scope. If
+    any source's ``joins`` reference an EventSource, this function
+    raises ``ValueError`` with a clear future-enhancement pointer
+    BEFORE the topological partition runs — early failure beats
+    runtime failure inside ``_apply_joins``.
 
     Args:
         sources: The flat declaration-order source list (StateSource
@@ -86,12 +97,37 @@ def _topo_sort_sources(sources: list[Any]) -> list[list[Any]]:
         order.
 
     Raises:
+        ValueError: when a join references an EventSource (M076
+            future-enhancement guard).
         SourceJoinCycleError: when a cycle is detected. The exception
             ``cycle`` attribute holds the cycle path.
     """
     by_name = {getattr(s, "name", None): s for s in sources}
     by_name.pop(None, None)
     declaration_index = {id(s): i for i, s in enumerate(sources)}
+
+    # M076 (v0.13.0): EventSource as join TARGET is out of scope.
+    # `_apply_joins` resolves the right-side primary-key column from
+    # the joined source's `id_field`, which only StateSource exposes.
+    # Surface this as a ValueError at sort time (before any worker
+    # runs) so users see the structural problem early.
+    for s in sources:
+        joins = getattr(s, "joins", None) or []
+        for j in joins:
+            target = by_name.get(j.source_name)
+            if isinstance(target, EventSource):
+                raise ValueError(
+                    f"Join in source {s.name!r} references "
+                    f"{j.source_name!r} which is an EventSource. "
+                    "Joining TO an EventSource is not yet supported "
+                    "(the right_pk_registry's id_field lookup assumes "
+                    "StateSource semantics; EventSources expose "
+                    "entity_id_field + timestamp_field instead). "
+                    "File a future-enhancement request if you need "
+                    "this. EventSource as the LEFT side of a join "
+                    "(i.e. an EventSource declaring `joins=[...]`) "
+                    "IS supported as of M076 / v0.13.0."
+                )
 
     # remaining_deps[name] = set of as-yet-unresolved join sources that
     # this source depends on. Edges pointing outside `sources` (no name
@@ -326,6 +362,12 @@ def run_pipeline(
         log.error("%s", exc)
         result.elapsed_seconds = time.monotonic() - start
         return result
+    except ValueError as exc:
+        # M076: EventSource-as-join-target guard surfaces here too.
+        result.errors.append(f"Source joins: {exc}")
+        log.error("%s", exc)
+        result.elapsed_seconds = time.monotonic() - start
+        return result
 
     def _load_one_source(
         src: object,
@@ -333,9 +375,13 @@ def run_pipeline(
         """Load one source. Returns ``(events, pre_diff_table)`` where
         ``events`` is the universal-schema event table (or None for
         unsupported source types) and ``pre_diff_table`` is the
-        post-transform / pre-snapshot-diff Ibis table that downstream
-        joins should consume from the registry. EventSources contribute
-        no pre_diff_table (they are not valid join targets in v0.12.0)."""
+        post-transform / pre-snapshot-diff (or pre-event-shape, for
+        EventSource) Ibis table that downstream consumers should consume
+        from the registry. M076 (v0.13.0): EventSources also populate
+        the registry with their post-pipeline (post-joins, pre-event-
+        shape) table. Joins TO an EventSource remain blocked at sort
+        time, so the registered EventSource entry is forward-compatible
+        rather than load-bearing today."""
         if isinstance(src, StateSource):
             with phase1_lock:
                 pre_diff = _build_state_source_table(
@@ -356,10 +402,30 @@ def run_pipeline(
                 return events, pre_diff
         if isinstance(src, EventSource):
             with phase1_lock:
-                events = load_event_source(
-                    conn, src, data_dir=config.data_dir, backend=config.backend,
+                # M076 (v0.13.0): build the post-pipeline table first so
+                # the registry can hold it BEFORE event-shape conversion.
+                # Joined columns are part of the post-pipeline table; the
+                # event-shape conversion's payload-pack step (load_event_source
+                # below) carries them into the emitted event payload.
+                pre_event = _build_event_source_table(
+                    conn,
+                    src,
+                    data_dir=config.data_dir,
+                    backend=config.backend,
+                    source_registry=loaded_sources,
+                    right_pk_registry=right_pk_registry,
                 )
-                return events, None
+                loaded_sources[src.name] = pre_event
+                events = load_event_source(
+                    conn,
+                    src,
+                    data_dir=config.data_dir,
+                    backend=config.backend,
+                    source_registry=loaded_sources,
+                    right_pk_registry=right_pk_registry,
+                    pre_built_table=pre_event,
+                )
+                return events, pre_event
         return None, None
 
     def _phase1_worker(

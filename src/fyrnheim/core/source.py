@@ -267,24 +267,9 @@ class BaseTableSource(BaseModel):
 
 
 class TableSource(BaseTableSource):
-    """Standard table source with optional field definitions and transforms.
-
-    When used inside a UnionSource, the optional field_mappings and
-    literal_columns enable per-source normalization before union:
-
-    - field_mappings: Rename source columns before union.
-      Keys are source column names, values are unified column names.
-      Example: {'contact_email': 'email'} renames the source's
-      'contact_email' column to 'email'.
-
-    - literal_columns: Inject constant values as new columns.
-      Example: {'product_type': 'video'} adds a column 'product_type'
-      with value 'video' for every row from this source.
-    """
+    """Standard table source with optional field definitions and transforms."""
     transforms: SourceTransforms | None = None
     fields: list[Field] | None = None
-    field_mappings: dict[str, str] = PydanticField(default_factory=dict)
-    literal_columns: dict[str, Any] = PydanticField(default_factory=dict)
 
 
 class StateSource(BaseTableSource):
@@ -320,8 +305,9 @@ class StateSource(BaseTableSource):
             "their inferred join dependencies — declaration order is "
             "preserved when no joins are declared. See :class:`Join` for "
             "the join_key column-name semantics. Mutually exclusive with "
-            "`upstream` (StagingView). M070 / v0.12.0; EventSource is a "
-            "future enhancement (file a follow-up if needed)."
+            "`upstream` (StagingView). M070 / v0.12.0. EventSource gains "
+            "the same field shape in M076 / v0.13.0 (LEFT side only — "
+            "joining TO an EventSource remains a future enhancement)."
         ),
     )
 
@@ -347,6 +333,27 @@ class EventSource(BaseTableSource):
     fields: list[Field] | None = None
     computed_columns: list[ComputedColumn] = PydanticField(default_factory=list)
     payload_exclude: list[str] = PydanticField(default_factory=list)
+    joins: list[Join] = PydanticField(
+        default_factory=list,
+        description=(
+            "Declarative left-joins to other StateSources declared in "
+            "the same pipeline. Same shape and semantics as "
+            ":attr:`StateSource.joins` (M070 / v0.12.0): single-column "
+            "equality on `table[join_key] == other[id_field]`, applied "
+            "AFTER `transforms` (rename) and BEFORE `json_path` "
+            "extraction. Joined columns flow into the emitted event "
+            "payload via the existing payload-pack step (any column "
+            "not in `payload_exclude` / entity_id / ts / event_type "
+            "lands in the JSON payload). The `upstream` (StagingView) "
+            "and `joins` mutex from BaseTableSource applies. "
+            "M076 / v0.13.0. EventSource as a join TARGET (someone "
+            "joining TO an EventSource) is OUT of scope — the "
+            "right-side `id_field` lookup assumes StateSource "
+            "semantics; the topological sort raises ValueError if a "
+            "join references an EventSource. File a follow-up if you "
+            "need that direction."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_event_type_exclusivity(self) -> "EventSource":

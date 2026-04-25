@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-04-25
+
+### Added
+
+- **EventSource.joins** (FR-10) — `EventSource` now supports the same
+  `joins: list[Join] = []` field that `StateSource` got in M070
+  (v0.12.0). Joins are applied between transforms and json_path on
+  the EventSource read path; joined columns become part of the
+  emitted event payload after the existing payload-pack step.
+  Closes the M070 future-enhancement request for EventSource joins.
+
+  Reporter use case (client-flowable 2026-04-25 follow-up): the
+  `pardot_lifecycle_history.sql` migration was blocked because that
+  source is an `EventSource` (downstream activities use
+  `EventOccurred(event_type="lead_created")` dispatch) and M070's
+  joins were StateSource-only. With v0.13.0 it can migrate fully:
+
+  ```python
+  pardot_lifecycle_history = EventSource(
+      name="pardot_lifecycle_history",
+      ...,
+      entity_id_field="prospect_id",
+      timestamp_field="created_at",
+      joins=[
+          Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+          Join(source_name="lifecycle_stage", join_key="next_stage_id"),
+      ],
+  )
+  ```
+
+  **Out of scope**: `EventSource` as a join TARGET. The
+  `right_pk_registry`'s `id_field` lookup assumes StateSource
+  semantics; EventSources don't have `id_field` in the same sense
+  (they have `entity_id_field` + `timestamp_field`). Joining TO an
+  EventSource raises `ValueError` at pipeline-load time (during the
+  topological sort) with a future-enhancement pointer. EventSource
+  as the LEFT side (the source declaring the joins) IS supported.
+
+- **`upstream` and `joins` mutex now applies to EventSource.** The
+  M070 mutex validator already lives on `BaseTableSource` and uses
+  `getattr(self, "joins", None)`, so EventSource inherits it
+  automatically once the `joins` field is added. Declaring
+  `EventSource(upstream=<StagingView>, joins=[Join(...)])` raises
+  `ValidationError` at construction.
+
+### Removed
+
+- **`TableSource.field_mappings`** and **`TableSource.literal_columns`** —
+  declared on the model with detailed docstrings explaining their role
+  "when used inside a UnionSource", but `UnionSource` does not exist
+  in the codebase. Same dead-field pattern as M073's
+  `snapshot_grain` removal. Verified pre-removal: no other src/ or
+  tests/ code references either field.
+
+  **Migration**: users with `field_mappings={...}` or
+  `literal_columns={...}` declarations can drop the attributes.
+  Pydantic v2's default `extra='ignore'` means existing declarations
+  continue to load without error on v0.13.0+ — no urgent upgrade
+  pressure. If union-source-style normalization is something you
+  need, file a feature request.
+
+### Notes
+
+- Phase 1 source-load orchestration in `pipeline.py` already used
+  `getattr(src, "joins", [])` on every source (M070 design choice),
+  so generalizing the topological sort to handle `EventSource.joins`
+  required no graph-builder changes — only the new
+  EventSource-as-target guard plus the `_build_event_source_table`
+  extraction needed to register the post-pipeline EventSource table
+  in the source registry BEFORE the event-shape conversion.
+
 ## [0.12.1] - 2026-04-25
 
 ### Fixed

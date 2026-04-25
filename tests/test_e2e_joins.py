@@ -27,10 +27,11 @@ from pathlib import Path
 
 import ibis
 import pandas as pd
+import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
-from fyrnheim.core.source import Join, StateSource
+from fyrnheim.core.source import EventSource, Join, StateSource
 from fyrnheim.engine.pipeline import (
     _build_state_source_table,
     _load_state_source,
@@ -364,3 +365,292 @@ def test_m075_lifecycle_history_computed_column_with_joins_e2e(
     # Fixture's pre-computed value preserved — NOT the computed
     # expression's would-be result.
     assert transition_types == ["upgrade", "upgrade", "upgrade"]
+
+
+def test_m076_lifecycle_history_eventsource_joins_e2e(tmp_path: Path) -> None:
+    """FR-10 / M076 (v0.13.0) — EventSource gains the same joins shape
+    StateSource got in M070. Reporter follow-up
+    (client-flowable 2026-04-25): pardot_lifecycle_history is an
+    EventSource (downstream activities use EventOccurred(
+    event_type="lead_created") dispatch), so M070's StateSource-only
+    joins blocked its migration. With M076, an EventSource declaring
+    two Joins to a sibling StateSource (lifecycle_stage) now flows
+    through Phase 1 like its StateSource cousin: the joined columns
+    land in the post-pipeline table, then the existing payload-pack
+    step in load_event_source carries them into each emitted event's
+    payload.
+
+    Asserts:
+      * Both sources load through run_pipeline without errors.
+      * The lifecycle_history EventSource emits the expected number
+        of events.
+      * Each event's payload contains the joined-stage `name` columns
+        (suffixed by ibis for the duplicate-target join).
+      * Pin specific values for one row so a regression that resolves
+        joins to the wrong stage row (swap prev/next, reuse suffix,
+        etc.) fails loudly. lh-1 has previous_stage_id=10 (→ "Lead")
+        and next_stage_id=20 (→ "Qualified").
+    """
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.pipeline import run_pipeline
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    stage_path = data_dir / "lifecycle_stage.parquet"
+    pd.DataFrame(
+        {
+            "id": [10, 20, 30],
+            "name": ["Lead", "Qualified", "Customer"],
+        }
+    ).to_parquet(str(stage_path))
+
+    history_path = data_dir / "lifecycle_history.parquet"
+    pd.DataFrame(
+        {
+            "id": ["lh-1", "lh-2", "lh-3"],
+            "prospect_id": ["P-1", "P-1", "P-2"],
+            "created_at": ["2026-04-01", "2026-04-02", "2026-04-03"],
+            "previous_stage_id": [10, 20, 10],
+            "next_stage_id": [20, 30, 20],
+        }
+    ).to_parquet(str(history_path))
+
+    stage_source = StateSource(
+        name="lifecycle_stage",
+        project="test",
+        dataset="test",
+        table="lifecycle_stage",
+        duckdb_path=str(stage_path),
+        id_field="id",
+        full_refresh=True,
+    )
+
+    history_source = EventSource(
+        name="lifecycle_history",
+        project="test",
+        dataset="test",
+        table="lifecycle_history",
+        duckdb_path=str(history_path),
+        entity_id_field="prospect_id",
+        timestamp_field="created_at",
+        joins=[
+            Join(source_name="lifecycle_stage", join_key="previous_stage_id"),
+            Join(source_name="lifecycle_stage", join_key="next_stage_id"),
+        ],
+    )
+
+    config = ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=data_dir,
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+    (tmp_path / "output").mkdir(parents=True, exist_ok=True)
+
+    conn = ibis.duckdb.connect()
+    executor = IbisExecutor(conn, "duckdb")
+
+    # Declare history FIRST to exercise the topo-sort: lifecycle_stage
+    # must move to level 0 even though it appears second in declaration
+    # order.
+    assets = {
+        "sources": [history_source, stage_source],
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": [],
+        "metrics_models": [],
+        "staging_views": [],
+    }
+    result = run_pipeline(assets, config, executor)
+
+    assert result.errors == [], (
+        f"unexpected pipeline errors: {result.errors}"
+    )
+    assert result.source_count == 2
+    assert "lifecycle_stage" in result.timings.source_loads
+    assert "lifecycle_history" in result.timings.source_loads
+
+    # The EventSource emits its events through load_event_source's
+    # payload-pack step. Joined columns naturally appear in payload.
+    # Reach into the post-pipeline ibis table that lifecycle_history
+    # produced — read the parquet directly and rerun load_event_source
+    # to inspect the payloads (run_pipeline doesn't expose the per-source
+    # event tables in PipelineResult).
+    from fyrnheim.engine.event_source_loader import load_event_source
+    from fyrnheim.engine.pipeline import _build_state_source_table
+
+    source_registry: dict = {}
+    right_pk_registry = {"lifecycle_stage": "id"}
+
+    stage_table = _build_state_source_table(stage_source, config, conn)
+    source_registry["lifecycle_stage"] = stage_table
+
+    history_events = load_event_source(
+        conn,
+        history_source,
+        data_dir=config.data_dir,
+        backend=config.backend,
+        source_registry=source_registry,
+        right_pk_registry=right_pk_registry,
+    )
+    df = history_events.execute()
+
+    assert len(df) == 3
+    # Pin event-schema columns.
+    assert set(df.columns) == {
+        "source",
+        "entity_id",
+        "ts",
+        "event_type",
+        "payload",
+    }
+
+    import json
+
+    # Reorder by id to make pinning deterministic — the underlying
+    # parquet read order is preserved by duckdb but be explicit.
+    df_sorted = df.sort_values("entity_id").reset_index(drop=True)
+    payloads_by_id: dict[str, dict] = {}
+    for _, row in df_sorted.iterrows():
+        payload = json.loads(row["payload"])
+        # Use the original lh-id from the payload column.
+        payloads_by_id[payload["id"]] = payload
+
+    # lh-1: previous=10 → Lead, next=20 → Qualified
+    lh1 = payloads_by_id["lh-1"]
+    lh1_joined_names = {value for key, value in lh1.items() if "name" in key}
+    assert {"Lead", "Qualified"}.issubset(lh1_joined_names), (
+        f"expected both joined stage names ('Lead', 'Qualified') in "
+        f"payload from EventSource double-join; got {lh1}"
+    )
+
+    # lh-2: previous=20 → Qualified, next=30 → Customer
+    lh2 = payloads_by_id["lh-2"]
+    lh2_joined_names = {value for key, value in lh2.items() if "name" in key}
+    assert {"Qualified", "Customer"}.issubset(lh2_joined_names), (
+        f"expected both joined stage names ('Qualified', 'Customer') in "
+        f"payload from EventSource double-join; got {lh2}"
+    )
+
+
+def test_m076_join_target_eventsource_raises_clear_error(
+    tmp_path: Path,
+) -> None:
+    """FR-10 / M076 — EventSource as a join TARGET is OUT of scope.
+    The right-side primary-key column is resolved from the joined
+    source's `id_field`, which only StateSource exposes. A Join whose
+    `source_name` resolves to an EventSource must raise a clear
+    ValueError at sort time (before any worker runs) with a future-
+    enhancement pointer.
+    """
+    from fyrnheim.engine.executor import IbisExecutor
+    from fyrnheim.engine.pipeline import run_pipeline
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    stage_path = data_dir / "lifecycle_stage.parquet"
+    pd.DataFrame(
+        {"id": [10], "name": ["Lead"]}
+    ).to_parquet(str(stage_path))
+
+    events_path = data_dir / "events.parquet"
+    pd.DataFrame(
+        {
+            "id": ["e-1"],
+            "prospect_id": ["P-1"],
+            "created_at": ["2026-04-01"],
+        }
+    ).to_parquet(str(events_path))
+
+    # An EventSource declared as a join TARGET — the offending shape.
+    target_event_source = EventSource(
+        name="external_events",
+        project="test",
+        dataset="test",
+        table="events",
+        duckdb_path=str(events_path),
+        entity_id_field="prospect_id",
+        timestamp_field="created_at",
+    )
+
+    # A StateSource attempts to join TO the EventSource.
+    state_with_bad_join = StateSource(
+        name="lifecycle_stage",
+        project="test",
+        dataset="test",
+        table="lifecycle_stage",
+        duckdb_path=str(stage_path),
+        id_field="id",
+        full_refresh=True,
+        joins=[
+            Join(source_name="external_events", join_key="some_fk"),
+        ],
+    )
+
+    config = ResolvedConfig(
+        entities_dir=tmp_path / "entities",
+        data_dir=data_dir,
+        output_dir=tmp_path / "output",
+        backend="duckdb",
+        project_root=tmp_path,
+    )
+    (tmp_path / "output").mkdir(parents=True, exist_ok=True)
+
+    conn = ibis.duckdb.connect()
+    executor = IbisExecutor(conn, "duckdb")
+
+    assets = {
+        "sources": [target_event_source, state_with_bad_join],
+        "activities": [],
+        "identity_graphs": [],
+        "analytics_entities": [],
+        "metrics_models": [],
+        "staging_views": [],
+    }
+
+    # The runner converts the sort-time ValueError into a Phase 1
+    # error entry — assert it's surfaced clearly with the offending
+    # source_name AND a future-enhancement hint.
+    result = run_pipeline(assets, config, executor)
+    assert result.errors, "expected a clear error for EventSource-as-join-target"
+    err_text = "\n".join(result.errors)
+    assert "external_events" in err_text
+    assert "EventSource" in err_text
+    assert "future-enhancement" in err_text or "future enhancement" in err_text
+
+
+def test_m076_topo_sort_rejects_eventsource_join_target_directly() -> None:
+    """Unit-level guard: the topological sort itself raises ValueError
+    when a Join references an EventSource. Surfacing at sort time
+    (before worker dispatch) makes the error message structural — the
+    user sees the bad reference immediately rather than after some
+    other source happens to fail at runtime.
+    """
+    from fyrnheim.engine.pipeline import _topo_sort_sources
+
+    target = EventSource(
+        name="external_events",
+        project="test",
+        dataset="test",
+        table="t",
+        entity_id_field="prospect_id",
+        timestamp_field="created_at",
+    )
+    bad = StateSource(
+        name="lifecycle_stage",
+        project="test",
+        dataset="test",
+        table="lifecycle_stage",
+        id_field="id",
+        joins=[Join(source_name="external_events", join_key="fk")],
+    )
+    with pytest.raises(ValueError) as excinfo:
+        _topo_sort_sources([target, bad])
+    msg = str(excinfo.value)
+    assert "external_events" in msg
+    assert "EventSource" in msg
+    assert "id_field" in msg
+    assert "lifecycle_stage" in msg

@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-04-25
+
+### Fixed
+
+- **`fyrnheim.__version__`** was `"0.1.0"` across v0.8.0–v0.12.0 PyPI
+  releases — never synced from `pyproject.toml`. Users introspecting via
+  `import fyrnheim; print(fyrnheim.__version__)` got the wrong value.
+  v0.12.1 corrects it to `"0.12.1"` and adds an inline TODO pointing to
+  a future `importlib.metadata`-based derivation that would prevent
+  drift permanently.
+
+- **`computed_columns` on the fixture-shadow path** now respects
+  fixture-resident output columns. M072 (v0.10.0) shipped
+  `duckdb_fixture_is_transformed` with the rule "computed_columns
+  STILL APPLY" — but computed expressions can reference upstream-pipeline
+  outputs (joins, json_path extracts, transforms) that DID skip on the
+  fixture-shadow path. When the computed expression referenced a missing
+  input, it failed. v0.12.1 refines the rule (FR-9): when the
+  fixture-shadow path fires AND the computed_column's output column is
+  already present in the fixture, preserve the fixture's value instead
+  of recomputing. Per-column granularity — columns missing from the
+  fixture still get computed. This refines (not reverts) the M072
+  [0.10.0] entry's "STILL APPLY" wording: apply UNLESS output already
+  exists in the fixture.
+
+  Reporter case: a `transition_type` computed_column referencing
+  `t.name_<source>_<key>` (a join-suffixed column from M070's
+  source-level joins). On BigQuery, joins applied → suffix column
+  existed → expression evaluated. On DuckDB+fixture, joins skipped →
+  suffix column missing → expression failed; but the fixture had
+  `transition_type` pre-computed anyway, so the right behavior is
+  preserve-from-fixture. Unblocks the
+  `pardot_lifecycle_history.sql → pydantic` migration.
+
+- **Test improvements** (cherry-picked from PR #143's CodeRabbit
+  review on the orphan `release/v0.12.0` branch, commit `488d6eb`,
+  which never landed on main pre-tag):
+  - `tests/test_e2e_joins.py` lifecycle_history e2e now uses
+    `_build_state_source_table` + `_run_state_source_diff` to register
+    the pre-diff table properly with the source registry, instead of
+    bypassing the production path by re-reading the parquet.
+    Strengthened assertion to pin specific joined values
+    (`{"Lead", "Qualified"}.issubset(...)`) so a regression that
+    resolves joins to the wrong stage row fails loudly.
+  - `tests/test_source_transforms.py` adds
+    `test_apply_joins_missing_right_pk_registry_raises_clear_error`
+    for a previously-uncovered branch in `_apply_joins`.
+
 ## [0.12.0] - 2026-04-25
 
 ### Added

@@ -75,10 +75,25 @@ def load_event_source(
         table = _apply_json_path_extractions(table, event_source.fields)
 
     # Apply computed columns after transforms (users reference post-transform columns).
-    # M072: computed_columns ALWAYS apply — they are backend-independent expressions
-    # that evaluate the same way against the post-transform shape on any backend.
+    # M072: computed_columns apply on the fixture-shadow path because they are
+    # backend-independent expressions, evaluating the same way on any backend.
+    # M075 (FR-9): refines that rule. When fixture-shadow fires AND the
+    # computed_column's output column already exists in the fixture, preserve
+    # the fixture's value instead of recomputing. This unblocks expressions
+    # that reference upstream-pipeline outputs (joins, json_path, transforms)
+    # that DID skip on the fixture-shadow path — the fixture has the final
+    # value baked in, so re-evaluating against missing inputs would fail.
+    # Per-column granularity: columns missing from the fixture still get
+    # computed.
     if event_source.computed_columns:
         for cc in event_source.computed_columns:
+            if reads_fixture and cc.name in table.columns:
+                log.info(
+                    "EventSource %s: computed_column %s skipped (output already in fixture)",
+                    event_source.name,
+                    cc.name,
+                )
+                continue
             table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
 
     # M069: source-level filter applied AFTER computed_columns so users can

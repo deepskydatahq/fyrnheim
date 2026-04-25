@@ -576,6 +576,14 @@ def _build_state_source_table(
     transforms/joins/json_path/filter. The fixture is assumed to be in
     post-transform (and post-join) shape. computed_columns STILL APPLY —
     they are backend-independent expressions, not transforms.
+
+    M075 (FR-9): refines the M072 computed_columns rule. When fixture-shadow
+    fires AND the computed_column's output column is already present in the
+    fixture, preserve the fixture's value instead of recomputing. This
+    handles the case where a computed expression references upstream-pipeline
+    outputs (e.g. join-suffixed columns from M070) that DID skip on the
+    fixture-shadow path. Per-column granularity — columns missing from the
+    fixture still get computed.
     """
     table = source.read_table(conn, config.backend, data_dir=config.data_dir)
     reads_fixture = _reads_duckdb_fixture(source, config.backend)
@@ -605,6 +613,16 @@ def _build_state_source_table(
 
     if source.computed_columns:
         for cc in source.computed_columns:
+            # M075 (FR-9): skip when fixture-shadow fires AND output column
+            # already exists in the fixture — preserve fixture's value
+            # instead of recomputing against possibly-missing inputs.
+            if reads_fixture and cc.name in table.columns:
+                log.info(
+                    "StateSource %s: computed_column %s skipped (output already in fixture)",
+                    source.name,
+                    cc.name,
+                )
+                continue
             table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
 
     if not reads_fixture and source.filter:

@@ -652,6 +652,25 @@ def test_apply_joins_missing_source_raises_clear_error() -> None:
         _apply_joins(left, joins, {}, {})
 
 
+def test_apply_joins_missing_right_pk_registry_raises_clear_error() -> None:
+    """When ``source_registry`` has the joined source but
+    ``right_pk_registry`` does NOT, ``_apply_joins`` raises a clear
+    ValueError pinning the StateSource-only contract. This is the
+    branch users hit when they declare a join to an EventSource (or to
+    any non-StateSource that never made it into the right-PK map).
+    """
+    left = _lifecycle_history_left()
+    right = _lifecycle_stage_right()
+    joins = [Join(source_name="lifecycle_stage", join_key="previous_stage_id")]
+    with pytest.raises(ValueError, match="right-side primary key"):
+        _apply_joins(
+            left,
+            joins,
+            {"lifecycle_stage": right},
+            {},  # missing lifecycle_stage -> right PK mapping
+        )
+
+
 def test_apply_joins_propagates_join_key_resolution() -> None:
     """Option A semantics: ``Join.join_key`` is the LEFT-side FK; the
     RIGHT-side PK comes from ``right_pk_registry``. Swap the registry

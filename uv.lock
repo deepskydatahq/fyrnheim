@@ -473,7 +473,7 @@ wheels = [
 
 [[package]]
 name = "fyrnheim"
-version = "0.12.0"
+version = "0.12.1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

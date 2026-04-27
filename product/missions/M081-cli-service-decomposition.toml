@@ -1,0 +1,70 @@
+# Mission: CLI service decomposition
+# Follow-up from M077 architecture audit.
+
+id = "M081"
+title = "CLI service decomposition"
+status = "draft"
+created = 2026-04-27
+depends_on = ["M077"]
+
+[outcome]
+description = """
+Prepare Fyrnheim's CLI for publishable-package maturity by separating large Click command handlers from reusable command service logic. The CLI should keep the same commands, options, output, and errors, while implementation details move into smaller functions/modules that can be tested without invoking Click for every case.
+"""
+
+user_progress = "From 'cli.py mixes Click command definitions with long orchestration bodies' to 'CLI behavior is stable but implementation logic is easier to test, document, and evolve for external users'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Existing CLI commands, options, help output, and error behavior remain compatible",
+    "Large command bodies such as run, bench, materialize, drop, list-staging, and asset discovery are reviewed for service extraction",
+    "At least one high-leverage service extraction is completed or a documented decomposition plan explains why implementation should be phased",
+    "CLI tests cover preserved user-facing behavior after any extraction",
+    "No command output changes unless explicitly documented and tested",
+    "Internal helpers are importable/testable without requiring a Click runner"
+]
+validator_context = [
+    "src/fyrnheim/cli.py",
+    "tests/test_cli_run.py",
+    "tests/test_cli_staging.py",
+    "tests/test_config.py"
+]
+
+[context]
+related_docs = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M077-extension-architecture-refactor-audit.toml",
+    "VALUES.md"
+]
+relevant_paths = [
+    "src/fyrnheim/cli.py",
+    "src/fyrnheim/config.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_cli_run.py",
+    "tests/test_cli_staging.py",
+    "tests/test_config.py"
+]
+
+[scope]
+in_scope = [
+    "Map long CLI command handlers and identify extraction boundaries",
+    "Prioritize extraction around behavior that is already covered by tests",
+    "Move command implementation logic to service/helper functions where it improves clarity",
+    "Keep Click decorators and user-facing command definitions thin"
+]
+out_of_scope = [
+    "Adding new CLI commands",
+    "Changing command names, options, or output formats",
+    "Changing pipeline execution semantics",
+    "Introducing rich/textual UI dependencies",
+    "Rewriting all CLI code in one large diff"
+]
+acceptable_breakage = [
+    "None expected. User-facing CLI compatibility must be preserved."
+]
+
+[notes]
+considerations = """
+M077 evidence: `src/fyrnheim/cli.py` is about 716 lines, with several 50+ line functions. This may be fine short-term, but Level 4 publishable-package work benefits from clearer command/service boundaries. Prefer incremental extraction with tests over a broad rewrite.
+"""

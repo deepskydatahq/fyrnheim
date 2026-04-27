@@ -1,0 +1,75 @@
+# Mission: Extension regression test architecture
+# Follow-up from M077 architecture audit.
+
+id = "M082"
+title = "Extension regression test architecture"
+status = "draft"
+created = 2026-04-27
+depends_on = ["M077"]
+
+[outcome]
+description = """
+Reshape the M068-M076 regression tests so future source-pipeline extension work has reusable fixtures, clear stage-order invariant tests, and focused e2e coverage. The goal is not fewer tests; it is easier-to-understand tests that preserve the current safety net while reducing duplicated setup and making architectural invariants explicit.
+"""
+
+user_progress = "From 'extension regression tests are strong but spread across large mission-specific files' to 'future extension work has reusable test helpers and obvious invariant tests for source-stage behavior'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Regression coverage for M068-M076 remains intact or stronger",
+    "Common lifecycle-stage/source fixtures are extracted only when doing so improves readability without hiding important test setup",
+    "Stage-order invariant tests explicitly cover transforms, joins, json_path, computed_columns, filter, and fixture-shadow skips",
+    "StateSource and EventSource extension behavior both remain covered",
+    "Large test files are either reduced or documented as intentionally scenario-heavy",
+    "No assertions are weakened during fixture consolidation"
+]
+validator_context = [
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_state_event_source.py",
+    "tests/conftest.py"
+]
+
+[context]
+related_docs = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M077-extension-architecture-refactor-audit.toml"
+]
+relevant_paths = [
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_state_event_source.py",
+    "tests/test_event_source_loader.py",
+    "tests/conftest.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py"
+]
+
+[scope]
+in_scope = [
+    "Inventory duplicated fixtures and setup patterns in M068-M076 regression tests",
+    "Extract reusable fixtures/helpers where they clarify tests",
+    "Add source-stage invariant tests that would catch stage-order regressions",
+    "Keep e2e tests for reporter-shaped scenarios such as lifecycle_history joins",
+    "Document any intentionally verbose scenario tests"
+]
+out_of_scope = [
+    "Reducing coverage for speed alone",
+    "Changing production code except where tiny testability hooks are justified and behavior-preserving",
+    "Replacing e2e tests with unit tests when the e2e path is the behavior under test",
+    "Large fixture framework abstractions that make tests harder to read"
+]
+acceptable_breakage = [
+    "None expected. Test refactors must preserve or strengthen assertions."
+]
+
+[notes]
+considerations = """
+M077 evidence: `tests/test_source_transforms.py`, `tests/test_e2e_joins.py`, `tests/test_m072_fixture_shadowing.py`, and `tests/test_state_event_source.py` are all large and contain mission-specific regression history. That history is valuable. Consolidate only repeated setup, not the narrative traceability that explains why the behavior matters.
+"""

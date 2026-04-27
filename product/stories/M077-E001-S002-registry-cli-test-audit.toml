@@ -1,0 +1,49 @@
+id = "M077-E001-S002"
+parent = "M077-E001"
+title = "Audit registry, CLI, and regression-test architecture"
+status = "complete"
+triage = "plan"
+created = 2026-04-27
+
+[outcome]
+description = """Document registry discovery duplication, CLI command growth, and regression-test organization findings with evidence from current code."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "docs/M077-architecture-refactor-audit.md includes findings for registry discovery consolidation, CLI decomposition, and test architecture"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Findings cite relevant paths including the four registry modules, cli.py, and M068-M076 regression test files"
+
+[context]
+relevant_paths = [
+    "docs/M077-architecture-refactor-audit.md",
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_state_event_source.py"
+]
+input_fixtures = []
+depends_on = ["M077-E001-S001"]
+
+[handoff]
+implementation_hints = """Planning story completed by documenting architectural findings; no production code changes."""
+reference_files = []
+
+[execution]
+branch = "plan-M077-refactor-audit"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/150"
+commit = "7a66aa4"
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

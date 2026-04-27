@@ -6,14 +6,17 @@ from types import SimpleNamespace
 
 import ibis
 import pandas as pd
+import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.source import EventSource, Join, SourceTransforms, StateSource
 from fyrnheim.engine import event_source_loader, pipeline, source_stage
+from fyrnheim.engine.expression_eval import UnsafeExpressionError, evaluate_expression
 from fyrnheim.engine.source_stage import build_source_stage_table
 
 
-def _table() -> ibis.Table:
+@pytest.fixture
+def table() -> ibis.Table:
     return ibis.memtable(
         pd.DataFrame(
             {
@@ -27,7 +30,9 @@ def _table() -> ibis.Table:
     )
 
 
-def test_build_source_stage_table_applies_non_fixture_stages_in_order(monkeypatch):
+def test_build_source_stage_table_applies_non_fixture_stages_in_order(
+    monkeypatch, table
+):
     """The shared helper owns the load-bearing stage order.
 
     Spies avoid retesting the transform/join/json helpers themselves;
@@ -35,7 +40,6 @@ def test_build_source_stage_table_applies_non_fixture_stages_in_order(monkeypatc
     around computed_columns and filter.
     """
     calls: list[str] = []
-    table = _table()
 
     def read_table(self, conn, backend, data_dir=None):
         calls.append("read")
@@ -147,8 +151,7 @@ def test_build_source_stage_table_preserves_fixture_shadow_semantics(monkeypatch
     assert df["created"].tolist() == [42]
 
 
-def test_state_source_builder_delegates_to_shared_source_stage(monkeypatch):
-    table = _table()
+def test_state_source_builder_delegates_to_shared_source_stage(monkeypatch, table):
     seen: dict[str, object] = {}
 
     def shared_helper(source, conn, backend, **kwargs):
@@ -178,8 +181,7 @@ def test_state_source_builder_delegates_to_shared_source_stage(monkeypatch):
     }
 
 
-def test_event_source_builder_delegates_to_shared_source_stage(monkeypatch):
-    table = _table()
+def test_event_source_builder_delegates_to_shared_source_stage(monkeypatch, table):
     seen: dict[str, object] = {}
 
     def shared_helper(source, conn, backend, **kwargs):
@@ -211,3 +213,24 @@ def test_event_source_builder_delegates_to_shared_source_stage(monkeypatch):
         "backend": "duckdb",
         "source_kind": "EventSource",
     }
+
+
+def test_evaluate_expression_allows_existing_fyrnheim_expression_shapes():
+    row = {"email": "USER@EXAMPLE.COM", "total_revenue": 10, "workshop_count": 2}
+    proxy = SimpleNamespace(email=row["email"])
+
+    assert evaluate_expression("t.email.split('@')[1].lower()", {"t": proxy}) == "example.com"
+    assert evaluate_expression(
+        "total_revenue / workshop_count if workshop_count else 0",
+        row,
+    ) == 5
+
+
+def test_evaluate_expression_rejects_dunder_escape_hatches():
+    with pytest.raises(UnsafeExpressionError):
+        evaluate_expression("{}.__class__.__bases__[0].__subclasses__()", {})
+
+
+def test_evaluate_expression_rejects_unknown_builtins():
+    with pytest.raises(UnsafeExpressionError):
+        evaluate_expression("__import__('os').system('id')", {})

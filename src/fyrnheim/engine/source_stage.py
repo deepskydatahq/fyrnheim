@@ -19,6 +19,7 @@ from typing import Any
 import ibis
 
 from fyrnheim.core.source import BaseTableSource
+from fyrnheim.engine.expression_eval import evaluate_expression
 from fyrnheim.engine.source_transforms import (
     _apply_joins,
     _apply_json_path_extractions,
@@ -114,10 +115,12 @@ def build_source_stage_table(
                 cc.name,
             )
             continue
-        table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
+        table = table.mutate(
+            **{cc.name: evaluate_expression(cc.expression, {"ibis": ibis, "t": table})}
+        )
 
     source_filter: Any = getattr(source, "filter", None)
     if not reads_fixture and source_filter:
-        table = table.filter(eval(source_filter, {"ibis": ibis, "t": table}))  # noqa: S307
+        table = table.filter(evaluate_expression(source_filter, {"ibis": ibis, "t": table}))
 
     return table

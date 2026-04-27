@@ -3,7 +3,7 @@
 
 id = "M078"
 title = "Shared source stage runner extraction"
-status = "draft"
+status = "complete"
 created = 2026-04-27
 depends_on = ["M077"]
 

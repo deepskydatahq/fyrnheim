@@ -1,0 +1,51 @@
+id = "M078-E001-S001"
+parent = "M078-E001"
+title = "Extract shared source-stage helper"
+status = "complete"
+triage = "plan"
+created = 2026-04-27
+
+[outcome]
+description = """Introduce an internal helper for the shared read -> transforms -> joins -> json_path -> computed_columns -> filter source-stage chain and use it from both StateSource and EventSource build paths."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A shared helper exists in src/fyrnheim/engine/source_stage.py and represents source-stage processing before StateSource snapshot diff or EventSource payload conversion"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/pipeline.py::_build_state_source_table delegates to the shared helper"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "src/fyrnheim/engine/event_source_loader.py::_build_event_source_table delegates to the shared helper"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The helper preserves existing stage order and logging semantics for transforms, joins, json_path, computed_columns, filter, and fixture-shadow skips"
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/source_stage.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/source_transforms.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Prefer a small internal function over a framework. Accept source kind/name/logger as parameters so log messages stay clear."""
+reference_files = ["docs/M077-architecture-refactor-audit.md"]
+
+[execution]
+branch = "plan-M077-refactor-audit"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/150"
+commit = ""
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

@@ -30,12 +30,7 @@ from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
 from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
-from fyrnheim.engine.source_transforms import (
-    _apply_joins,
-    _apply_json_path_extractions,
-    _apply_source_transforms,
-    _reads_duckdb_fixture,
-)
+from fyrnheim.engine.source_stage import build_source_stage_table
 from fyrnheim.engine.staging_runner import materialize_staging_views
 
 log = logging.getLogger("fyrnheim.pipeline")
@@ -610,93 +605,25 @@ def _build_state_source_table(
     source_registry: dict[str, ibis.Table] | None = None,
     right_pk_registry: dict[str, str] | None = None,
 ) -> ibis.Table:
-    """Apply the full read → transforms → joins → json_path → computed_columns → filter
-    chain to a StateSource and return the resulting Ibis table.
+    """Apply the shared source-stage chain to a StateSource.
 
-    Extracted from :func:`_load_state_source` (M070, v0.12.0) so the
-    Phase 1 pipeline runner can stash the post-pipeline table in the
-    join-source-registry BEFORE the snapshot-diff step turns it into
-    the universal event schema (source/entity_id/ts/event_type/payload).
-    Other StateSources whose ``joins`` reference this one need the
-    *transformed* table, not the event-shape view.
-
-    Calling :func:`_load_state_source` continues to work without a
-    registry — the registry args are optional and the helper
-    short-circuits on empty joins.
-
-    Stage order (load-bearing):
+    The shared chain is implemented by
+    :func:`fyrnheim.engine.source_stage.build_source_stage_table`:
 
       read → transforms → joins → json_path → computed_columns → filter
 
-    * transforms before joins: users can rename a column and use the
-      new name as the join_key.
-    * joins before json_path: users can extract JSON from columns
-      contributed by a joined source.
-    * json_path before computed_columns: user expressions can reference
-      extracted typed columns.
-    * filter after computed_columns: users can filter on computed
-      values (and on joined / extracted columns).
-
-    M072 (FR-8): when the source opts into fixture-shadow mode AND the
-    engine is reading the duckdb_path parquet, skip
-    transforms/joins/json_path/filter. The fixture is assumed to be in
-    post-transform (and post-join) shape. computed_columns STILL APPLY —
-    they are backend-independent expressions, not transforms.
-
-    M075 (FR-9): refines the M072 computed_columns rule. When fixture-shadow
-    fires AND the computed_column's output column is already present in the
-    fixture, preserve the fixture's value instead of recomputing. This
-    handles the case where a computed expression references upstream-pipeline
-    outputs (e.g. join-suffixed columns from M070) that DID skip on the
-    fixture-shadow path. Per-column granularity — columns missing from the
-    fixture still get computed.
+    StateSource-specific snapshot diff remains in :func:`_run_state_source_diff`.
     """
-    table = source.read_table(conn, config.backend, data_dir=config.data_dir)
-    reads_fixture = _reads_duckdb_fixture(source, config.backend)
-
-    if reads_fixture:
-        log.info(
-            "StateSource %s: duckdb_fixture_is_transformed=True, "
-            "skipping transforms/joins/fields/filter (reading duckdb_path fixture)",
-            source.name,
-        )
-    else:
-        table = _apply_source_transforms(table, source.transforms)
-        if source.joins:
-            log.info(
-                "StateSource %s: applying %d join(s) to %s",
-                source.name,
-                len(source.joins),
-                [j.source_name for j in source.joins],
-            )
-            table = _apply_joins(
-                table,
-                source.joins,
-                source_registry or {},
-                right_pk_registry or {},
-            )
-        table = _apply_json_path_extractions(table, source.fields)
-
-    if source.computed_columns:
-        for cc in source.computed_columns:
-            # M075 (FR-9): skip when fixture-shadow fires AND output column
-            # already exists in the fixture — preserve fixture's value
-            # instead of recomputing against possibly-missing inputs.
-            if reads_fixture and cc.name in table.columns:
-                log.info(
-                    "StateSource %s: computed_column %s skipped (output already in fixture)",
-                    source.name,
-                    cc.name,
-                )
-                continue
-            table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
-
-    if not reads_fixture and source.filter:
-        table = table.filter(
-            eval(source.filter, {"ibis": ibis, "t": table})  # noqa: S307
-        )
-
-    return table
+    return build_source_stage_table(
+        source,
+        conn,
+        config.backend,
+        data_dir=config.data_dir,
+        source_registry=source_registry,
+        right_pk_registry=right_pk_registry,
+        log=log,
+        source_kind="StateSource",
+    )
 
 
 def _load_state_source(

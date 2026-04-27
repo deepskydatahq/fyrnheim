@@ -15,12 +15,7 @@ import numpy as np
 import pandas as pd
 
 from fyrnheim.core.source import EventSource
-from fyrnheim.engine.source_transforms import (
-    _apply_joins,
-    _apply_json_path_extractions,
-    _apply_source_transforms,
-    _reads_duckdb_fixture,
-)
+from fyrnheim.engine.source_stage import build_source_stage_table
 
 log = logging.getLogger("fyrnheim.event_source_loader")
 
@@ -34,111 +29,25 @@ def _build_event_source_table(
     source_registry: dict[str, ibis.Table] | None = None,
     right_pk_registry: dict[str, str] | None = None,
 ) -> ibis.Table:
-    """Apply the full read → transforms → joins → json_path →
-    computed_columns → filter chain to an EventSource and return the
-    resulting Ibis table.
+    """Apply the shared source-stage chain to an EventSource.
 
-    Mirrors :func:`_build_state_source_table` (M076, v0.13.0) so the
-    Phase 1 pipeline runner can stash the post-pipeline table in the
-    join-source-registry BEFORE the event-shape conversion turns it into
-    the universal event schema. Calling :func:`load_event_source`
-    continues to work without a registry — registry args are optional
-    and the helper short-circuits on empty joins.
-
-    Stage order (load-bearing, mirrors StateSource):
+    The shared chain is implemented by
+    :func:`fyrnheim.engine.source_stage.build_source_stage_table`:
 
       read → transforms → joins → json_path → computed_columns → filter
 
-    M072 (FR-8): when the source opts into fixture-shadow mode AND the
-    engine is reading the duckdb_path parquet, skip transforms/joins/
-    json_path/filter. The fixture is assumed to be in post-transform
-    (and post-join) shape. computed_columns STILL APPLY — they are
-    backend-independent expressions.
-
-    M075 (FR-9): refines the M072 computed_columns rule. When
-    fixture-shadow fires AND the computed_column's output column is
-    already present in the fixture, preserve the fixture's value
-    instead of recomputing.
+    EventSource-specific payload packing remains in :func:`load_event_source`.
     """
-    table = event_source.read_table(conn, backend, data_dir=data_dir)
-
-    # M072 (FR-8): when the source opts into fixture-shadow mode AND the
-    # engine is reading the duckdb_path parquet (i.e. backend=duckdb +
-    # duckdb_path set — mirrors BaseTableSource.read_table's parquet-read
-    # branch), skip transforms / json_path / filter. The fixture is
-    # assumed to be in post-transform shape; re-applying transforms would
-    # either fail (pre-rename columns missing) or double-transform.
-    # computed_columns STILL APPLY on the skip path — they are
-    # backend-independent expressions, not transforms.
-    reads_fixture = _reads_duckdb_fixture(event_source, backend)
-
-    if reads_fixture:
-        log.info(
-            "EventSource %s: duckdb_fixture_is_transformed=True, "
-            "skipping transforms/joins/fields/filter (reading duckdb_path fixture)",
-            event_source.name,
-        )
-    else:
-        # M068: apply read-time transforms (type_casts, divides, multiplies, renames)
-        # before computed_columns so user expressions can reference the transformed schema.
-        table = _apply_source_transforms(table, event_source.transforms)
-
-        # M076 (v0.13.0): apply source-level joins AFTER transforms (so users
-        # can join on transform-renamed columns) and BEFORE json_path
-        # extraction (so users can extract JSON from joined columns).
-        # Same pipeline-stage placement as _build_state_source_table.
-        if event_source.joins:
-            log.info(
-                "EventSource %s: applying %d join(s) to %s",
-                event_source.name,
-                len(event_source.joins),
-                [j.source_name for j in event_source.joins],
-            )
-            table = _apply_joins(
-                table,
-                event_source.joins,
-                source_registry or {},
-                right_pk_registry or {},
-            )
-
-        # M069: extract json_path fields AFTER renames (users can rename a JSON
-        # column and extract from the renamed name) and BEFORE computed_columns
-        # (so user expressions can reference the extracted typed columns).
-        table = _apply_json_path_extractions(table, event_source.fields)
-
-    # Apply computed columns after transforms (users reference post-transform columns).
-    # M072: computed_columns apply on the fixture-shadow path because they are
-    # backend-independent expressions, evaluating the same way on any backend.
-    # M075 (FR-9): refines that rule. When fixture-shadow fires AND the
-    # computed_column's output column already exists in the fixture, preserve
-    # the fixture's value instead of recomputing. This unblocks expressions
-    # that reference upstream-pipeline outputs (joins, json_path, transforms)
-    # that DID skip on the fixture-shadow path — the fixture has the final
-    # value baked in, so re-evaluating against missing inputs would fail.
-    # Per-column granularity: columns missing from the fixture still get
-    # computed.
-    if event_source.computed_columns:
-        for cc in event_source.computed_columns:
-            if reads_fixture and cc.name in table.columns:
-                log.info(
-                    "EventSource %s: computed_column %s skipped (output already in fixture)",
-                    event_source.name,
-                    cc.name,
-                )
-                continue
-            table = table.mutate(**{cc.name: eval(cc.expression, {"ibis": ibis, "t": table})})  # noqa: S307
-
-    # M069: source-level filter applied AFTER computed_columns so users can
-    # filter on computed values. See BaseTableSource.filter docstring for
-    # NULL-gotcha and the .fillna(False) escape hatch.
-    # M072: skipped on the fixture-shadow path (the fixture is assumed to
-    # already be filtered to the post-transform row set).
-    if not reads_fixture and event_source.filter:
-        table = table.filter(
-            eval(event_source.filter, {"ibis": ibis, "t": table})  # noqa: S307
-        )
-
-    return table
+    return build_source_stage_table(
+        event_source,
+        conn,
+        backend,
+        data_dir=data_dir,
+        source_registry=source_registry,
+        right_pk_registry=right_pk_registry,
+        log=log,
+        source_kind="EventSource",
+    )
 
 
 def load_event_source(

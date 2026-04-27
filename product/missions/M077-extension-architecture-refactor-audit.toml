@@ -1,0 +1,167 @@
+# Mission: Extension architecture refactor audit
+# Identify and prioritize refactoring opportunities after the M068-M076 source-pipeline extension streak.
+
+id = "M077"
+title = "Extension architecture refactor audit"
+status = "complete"
+created = 2026-04-27
+depends_on = ["M076"]
+
+[outcome]
+description = """
+Fyrnheim has added a dense sequence of source-pipeline extensions: read-time transforms,
+json_path extraction, backend-aware fixture shadowing, source-level joins, computed-column
+fixture skip semantics, and EventSource joins. This mission audits the resulting architecture
+and turns refactoring opportunities into specific, prioritized follow-up missions so the next
+feature work builds on a solid foundation rather than accumulating accidental complexity.
+
+The intended end state is not a broad rewrite. It is a documented architecture health report
+with concrete follow-up mission TOMLs for the highest-leverage refactor themes, each tied to
+evidence in code and tests.
+"""
+
+user_progress = "From 'recent source-pipeline extensions work but architectural seams and duplication are unclear' to 'we know which refactor themes matter, why they matter, and have scoped follow-up missions to address them without destabilizing behavior'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "An architecture audit document or mission notes section identifies current extension seams, duplicated patterns, and risky complexity with file/path evidence",
+    "The audit explicitly covers source models, source transforms, EventSource/StateSource loading, pipeline orchestration, registry discovery, CLI command growth, and extension regression tests",
+    "At least 5 candidate refactoring opportunities are classified by impact, risk, and recommended disposition: create mission, fold into existing mission, defer, or reject",
+    "Every recommended refactor theme has a concrete follow-up mission TOML with outcome, scope, testing criteria, validator context, and relevant paths",
+    "The audit distinguishes safe mechanical refactors from behavior-changing design work",
+    "No production behavior changes are made by the audit itself except optional docs/product TOML updates",
+    "Quality gates pass after any product/documentation changes committed for the audit"
+]
+validator_context = [
+    "product/missions/M077-extension-architecture-refactor-audit.toml",
+    "product/missions/M078-*.toml",
+    "product/missions/M079-*.toml",
+    "product/missions/M080-*.toml",
+    "product/missions/M081-*.toml",
+    "product/missions/M082-*.toml",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_state_event_source.py"
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+    "HOW_WE_WORK.md",
+    "CHANGELOG.md"
+]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_state_event_source.py",
+    "tests/test_cli_run.py",
+    "tests/test_event_source_loader.py"
+]
+related_missions = [
+    "M068 — wire source transforms and computed columns into source loading",
+    "M069 — json_path extraction and source-level filtering",
+    "M070 — StateSource joins and source topological sort",
+    "M072 — backend-aware fixture shadowing",
+    "M074 — nested json_path dot-notation support",
+    "M075 — computed_column skip-if-output-exists on fixture path",
+    "M076 — EventSource joins and dead TableSource field cleanup"
+]
+
+[scope]
+in_scope = [
+    "Audit source-pipeline stage ordering and duplication between StateSource and EventSource loading",
+    "Audit join architecture: Join model semantics, _apply_joins helper, source registries, right_pk_registry, and EventSource target guard",
+    "Audit fixture-shadow semantics across transforms, joins, json_path, computed_columns, and filter",
+    "Audit source topological sort and its relationship to staging_runner's topological sort",
+    "Audit registry discovery duplication across activity, analytics entity, identity graph, and metrics model registries",
+    "Audit CLI command growth and identify whether command bodies should be split into service/helper modules",
+    "Audit regression-test organization for M068-M076 to identify duplicate fixtures, overly long tests, and missing architectural invariants",
+    "Produce a prioritized refactor candidate table with impact, risk, file paths, and recommended next action",
+    "Create follow-up product missions for recommended refactor themes, using draft status until scope is reviewed"
+]
+out_of_scope = [
+    "Implementing the refactors discovered by the audit, except for tiny documentation or product TOML corrections",
+    "Changing public source API semantics such as Join shape, fixture-shadow behavior, json_path grammar, or EventSource join target support",
+    "Changing release/versioning policy",
+    "Changing generated output semantics or pipeline execution behavior",
+    "Broad formatting-only churn",
+    "Moving code without tests that prove behavior is unchanged"
+]
+acceptable_breakage = [
+    "None. This is a planning/audit mission. Any follow-up refactor missions must preserve existing behavior unless they explicitly scope and justify a behavior change."
+]
+
+[notes]
+considerations = """
+Exploration snapshot, 2026-04-27:
+
+Recent extension missions M068-M076 added useful but tightly coupled behavior around source loading:
+
+- `src/fyrnheim/core/source.py` now contains the public source model surface: Field json_path docs,
+  Join semantics, BaseTableSource validators, StateSource.joins, and EventSource.joins.
+- `src/fyrnheim/engine/source_transforms.py` owns read-time transforms, fixture-shadow detection,
+  json_path extraction, and `_apply_joins`.
+- `src/fyrnheim/engine/event_source_loader.py` has `_build_event_source_table` and `load_event_source`;
+  both are relatively long and encode the EventSource pipeline chain plus payload packing.
+- `src/fyrnheim/engine/pipeline.py` is 780+ lines. `run_pipeline` is about 340 lines and now owns
+  source topological levels, registries, Phase 1 loading, event concatenation, activities, identity,
+  analytics projection, metrics projection, write fan-out, and timing aggregation.
+- `_build_state_source_table` and `_build_event_source_table` intentionally mirror each other but now
+  duplicate stage-order, fixture-shadow, join, json_path, computed_column, and filter semantics.
+- `_topo_sort_sources` mirrors staging_runner's topological-sort idea but returns levels and has
+  source-specific guards. There may be an extractable DAG utility, but behavior must remain stable.
+- ActivityRegistry, AnalyticsEntityRegistry, IdentityGraphRegistry, and MetricsModelRegistry repeat
+  near-identical dynamic-discovery and duplicate-name registry mechanics.
+- `src/fyrnheim/cli.py` is 700+ lines with several 50+ line command handlers. This may be acceptable
+  for now, but release/package readiness will benefit from separating command orchestration from
+  business logic.
+- Tests are strong but mission-specific: M068-M076 regression tests live across
+  `tests/test_source_transforms.py`, `tests/test_e2e_joins.py`, `tests/test_m072_fixture_shadowing.py`,
+  `tests/test_pipeline_topo_sort.py`, and `tests/test_state_event_source.py`. They provide good safety,
+  but duplicate setup may obscure architectural invariants.
+
+Suggested scope option chosen for this draft: audit-first. Do not refactor immediately. The likely
+audit areas that may become follow-up missions are:
+
+1. Source pipeline seam audit — identify whether to extract a shared source-stage runner for
+   StateSource/EventSource without changing behavior.
+2. DAG/topological utility audit — decide whether source and staging graph sorting should share a
+   small utility or remain separate due to level-vs-linear output differences.
+3. Registry discovery consolidation audit — evaluate a generic registry/discovery helper across the
+   four registry classes.
+4. CLI decomposition audit — identify command handlers that should move to service modules before
+   publishable-package work.
+5. Test architecture audit — consolidate fixtures/helpers and add invariant tests around stage order.
+
+Recommended handling during execution: perform the audits above and write findings into new draft
+mission TOMLs, one mission per coherent refactor theme. Do not create low-level implementation
+stories during this audit unless a mission already exists and the refactor is clearly mechanical.
+Each follow-up mission should describe the architectural problem, evidence, desired end state,
+in-scope/out-of-scope boundaries, and validation criteria. Leave follow-up missions in `draft`
+until a human reviews their priority and scope.
+"""

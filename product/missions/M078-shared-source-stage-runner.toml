@@ -1,0 +1,76 @@
+# Mission: Shared source stage runner extraction
+# Follow-up from M077 architecture audit.
+
+id = "M078"
+title = "Shared source stage runner extraction"
+status = "complete"
+created = 2026-04-27
+depends_on = ["M077"]
+
+[outcome]
+description = """
+Extract the duplicated source-stage pipeline semantics shared by StateSource and EventSource into a small, tested internal seam. The behavior must remain identical: read_table, transforms, joins, json_path, computed_columns with M075 fixture skip-if-output-exists, and filter must run or skip in the same order as today.
+
+The desired result is a clearer place to add future source-stage extensions without updating two mirrored implementations in `pipeline.py` and `event_source_loader.py`.
+"""
+
+user_progress = "From 'StateSource and EventSource source-stage behavior is mirrored in two places' to 'future source-stage extensions have one behavior-preserving internal seam to modify and test'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource and EventSource source-stage behavior is represented by a shared helper or explicitly documented shared abstraction",
+    "Stage order remains read_table -> transforms -> joins -> json_path -> computed_columns -> filter before source-specific event/diff conversion",
+    "Fixture-shadow semantics remain unchanged: transforms/joins/json_path/filter skip, computed_columns apply unless output already exists",
+    "Existing M068-M076 regression tests pass without weakening assertions",
+    "New or updated tests pin the shared stage order for both StateSource and EventSource",
+    "Public source APIs and output semantics remain unchanged"
+]
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_transforms.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_event_source_loader.py"
+]
+
+[context]
+related_docs = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M077-extension-architecture-refactor-audit.toml"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "tests/test_source_transforms.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_event_source_loader.py"
+]
+
+[scope]
+in_scope = [
+    "Characterize current StateSource and EventSource source-stage behavior before refactoring",
+    "Extract or introduce an internal helper for shared source-stage processing if it reduces duplication without hiding source-specific semantics",
+    "Preserve EventSource payload packing and StateSource snapshot-diff handoff as source-specific steps outside the shared stage helper",
+    "Add tests that make stage order and fixture-shadow behavior explicit for both source types"
+]
+out_of_scope = [
+    "Changing Join public API or semantics",
+    "Changing json_path grammar",
+    "Changing fixture-shadow behavior",
+    "Changing EventSource payload schema or StateSource snapshot-diff semantics",
+    "Broad pipeline orchestration refactors outside source-stage processing"
+]
+acceptable_breakage = [
+    "None expected. This mission must be behavior-preserving."
+]
+
+[notes]
+considerations = """
+M077 evidence: `_build_state_source_table` and `_build_event_source_table` both encode the same stage-order and fixture-shadow rules. Future source-stage features currently require touching both paths. The refactor should not create a framework; prefer a small typed helper whose inputs make source-specific differences explicit.
+"""

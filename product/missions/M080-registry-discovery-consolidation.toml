@@ -1,0 +1,75 @@
+# Mission: Registry discovery consolidation
+# Follow-up from M077 architecture audit.
+
+id = "M080"
+title = "Registry discovery consolidation"
+status = "draft"
+created = 2026-04-27
+depends_on = ["M077"]
+
+[outcome]
+description = """
+Consolidate the repeated dynamic-discovery mechanics across Fyrnheim registries into a small internal helper or base abstraction. Activity, analytics entity, identity graph, and metrics model registries should keep their public behavior while sharing tested file scanning, import, extraction, duplicate detection, and iteration mechanics where practical.
+"""
+
+user_progress = "From 'four registry classes repeat near-identical dynamic import and duplicate-registration logic' to 'registry discovery behavior is consistent, tested once, and easier to maintain before publishable-package work'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "ActivityRegistry, AnalyticsEntityRegistry, IdentityGraphRegistry, and MetricsModelRegistry preserve their public methods and error behavior",
+    "Common dynamic import, py-file filtering, sys.path handling, and duplicate-name registration logic is centralized or explicitly justified if left separate",
+    "Single-variable and plural-list discovery behavior remains intact for registries that support both",
+    "IdentityGraphRegistry's current sys.modules behavior is either preserved intentionally or changed with tests and rationale",
+    "Existing registry tests pass and include coverage for duplicate names and missing directories",
+    "No user-facing import paths change"
+]
+validator_context = [
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "tests/test_activity_registry.py",
+    "tests/test_analytics_entity_registry.py",
+    "tests/test_identity_registry.py",
+    "tests/test_metrics_model_registry.py"
+]
+
+[context]
+related_docs = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M077-extension-architecture-refactor-audit.toml",
+    "VALUES.md"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "tests/test_activity_registry.py",
+    "tests/test_analytics_entity_registry.py",
+    "tests/test_identity_registry.py",
+    "tests/test_metrics_model_registry.py"
+]
+
+[scope]
+in_scope = [
+    "Characterize shared and divergent registry discovery behavior",
+    "Introduce a small internal discovery helper or base registry only if it simplifies the four registries",
+    "Preserve existing public classes and method names",
+    "Add focused tests for shared helper behavior and keep registry-specific tests for public contracts"
+]
+out_of_scope = [
+    "Changing how users define activity, analytics entity, identity graph, or metrics model variables",
+    "Recursive discovery beyond current one-directory behavior",
+    "Plugin systems or entry-points discovery",
+    "Renaming public registry classes"
+]
+acceptable_breakage = [
+    "None expected. This is an internal consolidation."
+]
+
+[notes]
+considerations = """
+M077 evidence: all four registry modules repeat `Path(...).exists()`, parent sys.path insertion, `*.py` filtering, `importlib.util.spec_from_file_location`, object extraction, duplicate checking, `all/items/__iter__/__len__/__contains__`. Identity registry differs by writing to `sys.modules`; that difference must be understood before consolidation.
+"""

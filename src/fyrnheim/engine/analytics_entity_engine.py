@@ -76,6 +76,7 @@ import pandas as pd
 from ibis.expr.types import BooleanValue, StringValue, Table
 
 from fyrnheim.core.analytics_entity import AnalyticsEntity, Measure, StateField
+from fyrnheim.engine.expression_eval import evaluate_expression
 
 
 class _RowProxy:
@@ -613,9 +614,8 @@ def project_analytics_entity(
 
     for cf in analytics_entity.computed_fields:
         df[cf.name] = df.apply(
-            lambda r, expr=cf.expression: eval(  # noqa: S307
+            lambda r, expr=cf.expression: evaluate_expression(
                 expr,
-                {"__builtins__": {}},
                 {**r.to_dict(), "t": _RowProxy(r.to_dict())},
             ),
             axis=1,

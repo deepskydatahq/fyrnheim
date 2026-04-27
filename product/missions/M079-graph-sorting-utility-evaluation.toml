@@ -1,0 +1,68 @@
+# Mission: Graph sorting utility evaluation
+# Follow-up from M077 architecture audit.
+
+id = "M079"
+title = "Graph sorting utility evaluation"
+status = "draft"
+created = 2026-04-27
+depends_on = ["M077"]
+
+[outcome]
+description = """
+Evaluate whether Fyrnheim's source-level join sorting and staging-view dependency sorting should share a small graph utility or remain separate. The goal is architectural clarity: if a shared utility reduces duplication and improves diagnostics, introduce it with behavior-preserving tests; if the semantics are meaningfully different, document that decision and add focused tests around the separate implementations.
+"""
+
+user_progress = "From 'source and staging graph sorting look related but are implemented separately' to 'we know whether to share graph infrastructure or intentionally keep separate sorters, with tests documenting the decision'"
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Source-level join sorting and staging-view sorting are compared with concrete differences and commonalities",
+    "The chosen approach is documented: shared utility, partial utility, or intentional separation",
+    "Cycle detection messages remain clear and deterministic",
+    "Source sorting still returns dependency levels and preserves declaration order for no-join pipelines",
+    "Staging sorting behavior remains unchanged",
+    "Tests cover no-dependency, reorder, missing dependency, and cycle cases for any changed utility"
+]
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_staging_view.py"
+]
+
+[context]
+related_docs = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M077-extension-architecture-refactor-audit.toml"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_staging_view.py",
+    "tests/test_e2e_joins.py"
+]
+
+[scope]
+in_scope = [
+    "Compare `_topo_sort_sources` with staging_runner topological-sort logic",
+    "Decide whether a shared internal graph helper is worth extracting",
+    "Preserve level-based source sorting semantics if source sorting changes",
+    "Preserve staging materialization semantics if staging sorting changes",
+    "Add or update tests for deterministic ordering and cycle diagnostics"
+]
+out_of_scope = [
+    "Changing source join semantics",
+    "Changing EventSource-as-join-target behavior",
+    "Changing staging view public API",
+    "Changing pipeline parallelism model beyond preserving current level behavior"
+]
+acceptable_breakage = [
+    "None expected. Any extraction must be behavior-preserving."
+]
+
+[notes]
+considerations = """
+M077 evidence: `_topo_sort_sources` in pipeline.py is source-specific, returns levels for parallel loading, and includes EventSource-target guards. staging_runner has related DAG sorting for staging views. A utility may still help if it only handles generic graph traversal/cycle detection while callers own domain-specific guards and output shape.
+"""

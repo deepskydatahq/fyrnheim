@@ -1,0 +1,49 @@
+id = "M078-E001"
+parent = "M078"
+title = "Shared source stage runner extraction"
+status = "complete"
+created = 2026-04-27
+depends_on = []
+
+[outcome]
+description = """
+Extract the duplicated StateSource/EventSource source-stage chain into a small internal helper while preserving current behavior and tests.
+"""
+
+[job_story]
+description = """When future source-stage extensions are added, I want one shared internal stage runner to update, so that StateSource and EventSource behavior stays consistent without duplicating stage-order logic."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Shared source-stage helper exists and is used by both StateSource and EventSource build paths",
+    "Stage order and fixture-shadow semantics are pinned by tests",
+    "Existing source extension regression tests pass",
+    "No public API or output semantics change"
+]
+validator_context = [
+    "src/fyrnheim/engine/source_stage.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "tests/test_source_stage.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py"
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "tests/test_source_stage.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_e2e_joins.py"
+]
+dependencies = []
+
+[notes]
+considerations = """
+Keep the helper small. Source-specific conversion remains outside the helper: StateSource snapshot diff and EventSource payload packing are not part of this refactor.
+"""
+
+estimated_stories = 2

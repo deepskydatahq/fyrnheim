@@ -1,0 +1,52 @@
+id = "M078-E001-S002"
+parent = "M078-E001"
+title = "Pin source-stage invariants with tests"
+status = "complete"
+triage = "plan"
+created = 2026-04-27
+
+[outcome]
+description = """Add or update tests that pin the shared source-stage helper's order and fixture-shadow behavior for StateSource and EventSource paths."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests verify _build_state_source_table and _build_event_source_table both use the shared helper"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests verify fixture-shadow skips transforms/joins/json_path/filter but still applies computed_columns unless output already exists"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Existing M068-M076 regression tests related to source transforms, fixture shadowing, and joins continue to pass"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "ruff and mypy pass for changed source and test files"
+
+[context]
+relevant_paths = [
+    "tests/test_source_stage.py",
+    "tests/test_source_transforms.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_event_source_loader.py"
+]
+input_fixtures = []
+depends_on = ["M078-E001-S001"]
+
+[handoff]
+implementation_hints = """Keep tests behavior-focused. Do not weaken existing reporter-shaped regression tests."""
+reference_files = ["product/missions/M078-shared-source-stage-runner.toml"]
+
+[execution]
+branch = "plan-M077-refactor-audit"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/150"
+commit = "896494f"
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

@@ -1,0 +1,45 @@
+id = "M077-E001-S003"
+parent = "M077-E001"
+title = "Create follow-up missions for refactor themes"
+status = "complete"
+triage = "ready"
+created = 2026-04-27
+
+[outcome]
+description = """Create draft mission TOMLs for each recommended refactor theme discovered by the architecture audit."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Draft follow-up missions M078-M082 exist and each contains outcome, testing criteria, validator_context, relevant_paths, in_scope, out_of_scope, acceptable_breakage, and notes"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Each follow-up mission references docs/M077-architecture-refactor-audit.md and remains status=draft for human prioritization"
+
+[context]
+relevant_paths = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M078-shared-source-stage-runner.toml",
+    "product/missions/M079-graph-sorting-utility-evaluation.toml",
+    "product/missions/M080-registry-discovery-consolidation.toml",
+    "product/missions/M081-cli-service-decomposition.toml",
+    "product/missions/M082-extension-regression-test-architecture.toml"
+]
+input_fixtures = []
+depends_on = ["M077-E001-S001", "M077-E001-S002"]
+
+[handoff]
+implementation_hints = """Planning story completed by writing follow-up mission TOMLs; no production code changes."""
+reference_files = ["docs/M077-architecture-refactor-audit.md"]
+
+[execution]
+branch = "plan-M077-refactor-audit"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/150"
+commit = "3f1028b"
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

@@ -1,0 +1,58 @@
+id = "M077-E001"
+parent = "M077"
+title = "Audit extension architecture and file follow-up missions"
+status = "complete"
+created = 2026-04-27
+depends_on = []
+
+[outcome]
+description = """
+Audit the architecture seams created by the M068-M076 source-pipeline extension streak and convert the highest-leverage findings into draft follow-up missions.
+"""
+
+[job_story]
+description = """When recent extension work has made the source pipeline more capable but more complex, I want architectural findings turned into scoped missions, so that refactoring work can be prioritized deliberately instead of being mixed into feature work."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Audit findings are documented with evidence and dispositions",
+    "Follow-up missions exist for recommended refactor themes",
+    "M077 mission acceptance criteria are satisfied without production code changes"
+]
+validator_context = [
+    "docs/M077-architecture-refactor-audit.md",
+    "product/missions/M077-extension-architecture-refactor-audit.toml",
+    "product/missions/M078-*.toml",
+    "product/missions/M079-*.toml",
+    "product/missions/M080-*.toml",
+    "product/missions/M081-*.toml",
+    "product/missions/M082-*.toml"
+]
+
+[context]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/engine/activity_registry.py",
+    "src/fyrnheim/engine/analytics_entity_registry.py",
+    "src/fyrnheim/engine/identity_registry.py",
+    "src/fyrnheim/engine/metrics_model_registry.py",
+    "src/fyrnheim/cli.py",
+    "tests/test_source_transforms.py",
+    "tests/test_e2e_joins.py",
+    "tests/test_m072_fixture_shadowing.py",
+    "tests/test_pipeline_topo_sort.py",
+    "tests/test_state_event_source.py"
+]
+dependencies = []
+
+[notes]
+considerations = """
+This epic is documentation/product planning only. It intentionally files follow-up missions rather than implementation stories.
+"""
+
+estimated_stories = 3

@@ -1,0 +1,45 @@
+id = "M077-E001-S001"
+parent = "M077-E001"
+title = "Audit source pipeline extension seams"
+status = "complete"
+triage = "plan"
+created = 2026-04-27
+
+[outcome]
+description = """Document source-pipeline, join, fixture-shadow, and graph-sorting findings with evidence from current code."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "docs/M077-architecture-refactor-audit.md includes findings for source-stage duplication, join architecture, fixture-shadow semantics, and source/staging graph sorting"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Findings cite relevant paths including pipeline.py, event_source_loader.py, source_transforms.py, source.py, and staging_runner.py"
+
+[context]
+relevant_paths = [
+    "docs/M077-architecture-refactor-audit.md",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/staging_runner.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Planning story completed by documenting architectural findings; no production code changes."""
+reference_files = []
+
+[execution]
+branch = "plan-M077-refactor-audit"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/150"
+commit = "3f1028b"
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

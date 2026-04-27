@@ -234,3 +234,8 @@ def test_evaluate_expression_rejects_dunder_escape_hatches():
 def test_evaluate_expression_rejects_unknown_builtins():
     with pytest.raises(UnsafeExpressionError):
         evaluate_expression("__import__('os').system('id')", {})
+
+
+def test_evaluate_expression_normalizes_syntax_errors():
+    with pytest.raises(UnsafeExpressionError, match="Invalid expression syntax"):
+        evaluate_expression("t.value +", {"t": object()})

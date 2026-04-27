@@ -115,7 +115,10 @@ def evaluate_expression(expression: str, context: Mapping[str, Any]) -> Any:
     Raises:
         UnsafeExpressionError: if the expression uses unsupported syntax.
     """
-    tree = ast.parse(expression, mode="eval")
+    try:
+        tree = ast.parse(expression, mode="eval")
+    except SyntaxError as exc:
+        raise UnsafeExpressionError(f"Invalid expression syntax: {exc.msg}") from exc
     _ExpressionValidator(set(context)).visit(tree)
     code = compile(tree, "<fyrnheim-expression>", "eval")
     return eval(code, {"__builtins__": {}}, dict(context))  # noqa: S307

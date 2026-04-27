@@ -31,7 +31,7 @@ uv sync --all-extras
 # Run tests
 uv run pytest
 
-# Lint
+# Lint/type check
 uv run ruff check src/ tests/
 uv run mypy src/
 
@@ -43,51 +43,46 @@ uv run fyr --help
 
 ## Development Workflow
 
-This project uses Beads (`bd`) as the task engine with a structured product layer (Missions → Epics → Stories) and autonomous execution via Claude Code sub-agents.
+Fyrnheim uses a structured product layer as the canonical task system. Product TOML files are the source of truth; do not create Beads/`bd` tasks unless explicitly asked to work with the legacy workflow.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Product Layer (TOML files)                                             │
-│                                                                         │
-│   product/missions/ → product/epics/ → product/stories/                 │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  Execution (Claude Code sub-agents)                                     │
-│                                                                         │
-│   /execute-mission M010                                                 │
-│     Phase 1: Breakdown + LLM triage → Beads tasks                       │
-│     Phase 2: Epic sub-agents (parallel, worktree) → PRs                 │
-│     Phase 3: /fix-pr-feedback → address review comments                 │
-│     Phase 4: Report                                                     │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│  Post-Implementation                                                    │
-│                                                                         │
-│   /retro → discover follow-up issues → Beads tasks                      │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+```text
+VISION.md
+  -> VALUES.md
+  -> product/missions/*.toml
+  -> product/epics/*.toml
+  -> product/stories/*.toml
+  -> commits / PRs
 ```
 
-### Commands
+Stories are implementation tasks. Story status and triage live in the story TOML.
+
+### Story Status Values
+
+- `draft` — not ready for implementation
+- `ready` — ready and unclaimed
+- `in_progress` — currently being implemented
+- `blocked` — cannot proceed without a decision or prerequisite
+- `complete` — implemented, tested, and committed
+- `failed` — attempted but not completed; include a failure reason
+
+### Story Triage Values
+
+- `ready` — implement directly
+- `plan` — inspect relevant files and make a short plan first
+- `brainstorm` — compare approaches before planning/implementing
+
+### Pi Commands
 
 | Command | Description |
 |---------|-------------|
-| `/execute-mission` | Full autopilot: breakdown → triage → implement → PR feedback → report |
-| `/fix-pr-feedback` | Read PR review comments, fix actionable feedback (max 2 rounds) |
-| `/retro` | Post-implementation retrospective, discover follow-up issues |
 | `/plan-mission` | Plan a mission with codebase exploration and scope mapping |
-| `/brainstorm-epics` | Generate mission candidates from vision + value ladder |
-| `/product-judgment` | Validate story/epic/mission completion |
-
-### Beads CLI Reference
-
-```bash
-bd list --label ready               # Tasks ready to implement
-bd show <id> --json                 # Full task details
-bd update <id> --status in_progress # Start working
-bd close <id>                       # Mark complete
-bd status                           # Overview
-```
+| `/execute-mission` | Break down and execute a mission using product TOML stories |
+| `/fix-pr-feedback` | Read PR review comments and fix actionable feedback, max 2 rounds |
+| `/retro` | Post-implementation retrospective; discover follow-up stories |
+| `/mission-status` | Summarize a mission's epics and stories |
+| `/story-list` | List stories, optionally filtered by status |
+| `/story-set-status` | Update story status in TOML |
+| `/fyrnheim-status` | Show git status and story counts |
 
 ---
 
@@ -97,51 +92,53 @@ The full development workflow is documented in [HOW_WE_WORK.md](./HOW_WE_WORK.md
 
 ### The Flow
 
-1. **Direction:** Refine vision and value ladder as needed
-2. **Mission:** Define the mission TOML (via `/plan-mission` or `/brainstorm-epics`)
-3. **Execute:** `/execute-mission M010` — breakdown, triage, implement, PR feedback — all autonomous
-4. **Review:** Review and merge epic PRs
-5. **Retro:** `/retro` — discover follow-up issues
-6. **Learn:** Update value ladder with learnings
+1. **Direction:** Refine vision and value ladder as needed.
+2. **Mission:** Define the mission TOML via `/plan-mission` or product planning.
+3. **Breakdown:** Mission → epics → stories with explicit acceptance criteria.
+4. **Execute:** Implement stories directly from `product/stories/*.toml`.
+5. **Review:** Open and review PRs for completed epic/mission branches.
+6. **Retro:** `/retro` discovers follow-up stories.
+7. **Learn:** Update value ladder and product docs with learnings.
 
 ---
 
 ## Testing
 
 **Commands:**
+
 ```bash
 uv run pytest                           # All tests
 uv run pytest tests/test_cli.py         # Specific test file
 uv run pytest -x                        # Stop on first failure
 uv run pytest --cov=fyrnheim            # With coverage
+uv run ruff check src/ tests/           # Lint
+uv run mypy src/                        # Type check
 ```
 
 **Key patterns:**
-- Tests live in `tests/` directory
-- Use `pytest` fixtures for setup
-- Write tests for all new functions and modules
+
+- Tests live in `tests/`.
+- Use `pytest` fixtures for setup.
+- Write tests for all new functions and modules.
+- Prefer behavior-focused tests tied to story acceptance criteria.
 
 ---
 
 ## Critical Rules
 
 **Every feature must have tests**
-- Write tests for all new functions and modules
-- Never mark work complete until tests pass
+
+- Write tests for all new functions and modules.
+- Never mark a story complete until relevant tests pass or a documented blocker exists.
+
+**Product TOML is the task source of truth**
+
+- Update story status as work progresses.
+- Add follow-up stories for remaining work.
+- Do not duplicate story state into Beads.
 
 **Work is not complete until pushed**
-- Always push to remote before ending a session
-- Create PRs for all feature branches
 
----
-
-## Huginn Memory (Project-Scoped)
-
-This project is registered in Huginn Memory as `project="fyrnheim"`.
-
-When using MCP tools (`mcp__huginn-memory__*`), **always pass `project="fyrnheim"`** on these scoped tools:
-- **Memory:** remember, recall, decide, forget, summarize
-- **Tasks:** create_task, update_task, list_tasks, get_task, dismiss_task, surface_daily_candidates
-- **Agents:** get_agent_profile, update_agent_profile, log_agent_execution, get_agent_metrics, log_feedback, get_feedback_summary, get_content_calendar, update_content_calendar
-
-Global tools (daily entries, cashflow, time tracking, brainstorm, web distillation) do **not** take a project parameter.
+- Commit completed work.
+- Push to remote before ending a session unless explicitly instructed not to.
+- Create PRs for feature branches when appropriate.

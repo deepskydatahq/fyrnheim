@@ -1,0 +1,79 @@
+# Mission: Parallel staging view materialization
+# Materialize independent staging views concurrently by DAG level.
+
+id = "M089"
+title = "Parallel staging view materialization"
+status = "draft"
+created = 2026-04-28
+depends_on = ["M058"]
+
+[outcome]
+description = """
+Speed up staging view materialization by running independent views concurrently while preserving dependency order. The current staging runner materializes one view at a time even when views have no dependencies on each other. BigQuery can handle multiple independent CREATE OR REPLACE jobs concurrently, and Fyrnheim already has `max_parallel_io` as a bounded safety knob.
+
+This mission executes staging views by topological levels: views in the same dependency level can materialize in a bounded thread pool; later levels wait for prerequisites.
+"""
+
+user_progress = "From 'all staging views materialize sequentially' to 'independent staging views materialize concurrently with dependency safety and bounded BigQuery load'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "benchmark-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Staging view dependency graph is grouped into topological levels or equivalent batches",
+    "Views within one independent level materialize concurrently up to max_parallel_io or an explicit staging concurrency setting",
+    "Dependent views never start before prerequisites complete",
+    "If max_parallel_io == 1, behavior is serial and equivalent to the current materialization order",
+    "Failure in any view cancels or prevents dependent views and propagates a clear error",
+    "Content-hash skip behavior remains intact and skipped views do not block unrelated independent views",
+    "Tests cover independent parallelism, dependency ordering, serial fallback, skipped views, and failure propagation",
+    "Benchmark or PR notes show staging materialization wall-time improvement on a representative multi-view pipeline",
+    "No new runtime dependencies; ruff, mypy, and tests pass"
+]
+validator_context = [
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/config.py",
+    "tests/test_staging_view.py"
+]
+
+[context]
+related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/staging_runner.py",
+    "src/fyrnheim/core/staging_view.py",
+    "src/fyrnheim/config.py",
+    "tests/test_staging_view.py"
+]
+related_missions = [
+    "M058 — benchmark harness used to measure staging phase",
+    "M059 — max_parallel_io and thread-pool patterns for bounded I/O",
+    "M079 — graph sorting utility evaluation may provide reusable DAG-level ordering"
+]
+
+[scope]
+in_scope = [
+    "Build staging-view dependency levels from existing depends_on/toposort data",
+    "Bounded parallel materialization within each level",
+    "Serial fallback when max_parallel_io is 1",
+    "Failure propagation and dependent-view suppression",
+    "Tests and benchmark notes"
+]
+out_of_scope = [
+    "Changing StagingView public model semantics",
+    "Automatic BigQuery slot/quota management beyond max_parallel_io",
+    "Parsing SQL text to infer dependencies",
+    "Replacing content-hash idempotency"
+]
+acceptable_breakage = [
+    "Log ordering may change for independent views when concurrency is enabled; materialized outputs and dependency semantics must not change."
+]
+
+[notes]
+considerations = """
+This is a quick win compared with the deep pushdown missions. It can ship independently as long as max_parallel_io bounds concurrency and tests prove dependency safety.
+"""

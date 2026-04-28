@@ -1,0 +1,81 @@
+# Mission: Warehouse-native event stream assembly
+# Stop downloading source event streams to Python just to normalize and concatenate them.
+
+id = "M084"
+title = "Warehouse-native event stream assembly"
+status = "draft"
+created = 2026-04-28
+depends_on = ["M058", "M078"]
+
+[outcome]
+description = """
+Replace the pandas-first source event assembly path with an Ibis/SQL expression path. Today several source loaders and `pipeline._concat_tables` call `.execute()`, pull large BigQuery intermediates into Python, normalize rows locally, then `pd.concat()` them. On warehouse backends this turns BigQuery into a remote file source instead of the compute engine.
+
+This mission makes StateSource/EventSource loading produce backend-executable Ibis expressions in the canonical event schema and uses backend-side `UNION ALL` for concatenation. Python should orchestrate expression construction and only materialize final outputs or small validation counts.
+"""
+
+user_progress = "From '20 source event streams are downloaded and concatenated on the operator machine' to 'Fyrnheim builds one warehouse-native event stream expression and BigQuery performs normalization/unioning server-side'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "benchmark-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "EventSource loading can return a canonical Ibis event expression without calling table.execute() or iterating pandas rows on BigQuery paths",
+    "StateSource event output remains canonical and compatible with backend-side unioning",
+    "pipeline source concatenation uses Ibis union/union_all instead of executing every source and pd.concat-ing dataframes",
+    "DuckDB behavior remains byte-compatible with existing event-source and pipeline tests",
+    "BigQuery compile or credential-gated integration coverage verifies generated source-union SQL runs without local event-stream materialization",
+    "M058/fyr bench timings or PR notes show source load/concat time before and after on a representative pipeline",
+    "No new runtime dependencies; ruff, mypy, and tests pass"
+]
+validator_context = [
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/source_stage.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "tests/"
+]
+
+[context]
+related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/source_stage.py",
+    "src/fyrnheim/engine/snapshot_diff.py"
+]
+related_missions = [
+    "M058 — benchmark harness used to prove impact",
+    "M059 — bounded parallel I/O, complementary but not a substitute for pushdown",
+    "M060 — analytics-entity projection pushdown; this mission handles earlier event-stream assembly",
+    "M078 — shared source-stage runner foundation"
+]
+
+[scope]
+in_scope = [
+    "Define a canonical event-stream Ibis expression contract for source loaders",
+    "Refactor EventSource normalization to Ibis expressions for warehouse backends",
+    "Keep StateSource output compatible with expression-level unioning",
+    "Replace pipeline `_concat_tables` pandas execution path with backend-side union/union_all",
+    "Preserve source ordering where semantics/debugging depend on it",
+    "Tests for event schema, union behavior, DuckDB compatibility, and BigQuery SQL/compile path"
+]
+out_of_scope = [
+    "Identity resolution pushdown (M085)",
+    "Activity filtering pushdown (M086)",
+    "Metrics aggregation pushdown (M087)",
+    "Analytics entity projection pushdown already covered by M060",
+    "Changing public source model APIs unless strictly necessary"
+]
+acceptable_breakage = [
+    "None expected. Output event rows and columns must remain compatible with current tests. Row ordering may require explicit order columns if backend union order is not guaranteed."
+]
+
+[notes]
+considerations = """
+The key architectural rule is: BigQuery paths should not call `.execute()` for large intermediate event streams. If a small count or schema check is required, keep it explicit and documented. Prototype JSON/payload construction against both DuckDB and BigQuery early because canonical event payload construction is the main portability risk.
+"""

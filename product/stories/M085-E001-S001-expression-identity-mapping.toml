@@ -27,8 +27,8 @@ depends_on = []
 [execution]
 branch = "execute-M085-identity-pushdown"
 worktree = ""
-pr = ""
-commit = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/153"
+commit = "5a6cff0"
 started = "2026-04-28"
 completed = "2026-04-28"
 failure_reason = ""

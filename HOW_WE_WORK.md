@@ -24,7 +24,7 @@ commits / PRs         "How does the implementation ship?"
 
 Each level feeds the next. Validation flows back up: a completed story validates its epic, a completed epic validates its mission.
 
-Product TOML files are the canonical task system. Do not create Beads/`bd` tasks unless explicitly working with the legacy workflow.
+Product TOML files are the canonical task system. Do not create Beads/`bd` tasks unless explicitly working with the legacy workflow. If older docs conflict with `AGENTS.md`, `AGENTS.md` and the product TOML workflow win.
 
 ---
 
@@ -50,6 +50,25 @@ Outcome-oriented work packages. Each mission proves something about the product 
 
 - **Naming:** `M001-short-description.toml`
 - **Key fields:** `id`, `title`, `status`, `outcome.description`, `testing.criteria`, `scope`
+
+### Mission Execution Modes
+
+Missions may include an optional `[execution]` table to guide Pi:
+
+```toml
+[execution]
+mode = "implementation"  # implementation | audit | planning | docs | release
+outputs = ["code", "stories"]
+```
+
+| Mode | Output |
+|------|--------|
+| `implementation` | Epics, stories, code changes, tests, PR |
+| `audit` / `planning` | Audit notes, decision records, follow-up mission TOMLs; do not force implementation stories |
+| `docs` | Documentation artifacts and validation |
+| `release` | Version/changelog/package-release workflow |
+
+If `[execution].mode` is missing, infer it from the mission outcome and scope. Use implementation mode only when the mission clearly requires code changes.
 
 ### Epics (`product/epics/*.toml`)
 
@@ -124,6 +143,9 @@ Useful commands:
 | `/plan-mission <idea>` | Explore code and create a mission TOML |
 | `/execute-mission <Mxxx>` | Break down and execute a mission from TOML |
 | `/fix-pr-feedback <pr>` | Fix actionable PR review feedback, max 2 rounds |
+| `/quality-gates` | Run pytest, ruff, and mypy using uv/.venv/plain fallback |
+| `/pr-status [pr]` | Show PR checks, CodeRabbit state, mergeability, and comments |
+| `/pr-merge-if-ready [pr]` | Squash-merge only when checks pass and no actionable comments remain |
 | `/retro` | Discover follow-up product stories after implementation |
 | `/mission-status <Mxxx>` | Show a mission's epics and stories |
 | `/story-list [status]` | List stories, optionally by status |
@@ -212,6 +234,12 @@ If blocked, set `status = "blocked"` or `failed` and document the reason.
 ### Phase 3: Validation + PR
 
 Use product judgment to validate whether stories/epics/missions achieved their stated outcomes. Run quality gates:
+
+```bash
+scripts/quality-gates.sh
+```
+
+The script prefers `uv run ...`, falls back to `.venv/bin/...`, then falls back to commands on `PATH`. Direct commands remain valid when the environment supports them:
 
 ```bash
 uv run pytest

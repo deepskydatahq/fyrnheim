@@ -1,0 +1,38 @@
+id = "M083-E001-S001"
+parent = "M083-E001"
+title = "Document mission execution modes and precedence"
+status = "complete"
+triage = "ready"
+created = 2026-04-27
+
+[outcome]
+description = """Document mission execution modes and clarify that AGENTS.md/product TOML workflow wins over stale Beads-era docs."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "HOW_WE_WORK.md documents implementation, audit/planning, docs, and release mission modes"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "AGENTS.md or HOW_WE_WORK.md states AGENTS.md/product TOML workflow wins when older docs disagree"
+
+[context]
+relevant_paths = ["AGENTS.md", "HOW_WE_WORK.md", ".pi/README.md"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = """Docs only."""
+reference_files = ["product/missions/M083-pi-workflow-hardening.toml"]
+
+[execution]
+branch = "plan-M083-pi-workflow-hardening"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/151"
+commit = ""
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

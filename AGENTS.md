@@ -15,6 +15,8 @@ VISION.md
 
 Stories are implementation tasks. Do **not** use Beads/`bd` unless the user explicitly asks for legacy Beads operations.
 
+If older docs such as `CLAUDE.md` or archived command files conflict with this file, `AGENTS.md` and the product TOML workflow win.
+
 ## Quick Reference
 
 ```bash
@@ -26,7 +28,8 @@ Stories are implementation tasks. Do **not** use Beads/`bd` unless the user expl
 /retro                        # Discover follow-up stories
 
 # Shell
-uv run pytest
+scripts/quality-gates.sh      # Preferred: uv with .venv/plain fallback
+uv run pytest                  # Direct fallback if uv is available
 uv run ruff check src/ tests/
 uv run mypy src/
 git status --short --branch

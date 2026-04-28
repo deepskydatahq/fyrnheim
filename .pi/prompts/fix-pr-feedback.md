@@ -8,6 +8,8 @@ Fix actionable PR review feedback for PR `$1`. Maximum two rounds.
 
 ## Setup
 
+Before editing, use `/pr-status $1` or equivalent `gh` commands to inspect checks, CodeRabbit status, mergeability, reviews, issue comments, and inline comments.
+
 1. Get repository and PR metadata:
    - `gh repo view --json nameWithOwner --jq '.nameWithOwner'`
    - `gh pr view $1 --json headRefName,baseRefName,title,state,url`
@@ -52,6 +54,7 @@ Present a table before fixing.
 3. Fix new actionable items.
 4. Run gates, commit, and push.
 5. Do not attempt a third round.
+6. After pushing, use `/pr-status $1` to verify CI/CodeRabbit state. Use `/pr-merge-if-ready $1` only if the user explicitly asked to merge.
 
 ## Report
 

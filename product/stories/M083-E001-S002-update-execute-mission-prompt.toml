@@ -1,0 +1,38 @@
+id = "M083-E001-S002"
+parent = "M083-E001"
+title = "Update execute-mission prompt for mission modes"
+status = "complete"
+triage = "ready"
+created = 2026-04-27
+
+[outcome]
+description = """Update the Pi execute-mission prompt so it reads mission execution mode and handles audit/planning missions without forcing implementation stories."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = ".pi/prompts/execute-mission.md instructs the agent to read [execution].mode and branch behavior for implementation, audit/planning, docs, and release"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Audit/planning mode explicitly produces audit docs and follow-up mission TOMLs rather than forced epics/stories"
+
+[context]
+relevant_paths = [".pi/prompts/execute-mission.md", ".pi/README.md"]
+input_fixtures = []
+depends_on = ["M083-E001-S001"]
+
+[handoff]
+implementation_hints = """Prompt/docs only."""
+reference_files = ["product/missions/M083-pi-workflow-hardening.toml"]
+
+[execution]
+branch = "plan-M083-pi-workflow-hardening"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/151"
+commit = ""
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

@@ -1,0 +1,42 @@
+id = "M083-E001-S004"
+parent = "M083-E001"
+title = "Add PR status and merge-if-ready workflow commands"
+status = "complete"
+triage = "plan"
+created = 2026-04-27
+
+[outcome]
+description = """Add Pi commands or documented workflow for checking PR status, CodeRabbit/CI state, actionable comments, and squash-merging only when ready."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = ".pi/extensions/fyrnheim-workflow/index.ts registers /pr-status and /pr-merge-if-ready commands using gh"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "/pr-merge-if-ready refuses to merge while checks are pending/failing or actionable unresolved comments remain"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = ".pi/README.md documents the PR commands"
+
+[context]
+relevant_paths = [".pi/extensions/fyrnheim-workflow/index.ts", ".pi/README.md", ".pi/prompts/fix-pr-feedback.md"]
+input_fixtures = []
+depends_on = ["M083-E001-S003"]
+
+[handoff]
+implementation_hints = """Use gh JSON output. Merge command must require explicit invocation and should not run automatically."""
+reference_files = []
+
+[execution]
+branch = "plan-M083-pi-workflow-hardening"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/151"
+commit = ""
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

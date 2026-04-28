@@ -65,6 +65,91 @@ function table(rows: string[][]): string {
   return rows.map((row) => row.map((cell, col) => (cell ?? "").padEnd(widths[col])).join("  ")).join("\n");
 }
 
+async function resolvePrNumber(pi: ExtensionAPI, args: string): Promise<string> {
+  const explicit = args.trim().split(/\s+/)[0];
+  if (explicit) return explicit.replace(/^#/, "");
+  const result = await pi.exec("gh", ["pr", "view", "--json", "number", "--jq", ".number"], { timeout: 10_000 });
+  const number = result.stdout.trim();
+  if (!number) throw new Error("Could not infer PR number from current branch; pass one explicitly.");
+  return number;
+}
+
+function checkState(check: any): string {
+  if (check.__typename === "CheckRun") return `${check.name}: ${check.status}${check.conclusion ? `/${check.conclusion}` : ""}`;
+  if (check.__typename === "StatusContext") return `${check.context}: ${check.state}`;
+  return JSON.stringify(check);
+}
+
+function checkIsPassing(check: any): boolean {
+  if (check.__typename === "CheckRun") return check.status === "COMPLETED" && check.conclusion === "SUCCESS";
+  if (check.__typename === "StatusContext") return check.state === "SUCCESS";
+  return false;
+}
+
+function checkIsPending(check: any): boolean {
+  if (check.__typename === "CheckRun") return check.status !== "COMPLETED";
+  if (check.__typename === "StatusContext") return ["PENDING", "EXPECTED"].includes(check.state);
+  return false;
+}
+
+function isUnresolvedActionableComment(comment: any): boolean {
+  const author = comment.user?.login ?? comment.author?.login ?? "";
+  const body = comment.body ?? "";
+  if (!author.toLowerCase().includes("coderabbit")) return false;
+  if (body.includes("✅ Addressed")) return false;
+  return body.includes("Potential issue") || body.includes("Actionable comments posted");
+}
+
+async function getPrSummary(pi: ExtensionAPI, prNumber: string) {
+  const view = await pi.exec(
+    "gh",
+    [
+      "pr",
+      "view",
+      prNumber,
+      "--json",
+      "number,title,state,isDraft,mergeable,reviewDecision,statusCheckRollup,headRefName,baseRefName,url,comments,reviews",
+    ],
+    { timeout: 20_000 },
+  );
+  if (view.code !== 0) throw new Error(view.stderr || view.stdout || `gh pr view ${prNumber} failed`);
+  const pr = JSON.parse(view.stdout);
+
+  const inline = await pi.exec(
+    "gh",
+    ["api", `repos/{owner}/{repo}/pulls/${prNumber}/comments`, "--paginate", "--slurp"],
+    { timeout: 20_000 },
+  );
+  const inlinePages = inline.code === 0 && inline.stdout.trim() ? JSON.parse(inline.stdout) : [];
+  const inlineComments = Array.isArray(inlinePages?.[0]) ? inlinePages.flat() : inlinePages;
+  const issueComments = pr.comments ?? [];
+  const actionable = [...inlineComments, ...issueComments].filter(isUnresolvedActionableComment);
+  const checks = pr.statusCheckRollup ?? [];
+  const pendingChecks = checks.filter(checkIsPending);
+  const failingChecks = checks.filter((check: any) => !checkIsPending(check) && !checkIsPassing(check));
+
+  return { pr, inlineComments, issueComments, actionable, checks, pendingChecks, failingChecks };
+}
+
+function renderPrSummary(summary: any): string {
+  const { pr, checks, pendingChecks, failingChecks, actionable } = summary;
+  const checkRows = checks.map((check: any) => [check.__typename === "CheckRun" ? check.name : check.context, checkState(check)]);
+  return [
+    `PR #${pr.number}: ${pr.title}`,
+    pr.url,
+    `State: ${pr.state}${pr.isDraft ? " (draft)" : ""}`,
+    `Branch: ${pr.headRefName} -> ${pr.baseRefName}`,
+    `Mergeable: ${pr.mergeable}`,
+    `Review decision: ${pr.reviewDecision || "none"}`,
+    `Pending checks: ${pendingChecks.length}`,
+    `Failing checks: ${failingChecks.length}`,
+    `Unresolved actionable comments: ${actionable.length}`,
+    "",
+    "Checks:",
+    table([["Name", "State"], ...checkRows]),
+  ].join("\n");
+}
+
 export default function fyrnheimWorkflow(pi: ExtensionAPI) {
   pi.on("before_agent_start", async (event) => {
     return {
@@ -145,6 +230,61 @@ export default function fyrnheimWorkflow(pi: ExtensionAPI) {
       }
       await setTomlStringField(file, "status", status);
       ctx.ui.notify(`Updated ${path.relative(ctx.cwd, file)}: status = ${status}`, "success");
+    },
+  });
+
+  pi.registerCommand("quality-gates", {
+    description: "Run Fyrnheim quality gates with uv/.venv/plain fallback",
+    handler: async (_args, ctx) => {
+      const result = await pi.exec("bash", ["scripts/quality-gates.sh"], { timeout: 120_000 });
+      const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+      if (result.code === 0) ctx.ui.notify(`Quality gates passed.\n${output}`, "success");
+      else ctx.ui.notify(`Quality gates failed (exit ${result.code}).\n${output}`, "error");
+    },
+  });
+
+  pi.registerCommand("pr-status", {
+    description: "Show GitHub PR checks, CodeRabbit status, mergeability, and actionable comments",
+    handler: async (args, ctx) => {
+      try {
+        const prNumber = await resolvePrNumber(pi, args);
+        const summary = await getPrSummary(pi, prNumber);
+        ctx.ui.notify(renderPrSummary(summary), summary.actionable.length ? "warning" : "info");
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    },
+  });
+
+  pi.registerCommand("pr-merge-if-ready", {
+    description: "Squash-merge a PR only when CI/CodeRabbit pass and no actionable comments remain",
+    handler: async (args, ctx) => {
+      try {
+        const prNumber = await resolvePrNumber(pi, args);
+        const summary = await getPrSummary(pi, prNumber);
+        if (summary.pr.isDraft) {
+          ctx.ui.notify(`PR #${prNumber} is a draft; refusing to merge.`, "error");
+          return;
+        }
+        if (summary.pr.mergeable !== "MERGEABLE") {
+          ctx.ui.notify(`PR #${prNumber} mergeable state is ${summary.pr.mergeable}; refusing to merge.`, "error");
+          return;
+        }
+        if (summary.pendingChecks.length || summary.failingChecks.length) {
+          ctx.ui.notify(`PR #${prNumber} is not ready.\n${renderPrSummary(summary)}`, "error");
+          return;
+        }
+        if (summary.actionable.length) {
+          ctx.ui.notify(`PR #${prNumber} has unresolved actionable comments; refusing to merge.\n${renderPrSummary(summary)}`, "error");
+          return;
+        }
+        const merge = await pi.exec("gh", ["pr", "merge", prNumber, "--squash", "--delete-branch"], { timeout: 120_000 });
+        const output = [merge.stdout, merge.stderr].filter(Boolean).join("\n");
+        if (merge.code === 0) ctx.ui.notify(`Merged PR #${prNumber}.\n${output}`, "success");
+        else ctx.ui.notify(`Merge failed for PR #${prNumber}.\n${output}`, "error");
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      }
     },
   });
 }

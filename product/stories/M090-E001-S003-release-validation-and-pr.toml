@@ -1,7 +1,7 @@
 id = "M090-E001-S003"
 parent = "M090-E001"
 title = "Validate v0.14.0 release and open PR"
-status = "ready"
+status = "complete"
 triage = "ready"
 created = 2026-04-28
 
@@ -31,8 +31,8 @@ depends_on = ["M090-E001-S001", "M090-E001-S002"]
 [execution]
 branch = "release/v0.14.0"
 worktree = ""
-pr = ""
-commit = ""
-started = ""
-completed = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/159"
+commit = "95c8362"
+started = "2026-04-28"
+completed = "2026-04-28"
 failure_reason = ""

@@ -1,7 +1,7 @@
 id = "M090-E001-S002"
 parent = "M090-E001"
 title = "Write v0.14.0 changelog and compatibility notes"
-status = "ready"
+status = "complete"
 triage = "plan"
 created = 2026-04-28
 
@@ -27,8 +27,8 @@ depends_on = ["M090-E001-S001"]
 [execution]
 branch = "release/v0.14.0"
 worktree = ""
-pr = ""
-commit = ""
-started = ""
-completed = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/159"
+commit = "95c8362"
+started = "2026-04-28"
+completed = "2026-04-28"
 failure_reason = ""

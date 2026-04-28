@@ -27,7 +27,7 @@ depends_on = ["M088-E001-S001", "M088-E001-S002"]
 [execution]
 branch = "execute-M088-column-pushdown"
 worktree = ""
-pr = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/156"
 commit = "21ffc61"
 started = "2026-04-28"
 completed = "2026-04-28"

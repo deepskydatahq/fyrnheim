@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 
 import ibis
@@ -31,6 +32,59 @@ def _make_raw_events(rows: list[dict[str, str]]) -> ibis.Table:
         )
         return ibis.memtable([], schema=schema)
     return ibis.memtable(pd.DataFrame(rows))
+
+
+def test_activity_derivation_compiles_to_bigquery_predicates_and_union() -> None:
+    raw = _make_raw_events(
+        [
+            {
+                "source": "customers",
+                "entity_id": "1",
+                "ts": "2024-01-01",
+                "event_type": "row_appeared",
+                "payload": json.dumps({"name": "alice", "plan": "free"}),
+            },
+            {
+                "source": "customers",
+                "entity_id": "1",
+                "ts": "2024-01-02",
+                "event_type": "field_changed",
+                "payload": json.dumps(
+                    {"field_name": "plan", "old_value": "free", "new_value": "pro"}
+                ),
+            },
+        ]
+    )
+    defns = [
+        ActivityDefinition(
+            name="signup",
+            source="customers",
+            trigger=RowAppeared(),
+            entity_id_field="id",
+            include_fields=["name"],
+        ),
+        ActivityDefinition(
+            name="became_paying",
+            source="customers",
+            trigger=FieldChanged(field="plan", to_values=["pro"]),
+            entity_id_field="id",
+        ),
+    ]
+
+    sql = ibis.to_sql(apply_activity_definitions(raw, defns), dialect="bigquery")
+
+    assert "UNION ALL" in sql
+    assert "field_changed" in sql
+    assert "CAST" in sql
+    assert "JSON" in sql
+    assert "became_paying" in sql
+
+
+def test_activity_engine_does_not_materialize_inputs_in_core_path() -> None:
+    source = inspect.getsource(apply_activity_definitions)
+
+    assert ".execute(" not in source
+    assert "iterrows(" not in source
 
 
 class TestRowAppearedTrigger:

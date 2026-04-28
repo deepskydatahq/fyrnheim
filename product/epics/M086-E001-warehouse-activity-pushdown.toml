@@ -1,0 +1,21 @@
+id = "M086-E001"
+parent = "M086"
+title = "Warehouse-native activity derivation"
+status = "complete"
+created = 2026-04-28
+depends_on = []
+
+[outcome]
+description = """Refactor activity definition application to compose backend-executable Ibis filters, projections, and unions."""
+
+[scope]
+in_scope = [
+    "Expression-based activity trigger predicates",
+    "Expression-based payload projection for include_fields",
+    "Pass-through preservation without pandas materialization",
+    "BigQuery SQL compile coverage"
+]
+out_of_scope = [
+    "Changing ActivityDefinition model semantics",
+    "Metrics aggregation pushdown"
+]

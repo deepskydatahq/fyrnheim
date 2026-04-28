@@ -1,0 +1,34 @@
+id = "M086-E001-S002"
+parent = "M086-E001"
+title = "Project activity payloads and pass-through rows as Ibis expressions"
+status = "complete"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Implement activity event projection, include_fields payload filtering, unmatched event pass-through, and multi-definition unioning without pandas materialization."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "include_fields, pass-through, and multiple-definition activity tests pass"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Activity e2e tests pass unchanged"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/activity_engine.py", "tests/test_activity_engine.py", "tests/test_e2e_activity_pipeline.py", "tests/test_e2e_activity_preserve.py"]
+input_fixtures = []
+depends_on = ["M086-E001-S001"]
+
+[execution]
+branch = "execute-M086-activity-pushdown"
+worktree = ""
+pr = ""
+commit = ""
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

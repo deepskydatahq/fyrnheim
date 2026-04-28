@@ -3,7 +3,7 @@
 
 id = "M086"
 title = "Warehouse-native activity derivation"
-status = "draft"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M084"]
 

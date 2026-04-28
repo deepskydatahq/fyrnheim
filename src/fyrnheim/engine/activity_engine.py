@@ -1,15 +1,14 @@
 """Activity engine for applying ActivityDefinitions to raw event streams.
 
-Filters raw events (from diff_snapshots) by activity definitions and
-produces named business events.
+Filters raw events by activity definitions and produces named business events.
 """
 
 from __future__ import annotations
 
 import json
+from functools import reduce
 
 import ibis
-import pandas as pd
 
 from fyrnheim.core.activity import (
     ActivityDefinition,
@@ -24,166 +23,112 @@ def apply_activity_definitions(
     raw_events: ibis.Table,
     definitions: list[ActivityDefinition],
 ) -> ibis.Table:
-    """Apply activity definitions to a raw event table and produce a stream of
-    annotated + pass-through events.
+    """Apply activity definitions to a raw event table.
 
-    For each raw event in the input:
-    - If one or more ActivityDefinitions match it, emit one renamed copy per
-      matching definition (with the activity's name as event_type and,
-      optionally, payload filtered via include_fields).
-    - If no ActivityDefinition matches it, emit the raw event unchanged.
-
-    No raw event is ever silently dropped. This is a change from pre-v0.5.0
-    behavior, where unmatched events were dropped — see ADR-0001
-    (docs/decisions/0001-activity-definitions-drop-vs-preserve.md) for the
-    decision rationale.
-
-    Args:
-        raw_events: Ibis table with columns: source, entity_id, ts,
-            event_type, payload.
-        definitions: List of ActivityDefinition instances to apply.
-
-    Returns:
-        Ibis table with the same schema. Matched events have their
-        event_type replaced by the activity definition name; unmatched
-        events pass through with their original event_type and payload.
+    The implementation is expression-based: filtering, event renaming, payload
+    projection, pass-through, and unioning compose as Ibis expressions so
+    warehouse backends can execute the activity phase server-side.
     """
-    events_df = raw_events.execute()
+    if not definitions:
+        return _canonical_event_table(raw_events)
 
-    all_matched: list[dict[str, str]] = []
-    matched_indices: set[int] = set()
+    matched_tables: list[ibis.Table] = []
+    match_predicates: list[ibis.Value] = []
 
-    for defn in definitions:
-        matched, indices = _apply_single_definition(events_df, defn)
-        all_matched.extend(matched)
-        matched_indices.update(indices)
+    for definition in definitions:
+        predicate = _definition_predicate(raw_events, definition)
+        match_predicates.append(predicate)
+        matched_tables.append(_activity_projection(raw_events, definition, predicate))
 
-    # Pass through any raw events that no definition matched.
-    passthrough: list[dict[str, str]] = []
-    for idx in events_df.index:
-        if idx in matched_indices:
-            continue
-        row = events_df.loc[idx]
-        passthrough.append(
-            {
-                "source": row["source"],
-                "entity_id": row["entity_id"],
-                "ts": row["ts"],
-                "event_type": row["event_type"],
-                "payload": row["payload"],
-            }
-        )
-
-    all_rows = all_matched + passthrough
-
-    if not all_rows:
-        empty_schema = ibis.schema(
-            {
-                "source": "string",
-                "entity_id": "string",
-                "ts": "string",
-                "event_type": "string",
-                "payload": "string",
-            }
-        )
-        return ibis.memtable([], schema=empty_schema)
-
-    return ibis.memtable(pd.DataFrame(all_rows))
+    any_matched = reduce(lambda left, right: left | right, match_predicates)
+    passthrough = _canonical_event_table(raw_events.filter(~any_matched))
+    return ibis.union(*matched_tables, passthrough, distinct=False)
 
 
-def _apply_single_definition(
-    events_df: pd.DataFrame,
-    defn: ActivityDefinition,
-) -> tuple[list[dict[str, str]], set[int]]:
-    """Apply a single ActivityDefinition to events.
+def _canonical_event_table(table: ibis.Table) -> ibis.Table:
+    """Select the canonical event schema in a stable column order."""
+    return table.select(
+        source=table["source"].cast("string"),
+        entity_id=table["entity_id"].cast("string"),
+        ts=table["ts"].cast("string"),
+        event_type=table["event_type"].cast("string"),
+        payload=table["payload"].cast("string"),
+    )
 
-    Returns:
-        A tuple of (output rows, set of original DataFrame indices that
-        were matched by this definition).
-    """
-    # Filter by source
-    source_mask = events_df["source"] == defn.source
-    filtered = events_df[source_mask]
 
-    trigger = defn.trigger
+def _definition_predicate(
+    events: ibis.Table,
+    definition: ActivityDefinition,
+) -> ibis.Value:
+    """Build the backend predicate for one activity definition."""
+    trigger = definition.trigger
+    predicate = events["source"] == definition.source
 
     if isinstance(trigger, RowAppeared):
-        matched = filtered[filtered["event_type"] == "row_appeared"]
-    elif isinstance(trigger, RowDisappeared):
-        matched = filtered[filtered["event_type"] == "row_disappeared"]
-    elif isinstance(trigger, FieldChanged):
-        matched = _match_field_changed(filtered, trigger)
-    elif isinstance(trigger, EventOccurred):
-        matched = _match_event_occurred(filtered, trigger)
-    else:
-        return [], set()
-
-    # Build output events
-    results: list[dict[str, str]] = []
-    for _idx, row in matched.iterrows():
-        payload_str = row["payload"]
-        if defn.include_fields:
-            payload_str = _filter_payload(payload_str, defn.include_fields)
-
-        results.append(
-            {
-                "source": row["source"],
-                "entity_id": row["entity_id"],
-                "ts": row["ts"],
-                "event_type": defn.name,
-                "payload": payload_str,
-            }
-        )
-
-    return results, set(matched.index)
-
-
-def _match_field_changed(
-    events: pd.DataFrame,
-    trigger: FieldChanged,
-) -> pd.DataFrame:
-    """Filter field_changed events by trigger criteria."""
-    fc_events = events[events["event_type"] == "field_changed"]
-
-    if fc_events.empty:
-        return fc_events
-
-    mask = pd.Series(True, index=fc_events.index)
-
-    for idx in fc_events.index:
-        payload = json.loads(fc_events.at[idx, "payload"])
-        if payload.get("field_name") != trigger.field:
-            mask[idx] = False
-            continue
+        return predicate & (events["event_type"] == "row_appeared")
+    if isinstance(trigger, RowDisappeared):
+        return predicate & (events["event_type"] == "row_disappeared")
+    if isinstance(trigger, FieldChanged):
+        predicate = predicate & (events["event_type"] == "field_changed")
+        payload = events["payload"]
+        predicate = predicate & (_json_scalar(payload, "field_name") == trigger.field)
         if trigger.to_values is not None:
-            if payload.get("new_value") not in trigger.to_values:
-                mask[idx] = False
-                continue
+            predicate = predicate & _json_scalar(payload, "new_value").isin(
+                trigger.to_values
+            )
         if trigger.from_values is not None:
-            if payload.get("old_value") not in trigger.from_values:
-                mask[idx] = False
-                continue
+            predicate = predicate & _json_scalar(payload, "old_value").isin(
+                trigger.from_values
+            )
+        return predicate
+    if isinstance(trigger, EventOccurred):
+        if trigger.event_type is not None:
+            return predicate & (events["event_type"] == trigger.event_type)
+        return predicate
+    return ibis.literal(False)
 
-    return fc_events[mask]
+
+def _activity_projection(
+    events: ibis.Table,
+    definition: ActivityDefinition,
+    predicate: ibis.Value,
+) -> ibis.Table:
+    """Project matched rows into named activity events."""
+    matched = events.filter(predicate)
+    return matched.select(
+        source=matched["source"].cast("string"),
+        entity_id=matched["entity_id"].cast("string"),
+        ts=matched["ts"].cast("string"),
+        event_type=ibis.literal(definition.name).cast("string"),
+        payload=_project_payload(matched["payload"], definition.include_fields),
+    )
 
 
-def _match_event_occurred(
-    events: pd.DataFrame,
-    trigger: EventOccurred,
-) -> pd.DataFrame:
-    """Filter events for EventOccurred trigger.
+def _project_payload(payload: ibis.Value, include_fields: list[str]) -> ibis.Value:
+    """Return an expression for an activity payload.
 
-    EventOccurred matches events from event sources. If trigger.event_type
-    is set, only events with that exact event_type match. Otherwise, all
-    events from the source match.
+    Empty ``include_fields`` preserves the original payload. Non-empty lists
+    build a JSON object from the requested payload keys.
     """
-    if trigger.event_type is not None:
-        return events[events["event_type"] == trigger.event_type]
-    return events
+    if not include_fields:
+        return payload.cast("string")
+    json_payload = payload.cast("json")
+    return ibis.struct(
+        {field: json_payload[field] for field in include_fields}
+    ).cast("json").cast("string")
+
+
+def _json_scalar(payload: ibis.Value, field_name: str) -> ibis.Value:
+    """Extract a scalar JSON payload field as a string expression."""
+    return payload.cast("json")[field_name].cast("string").replace('"', "")
 
 
 def _filter_payload(payload_str: str, include_fields: list[str]) -> str:
-    """Filter a JSON payload to only include specified fields."""
+    """Filter a JSON payload to only include specified fields.
+
+    Kept as a tiny compatibility helper for callers that imported the private
+    function directly; the activity engine no longer uses it internally.
+    """
     payload = json.loads(payload_str)
     filtered = {k: v for k, v in payload.items() if k in include_fields}
     return json.dumps(filtered)

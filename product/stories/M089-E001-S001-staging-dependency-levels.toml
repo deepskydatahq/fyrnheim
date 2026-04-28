@@ -23,7 +23,7 @@ depends_on = []
 [execution]
 branch = "execute-M089-parallel-staging"
 worktree = ""
-pr = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/157"
 commit = "3d34af6"
 started = "2026-04-28"
 completed = "2026-04-28"

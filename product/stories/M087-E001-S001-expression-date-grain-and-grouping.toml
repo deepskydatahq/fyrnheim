@@ -1,0 +1,34 @@
+id = "M087-E001-S001"
+parent = "M087-E001"
+title = "Build metric date grain and grouping as Ibis expressions"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Translate metric source filtering, hourly/daily/weekly/monthly date grains, and dimensions to backend Ibis expressions."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing grain and dimension metrics tests pass"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "aggregate_metrics no longer executes the events table locally"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/metrics_engine.py", "tests/test_metrics_engine.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "execute-M087-metrics-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/155"
+commit = "ff0c564"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

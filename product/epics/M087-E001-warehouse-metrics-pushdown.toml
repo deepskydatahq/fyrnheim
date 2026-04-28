@@ -1,0 +1,21 @@
+id = "M087-E001"
+parent = "M087"
+title = "Warehouse-native metrics aggregation"
+status = "complete"
+created = 2026-04-28
+depends_on = []
+
+[outcome]
+description = """Refactor metrics aggregation to compose backend-executable Ibis group-by expressions instead of pandas groupbys."""
+
+[scope]
+in_scope = [
+    "Expression-based date grain and dimension grouping",
+    "Expression-based state and event metric aggregations",
+    "BigQuery GROUP BY compile coverage",
+    "Metric engine semantic regression tests"
+]
+out_of_scope = [
+    "New metric types",
+    "Column pushdown for source reads"
+]

@@ -1,0 +1,30 @@
+id = "M088-E001-S001"
+parent = "M088-E001"
+title = "Collect conservative required source columns"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Add a collector that derives per-source columns from source definitions, transforms, filters, computed columns, activities, identity graphs, analytics entities, and metrics models."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Required-column inference covers StateSource, EventSource, joins, transforms, filters, JSON fields, activities, identity graphs, analytics state fields, and metrics fields"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/source_column_pushdown.py", "tests/test_source_column_pushdown.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "execute-M088-column-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/156"
+commit = "21ffc61"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

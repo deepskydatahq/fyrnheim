@@ -30,6 +30,7 @@ from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
 from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
+from fyrnheim.engine.source_column_pushdown import collect_required_source_columns
 from fyrnheim.engine.source_stage import build_source_stage_table
 from fyrnheim.engine.staging_runner import materialize_staging_views
 
@@ -282,6 +283,7 @@ def run_pipeline(
     analytics_entities = assets.get("analytics_entities", [])
     metrics_models = assets.get("metrics_models", [])
     staging_views = assets.get("staging_views", [])
+    source_column_requirements = collect_required_source_columns(assets)
 
     # --- Phase 0: Materialize staging views (in-warehouse derived sources) ---
     if staging_views:
@@ -379,12 +381,14 @@ def run_pipeline(
         rather than load-bearing today."""
         if isinstance(src, StateSource):
             with phase1_lock:
+                requirement = source_column_requirements.get(src.name)
                 pre_diff = _build_state_source_table(
                     src,
                     config,
                     conn,
                     source_registry=loaded_sources,
                     right_pk_registry=right_pk_registry,
+                    required_columns=None if requirement is None else requirement.columns,
                 )
                 # Populate the registry BEFORE running snapshot-diff so
                 # any same-level race-loser would still see this source
@@ -402,6 +406,7 @@ def run_pipeline(
                 # Joined columns are part of the post-pipeline table; the
                 # event-shape conversion's payload-pack step (load_event_source
                 # below) carries them into the emitted event payload.
+                requirement = source_column_requirements.get(src.name)
                 pre_event = _build_event_source_table(
                     conn,
                     src,
@@ -409,6 +414,7 @@ def run_pipeline(
                     backend=config.backend,
                     source_registry=loaded_sources,
                     right_pk_registry=right_pk_registry,
+                    required_columns=None if requirement is None else requirement.columns,
                 )
                 loaded_sources[src.name] = pre_event
                 events = load_event_source(
@@ -604,6 +610,7 @@ def _build_state_source_table(
     *,
     source_registry: dict[str, ibis.Table] | None = None,
     right_pk_registry: dict[str, str] | None = None,
+    required_columns: set[str] | frozenset[str] | None = None,
 ) -> ibis.Table:
     """Apply the shared source-stage chain to a StateSource.
 
@@ -623,6 +630,7 @@ def _build_state_source_table(
         right_pk_registry=right_pk_registry,
         log=log,
         source_kind="StateSource",
+        required_columns=required_columns,
     )
 
 

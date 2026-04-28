@@ -3,7 +3,7 @@
 
 id = "M088"
 title = "Column pushdown for warehouse sources"
-status = "draft"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M084", "M085", "M086", "M087"]
 

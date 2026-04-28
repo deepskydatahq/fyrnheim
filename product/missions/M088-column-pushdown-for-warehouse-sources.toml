@@ -1,0 +1,78 @@
+# Mission: Column pushdown for warehouse sources
+# Read only columns needed by downstream Fyrnheim assets.
+
+id = "M088"
+title = "Column pushdown for warehouse sources"
+status = "draft"
+created = 2026-04-28
+depends_on = ["M084", "M085", "M086", "M087"]
+
+[outcome]
+description = """
+Add source column-pruning so Fyrnheim selects only columns required by source definitions and downstream activities, identities, analytics entities, and metrics. Today warehouse source reads can carry entire tables through staging and event construction even when only a subset of columns are needed. That increases BigQuery scan cost, network transfer for any remaining materialization, and expression complexity.
+
+This mission derives required source columns from the product asset graph and applies projection as early as safely possible in the source-stage pipeline.
+"""
+
+user_progress = "From 'source reads often SELECT * and carry unused columns' to 'Fyrnheim computes needed columns and pushes SELECT column lists into warehouse source queries'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "A required-column collector derives per-source columns from id/timestamp fields, joins, transforms, filters, JSON fields, activities, identity graphs, analytics entities, and metrics models",
+    "Source-stage reads apply projection before expensive downstream operations when it is safe to do so",
+    "Computed columns, filters, joins, and JSON extraction keep their input columns even if outputs are differently named",
+    "Tests cover StateSource, EventSource, joins, transforms, activity payloads, identity match keys, metrics fields, and analytics state fields",
+    "BigQuery SQL/compile coverage shows source queries use explicit column lists rather than SELECT * where possible",
+    "Docs explain limitations: opaque SQL staging views and arbitrary expressions may require conservative column retention",
+    "No correctness regressions; ruff, mypy, and tests pass"
+]
+validator_context = [
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "src/fyrnheim/engine/source_stage.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/"
+]
+
+[context]
+related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
+relevant_paths = [
+    "src/fyrnheim/core/source.py",
+    "src/fyrnheim/engine/source_stage.py",
+    "src/fyrnheim/engine/source_transforms.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/"
+]
+related_missions = [
+    "M084 — establishes source/event expression boundaries where projection can be applied",
+    "M078 — shared source-stage runner provides a central place for projection"
+]
+
+[scope]
+in_scope = [
+    "Per-source required-column analysis",
+    "Early projection in source-stage read paths",
+    "Conservative fallbacks for opaque expressions/staging SQL",
+    "Tests for required-column inference and SQL projection shape",
+    "Docs describing column-pushdown behavior and limitations"
+]
+out_of_scope = [
+    "Parsing arbitrary SQL staging view text to infer columns",
+    "Changing user-facing source model syntax unless unavoidable",
+    "Backend-specific query optimizer hints",
+    "Cost estimation or dry-run bytes reporting"
+]
+acceptable_breakage = [
+    "Column pruning must be conservative. It is acceptable to keep extra columns when analysis is uncertain; it is not acceptable to drop required columns."
+]
+
+[notes]
+considerations = """
+This mission should prefer false negatives over false positives: retain a column if uncertain. Once M084-M087 convert downstream phases to expressions, the required-column collector can become more precise.
+"""

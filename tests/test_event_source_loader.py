@@ -11,7 +11,11 @@ import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.core.source import EventSource, Field, Rename, SourceTransforms, TypeCast
-from fyrnheim.engine.event_source_loader import _serialize_value, load_event_source
+from fyrnheim.engine.event_source_loader import (
+    _serialize_value,
+    build_event_source_event_table,
+    load_event_source,
+)
 
 
 def _make_event_source(
@@ -34,6 +38,30 @@ def _make_event_source(
         event_type=event_type,
         event_type_field=event_type_field,
     )
+
+
+def test_event_source_event_table_compiles_to_bigquery_payload_sql() -> None:
+    """EventSource normalization is an expression BigQuery can execute."""
+    table = ibis.memtable(
+        pd.DataFrame(
+            {
+                "user_id": ["u1"],
+                "viewed_at": ["2024-01-01"],
+                "page": ["/home"],
+            }
+        )
+    )
+    source = _make_event_source(event_type="page_view")
+
+    sql = ibis.to_sql(
+        build_event_source_event_table(table, source),
+        dialect="bigquery",
+    )
+
+    assert "STRUCT" in sql
+    assert " AS `payload`" in sql
+    assert "page_view" in sql
+    assert "user_id" in sql
 
 
 class TestLoadEventSource:

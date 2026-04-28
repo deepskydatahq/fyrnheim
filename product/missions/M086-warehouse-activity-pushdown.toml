@@ -1,0 +1,77 @@
+# Mission: Warehouse-native activity derivation
+# Replace activity_engine pandas scans with backend filters/projections.
+
+id = "M086"
+title = "Warehouse-native activity derivation"
+status = "draft"
+created = 2026-04-28
+depends_on = ["M084"]
+
+[outcome]
+description = """
+Move activity derivation from Python row loops to backend-executable Ibis/SQL. The current activity engine executes the full raw event stream into pandas and loops through matching rows. For BigQuery projects, activity filters and payload projections should be SQL predicates and expressions over the event stream.
+
+This mission rewrites activity application so BigQuery evaluates event_type/source/payload conditions server-side and emits the same activity event schema without local full-stream materialization.
+"""
+
+user_progress = "From 'activity derivation scans every event in Python' to 'activity filters and projections are SQL expressions evaluated by BigQuery'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "benchmark-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "apply_activities or equivalent activity pipeline phase returns an Ibis expression rather than executing the full raw event table into pandas on BigQuery paths",
+    "Activity source/event_type filters compile to backend predicates",
+    "Payload extraction and output payload construction preserve existing activity semantics",
+    "Existing activity engine and e2e activity tests pass unchanged or with only assertion-order hygiene fixes",
+    "BigQuery-gated integration or SQL compile coverage verifies representative activity filters use server-side predicates",
+    "Pipeline phase timings show activity phase no longer dominated by local pandas iterrows on representative data",
+    "No new runtime dependencies; ruff, mypy, and tests pass"
+]
+validator_context = [
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_e2e_activity_pipeline.py",
+    "tests/test_e2e_activity_preserve.py"
+]
+
+[context]
+related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/core/activity.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/"
+]
+related_missions = [
+    "M084 — provides warehouse-native canonical event stream expressions",
+    "M085 — identity enrichment can compose with pushed-down activity outputs"
+]
+
+[scope]
+in_scope = [
+    "Translate activity matching/filtering to Ibis predicates",
+    "Translate activity payload projection to Ibis expressions",
+    "Keep current activity output schema stable",
+    "Tests for count, payload, mixed definitions, and named event behavior",
+    "BigQuery compile/integration coverage for representative activity derivation"
+]
+out_of_scope = [
+    "Changing Activity model semantics",
+    "Identity resolution pushdown (M085)",
+    "Metrics aggregation pushdown (M087)",
+    "A new activity DSL beyond what current models express"
+]
+acceptable_breakage = [
+    "None expected. Activity event rows and payloads should remain semantically identical."
+]
+
+[notes]
+considerations = """
+This mission is smaller than identity or metrics pushdown but depends on the M084 expression contract. Keep backend-specific JSON handling isolated so M087 can reuse it for metrics field extraction.
+"""

@@ -110,65 +110,67 @@ def load_event_source(
             right_pk_registry=right_pk_registry,
         )
 
-    df = table.execute()
+    return build_event_source_event_table(table, event_source)
 
-    # Map entity_id and ts
+
+def build_event_source_event_table(
+    table: ibis.Table,
+    event_source: EventSource,
+) -> ibis.Table:
+    """Convert a post-stage EventSource table to canonical events.
+
+    This is intentionally expression-only: it does not call ``execute()``
+    and it does not iterate rows in Python. On BigQuery, the returned Ibis
+    expression compiles to SQL that maps IDs/timestamps, chooses the event
+    type, and packs the payload in the warehouse.
+    """
     entity_id_col = event_source.entity_id_field
     ts_col = event_source.timestamp_field
 
-    # Determine event_type strategy
-    has_static = event_source.event_type is not None
     has_field = event_source.event_type_field is not None
-
-    # Columns that are NOT packed into payload
     exclude_cols = {entity_id_col, ts_col}
     if has_field and event_source.event_type_field is not None:
         exclude_cols.add(event_source.event_type_field)
-    # User-configured exclusions for noisy/large columns (e.g. GA4 event_params)
     exclude_cols.update(event_source.payload_exclude)
 
-    events: list[dict[str, str]] = []
-    for _, row in df.iterrows():
-        entity_id = str(row[entity_id_col])
-        ts = str(row[ts_col])
+    if event_source.event_type is not None:
+        event_type_expr = ibis.literal(event_source.event_type).cast("string")
+    elif event_source.event_type_field is not None:
+        event_type_expr = table[event_source.event_type_field].cast("string")
+    else:
+        event_type_expr = ibis.literal(event_source.name).cast("string")
 
-        if has_static:
-            event_type: str = event_source.event_type  # type: ignore[assignment]
-        elif has_field:
-            event_type = str(row[event_source.event_type_field])  # type: ignore[index]
-        else:
-            event_type = event_source.name
-
-        # Pack remaining columns into payload
-        payload = {
-            k: _serialize_value(v)
-            for k, v in row.items()
-            if k not in exclude_cols
-        }
-
-        events.append(
+    payload_cols = [col for col in table.columns if col not in exclude_cols]
+    if payload_cols:
+        payload = ibis.struct(
             {
-                "source": event_source.name,
-                "entity_id": entity_id,
-                "ts": ts,
-                "event_type": event_type,
-                "payload": json.dumps(payload),
+                col: _payload_expr(table[col])
+                for col in payload_cols
             }
-        )
+        ).cast("json").cast("string")
+    else:
+        payload = ibis.literal("{}")
 
-    if not events:
-        empty_schema = ibis.schema(
-            {
-                "source": "string",
-                "entity_id": "string",
-                "ts": "string",
-                "event_type": "string",
-                "payload": "string",
-            }
-        )
-        return ibis.memtable([], schema=empty_schema)
+    return table.select(
+        source=ibis.literal(event_source.name).cast("string"),
+        entity_id=table[entity_id_col].cast("string"),
+        ts=table[ts_col].cast("string"),
+        event_type=event_type_expr,
+        payload=payload,
+    )
 
-    return ibis.memtable(pd.DataFrame(events))
+
+def _payload_expr(expr: ibis.Value) -> ibis.Value:
+    """Return an expression matching legacy payload serialization.
+
+    Legacy pandas packing encoded array-like payload values as JSON strings
+    nested inside the payload object. Preserve that shape so existing GA4
+    payload consumers can continue to call ``json.loads(payload[key])``.
+    """
+    dtype = expr.type()
+    if dtype.is_array() or dtype.is_struct() or dtype.is_map():
+        return expr.cast("json").cast("string")
+    return expr
 
 
 def _serialize_value(v: object) -> object:

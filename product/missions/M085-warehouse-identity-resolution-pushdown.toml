@@ -1,0 +1,78 @@
+# Mission: Warehouse-native identity resolution
+# Move canonical-id mapping and enrichment out of Python row loops and into SQL/Ibis.
+
+id = "M085"
+title = "Warehouse-native identity resolution"
+status = "draft"
+created = 2026-04-28
+depends_on = ["M084"]
+
+[outcome]
+description = """
+Refactor identity resolution so BigQuery performs match-key extraction, hashing, canonical-id assignment, and event enrichment server-side. The current `identity_engine.py` path downloads the event stream, loops with pandas `iterrows()`, parses JSON payloads in Python, and hashes per row. On warehouse-scale data this is both slow and architecturally wrong.
+
+This mission expresses identity mapping and enrichment as backend-executable Ibis/SQL transformations over the warehouse-native event stream introduced by M084.
+"""
+
+user_progress = "From 'identity graphs require downloading every relevant event and hashing in Python' to 'BigQuery computes identity mappings and enriched events with SQL expressions/window functions'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "benchmark-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "resolve_identities builds an Ibis expression for match-key extraction, deterministic canonical-id assignment, and mapping output without downloading all events on BigQuery paths",
+    "enrich_events joins mapping expressions to event expressions server-side instead of executing both tables into pandas",
+    "Canonical ID semantics remain compatible with existing identity tests, including fallback to entity_id for unmapped sources",
+    "Hashing semantics are deterministic and documented across DuckDB and BigQuery; any backend-specific hash encoding differences are normalized or explicitly tested",
+    "BigQuery SQL uses native JSON extraction, SHA256/to_hex or equivalent, joins, and window/group operations instead of Python JSON parsing loops",
+    "DuckDB e2e identity tests continue to pass",
+    "A BigQuery-gated integration test or SQL compile test covers a representative identity graph",
+    "M058/fyr bench or PR notes show identity phase time before and after on a representative pipeline",
+    "No new runtime dependencies; ruff, mypy, and tests pass"
+]
+validator_context = [
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/core/identity.py",
+    "tests/test_identity_engine.py",
+    "tests/test_identity_registry.py",
+    "tests/test_e2e_identity_projection.py"
+]
+
+[context]
+related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/core/identity.py",
+    "tests/"
+]
+related_missions = [
+    "M084 — provides warehouse-native canonical event stream expressions",
+    "M060 — downstream analytics projection pushdown benefits from warehouse-native enriched events"
+]
+
+[scope]
+in_scope = [
+    "SQL/Ibis implementation of identity match-key extraction from payloads",
+    "SQL/Ibis deterministic canonical-id mapping per identity graph",
+    "SQL/Ibis enriched event output with canonical_id",
+    "Backend-portable JSON/hash helpers where needed",
+    "Regression tests for current identity semantics and BigQuery compile/integration coverage"
+]
+out_of_scope = [
+    "Changing IdentityGraph public model semantics",
+    "Cross-graph identity stitching beyond current behavior",
+    "Activity filtering pushdown (M086)",
+    "Metrics aggregation pushdown (M087)"
+]
+acceptable_breakage = [
+    "Canonical IDs must remain deterministic. If byte-identical hash strings cannot be preserved across backends, the mission must document and test a migration-safe format before landing."
+]
+
+[notes]
+considerations = """
+Prototype hash and JSON extraction first. BigQuery likely wants JSON_VALUE/JSON_EXTRACT_SCALAR and TO_HEX(SHA256(...)); DuckDB has different functions. Prefer Ibis operations where portable, but isolate backend-specific SQL in one helper if needed.
+"""

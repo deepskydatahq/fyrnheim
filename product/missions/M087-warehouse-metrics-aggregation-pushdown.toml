@@ -1,0 +1,79 @@
+# Mission: Warehouse-native metrics aggregation
+# Replace metrics_engine pandas groupbys with backend groupby/aggregation expressions.
+
+id = "M087"
+title = "Warehouse-native metrics aggregation"
+status = "draft"
+created = 2026-04-28
+depends_on = ["M084", "M085", "M086"]
+
+[outcome]
+description = """
+Refactor metrics aggregation so BigQuery performs filtering, grouping, date-grain truncation, count/count-distinct/sum/latest aggregations, and dimension grouping server-side. The current `metrics_engine.py` path downloads the event stream and uses pandas groupbys, which is slow and breaks the warehouse-compute architecture.
+
+This mission makes MetricsModel projection return a backend-executable Ibis expression and materializes only the final metrics rows.
+"""
+
+user_progress = "From 'metrics require downloading all events and grouping in pandas' to 'BigQuery computes metric aggregates with SQL GROUP BY and returns only final result rows'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "benchmark-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "project_metrics_model or equivalent metrics engine entrypoint returns an Ibis expression rather than a pandas-derived memtable for BigQuery paths",
+    "count, count_distinct, sum_delta, last_value, max_value, and existing aggregation semantics are implemented as backend aggregations",
+    "Date grains and dimensions compile to SQL group-by keys",
+    "Payload field extraction and numeric coercion match existing tests or document intentional backend-compatible differences",
+    "Existing metrics unit/e2e tests pass, with approximate comparisons only where backend floating-point aggregation differs",
+    "BigQuery-gated integration or SQL compile coverage verifies representative metric models produce server-side GROUP BY SQL",
+    "M058/fyr bench or PR notes show metrics phase time before and after on representative data",
+    "No new runtime dependencies; ruff, mypy, and tests pass"
+]
+validator_context = [
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_metrics_engine.py",
+    "tests/test_metrics_model.py"
+]
+
+[context]
+related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
+relevant_paths = [
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/core/metrics_model.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/"
+]
+related_missions = [
+    "M084 — source event stream expression foundation",
+    "M085 — enriched event stream can be aggregated without local materialization",
+    "M086 — activity outputs become SQL expressions usable by metrics"
+]
+
+[scope]
+in_scope = [
+    "Translate metrics filters and date grains to Ibis expressions",
+    "Translate all currently supported metric aggregations to backend groupby/agg expressions",
+    "Preserve MetricsModel materialization behavior after projection",
+    "Tests for semantic equivalence and BigQuery SQL/compile coverage",
+    "Benchmark notes proving reduced local materialization"
+]
+out_of_scope = [
+    "New metric types",
+    "Approximate/streaming aggregates",
+    "Changing MetricsModel public API",
+    "Computed metric expressions beyond existing model semantics"
+]
+acceptable_breakage = [
+    "Backend aggregation may differ from pandas in last-bit floating-point results; tests should use tolerances where appropriate and release notes should mention this if observed."
+]
+
+[notes]
+considerations = """
+This is one of the highest-impact changes after identity pushdown. Implement after M084-M086 so metrics can consume warehouse-native event/activity/enriched expressions instead of reintroducing `.execute()` at the phase boundary.
+"""

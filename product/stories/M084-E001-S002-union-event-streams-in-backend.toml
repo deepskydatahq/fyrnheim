@@ -1,0 +1,38 @@
+id = "M084-E001-S002"
+parent = "M084-E001"
+title = "Union event streams in the backend"
+status = "complete"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Replace pipeline event stream concatenation's execute + pandas concat path with Ibis union_all expression composition."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "_concat_tables uses Ibis union semantics and preserves duplicate rows"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Mixed-source pipeline tests continue to pass"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "pipeline.py no longer imports pandas solely for _concat_tables and does not execute event tables to concatenate them"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/pipeline.py", "tests/test_pipeline.py"]
+input_fixtures = []
+depends_on = ["M084-E001-S001"]
+
+[execution]
+branch = "plan-bigquery-pushdown-missions"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/152"
+commit = "4d80e31"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

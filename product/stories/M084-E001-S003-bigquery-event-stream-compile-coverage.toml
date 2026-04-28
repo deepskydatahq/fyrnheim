@@ -1,0 +1,38 @@
+id = "M084-E001-S003"
+parent = "M084-E001"
+title = "Add BigQuery event-stream compile coverage"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Add regression coverage showing EventSource normalization and source union compile to BigQuery SQL without local event-stream materialization."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests compile representative EventSource normalization to BigQuery SQL containing backend JSON/payload construction"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Tests compile multi-source union to BigQuery SQL containing UNION ALL"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Mission/PR notes document that M084 removes EventSource and concat local materialization; StateSource snapshot diff remains follow-up/out of scope"
+
+[context]
+relevant_paths = ["tests/", "product/missions/M084-warehouse-event-stream-pushdown.toml"]
+input_fixtures = []
+depends_on = ["M084-E001-S002"]
+
+[execution]
+branch = "plan-bigquery-pushdown-missions"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/152"
+commit = "4d80e31"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

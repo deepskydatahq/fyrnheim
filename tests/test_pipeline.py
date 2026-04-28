@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import ibis
 import pandas as pd
 import pytest
 
@@ -12,7 +13,7 @@ from fyrnheim.core.activity import ActivityDefinition, EventOccurred, RowAppeare
 from fyrnheim.core.metrics_model import MetricField, MetricsModel
 from fyrnheim.core.source import EventSource, StateSource
 from fyrnheim.engine.executor import IbisExecutor
-from fyrnheim.engine.pipeline import PipelineResult, run_pipeline
+from fyrnheim.engine.pipeline import PipelineResult, _concat_tables, run_pipeline
 
 
 def _make_config(tmp_path: Path) -> ResolvedConfig:
@@ -28,6 +29,49 @@ def _make_config(tmp_path: Path) -> ResolvedConfig:
 def _write_parquet(path: Path, df: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(str(path))
+
+
+def _event_frame(source: str = "a") -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "source": source,
+                "entity_id": "1",
+                "ts": "2024-01-01",
+                "event_type": "x",
+                "payload": "{}",
+            }
+        ]
+    )
+
+
+def test_concat_tables_uses_union_all_and_preserves_duplicates() -> None:
+    """Event stream concat is backend-side UNION ALL, not pandas concat."""
+    left = _event_frame()
+    right = _event_frame()
+
+    result = _concat_tables([ibis.memtable(left), ibis.memtable(right)]).execute()
+
+    assert len(result) == 2
+    assert result.to_dict(orient="records") == [
+        left.iloc[0].to_dict(),
+        right.iloc[0].to_dict(),
+    ]
+
+
+def test_concat_tables_compiles_to_bigquery_union_all() -> None:
+    """Multi-source concat remains a backend expression for BigQuery."""
+    expr = _concat_tables(
+        [
+            ibis.memtable(_event_frame("a")),
+            ibis.memtable(_event_frame("b")),
+        ]
+    )
+
+    sql = ibis.to_sql(expr, dialect="bigquery")
+
+    assert "UNION ALL" in sql
+    assert "ibis_pandas_memtable" in sql
 
 
 class TestRunPipelineStateSources:

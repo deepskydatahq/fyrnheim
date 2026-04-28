@@ -3,7 +3,7 @@
 
 id = "M087"
 title = "Warehouse-native metrics aggregation"
-status = "draft"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M084", "M085", "M086"]
 

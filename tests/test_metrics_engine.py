@@ -1,5 +1,6 @@
 """Tests for the metrics engine."""
 
+import inspect
 import json
 
 import ibis
@@ -19,6 +20,57 @@ def _payload(field_name: str, old_value: str, new_value: str) -> str:
     return json.dumps(
         {"field_name": field_name, "old_value": old_value, "new_value": new_value}
     )
+
+
+def test_metrics_aggregation_compiles_to_bigquery_group_by_sql() -> None:
+    events = _make_events(
+        [
+            {
+                "source": "website",
+                "entity_id": "u1",
+                "ts": "2024-01-01T10:00:00",
+                "event_type": "field_changed",
+                "payload": _payload("score", "1", "3"),
+            },
+            {
+                "source": "website",
+                "entity_id": "u1",
+                "ts": "2024-01-01T10:05:00",
+                "event_type": "signup",
+                "payload": json.dumps({"session_id": "s1"}),
+            },
+        ]
+    )
+    model = MetricsModel(
+        name="engagement",
+        sources=["website"],
+        grain="daily",
+        dimensions=["entity_id"],
+        metric_fields=[
+            MetricField(field_name="score", aggregation="sum_delta"),
+            MetricField(field_name="signup", aggregation="count"),
+            MetricField(
+                field_name="signup",
+                aggregation="count_distinct",
+                distinct_field="session_id",
+            ),
+        ],
+    )
+
+    sql = ibis.to_sql(aggregate_metrics(events, model), dialect="bigquery")
+
+    assert "GROUP BY" in sql
+    assert "FORMAT_DATETIME" in sql
+    assert "JSON" in sql
+    assert "COUNT" in sql
+    assert "DISTINCT" in sql
+
+
+def test_aggregate_metrics_does_not_materialize_inputs() -> None:
+    source = inspect.getsource(aggregate_metrics)
+
+    assert ".execute(" not in source
+    assert "groupby(" not in source
 
 
 class TestSumDelta:

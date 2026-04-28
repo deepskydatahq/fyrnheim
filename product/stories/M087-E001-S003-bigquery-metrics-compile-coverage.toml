@@ -1,0 +1,34 @@
+id = "M087-E001-S003"
+parent = "M087-E001"
+title = "Add BigQuery metrics aggregation compile coverage"
+status = "complete"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Add regression coverage proving representative metrics compile to BigQuery SQL with date truncation, JSON extraction, GROUP BY, COUNT, and DISTINCT."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Representative metrics model compiles to BigQuery SQL containing GROUP BY, date formatting, JSON access, count, and distinct aggregation"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Guardrail test verifies aggregate_metrics does not call .execute() or pandas groupby"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/metrics_engine.py", "tests/test_metrics_engine.py"]
+input_fixtures = []
+depends_on = ["M087-E001-S002"]
+
+[execution]
+branch = "execute-M087-metrics-pushdown"
+worktree = ""
+pr = ""
+commit = ""
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

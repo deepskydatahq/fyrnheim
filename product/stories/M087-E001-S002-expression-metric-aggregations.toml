@@ -1,0 +1,34 @@
+id = "M087-E001-S002"
+parent = "M087-E001"
+title = "Translate metrics aggregations to backend group-by expressions"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Implement sum_delta, last_value, max_value, count, and count_distinct as Ibis aggregations over event expressions."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing metrics aggregation tests pass for all supported aggregation types"
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "Metrics model registry e2e tests pass"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/metrics_engine.py", "tests/test_metrics_engine.py", "tests/test_metrics_model_registry.py"]
+input_fixtures = []
+depends_on = ["M087-E001-S001"]
+
+[execution]
+branch = "execute-M087-metrics-pushdown"
+worktree = ""
+pr = ""
+commit = ""
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

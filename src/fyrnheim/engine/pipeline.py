@@ -304,6 +304,7 @@ def run_pipeline(
                 list(staging_views),
                 no_state=no_state,
                 source_fixture_names=fixture_names,
+                max_parallel_io=config.max_parallel_io,
             )
             result.staging_materialized = staging_summary.materialized
             result.staging_skipped = staging_summary.skipped

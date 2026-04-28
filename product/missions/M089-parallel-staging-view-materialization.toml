@@ -3,7 +3,7 @@
 
 id = "M089"
 title = "Parallel staging view materialization"
-status = "draft"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M058", "M059"]
 

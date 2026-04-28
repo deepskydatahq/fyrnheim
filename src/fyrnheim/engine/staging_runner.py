@@ -8,6 +8,7 @@ whose SQL has not changed.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -37,39 +38,45 @@ class StagingRunSummary:
     fixture_skipped: list[str] = field(default_factory=list)
 
 
-def _topo_sort(views: list[StagingView]) -> list[StagingView]:
-    """Kahn-style topological sort by depends_on. Only edges within the
-    provided view set are considered; external deps are ignored. Raises
-    StagingCycleError on cycle.
+def _topo_levels(views: list[StagingView]) -> list[list[StagingView]]:
+    """Group staging views into topological dependency levels.
+
+    Only edges within the provided view set are considered; external deps are
+    ignored. Views in the same level have no dependencies on each other and can
+    be materialized concurrently. Level and intra-level ordering are stable and
+    alphabetical, matching the previous topological order for serial runs.
     """
     by_name = {v.name: v for v in views}
-    # adjacency: dep -> dependents
     remaining_deps: dict[str, set[str]] = {
         v.name: {d for d in v.depends_on if d in by_name} for v in views
     }
 
-    ordered: list[StagingView] = []
-    ready = sorted(
-        [name for name, deps in remaining_deps.items() if not deps]
-    )
+    levels: list[list[StagingView]] = []
+    placed: set[str] = set()
 
-    while ready:
-        name = ready.pop(0)
-        ordered.append(by_name[name])
-        for other, deps in remaining_deps.items():
-            if name in deps:
-                deps.discard(name)
-                if not deps and other not in [o.name for o in ordered] and other not in ready:
-                    ready.append(other)
-        ready.sort()
+    while len(placed) < len(views):
+        ready = sorted(
+            name
+            for name, deps in remaining_deps.items()
+            if name not in placed and deps.issubset(placed)
+        )
+        if not ready:
+            remaining = {n for n in by_name if n not in placed}
+            cycle = _find_cycle(remaining, by_name)
+            raise StagingCycleError(cycle)
+        levels.append([by_name[name] for name in ready])
+        placed.update(ready)
 
-    if len(ordered) != len(views):
-        # Find a cycle in the remaining subgraph.
-        remaining = {n for n in by_name if n not in {o.name for o in ordered}}
-        cycle = _find_cycle(remaining, by_name)
-        raise StagingCycleError(cycle)
+    return levels
 
-    return ordered
+
+def _topo_sort(views: list[StagingView]) -> list[StagingView]:
+    """Kahn-style topological sort by depends_on.
+
+    Kept for callers/tests that import the private helper; implemented by
+    flattening the dependency levels used by the parallel runner.
+    """
+    return [view for level in _topo_levels(views) for view in level]
 
 
 def _find_cycle(nodes: set[str], by_name: dict[str, StagingView]) -> list[str]:
@@ -210,8 +217,9 @@ def materialize_staging_views(
     *,
     no_state: bool = False,
     source_fixture_names: set[str] | None = None,
+    max_parallel_io: int = 1,
 ) -> StagingRunSummary:
-    """Materialize staging views in topological order with state skip.
+    """Materialize staging views by topological level with state skip.
 
     Args:
         executor: IbisExecutor connected to the target backend.
@@ -220,6 +228,9 @@ def materialize_staging_views(
         source_fixture_names: Set of source names whose upstream fixture
             shadows a staging view; any view whose name appears in this
             set is skipped (fixture-shadowed).
+        max_parallel_io: Maximum number of independent views to materialize
+            concurrently within one dependency level. ``1`` preserves the
+            historical serial execution order.
 
     Returns:
         StagingRunSummary with materialized / skipped / fixture_skipped lists.
@@ -230,17 +241,24 @@ def materialize_staging_views(
 
     fixture_names = source_fixture_names or set()
 
-    ordered = _topo_sort(views)
+    levels = _topo_levels(views)
 
     # Filter out fixture-shadowed views up front; they are neither
-    # materialized nor state-tracked.
+    # materialized nor state-tracked. Keep level boundaries intact so
+    # dependency ordering remains explicit for the active views.
+    active_levels: list[list[StagingView]] = []
     active: list[StagingView] = []
-    for v in ordered:
-        if v.name in fixture_names:
-            summary.fixture_skipped.append(v.name)
-            log.info("StagingView '%s' shadowed by duckdb fixture; skipping", v.name)
-        else:
-            active.append(v)
+    for level in levels:
+        active_level: list[StagingView] = []
+        for v in level:
+            if v.name in fixture_names:
+                summary.fixture_skipped.append(v.name)
+                log.info("StagingView '%s' shadowed by duckdb fixture; skipping", v.name)
+            else:
+                active_level.append(v)
+                active.append(v)
+        if active_level:
+            active_levels.append(active_level)
 
     if not active:
         return summary
@@ -252,20 +270,42 @@ def materialize_staging_views(
         _ensure_state_table(executor, project, dataset)
         existing_state = _load_state(executor, project, dataset)
 
-    for view in active:
-        h = view.content_hash()
-        if not no_state and existing_state.get(view.name) == h:
-            summary.skipped.append(view.name)
-            log.info("StagingView '%s' unchanged; skipping", view.name)
-            continue
+    hashes = {view.name: view.content_hash() for view in active}
+    runnable_levels: list[list[StagingView]] = []
+    for level in active_levels:
+        runnable_level: list[StagingView] = []
+        for view in level:
+            if not no_state and existing_state.get(view.name) == hashes[view.name]:
+                summary.skipped.append(view.name)
+                log.info("StagingView '%s' unchanged; skipping", view.name)
+            else:
+                runnable_level.append(view)
+        if runnable_level:
+            runnable_levels.append(runnable_level)
 
+    workers = max(1, int(max_parallel_io))
+
+    def materialize_one(view: StagingView) -> str:
         executor.materialize_view(
             view.project, view.dataset, view.name, view.rendered_sql
         )
-        summary.materialized.append(view.name)
         log.info("Materialized StagingView '%s'", view.name)
-
         if not no_state:
-            _write_state_row(executor, project, dataset, view, h)
+            _write_state_row(executor, project, dataset, view, hashes[view.name])
+        return view.name
+
+    for level in runnable_levels:
+        if workers == 1 or len(level) == 1:
+            for view in level:
+                summary.materialized.append(materialize_one(view))
+            continue
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(materialize_one, view) for view in level]
+            for future in futures:
+                # Iterating in submission order preserves deterministic summary
+                # ordering. If any view fails, the exception propagates here and
+                # later dependency levels are not started.
+                summary.materialized.append(future.result())
 
     return summary

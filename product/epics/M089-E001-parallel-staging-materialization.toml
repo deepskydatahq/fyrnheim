@@ -1,0 +1,22 @@
+id = "M089-E001"
+parent = "M089"
+title = "Parallel staging view materialization"
+status = "complete"
+created = 2026-04-28
+depends_on = []
+
+[outcome]
+description = """Materialize independent staging views concurrently by dependency level while preserving ordering, skip behavior, and clear failure propagation."""
+
+[scope]
+in_scope = [
+    "Topological staging-view dependency levels",
+    "Bounded per-level parallel materialization",
+    "Serial fallback for max_parallel_io = 1",
+    "Failure propagation and dependent-level suppression",
+    "Tests and benchmark notes"
+]
+out_of_scope = [
+    "Changing StagingView public model semantics",
+    "Parsing SQL dependencies"
+]

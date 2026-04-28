@@ -36,7 +36,7 @@ criteria = [
 validator_context = [
     "docs/M084-bigquery-pushdown-roadmap.md",
     "src/fyrnheim/engine/identity_engine.py",
-    "src/fyrnheim/core/identity_graph.py",
+    "src/fyrnheim/core/identity.py",
     "tests/test_identity_engine.py",
     "tests/test_identity_registry.py",
     "tests/test_e2e_identity_projection.py"
@@ -46,7 +46,7 @@ validator_context = [
 related_docs = ["docs/M084-bigquery-pushdown-roadmap.md"]
 relevant_paths = [
     "src/fyrnheim/engine/identity_engine.py",
-    "src/fyrnheim/core/identity_graph.py",
+    "src/fyrnheim/core/identity.py",
     "tests/"
 ]
 related_missions = [

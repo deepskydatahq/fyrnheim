@@ -5,7 +5,7 @@ id = "M089"
 title = "Parallel staging view materialization"
 status = "draft"
 created = 2026-04-28
-depends_on = ["M058"]
+depends_on = ["M058", "M059"]
 
 [outcome]
 description = """
@@ -52,7 +52,7 @@ relevant_paths = [
 related_missions = [
     "M058 — benchmark harness used to measure staging phase",
     "M059 — max_parallel_io and thread-pool patterns for bounded I/O",
-    "M079 — graph sorting utility evaluation may provide reusable DAG-level ordering"
+    "M078 — shared source-stage runner foundation; may provide reusable DAG-level sequencing patterns"
 ]
 
 [scope]

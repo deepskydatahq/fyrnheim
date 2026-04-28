@@ -1,0 +1,34 @@
+id = "M086-E001-S001"
+parent = "M086-E001"
+title = "Build activity trigger predicates as Ibis expressions"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Translate RowAppeared, RowDisappeared, FieldChanged, and EventOccurred triggers to backend predicates without executing raw events locally."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing activity trigger tests pass"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "apply_activity_definitions no longer calls raw_events.execute() or iterates pandas rows"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/activity_engine.py", "tests/test_activity_engine.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "execute-M086-activity-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/154"
+commit = "1c97099"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

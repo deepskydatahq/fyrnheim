@@ -1,0 +1,34 @@
+id = "M086-E001-S003"
+parent = "M086-E001"
+title = "Add BigQuery activity pushdown compile coverage"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Add regression coverage proving activity derivation compiles to BigQuery SQL with server-side predicates, JSON payload extraction, UNION ALL, and pass-through filtering."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Representative activity derivation compiles to BigQuery SQL containing predicates, JSON casts, and UNION ALL"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Mission notes document that activity phase no longer performs local pandas scans"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/activity_engine.py", "tests/test_activity_engine.py"]
+input_fixtures = []
+depends_on = ["M086-E001-S002"]
+
+[execution]
+branch = "execute-M086-activity-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/154"
+commit = "1c97099"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

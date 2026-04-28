@@ -23,13 +23,13 @@ outputs = ["pi-prompts", "pi-extension-commands", "docs"]
 [testing]
 approach = "agent-judgment"
 criteria = [
-    "HOW_WE_WORK.md documents mission execution modes such as implementation, audit/planning, docs, and release",
-    ".pi/prompts/execute-mission.md reads mission execution mode and does not force epics/stories for audit missions whose output is follow-up missions or docs",
-    "A project quality-gates command or script runs pytest, ruff, and mypy with uv when available and .venv fallbacks when uv is unavailable",
-    "Pi workflow docs mention the quality-gate fallback behavior explicitly",
+    "HOW_WE_WORK.md documents mission execution modes including implementation, audit/planning, docs, and release",
+    ".pi/prompts/execute-mission.md reads mission execution mode and treats audit/planning as non-implementation outputs such as docs or follow-up missions without forcing epics/stories",
+    "A project quality-gates command or script runs pytest, ruff, and mypy with uv -> .venv -> plain python/ruff/mypy fallback order and clear success/failure exit semantics",
+    "Pi workflow docs mention the quality-gate fallback behavior explicitly, including uv -> .venv -> plain command order",
     "A PR status command or documented workflow uses gh to report CI, CodeRabbit status, mergeability, reviews, and actionable comments",
-    "A merge-if-ready command or documented workflow refuses to merge while checks are pending/failing or actionable review comments remain, and can squash-merge when ready",
-    "AGENTS.md or HOW_WE_WORK.md states that AGENTS.md wins if older docs disagree with product TOML workflow rules",
+    "A merge-if-ready command or documented workflow refuses to merge while checks are pending/failing or actionable review comments remain, and squash-merges only when all checks pass and no actionable comments remain",
+    "Docs state one precedence chain: mission/product TOML workflow rules > AGENTS.md > HOW_WE_WORK.md > CLAUDE.md/legacy docs",
     "The M077/M078 lessons are captured so future agents know why these commands/modes exist"
 ]
 validator_context = [
@@ -108,5 +108,5 @@ Suggested implementation shape:
   - `audit` or `planning`: audit doc + follow-up missions; no forced implementation stories
   - `docs`: docs artifacts and validation
   - `release`: version/changelog/package PR flow
-- Update docs with the precedence rule: if historical docs mention Beads but AGENTS.md/product TOML workflow says otherwise, product TOML workflow wins.
+- Update docs with the same explicit precedence chain everywhere: mission/product TOML workflow rules > AGENTS.md > HOW_WE_WORK.md > CLAUDE.md/legacy docs.
 """

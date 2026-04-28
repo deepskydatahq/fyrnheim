@@ -24,7 +24,7 @@ commits / PRs         "How does the implementation ship?"
 
 Each level feeds the next. Validation flows back up: a completed story validates its epic, a completed epic validates its mission.
 
-Product TOML files are the canonical task system. Do not create Beads/`bd` tasks unless explicitly working with the legacy workflow. If older docs conflict with `AGENTS.md`, `AGENTS.md` and the product TOML workflow win.
+Product TOML files are the canonical task system. Do not create Beads/`bd` tasks unless explicitly working with the legacy workflow. Use this precedence chain when docs conflict: mission/product TOML workflow rules > `AGENTS.md` > `HOW_WE_WORK.md` > `CLAUDE.md`/legacy docs.
 
 ---
 

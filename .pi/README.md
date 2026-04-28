@@ -38,7 +38,7 @@ Skills in `.pi/skills/` provide on-demand workflow instructions:
 - `/pr-status [pr-number]`
 - `/pr-merge-if-ready [pr-number]`
 
-It also reminds the model that product TOML files are the canonical task system and Beads should not be used unless explicitly requested.
+It also reminds the model that product TOML files are the canonical task system and Beads should not be used unless explicitly requested. When docs conflict, use: mission/product TOML workflow rules > `AGENTS.md` > `HOW_WE_WORK.md` > `CLAUDE.md`/legacy docs.
 
 ## Task Model
 

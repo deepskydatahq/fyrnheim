@@ -15,7 +15,7 @@ VISION.md
 
 Stories are implementation tasks. Do **not** use Beads/`bd` unless the user explicitly asks for legacy Beads operations.
 
-If older docs such as `CLAUDE.md` or archived command files conflict with this file, `AGENTS.md` and the product TOML workflow win.
+Use this precedence chain when docs conflict: mission/product TOML workflow rules > `AGENTS.md` > `HOW_WE_WORK.md` > `CLAUDE.md`/legacy docs.
 
 ## Quick Reference
 

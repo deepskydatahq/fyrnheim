@@ -9,7 +9,7 @@ Execute mission `$1` using Fyrnheim's product TOML workflow. Do not use Beads.
 ## Phase 1: Read context and mode
 
 1. Read `AGENTS.md`, `HOW_WE_WORK.md`, and `CLAUDE.md`.
-2. If docs disagree, follow `AGENTS.md` and product TOML.
+2. If docs disagree, use this precedence chain: mission/product TOML workflow rules > `AGENTS.md` > `HOW_WE_WORK.md` > `CLAUDE.md`/legacy docs.
 3. Read the mission file: `product/missions/$1-*.toml`.
 4. Extract outcome, scope, testing criteria, relevant paths, dependencies, and `[execution]` if present.
 5. Determine execution mode:

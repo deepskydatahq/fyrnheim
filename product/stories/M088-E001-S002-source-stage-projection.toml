@@ -1,0 +1,34 @@
+id = "M088-E001-S002"
+parent = "M088-E001"
+title = "Apply early source-stage projection"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Thread required-column maps through pipeline source loading and project raw source tables before transforms, joins, JSON extraction, computed columns, and filters."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Source-stage projection preserves transform, computed-column, filter, JSON extraction, and join inputs"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "BigQuery compile coverage shows explicit source column projection rather than carrying unused columns"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/source_stage.py", "src/fyrnheim/engine/pipeline.py", "src/fyrnheim/engine/event_source_loader.py", "tests/test_source_stage.py", "tests/test_pipeline.py"]
+input_fixtures = []
+depends_on = ["M088-E001-S001"]
+
+[execution]
+branch = "execute-M088-column-pushdown"
+worktree = ""
+pr = ""
+commit = ""
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

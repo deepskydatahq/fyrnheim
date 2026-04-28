@@ -1,0 +1,21 @@
+id = "M088-E001"
+parent = "M088"
+title = "Column pushdown for warehouse sources"
+status = "complete"
+created = 2026-04-28
+depends_on = []
+
+[outcome]
+description = """Derive conservative per-source required columns from downstream assets and project source reads before source-stage transforms."""
+
+[scope]
+in_scope = [
+    "Required-column collector for source and downstream asset references",
+    "Early source-stage projection with conservative fallbacks",
+    "BigQuery SQL compile coverage for explicit source column lists",
+    "Docs for behavior and limitations"
+]
+out_of_scope = [
+    "Parsing arbitrary SQL staging views",
+    "Exact column minimization for opaque expressions"
+]

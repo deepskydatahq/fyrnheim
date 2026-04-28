@@ -28,6 +28,7 @@ def _build_event_source_table(
     *,
     source_registry: dict[str, ibis.Table] | None = None,
     right_pk_registry: dict[str, str] | None = None,
+    required_columns: set[str] | frozenset[str] | None = None,
 ) -> ibis.Table:
     """Apply the shared source-stage chain to an EventSource.
 
@@ -47,6 +48,7 @@ def _build_event_source_table(
         right_pk_registry=right_pk_registry,
         log=log,
         source_kind="EventSource",
+        required_columns=required_columns,
     )
 
 
@@ -59,6 +61,7 @@ def load_event_source(
     source_registry: dict[str, ibis.Table] | None = None,
     right_pk_registry: dict[str, str] | None = None,
     pre_built_table: ibis.Table | None = None,
+    required_columns: set[str] | frozenset[str] | None = None,
 ) -> ibis.Table:
     """Read an EventSource and convert it to the standard event schema.
 
@@ -108,6 +111,7 @@ def load_event_source(
             backend=backend,
             source_registry=source_registry,
             right_pk_registry=right_pk_registry,
+            required_columns=required_columns,
         )
 
     return build_event_source_event_table(table, event_source)

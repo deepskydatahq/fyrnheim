@@ -20,6 +20,7 @@ import ibis
 
 from fyrnheim.core.source import BaseTableSource
 from fyrnheim.engine.expression_eval import evaluate_expression
+from fyrnheim.engine.source_column_pushdown import required_raw_columns_for_source
 from fyrnheim.engine.source_transforms import (
     _apply_joins,
     _apply_json_path_extractions,
@@ -38,6 +39,7 @@ def build_source_stage_table(
     right_pk_registry: dict[str, str] | None = None,
     log: logging.Logger | None = None,
     source_kind: str | None = None,
+    required_columns: set[str] | frozenset[str] | None = None,
 ) -> ibis.Table:
     """Run the shared source-stage chain for StateSource/EventSource.
 
@@ -65,6 +67,9 @@ def build_source_stage_table(
         log: Logger for source-specific diagnostics.
         source_kind: Human-readable source kind for log messages. Defaults
             to the source class name.
+        required_columns: Optional post-stage columns needed by downstream
+            assets. When provided, the runner maps them back to raw columns
+            and projects the source table before transforms.
 
     Returns:
         The post-stage Ibis table, before StateSource snapshot diff or
@@ -76,6 +81,18 @@ def build_source_stage_table(
 
     table = source.read_table(conn, backend, data_dir=data_dir)
     reads_fixture = _reads_duckdb_fixture(source, backend)
+
+    raw_required = None if reads_fixture else required_raw_columns_for_source(source, required_columns)
+    if raw_required is not None:
+        raw_cols = [col for col in table.columns if col in raw_required]
+        if raw_cols:
+            table = table.select(raw_cols)
+            logger.info(
+                "%s %s: projected source columns to %s",
+                kind,
+                source_name,
+                raw_cols,
+            )
 
     if reads_fixture:
         logger.info(

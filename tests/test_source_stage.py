@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from fyrnheim.components.computed_column import ComputedColumn
-from fyrnheim.core.source import EventSource, Join, SourceTransforms, StateSource
+from fyrnheim.core.source import EventSource, Join, Rename, SourceTransforms, StateSource
 from fyrnheim.engine import event_source_loader, pipeline, source_stage
 from fyrnheim.engine.expression_eval import UnsafeExpressionError, evaluate_expression
 from fyrnheim.engine.source_stage import build_source_stage_table
@@ -149,6 +149,85 @@ def test_build_source_stage_table_preserves_fixture_shadow_semantics(monkeypatch
 
     assert df["existing"].tolist() == ["fixture-value"]
     assert df["created"].tolist() == [42]
+
+
+def test_build_source_stage_table_projects_raw_columns_before_transforms(monkeypatch):
+    source_table = ibis.memtable(
+        pd.DataFrame(
+            {
+                "id": ["1"],
+                "raw_email": ["a@example.com"],
+                "active": [True],
+                "unused": ["drop-me"],
+            }
+        )
+    )
+
+    def read_table(self, conn, backend, data_dir=None):
+        return source_table
+
+    monkeypatch.setattr(StateSource, "read_table", read_table)
+    source = StateSource(
+        name="state",
+        project="p",
+        dataset="d",
+        table="t",
+        id_field="id",
+        transforms=SourceTransforms(
+            renames=[Rename(from_name="raw_email", to_name="email")],
+        ),
+        filter="t.active",
+    )
+
+    result = build_source_stage_table(
+        source,
+        conn=object(),
+        backend="bigquery",
+        required_columns={"email"},
+    )
+
+    assert list(result.columns) == ["id", "email", "active"]
+    assert result.execute().to_dict(orient="records") == [
+        {"id": "1", "active": True, "email": "a@example.com"}
+    ]
+
+
+def test_build_source_stage_table_projection_compiles_without_unused_columns(monkeypatch):
+    source_table = ibis.table(
+        {
+            "user_id": "string",
+            "occurred_at": "timestamp",
+            "campaign": "string",
+            "unused_blob": "string",
+        },
+        name="raw_events",
+    )
+
+    def read_table(self, conn, backend, data_dir=None):
+        return source_table
+
+    monkeypatch.setattr(EventSource, "read_table", read_table)
+    source = EventSource(
+        name="events",
+        project="p",
+        dataset="d",
+        table="raw_events",
+        entity_id_field="user_id",
+        timestamp_field="occurred_at",
+    )
+
+    result = build_source_stage_table(
+        source,
+        conn=object(),
+        backend="bigquery",
+        required_columns={"campaign"},
+    )
+    sql = ibis.to_sql(result, dialect="bigquery")
+
+    assert "campaign" in sql
+    assert "user_id" in sql
+    assert "occurred_at" in sql
+    assert "unused_blob" not in sql
 
 
 def test_state_source_builder_delegates_to_shared_source_stage(monkeypatch, table):

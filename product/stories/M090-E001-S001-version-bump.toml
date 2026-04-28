@@ -1,7 +1,7 @@
 id = "M090-E001-S001"
 parent = "M090-E001"
 title = "Bump package version to v0.14.0"
-status = "ready"
+status = "complete"
 triage = "ready"
 created = 2026-04-28
 
@@ -29,6 +29,6 @@ branch = "release/v0.14.0"
 worktree = ""
 pr = ""
 commit = ""
-started = ""
-completed = ""
+started = "2026-04-28"
+completed = "2026-04-28"
 failure_reason = ""

@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-04-28
+
+### Added
+
+- **Warehouse-native event stream assembly.** `EventSource` loading now composes
+  Ibis expressions for event-shape normalization and the pipeline concatenates
+  source event streams with backend `UNION ALL` instead of materializing every
+  source locally and using pandas concat. This reduces BigQuery round-trips and
+  keeps event stream construction in the warehouse.
+
+- **Warehouse-native identity resolution.** Identity mappings and event
+  enrichment now use backend JSON extraction, hashing, joins, and `COALESCE`
+  fallback expressions. Repeated enrichment behavior and canonical-id fallback
+  semantics are preserved while avoiding pandas-side identity merges.
+
+- **Warehouse-native activity derivation.** Activity definitions now compile to
+  backend predicates, projections, payload JSON construction, pass-through, and
+  `UNION ALL` expressions for supported triggers (`RowAppeared`,
+  `RowDisappeared`, `FieldChanged`, and `EventOccurred`).
+
+- **Warehouse-native metrics aggregation.** Metrics models now compile supported
+  metric fields (`sum_delta`, `last_value`, `max_value`, `count`, and
+  `count_distinct`) to backend filtering, date-grain grouping, dimensions, and
+  aggregate expressions instead of downloading all events for pandas groupbys.
+
+- **Source column pushdown.** Fyrnheim derives conservative per-source required
+  columns from source definitions and downstream activities, identity graphs,
+  analytics entities, and metrics models, then projects source reads before
+  downstream source-stage work when analysis is safe.
+
+- **Parallel staging-view materialization.** Staging views now materialize by
+  dependency level. Independent views in the same level run concurrently,
+  bounded by `max_parallel_io`; dependent levels wait for prerequisites.
+
+### Changed
+
+- The pipeline now passes `max_parallel_io` to staging materialization as well
+  as source/output I/O. Set `max_parallel_io = 1` to preserve serial staging
+  execution behavior.
+
+- Column pushdown is intentionally conservative. Fyrnheim may retain extra
+  columns when analysis is uncertain, especially around opaque SQL staging
+  views, arbitrary expressions, and declarative join targets. It should not
+  drop required columns.
+
+### Compatibility
+
+- No intentional public API breaking changes. Existing source, activity,
+  identity, analytics entity, metrics model, and staging view declarations
+  should continue to run.
+
+- Log ordering for independent staging views may differ when
+  `max_parallel_io > 1`, but materialized outputs, dependency semantics,
+  content-hash skips, and fixture-shadow skips are preserved.
+
 ## [0.13.0] - 2026-04-25
 
 ### Added

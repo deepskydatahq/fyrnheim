@@ -5,7 +5,7 @@ def test_import_fyrnheim():
     """fyrnheim is importable."""
     import fyrnheim
 
-    assert fyrnheim.__version__ == "0.13.0"
+    assert fyrnheim.__version__ == "0.14.0"
 
 
 def test_import_subpackages():

@@ -3,7 +3,7 @@
 
 id = "M090"
 title = "v0.14.0 — BigQuery pushdown and performance release"
-status = "ready"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M084", "M085", "M086", "M087", "M088", "M089"]
 

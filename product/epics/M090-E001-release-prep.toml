@@ -1,7 +1,7 @@
 id = "M090-E001"
 parent = "M090"
 title = "Prepare v0.14.0 release artifacts"
-status = "ready"
+status = "complete"
 created = 2026-04-28
 depends_on = []
 

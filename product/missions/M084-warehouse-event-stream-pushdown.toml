@@ -3,7 +3,7 @@
 
 id = "M084"
 title = "Warehouse-native event stream assembly"
-status = "draft"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M058", "M078"]
 

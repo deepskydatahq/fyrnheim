@@ -701,11 +701,20 @@ def _run_state_source_diff(
     )
 
 
-def _concat_tables(tables: list[ibis.Table]) -> ibis.Table:
-    """Concatenate multiple Ibis tables via pandas."""
-    if len(tables) == 1:
-        return tables[0]
+def _canonical_event_table(table: ibis.Table) -> ibis.Table:
+    """Normalize event stream columns before backend-side unioning."""
+    return table.select(
+        source=table["source"].cast("string"),
+        entity_id=table["entity_id"].cast("string"),
+        ts=table["ts"].cast("string"),
+        event_type=table["event_type"].cast("string"),
+        payload=table["payload"].cast("string"),
+    )
 
-    dfs = [t.execute() for t in tables]
-    combined = pd.concat(dfs, ignore_index=True)
-    return ibis.memtable(combined)
+
+def _concat_tables(tables: list[ibis.Table]) -> ibis.Table:
+    """Concatenate event tables as a backend-executable UNION ALL."""
+    canonical = [_canonical_event_table(t) for t in tables]
+    if len(canonical) == 1:
+        return canonical[0]
+    return ibis.union(*canonical, distinct=False)

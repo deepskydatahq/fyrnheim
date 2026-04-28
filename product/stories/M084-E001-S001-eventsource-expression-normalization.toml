@@ -1,0 +1,38 @@
+id = "M084-E001-S001"
+parent = "M084-E001"
+title = "Normalize EventSource rows as Ibis expressions"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Refactor EventSource loading so canonical event rows are built as Ibis expressions without table.execute()/iterrows on the EventSource path."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "load_event_source returns canonical source/entity_id/ts/event_type/payload rows for existing DuckDB tests"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "EventSource normalization implementation no longer executes the staged table or loops over pandas rows"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Array payload columns keep existing JSON-string-in-payload behavior"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/event_source_loader.py", "tests/test_event_source_loader.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "plan-bigquery-pushdown-missions"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/152"
+commit = "a5e0ad4"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

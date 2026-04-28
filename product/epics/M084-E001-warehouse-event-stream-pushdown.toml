@@ -1,0 +1,21 @@
+id = "M084-E001"
+parent = "M084"
+title = "Warehouse-native event stream assembly"
+status = "complete"
+created = 2026-04-28
+depends_on = []
+
+[outcome]
+description = """Refactor source event stream assembly so EventSource normalization and multi-source concatenation stay as Ibis expressions instead of pandas materialization."""
+
+[scope]
+in_scope = [
+    "EventSource canonical event expression builder",
+    "Backend-side union/union_all for pipeline event concatenation",
+    "DuckDB compatibility and BigQuery SQL compile coverage",
+    "Mission status and validation notes"
+]
+out_of_scope = [
+    "Identity, activity, metrics, and analytics projection pushdown",
+    "StateSource snapshot diff rewrite"
+]

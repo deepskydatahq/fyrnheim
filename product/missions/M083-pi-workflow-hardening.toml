@@ -1,0 +1,112 @@
+# Mission: Pi workflow hardening after first mission execution
+# Capture lessons from executing M077/M078 and harden the project-local Pi workflow.
+
+id = "M083"
+title = "Pi workflow hardening after first mission execution"
+status = "complete"
+created = 2026-04-27
+depends_on = ["M077", "M078"]
+
+[outcome]
+description = """
+Harden Fyrnheim's project-local Pi workflow based on the first real mission execution. M077 and M078 validated product TOML as the task source of truth, but exposed workflow gaps around mission execution modes, quality-gate fallbacks, PR feedback polling/merge readiness, and stale Beads-era docs on branches without the Pi setup.
+
+This mission updates the Pi prompts, docs, and extension commands so future audit/planning/code missions run with less manual steering and fewer environment-specific failures.
+"""
+
+user_progress = "From 'Pi workflow works but needs manual branch/status checks, uv fallbacks, PR polling, and audit-mode interpretation' to 'Pi has explicit commands and documented execution modes for reliable mission execution and PR completion'"
+
+[execution]
+mode = "implementation"
+outputs = ["pi-prompts", "pi-extension-commands", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "HOW_WE_WORK.md documents mission execution modes including implementation, audit/planning, docs, and release",
+    ".pi/prompts/execute-mission.md reads mission execution mode and treats audit/planning as non-implementation outputs such as docs or follow-up missions without forcing epics/stories",
+    "A project quality-gates command or script runs pytest, ruff, and mypy with uv -> .venv -> plain python/ruff/mypy fallback order and clear success/failure exit semantics",
+    "Pi workflow docs mention the quality-gate fallback behavior explicitly, including uv -> .venv -> plain command order",
+    "A PR status command or documented workflow uses gh to report CI, CodeRabbit status, mergeability, reviews, and actionable comments",
+    "A merge-if-ready command or documented workflow refuses to merge while checks are pending/failing or actionable review comments remain, and squash-merges only when all checks pass and no actionable comments remain",
+    "Docs state one precedence chain: mission/product TOML workflow rules > AGENTS.md > HOW_WE_WORK.md > CLAUDE.md/legacy docs",
+    "The M077/M078 lessons are captured so future agents know why these commands/modes exist"
+]
+validator_context = [
+    "AGENTS.md",
+    "HOW_WE_WORK.md",
+    ".pi/README.md",
+    ".pi/prompts/execute-mission.md",
+    ".pi/prompts/fix-pr-feedback.md",
+    ".pi/extensions/fyrnheim-workflow/index.ts",
+    "scripts/quality-gates.sh"
+]
+
+[context]
+related_docs = [
+    "docs/M077-architecture-refactor-audit.md",
+    "HOW_WE_WORK.md",
+    "AGENTS.md",
+    ".pi/README.md"
+]
+relevant_paths = [
+    "AGENTS.md",
+    "HOW_WE_WORK.md",
+    ".pi/README.md",
+    ".pi/prompts/execute-mission.md",
+    ".pi/prompts/fix-pr-feedback.md",
+    ".pi/extensions/fyrnheim-workflow/index.ts",
+    "scripts/quality-gates.sh"
+]
+related_missions = [
+    "M077 — first Pi-style audit mission; showed audit findings should become follow-up missions rather than implementation stories",
+    "M078 — first Pi-executed code refactor; showed quality-gate fallback and PR feedback polling needs",
+    "M079-M082 — remaining refactor follow-ups that should benefit from the hardened workflow"
+]
+
+[scope]
+in_scope = [
+    "Define and document mission execution modes, including audit/planning missions that produce follow-up missions",
+    "Update the execute-mission prompt to branch behavior based on execution mode or inferred mission type",
+    "Add a quality-gates script or Pi command with uv -> .venv -> plain command fallback",
+    "Add or document PR status and merge-if-ready gh workflows for CodeRabbit/CI review loops",
+    "Update Pi README and workflow docs with lessons from M077/M078",
+    "Keep Beads out of the default workflow and clarify precedence when old docs disagree"
+]
+out_of_scope = [
+    "Building a full sub-agent/worktree orchestrator",
+    "Changing product mission/epic/story schema beyond optional execution mode documentation",
+    "Changing application runtime behavior outside Pi workflow tooling",
+    "Replacing GitHub/gh with another PR provider",
+    "Automatically merging PRs without explicit user instruction"
+]
+acceptable_breakage = [
+    "None expected. This mission changes workflow docs/prompts/extensions only. Existing Pi commands should continue to work."
+]
+
+[notes]
+considerations = """
+Lessons from M077/M078 execution:
+
+1. Product TOML worked as the source of truth; no Beads were needed.
+2. M077 exposed that not every mission should break into implementation stories. Audit/planning missions may produce docs and follow-up mission TOMLs instead.
+3. Quality gates documented as `uv run ...` failed because `uv` was not on PATH in the agent environment. `.venv/bin/python -m pytest`, `.venv/bin/ruff`, and `.venv/bin/mypy` worked.
+4. PR feedback handling via `gh` worked well but required manual polling: check PR comments, inline comments, reviews, CI, CodeRabbit status, and mergeability.
+5. CodeRabbit caught a real issue in M078. The workflow should make actionable PR feedback handling and re-checking first-class.
+6. Branch/docs state matters. Older branches may still contain Beads-era docs. Agents should treat AGENTS.md and current product TOML workflow rules as authoritative when docs disagree.
+7. The next hardening step should be pragmatic: scripts/commands and prompt updates, not a full orchestration framework.
+
+Suggested implementation shape:
+
+- Add `scripts/quality-gates.sh` with fallback logic:
+  1. if `uv` exists: `uv run pytest`, `uv run ruff check src/ tests/`, `uv run mypy src/`
+  2. else if `.venv/bin/python` exists: `.venv/bin/python -m pytest`, `.venv/bin/ruff check src/ tests/`, `.venv/bin/mypy src/`
+  3. else use `python -m pytest`, `ruff check src/ tests/`, `mypy src/`
+- Add `/quality-gates`, `/pr-status`, and possibly `/pr-merge-if-ready` to `.pi/extensions/fyrnheim-workflow/index.ts`.
+- Update `.pi/prompts/execute-mission.md` to check `[execution].mode`:
+  - `implementation`: epics/stories/code path
+  - `audit` or `planning`: audit doc + follow-up missions; no forced implementation stories
+  - `docs`: docs artifacts and validation
+  - `release`: version/changelog/package PR flow
+- Update docs with the same explicit precedence chain everywhere: mission/product TOML workflow rules > AGENTS.md > HOW_WE_WORK.md > CLAUDE.md/legacy docs.
+"""

@@ -1,0 +1,49 @@
+id = "M083-E001"
+parent = "M083"
+title = "Pi workflow hardening commands and docs"
+status = "complete"
+created = 2026-04-27
+depends_on = []
+
+[outcome]
+description = """
+Harden the project-local Pi workflow by documenting mission execution modes, adding quality-gate fallbacks, and adding PR status/merge readiness commands.
+"""
+
+[job_story]
+description = """When an agent executes Fyrnheim missions through Pi, I want mission-mode, quality-gate, and PR feedback mechanics encoded in project-local prompts/docs/commands, so that future sessions need less manual steering and avoid Beads-era workflow drift."""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Mission execution modes are documented and used by execute-mission prompt",
+    "Quality gates can run with uv or .venv fallback",
+    "PR status and merge-if-ready commands are available or documented",
+    "Docs capture M077/M078 lessons and AGENTS precedence"
+]
+validator_context = [
+    "AGENTS.md",
+    "HOW_WE_WORK.md",
+    ".pi/README.md",
+    ".pi/prompts/execute-mission.md",
+    ".pi/extensions/fyrnheim-workflow/index.ts",
+    "scripts/quality-gates.sh"
+]
+
+[context]
+relevant_paths = [
+    "AGENTS.md",
+    "HOW_WE_WORK.md",
+    ".pi/README.md",
+    ".pi/prompts/execute-mission.md",
+    ".pi/extensions/fyrnheim-workflow/index.ts",
+    "scripts/quality-gates.sh"
+]
+dependencies = []
+
+[notes]
+considerations = """
+This epic is workflow tooling only. Do not change Fyrnheim runtime behavior.
+"""
+
+estimated_stories = 4

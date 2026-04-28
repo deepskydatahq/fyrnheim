@@ -1,0 +1,42 @@
+id = "M083-E001-S003"
+parent = "M083-E001"
+title = "Add quality-gates fallback command"
+status = "complete"
+triage = "plan"
+created = 2026-04-27
+
+[outcome]
+description = """Add a quality-gates script and Pi command that run pytest, ruff, and mypy using uv when available and .venv/plain command fallbacks otherwise."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "scripts/quality-gates.sh runs pytest, ruff, and mypy with uv -> .venv -> plain fallback order"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = ".pi/extensions/fyrnheim-workflow/index.ts registers /quality-gates that runs the script"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs mention the fallback behavior"
+
+[context]
+relevant_paths = ["scripts/quality-gates.sh", ".pi/extensions/fyrnheim-workflow/index.ts", ".pi/README.md", "HOW_WE_WORK.md"]
+input_fixtures = []
+depends_on = ["M083-E001-S001"]
+
+[handoff]
+implementation_hints = """Prefer shell script for human/agent reuse; extension command should call the script."""
+reference_files = []
+
+[execution]
+branch = "plan-M083-pi-workflow-hardening"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/151"
+commit = ""
+started = "2026-04-27"
+completed = "2026-04-27"
+failure_reason = ""

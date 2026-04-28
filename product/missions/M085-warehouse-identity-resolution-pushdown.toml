@@ -3,7 +3,7 @@
 
 id = "M085"
 title = "Warehouse-native identity resolution"
-status = "draft"
+status = "complete"
 created = 2026-04-28
 depends_on = ["M084"]
 

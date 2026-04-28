@@ -6,13 +6,56 @@ across multiple sources, then enriches events with the resolved canonical_id.
 
 from __future__ import annotations
 
-import hashlib
-import json
-
 import ibis
-import pandas as pd
 
 from fyrnheim.core.identity import IdentityGraph
+
+
+@ibis.udf.scalar.builtin(name="sha256")
+def _sha256(value: str) -> str:
+    raise NotImplementedError
+
+
+@ibis.udf.scalar.builtin(name="to_hex")
+def _to_hex(value: bytes) -> str:
+    raise NotImplementedError
+
+
+def _json_scalar(payload: ibis.Value, field_name: str) -> ibis.Value:
+    """Extract a scalar JSON payload field as a string expression.
+
+    Ibis represents ``payload['field']`` as JSON. Casting to string keeps
+    quoted JSON strings, so remove quotes to match the legacy ``json.loads``
+    + ``str(value)`` behavior for identity match keys.
+    """
+    return payload.cast("json")[field_name].cast("string").replace('"', "")
+
+
+def _canonical_id(match_key_value: ibis.Value, *, backend_name: str) -> ibis.Value:
+    """Return Fyrnheim's deterministic canonical ID expression.
+
+    DuckDB's ``sha256`` returns a lowercase hexadecimal string, matching the
+    legacy Python ``hashlib.sha256(...).hexdigest()`` shape. BigQuery's
+    ``SHA256`` returns bytes, so BigQuery uses ``TO_HEX(SHA256(...))``.
+    """
+    hashed = _sha256(match_key_value.cast("string"))
+    if backend_name == "bigquery":
+        hashed = _to_hex(hashed)  # type: ignore[assignment]
+    return hashed.substr(0, 16)
+
+
+def _empty_identity_mapping() -> ibis.expr.types.Table:
+    """Return an empty identity mapping with the canonical schema."""
+    return ibis.memtable(
+        [],
+        schema=ibis.schema(
+            {
+                "source": "string",
+                "entity_id": "string",
+                "canonical_id": "string",
+            }
+        ),
+    )
 
 
 def resolve_identities(
@@ -21,13 +64,9 @@ def resolve_identities(
 ) -> ibis.expr.types.Table:
     """Resolve identities from an event stream using an identity graph.
 
-    For each IdentitySource in the graph, filters events by source name and
-    event_type=='row_appeared', parses the payload JSON to extract the
-    match_key_field value, and builds a mapping of (source, entity_id) to
-    canonical_id.
-
-    The canonical_id is a deterministic SHA-256 hash (first 16 hex chars)
-    of the match_key_value.
+    Builds an Ibis expression for each IdentitySource, unions those source
+    mappings, and deduplicates by ``(source, entity_id)``. The large event
+    stream stays in the backend; this function does not execute it locally.
 
     Args:
         events: Ibis table with columns: source, entity_id, ts, event_type, payload.
@@ -36,62 +75,34 @@ def resolve_identities(
     Returns:
         Ibis table with columns: source, entity_id, canonical_id.
     """
-    events_df = events.execute()
+    source_mappings: list[ibis.expr.types.Table] = []
+    payload = events["payload"]
+    try:
+        backend_name = events.get_backend().name
+    except Exception:
+        backend_name = ""
 
-    source_names = {s.source for s in identity_graph.sources}
-    source_match_keys = {s.source: s.match_key_field for s in identity_graph.sources}
-
-    # Filter to events from graph sources whose payload supports a direct
-    # column lookup. row_appeared events (StateSource snapshots) and
-    # EventSource events both have flat payloads keyed by source columns.
-    # field_changed events have a different shape ({field_name, old_value,
-    # new_value}) and would silently grab new_value if the field happened to
-    # match -- exclude them.
-    mask = (events_df["source"].isin(source_names)) & (
-        events_df["event_type"] != "field_changed"
-    )
-    relevant = events_df[mask]
-
-    rows: list[dict[str, str]] = []
-    for _, row in relevant.iterrows():
-        source = row["source"]
-        entity_id = row["entity_id"]
-        payload = row["payload"]
-        match_key_field = source_match_keys[source]
-
-        try:
-            payload_data = json.loads(payload)
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-        match_key_value = payload_data.get(match_key_field)
-        if match_key_value is None:
-            # SnapshotDiff strips the source's id_field from row_appeared
-            # payloads (it lives as the top-level entity_id column). When the
-            # IdentitySource's match_key_field equals the source's id_field,
-            # fall back to entity_id so identity resolution still works.
-            match_key_value = entity_id
-        if match_key_value is None:
-            continue
-
-        canonical_id = hashlib.sha256(str(match_key_value).encode()).hexdigest()[:16]
-        rows.append(
-            {
-                "source": source,
-                "entity_id": entity_id,
-                "canonical_id": canonical_id,
-            }
+    for identity_source in identity_graph.sources:
+        extracted = _json_scalar(payload, identity_source.match_key_field)
+        match_key_value = extracted.coalesce(events["entity_id"].cast("string"))
+        mapping = events.filter(
+            (events["source"] == identity_source.source)
+            & (events["event_type"] != "field_changed")
+            & match_key_value.notnull()
+        ).select(
+            source=events["source"].cast("string"),
+            entity_id=events["entity_id"].cast("string"),
+            canonical_id=_canonical_id(match_key_value, backend_name=backend_name),
         )
+        source_mappings.append(mapping)
 
-    if not rows:
-        return ibis.memtable(
-            pd.DataFrame(columns=["source", "entity_id", "canonical_id"])
-        )
+    if not source_mappings:
+        return _empty_identity_mapping()
 
-    mapping_df = pd.DataFrame(rows).drop_duplicates(
-        subset=["source", "entity_id"], keep="first"
+    unioned = ibis.union(*source_mappings, distinct=False)
+    return unioned.group_by(["source", "entity_id"]).agg(
+        canonical_id=unioned["canonical_id"].first()
     )
-    return ibis.memtable(mapping_df)
 
 
 def enrich_events(
@@ -100,8 +111,10 @@ def enrich_events(
 ) -> ibis.expr.types.Table:
     """Enrich events with canonical_id from an identity mapping.
 
-    Left joins events with the id_mapping on (source, entity_id).
-    Events without a mapping get their entity_id as canonical_id (fallback).
+    Left joins events with the id_mapping on (source, entity_id). Events
+    without a mapping get their entity_id as canonical_id. If the events are
+    already enriched by a previous identity graph, the new mapping wins where
+    present, otherwise the existing canonical_id is preserved.
 
     Args:
         events: Ibis table with columns: source, entity_id, ts, event_type, payload.
@@ -110,30 +123,28 @@ def enrich_events(
     Returns:
         Ibis table with columns: source, entity_id, ts, event_type, payload, canonical_id.
     """
-    events_df = events.execute()
-    mapping_df = id_mapping.execute()
-
-    # Preserve any existing canonical_id from prior enrichments by coalescing
-    # the new mapping with the existing column. Without this, a second
-    # enrich_events call would produce canonical_id_x / canonical_id_y from
-    # pandas' suffix logic and break downstream.
-    had_existing = "canonical_id" in events_df.columns
+    had_existing = "canonical_id" in events.columns
+    left = events
     if had_existing:
-        events_df = events_df.rename(columns={"canonical_id": "_existing_canonical_id"})
+        left = left.rename(_existing_canonical_id="canonical_id")
 
-    merged = events_df.merge(mapping_df, on=["source", "entity_id"], how="left")
+    mapping = id_mapping.rename(_new_canonical_id="canonical_id")
+    joined = left.left_join(mapping, ["source", "entity_id"])
 
     if had_existing:
-        # New mapping wins where present, fall back to existing, then entity_id
-        merged["canonical_id"] = (
-            merged["canonical_id"]
-            .fillna(merged["_existing_canonical_id"])
-            .fillna(merged["entity_id"])
+        canonical_id = joined["_new_canonical_id"].coalesce(
+            joined["_existing_canonical_id"], joined["entity_id"].cast("string")
         )
     else:
-        merged["canonical_id"] = merged["canonical_id"].fillna(merged["entity_id"])
+        canonical_id = joined["_new_canonical_id"].coalesce(
+            joined["entity_id"].cast("string")
+        )
 
-    result = merged[
-        ["source", "entity_id", "ts", "event_type", "payload", "canonical_id"]
-    ]
-    return ibis.memtable(result)
+    return joined.select(
+        source=joined["source"],
+        entity_id=joined["entity_id"],
+        ts=joined["ts"],
+        event_type=joined["event_type"],
+        payload=joined["payload"],
+        canonical_id=canonical_id,
+    )

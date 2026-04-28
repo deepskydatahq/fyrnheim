@@ -1,0 +1,107 @@
+# Mission: v0.14.0 performance release
+# Release the BigQuery pushdown and pipeline performance work completed after v0.13.0.
+
+id = "M090"
+title = "v0.14.0 — BigQuery pushdown and performance release"
+status = "ready"
+created = 2026-04-28
+depends_on = ["M084", "M085", "M086", "M087", "M088", "M089"]
+
+[outcome]
+description = """
+Cut a new Fyrnheim minor release that bundles the warehouse-native pipeline performance work completed after v0.13.0. The release should communicate that event stream assembly, identity resolution, activity derivation, metrics aggregation, source column projection, and staging-view materialization now stay in the warehouse where possible.
+
+This is a minor release because it materially improves warehouse execution behavior and introduces release-note-worthy performance characteristics without intentional breaking API changes.
+"""
+
+user_progress = "From v0.13.0 EventSource joins to a v0.14.0 release where warehouse pipelines push down source/event/activity/identity/metrics work and parallelize independent staging materialization."
+
+[execution]
+mode = "release"
+outputs = ["version-bump", "changelog", "quality-gates", "release-pr", "tag-and-publish-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Validation environment uses Python >=3.11; quality-gates.sh release validation records the Python runtime in the PR summary and fails or blocks release if it is below 3.11",
+    "pyproject.toml version is bumped from 0.13.0 to 0.14.0",
+    "src/fyrnheim/__init__.py __version__ is bumped to 0.14.0 and remains in sync with pyproject.toml",
+    "uv.lock is regenerated if it records the package version",
+    "CHANGELOG.md has a new ## [0.14.0] - 2026-04-28 entry above 0.13.0",
+    "CHANGELOG summarizes M084-M089 user-visible changes: warehouse event stream assembly, identity resolution, activity derivation, metrics aggregation, source column projection, and parallel staging materialization",
+    "CHANGELOG includes migration/compatibility notes: no intended breaking API changes; column pushdown is conservative; staging concurrency is bounded by max_parallel_io and max_parallel_io=1 preserves serial behavior",
+    "Release PR body includes validation results and post-merge tag/publish checklist",
+    "scripts/quality-gates.sh passes",
+    "Package metadata/version smoke test passes (`python -m build` or an equivalent local build if build tooling is available; otherwise document the exact blocker)",
+    "Do not tag or publish until the release PR is merged and the user explicitly approves publishing"
+]
+
+[context]
+related_docs = [
+    "CHANGELOG.md",
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "docs/M088-column-pushdown.md",
+    "docs/M089-parallel-staging.md"
+]
+relevant_paths = [
+    "pyproject.toml",
+    "src/fyrnheim/__init__.py",
+    "uv.lock",
+    "CHANGELOG.md",
+    "tests/test_package.py",
+    "product/missions/M084-warehouse-event-stream-pushdown.toml",
+    "product/missions/M085-warehouse-identity-resolution-pushdown.toml",
+    "product/missions/M086-warehouse-activity-pushdown.toml",
+    "product/missions/M087-warehouse-metrics-aggregation-pushdown.toml",
+    "product/missions/M088-column-pushdown-for-warehouse-sources.toml",
+    "product/missions/M089-parallel-staging-view-materialization.toml"
+]
+related_missions = [
+    "M084 — Warehouse-native event stream assembly",
+    "M085 — Warehouse-native identity resolution",
+    "M086 — Warehouse-native activity derivation",
+    "M087 — Warehouse-native metrics aggregation",
+    "M088 — Column pushdown for warehouse sources",
+    "M089 — Parallel staging view materialization"
+]
+
+[scope]
+in_scope = [
+    "Version bump to 0.14.0",
+    "CHANGELOG entry for all completed BigQuery pushdown and speed-improvement missions",
+    "Release branch and PR",
+    "Full local quality gates and CI validation",
+    "Post-merge tag/publish checklist"
+]
+out_of_scope = [
+    "New engine behavior beyond release preparation",
+    "Additional BigQuery pushdown work not already completed",
+    "Publishing to PyPI without explicit user approval after merge",
+    "Changing public source/activity/identity/metrics model APIs"
+]
+acceptable_breakage = [
+    "No intentional breaking changes. If validation reveals a compatibility issue, stop and update this mission before release."
+]
+
+[notes]
+considerations = """
+Suggested release branch: release/v0.14.0
+Suggested PR title: release: v0.14.0
+Suggested release type: minor.
+
+Release highlights to include:
+- EventSource assembly composes Ibis expressions and backend UNION ALL instead of pandas concat/materialization.
+- Identity resolution uses backend JSON extraction, hashing, joins, and COALESCE fallback.
+- Activity derivation composes backend predicates/projections/unions and preserves pass-through behavior.
+- Metrics aggregation uses backend GROUP BY/aggregations for supported metric types.
+- Source column pushdown projects only required source columns when analysis is safe.
+- Staging views materialize by dependency level with max_parallel_io-bounded parallelism.
+
+Post-merge checklist for the eventual release execution:
+1. Confirm release PR merged to main and local main is up to date.
+2. Create annotated tag v0.14.0.
+3. Push tag.
+4. Build package artifact.
+5. Publish only after explicit user approval.
+6. Verify GitHub release / PyPI metadata if publishing is performed.
+"""

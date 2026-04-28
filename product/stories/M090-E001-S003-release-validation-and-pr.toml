@@ -1,0 +1,38 @@
+id = "M090-E001-S003"
+parent = "M090-E001"
+title = "Validate v0.14.0 release and open PR"
+status = "ready"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Run quality gates, perform package/version smoke validation, and open the v0.14.0 release PR with post-merge checklist."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "quality"
+description = "scripts/quality-gates.sh passes"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Package build/version smoke validation passes or exact tooling blocker is documented"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Release PR includes validation summary and explicitly defers tag/publish until user approval"
+
+[context]
+relevant_paths = ["pyproject.toml", "src/fyrnheim/__init__.py", "CHANGELOG.md", "product/missions/M090-v0.14.0-performance-release.toml"]
+input_fixtures = []
+depends_on = ["M090-E001-S001", "M090-E001-S002"]
+
+[execution]
+branch = "release/v0.14.0"
+worktree = ""
+pr = ""
+commit = ""
+started = ""
+completed = ""
+failure_reason = ""

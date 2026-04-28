@@ -499,6 +499,16 @@ def _coerce_to_arrow_friendly_dtype(s: pd.Series) -> pd.Series:
     if types <= _INT_TYPES | _FLOAT_TYPES:
         return s.astype("Float64")
     if types == {str}:
+        # Detect ISO-8601 timestamp strings and promote to datetime64.
+        # JSON payloads strip type info, so timestamps arrive as strings
+        # (e.g. "2025-01-15 10:00:00+00:00"). Without this, timestamp
+        # columns land as STRING in BigQuery instead of TIMESTAMP.
+        sample = non_null.head(5)
+        try:
+            pd.to_datetime(sample, format="ISO8601")
+            return pd.to_datetime(s, format="ISO8601", errors="coerce")
+        except (ValueError, TypeError):
+            pass
         return s.astype(object)
     # M065 tolerant-coercion branch: mixed numeric + numeric-string.
     if types <= _INT_TYPES | _FLOAT_TYPES | {str}:

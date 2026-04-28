@@ -1,0 +1,34 @@
+id = "M090-E001-S002"
+parent = "M090-E001"
+title = "Write v0.14.0 changelog and compatibility notes"
+status = "ready"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Add CHANGELOG.md release notes covering M084-M089 and documenting compatibility/performance behavior."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "CHANGELOG has a 0.14.0 section above 0.13.0 with Added/Changed/Performance or equivalent subsections"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Release notes mention no intended breaking API changes, conservative column pushdown, and max_parallel_io staging concurrency fallback"
+
+[context]
+relevant_paths = ["CHANGELOG.md", "docs/M084-bigquery-pushdown-roadmap.md", "docs/M088-column-pushdown.md", "docs/M089-parallel-staging.md"]
+input_fixtures = []
+depends_on = ["M090-E001-S001"]
+
+[execution]
+branch = "release/v0.14.0"
+worktree = ""
+pr = ""
+commit = ""
+started = ""
+completed = ""
+failure_reason = ""

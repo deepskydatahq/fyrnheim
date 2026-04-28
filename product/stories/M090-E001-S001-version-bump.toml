@@ -1,0 +1,34 @@
+id = "M090-E001-S001"
+parent = "M090-E001"
+title = "Bump package version to v0.14.0"
+status = "ready"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Update release version metadata so pyproject.toml and fyrnheim.__version__ both report 0.14.0."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "tests/test_package.py passes and version metadata is synchronized"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "uv.lock is regenerated if it contains project version metadata"
+
+[context]
+relevant_paths = ["pyproject.toml", "src/fyrnheim/__init__.py", "uv.lock", "tests/test_package.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "release/v0.14.0"
+worktree = ""
+pr = ""
+commit = ""
+started = ""
+completed = ""
+failure_reason = ""

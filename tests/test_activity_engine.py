@@ -339,6 +339,67 @@ class TestUnmatchedPreserved:
         assert payload["new_value"] == "a@c.com"
 
 
+def test_incomplete_field_changed_payload_passes_through_unmatched() -> None:
+    """NULL predicate results must not drop unmatched events."""
+    raw = _make_raw_events(
+        [
+            {
+                "source": "customers",
+                "entity_id": "1",
+                "ts": "2024-01-01",
+                "event_type": "field_changed",
+                "payload": json.dumps({"field_name": "plan"}),
+            }
+        ]
+    )
+    defns = [
+        ActivityDefinition(
+            name="became_paying",
+            source="customers",
+            trigger=FieldChanged(field="plan", to_values=["pro"]),
+            entity_id_field="id",
+        )
+    ]
+
+    result = apply_activity_definitions(raw, defns).execute()
+
+    assert len(result) == 1
+    assert result.iloc[0]["event_type"] == "field_changed"
+
+
+def test_field_changed_values_preserve_embedded_quotes() -> None:
+    raw = _make_raw_events(
+        [
+            {
+                "source": "customers",
+                "entity_id": "1",
+                "ts": "2024-01-01",
+                "event_type": "field_changed",
+                "payload": json.dumps(
+                    {
+                        "field_name": "plan",
+                        "old_value": "free",
+                        "new_value": 'He said "pro"',
+                    }
+                ),
+            }
+        ]
+    )
+    defns = [
+        ActivityDefinition(
+            name="quoted_plan",
+            source="customers",
+            trigger=FieldChanged(field="plan", to_values=['He said "pro"']),
+            entity_id_field="id",
+        )
+    ]
+
+    result = apply_activity_definitions(raw, defns).execute()
+
+    assert len(result) == 1
+    assert result.iloc[0]["event_type"] == "quoted_plan"
+
+
 class TestFieldChangedTrigger:
     def test_matches_field_changed_by_field_name(self):
         raw = _make_raw_events(

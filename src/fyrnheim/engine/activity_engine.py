@@ -36,7 +36,7 @@ def apply_activity_definitions(
     match_predicates: list[ibis.Value] = []
 
     for definition in definitions:
-        predicate = _definition_predicate(raw_events, definition)
+        predicate = _definition_predicate(raw_events, definition).fill_null(False)
         match_predicates.append(predicate)
         matched_tables.append(_activity_projection(raw_events, definition, predicate))
 
@@ -120,7 +120,7 @@ def _project_payload(payload: ibis.Value, include_fields: list[str]) -> ibis.Val
 
 def _json_scalar(payload: ibis.Value, field_name: str) -> ibis.Value:
     """Extract a scalar JSON payload field as a string expression."""
-    return payload.cast("json")[field_name].cast("string").replace('"', "")
+    return payload.cast("json")[field_name].unwrap_as("string")
 
 
 def _filter_payload(payload_str: str, include_fields: list[str]) -> str:

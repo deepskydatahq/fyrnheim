@@ -1,0 +1,30 @@
+id = "M089-E001-S001"
+parent = "M089-E001"
+title = "Group staging views into dependency levels"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Build topological dependency levels for staging views so independent views can execute together while dependents wait for prerequisites."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dependency levels preserve existing topological order and detect cycles"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/staging_runner.py", "tests/test_staging_view.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "execute-M089-parallel-staging"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/157"
+commit = "3d34af6"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

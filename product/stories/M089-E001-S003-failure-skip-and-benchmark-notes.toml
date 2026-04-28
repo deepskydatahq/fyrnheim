@@ -1,0 +1,38 @@
+id = "M089-E001-S003"
+parent = "M089-E001"
+title = "Validate skip, failure, and benchmark behavior"
+status = "complete"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Pin content-hash skip behavior, failure propagation, dependent suppression, and add benchmark notes for parallel staging materialization."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Skipped views remain skipped and do not block unrelated independent views"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A failed view raises a clear error and prevents dependent levels from starting"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "PR notes or docs describe representative wall-time improvement"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/staging_runner.py", "tests/test_staging_view.py", "docs/M089-parallel-staging.md"]
+input_fixtures = []
+depends_on = ["M089-E001-S002"]
+
+[execution]
+branch = "execute-M089-parallel-staging"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/157"
+commit = "3d34af6"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

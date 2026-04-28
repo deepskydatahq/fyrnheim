@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -154,6 +156,7 @@ from fyrnheim.engine.staging_runner import (  # noqa: E402
     STATE_TABLE_NAME,
     StagingCycleError,
     StagingRunSummary,
+    _topo_levels,
     materialize_staging_views,
 )
 
@@ -186,6 +189,18 @@ class TestTopoSort:
         with IbisExecutor.duckdb() as ex:
             summary = materialize_staging_views(ex, [c, b, a])
         assert summary.materialized == ["a", "b", "c"]
+
+    def test_topo_levels_group_independent_views(self):
+        a = _sv("a")
+        b = _sv("b")
+        c = _sv("c", depends_on=["a", "b"])
+        d = _sv("d", depends_on=["c"])
+
+        assert [[v.name for v in level] for level in _topo_levels([d, c, b, a])] == [
+            ["a", "b"],
+            ["c"],
+            ["d"],
+        ]
 
     def test_cycle_raises(self):
         a = _sv("a", depends_on=["b"])
@@ -259,6 +274,87 @@ class TestStateIdempotency:
             except Exception:
                 tables = []
             assert STATE_TABLE_NAME not in tables
+
+
+class _FakeStagingExecutor:
+    def __init__(self, *, fail_names: set[str] | None = None, sleep_s: float = 0.0):
+        self.connection = type("Conn", (), {"name": "bigquery"})()
+        self.fail_names = fail_names or set()
+        self.sleep_s = sleep_s
+        self.calls: list[tuple[str, float, float]] = []
+        self._lock = threading.Lock()
+
+    def materialize_view(self, project, dataset, name, sql):
+        started = time.monotonic()
+        if self.sleep_s:
+            time.sleep(self.sleep_s)
+        if name in self.fail_names:
+            raise RuntimeError(f"boom: {name}")
+        ended = time.monotonic()
+        with self._lock:
+            self.calls.append((name, started, ended))
+
+    def execute_parameterized(self, sql, params):
+        return []
+
+
+def test_parallel_staging_materializes_independent_views_concurrently():
+    ex = _FakeStagingExecutor(sleep_s=0.05)
+    summary = materialize_staging_views(
+        ex,  # type: ignore[arg-type]
+        [_sv("a"), _sv("b"), _sv("c")],
+        no_state=True,
+        max_parallel_io=3,
+    )
+
+    assert summary.materialized == ["a", "b", "c"]
+    starts = {name: started for name, started, _ended in ex.calls}
+    ends = {name: ended for name, _started, ended in ex.calls}
+    assert starts["b"] < ends["a"] or starts["c"] < ends["a"]
+
+
+def test_parallel_staging_respects_dependency_levels():
+    ex = _FakeStagingExecutor(sleep_s=0.02)
+    summary = materialize_staging_views(
+        ex,  # type: ignore[arg-type]
+        [_sv("a"), _sv("b"), _sv("c", depends_on=["a", "b"])],
+        no_state=True,
+        max_parallel_io=3,
+    )
+
+    assert summary.materialized == ["a", "b", "c"]
+    ends = {name: ended for name, _started, ended in ex.calls}
+    starts = {name: started for name, started, _ended in ex.calls}
+    assert starts["c"] >= ends["a"]
+    assert starts["c"] >= ends["b"]
+
+
+def test_parallel_staging_max_parallel_one_is_serial():
+    ex = _FakeStagingExecutor(sleep_s=0.01)
+    summary = materialize_staging_views(
+        ex,  # type: ignore[arg-type]
+        [_sv("a"), _sv("b"), _sv("c")],
+        no_state=True,
+        max_parallel_io=1,
+    )
+
+    assert summary.materialized == ["a", "b", "c"]
+    calls = ex.calls
+    assert calls[1][1] >= calls[0][2]
+    assert calls[2][1] >= calls[1][2]
+
+
+def test_parallel_staging_failure_prevents_dependent_levels():
+    ex = _FakeStagingExecutor(fail_names={"a"})
+    with pytest.raises(RuntimeError, match="boom: a"):
+        materialize_staging_views(
+            ex,  # type: ignore[arg-type]
+            [_sv("a"), _sv("b", depends_on=["a"])],
+            no_state=True,
+            max_parallel_io=2,
+        )
+
+    assert [name for name, _started, _ended in ex.calls] == []
 
 
 class TestFixtureSkip:

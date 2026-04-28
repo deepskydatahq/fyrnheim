@@ -1,0 +1,34 @@
+id = "M089-E001-S002"
+parent = "M089-E001"
+title = "Materialize independent staging views with bounded parallelism"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Use max_parallel_io to run views within one dependency level concurrently, while preserving serial behavior when max_parallel_io is one."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Independent views run concurrently up to max_parallel_io"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "max_parallel_io = 1 runs serially in topological order"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/staging_runner.py", "src/fyrnheim/engine/pipeline.py", "tests/test_staging_view.py"]
+input_fixtures = []
+depends_on = ["M089-E001-S001"]
+
+[execution]
+branch = "execute-M089-parallel-staging"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/157"
+commit = "3d34af6"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

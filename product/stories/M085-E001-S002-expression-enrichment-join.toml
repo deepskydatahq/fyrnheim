@@ -1,0 +1,34 @@
+id = "M085-E001-S002"
+parent = "M085-E001"
+title = "Enrich events with server-side identity joins"
+status = "complete"
+triage = "ready"
+created = 2026-04-28
+
+[outcome]
+description = """Rewrite enrich_events so canonical-id enrichment is an Ibis left join with coalesce fallback, including multi-graph preservation."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing enrich_events tests pass, including unmapped fallback and repeated enrichment"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "enrich_events no longer executes events or mapping tables into pandas"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/identity_engine.py", "tests/test_identity_engine.py"]
+input_fixtures = []
+depends_on = ["M085-E001-S001"]
+
+[execution]
+branch = "execute-M085-identity-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/153"
+commit = "5a6cff0"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

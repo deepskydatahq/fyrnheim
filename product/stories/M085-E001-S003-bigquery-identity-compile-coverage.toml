@@ -1,0 +1,34 @@
+id = "M085-E001-S003"
+parent = "M085-E001"
+title = "Add BigQuery identity pushdown compile coverage"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Add regression tests proving identity mapping/enrichment compile to BigQuery SQL with JSON extraction, hashing, joins, and no local materialization."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Identity mapping expression compiles to BigQuery SQL using JSON extraction and SHA256 hashing"
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Enrichment expression compiles to BigQuery SQL using LEFT JOIN and COALESCE fallback"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/identity_engine.py", "tests/test_identity_engine.py"]
+input_fixtures = []
+depends_on = ["M085-E001-S002"]
+
+[execution]
+branch = "execute-M085-identity-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/153"
+commit = "5a6cff0"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

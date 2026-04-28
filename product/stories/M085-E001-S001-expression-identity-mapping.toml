@@ -1,0 +1,34 @@
+id = "M085-E001-S001"
+parent = "M085-E001"
+title = "Build identity mappings as Ibis expressions"
+status = "complete"
+triage = "plan"
+created = 2026-04-28
+
+[outcome]
+description = """Rewrite resolve_identities so source filtering, payload match-key extraction, fallback, hashing, and dedupe are backend expressions."""
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Existing resolve_identities tests pass with deterministic SHA-256 first-16 canonical IDs"
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "resolve_identities no longer calls events.execute() or loops over pandas rows"
+
+[context]
+relevant_paths = ["src/fyrnheim/engine/identity_engine.py", "tests/test_identity_engine.py"]
+input_fixtures = []
+depends_on = []
+
+[execution]
+branch = "execute-M085-identity-pushdown"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/153"
+commit = "5a6cff0"
+started = "2026-04-28"
+completed = "2026-04-28"
+failure_reason = ""

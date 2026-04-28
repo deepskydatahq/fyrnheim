@@ -1,0 +1,21 @@
+id = "M085-E001"
+parent = "M085"
+title = "Warehouse-native identity pushdown"
+status = "complete"
+created = 2026-04-28
+depends_on = []
+
+[outcome]
+description = """Refactor identity resolution and enrichment to compose Ibis expressions instead of executing event streams into pandas."""
+
+[scope]
+in_scope = [
+    "Expression-based identity mapping",
+    "Expression-based event enrichment join",
+    "DuckDB semantic parity tests",
+    "BigQuery SQL compile coverage"
+]
+out_of_scope = [
+    "Cross-graph identity stitching beyond current behavior",
+    "Activity and metrics pushdown"
+]

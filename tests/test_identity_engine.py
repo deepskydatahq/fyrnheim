@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 
 import ibis
 import pandas as pd
@@ -61,6 +62,41 @@ def events_table() -> ibis.expr.types.Table:
         }
     )
     return ibis.memtable(df)
+
+
+def test_resolve_identities_compiles_to_bigquery_json_and_hash_sql(
+    events_table: ibis.expr.types.Table,
+    identity_graph: IdentityGraph,
+) -> None:
+    """Identity mapping remains a backend expression for BigQuery."""
+    sql = ibis.to_sql(resolve_identities(events_table, identity_graph), dialect="bigquery")
+
+    assert "CAST" in sql
+    assert "JSON" in sql
+    assert "SHA256" in sql
+    assert "GROUP BY" in sql
+
+
+def test_enrich_events_compiles_to_bigquery_left_join_and_coalesce(
+    events_table: ibis.expr.types.Table,
+    identity_graph: IdentityGraph,
+) -> None:
+    """Identity enrichment remains a backend join expression for BigQuery."""
+    mapping = resolve_identities(events_table, identity_graph)
+
+    sql = ibis.to_sql(enrich_events(events_table, mapping), dialect="bigquery")
+
+    assert "LEFT OUTER JOIN" in sql
+    assert "COALESCE" in sql
+    assert "canonical_id" in sql
+
+
+def test_identity_engine_does_not_materialize_inputs_in_core_paths() -> None:
+    """M085 guardrail: no local execute calls in identity pushdown paths."""
+    source = inspect.getsource(resolve_identities) + inspect.getsource(enrich_events)
+
+    assert ".execute(" not in source
+    assert "iterrows(" not in source
 
 
 class TestResolveIdentities:

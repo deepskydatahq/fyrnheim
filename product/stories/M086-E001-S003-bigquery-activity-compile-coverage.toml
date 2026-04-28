@@ -27,8 +27,8 @@ depends_on = ["M086-E001-S002"]
 [execution]
 branch = "execute-M086-activity-pushdown"
 worktree = ""
-pr = ""
-commit = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/154"
+commit = "1c97099"
 started = "2026-04-28"
 completed = "2026-04-28"
 failure_reason = ""

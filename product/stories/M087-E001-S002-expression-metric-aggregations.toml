@@ -27,8 +27,8 @@ depends_on = ["M087-E001-S001"]
 [execution]
 branch = "execute-M087-metrics-pushdown"
 worktree = ""
-pr = ""
-commit = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/155"
+commit = "ff0c564"
 started = "2026-04-28"
 completed = "2026-04-28"
 failure_reason = ""

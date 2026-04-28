@@ -23,6 +23,7 @@ outputs = ["version-bump", "changelog", "quality-gates", "release-pr", "tag-and-
 [testing]
 approach = "agent-judgment"
 criteria = [
+    "Validation environment uses Python >=3.11; quality-gates.sh release validation records the Python runtime in the PR summary and fails or blocks release if it is below 3.11",
     "pyproject.toml version is bumped from 0.13.0 to 0.14.0",
     "src/fyrnheim/__init__.py __version__ is bumped to 0.14.0 and remains in sync with pyproject.toml",
     "uv.lock is regenerated if it records the package version",

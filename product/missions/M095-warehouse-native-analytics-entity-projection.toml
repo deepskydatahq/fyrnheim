@@ -1,0 +1,79 @@
+# Mission: Warehouse-native AnalyticsEntity projection
+# Follow-up from M091/M092: remove the remaining AnalyticsEntity pandas fallback.
+
+id = "M095"
+title = "Warehouse-native AnalyticsEntity projection"
+status = "draft"
+created = 2026-05-16
+depends_on = ["M092", "M094"]
+
+[outcome]
+description = """
+Make AnalyticsEntity projection fully warehouse-native so BigQuery/warehouse runs no longer need to reject AnalyticsEntity assets under the M091 compute-only contract.
+
+The current projection performs heavy aggregation in Ibis, then executes the post-aggregation result locally to restore JSON scalar values, evaluate Python computed fields, and re-register an ibis.memtable. This mission replaces or fences those remaining local-compute steps with backend-native expressions and explicit capability errors for unsupported computed-field shapes.
+"""
+
+user_progress = "From 'AnalyticsEntity is blocked on warehouse backends because projection still round-trips through pandas' to 'supported AnalyticsEntity projections compile to warehouse SQL and unsupported computed fields fail before materialization'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "AnalyticsEntity state fields and measures return an Ibis expression without post-aggregation execute/memtable round-trips on warehouse backends",
+    "JSON scalar extraction/restoration is expressed in backend-native Ibis/SQL for supported scalar types",
+    "Computed fields are either translated to an explicitly supported backend expression subset or rejected with a clear UnsupportedWarehouseComputeError before data is materialized",
+    "BigQuery compile coverage verifies representative state fields, measures, latest/sum/count aggregations, and canonical_id grouping",
+    "M091 materialization policy allows AnalyticsEntity on BigQuery only when the projection is warehouse-native",
+    "Existing DuckDB AnalyticsEntity tests remain compatible or document intentional scalar-format differences"
+]
+validator_context = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/materialization_policy.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_warehouse_compute_policy.py"
+]
+
+[context]
+related_docs = [
+    "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+    "docs/warehouse-compute-contract.md"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/materialization_policy.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_warehouse_compute_policy.py"
+]
+related_missions = [
+    "M091 — Warehouse compute-only contract",
+    "M092 — Evaluate Ibis vs SQLGlot as warehouse transformation IR",
+    "M094 — Warehouse transformation capability contract"
+]
+
+[scope]
+in_scope = [
+    "Remove warehouse pandas/memtable fallback from AnalyticsEntity projection",
+    "Backend-native scalar extraction for supported state/measure fields",
+    "Explicit computed-field capability checks",
+    "BigQuery compile tests and DuckDB regression tests",
+    "Policy update to unblock supported AnalyticsEntity warehouse runs"
+]
+out_of_scope = [
+    "Supporting arbitrary Python computed-field expressions on warehouses",
+    "Replacing Ibis wholesale with SQLGlot",
+    "Changing the public AnalyticsEntity API unless required for explicit capability declarations"
+]
+acceptable_breakage = [
+    "Warehouse AnalyticsEntity assets with arbitrary Python computed fields may continue to fail fast until a supported expression subset is defined. DuckDB local behavior should remain compatible."
+]
+
+[notes]
+considerations = """
+This mission should follow M094 so the policy can distinguish supported AnalyticsEntity shapes from unsupported Python-only computed fields rather than using a blanket asset-type block.
+"""

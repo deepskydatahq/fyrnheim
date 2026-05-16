@@ -1,0 +1,74 @@
+# Mission: SQLGlot SQL validation harness
+# Follow-up from M092: use SQLGlot at targeted SQL boundaries without replacing Ibis.
+
+id = "M096"
+title = "SQLGlot SQL validation harness"
+status = "draft"
+created = 2026-05-16
+depends_on = ["M092"]
+
+[outcome]
+description = """
+Add a lightweight SQL validation/golden-test harness that compiles Fyrnheim's Ibis expressions to warehouse SQL, parses or normalizes them with SQLGlot, and asserts important dialect/AST properties without executing against live warehouse credentials.
+
+This operationalizes the M092 recommendation: keep Ibis as the default expression layer, but use SQLGlot at SQL boundaries for dialect confidence, debuggability, and regression tests.
+"""
+
+user_progress = "From 'we trust generated BigQuery SQL mostly by spot-checking strings' to 'critical warehouse phases have parsed/normalized SQL shape tests using SQLGlot'"
+
+[execution]
+mode = "implementation"
+outputs = ["test-infrastructure", "sql-shape-tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "A test helper compiles an Ibis expression to BigQuery SQL and parses/normalizes it with SQLGlot",
+    "SQL shape tests cover EventSource payload construction, activity UNION ALL, identity join/coalesce, MetricsModel GROUP BY, and future StateSource/AnalyticsEntity paths as they become supported",
+    "Tests assert structural properties through SQLGlot AST where practical rather than brittle raw string matching",
+    "The harness does not require live BigQuery credentials",
+    "Docs explain SQLGlot's role as validation/debugging tooling, not the public engine IR"
+]
+validator_context = [
+    "tests/",
+    "tests/test_metrics_engine.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_identity_engine.py",
+    "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+    "pyproject.toml"
+]
+
+[context]
+related_docs = [
+    "docs/M092-ibis-vs-sqlglot-warehouse-ir.md"
+]
+relevant_paths = [
+    "tests/",
+    "tests/test_metrics_engine.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_identity_engine.py",
+    "pyproject.toml"
+]
+related_missions = [
+    "M092 — Evaluate Ibis vs SQLGlot as warehouse transformation IR"
+]
+
+[scope]
+in_scope = [
+    "SQLGlot-backed compile/parse/normalize test helper",
+    "Structural BigQuery SQL tests for existing warehouse-native phases",
+    "Documentation of SQLGlot validation role"
+]
+out_of_scope = [
+    "Using SQLGlot as the primary runtime compiler",
+    "Adding live BigQuery integration requirements",
+    "Rewriting engine phases"
+]
+acceptable_breakage = [
+    "Some existing string-only compile tests may be replaced by less brittle SQLGlot structural assertions. No runtime behavior changes expected."
+]
+
+[notes]
+considerations = """
+Ibis already depends on SQLGlot, but Fyrnheim may need to declare a direct test/development dependency if tests import SQLGlot directly. Keep the harness small and avoid asserting generated SQL formatting.
+"""

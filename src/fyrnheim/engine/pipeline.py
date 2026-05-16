@@ -20,13 +20,16 @@ from fyrnheim.config import ResolvedConfig
 from fyrnheim.core.source import EventSource, StateSource
 from fyrnheim.engine.activity_engine import apply_activity_definitions
 from fyrnheim.engine.analytics_entity_engine import project_analytics_entity
-from fyrnheim.engine.diff_engine import _make_appeared_events
+from fyrnheim.engine.diff_engine import build_row_appeared_events
 from fyrnheim.engine.event_source_loader import (
     _build_event_source_table,
     load_event_source,
 )
 from fyrnheim.engine.executor import IbisExecutor
 from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
+from fyrnheim.engine.materialization_policy import (
+    assert_warehouse_compute_supported,
+)
 from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
@@ -284,6 +287,8 @@ def run_pipeline(
     metrics_models = assets.get("metrics_models", [])
     staging_views = assets.get("staging_views", [])
     source_column_requirements = collect_required_source_columns(assets)
+
+    assert_warehouse_compute_supported(backend=config.backend, assets=assets)
 
     # --- Phase 0: Materialize staging views (in-warehouse derived sources) ---
     if staging_views:
@@ -689,14 +694,15 @@ def _run_state_source_diff(
     if source.full_refresh:
         # M066: escape hatch — never consult the snapshot store.
         today = datetime.date.today().isoformat()
-        replay_events = _make_appeared_events(
-            table.execute(), source.name, source.id_field, today
+        events = build_row_appeared_events(
+            table,
+            source_name=source.name,
+            id_field=source.id_field,
+            snapshot_date=today,
         )
-        events = ibis.memtable(pd.DataFrame(replay_events))
         log.info(
-            "StateSource %s: full_refresh enabled, emitted %d rows as row_appeared",
+            "StateSource %s: full_refresh enabled, emitting rows as row_appeared",
             source.name,
-            len(replay_events),
         )
         return events
 

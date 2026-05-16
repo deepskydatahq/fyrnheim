@@ -1,0 +1,118 @@
+# Mission: Warehouse compute-only contract
+# Remove the possibility of downloading warehouse data to Python for transformation compute.
+
+id = "M091"
+title = "Warehouse compute-only contract"
+status = "complete"
+created = 2026-05-16
+depends_on = ["M090"]
+
+[outcome]
+description = """
+Make warehouse execution a hard contract, not a best-effort optimization. Fyrnheim must not be able to run a BigQuery-backed pipeline by downloading source/intermediate data and computing transformations in pandas on the operator machine.
+
+The v0.14.0 pushdown missions moved the main source, identity, activity, metrics, and staging paths into Ibis/SQL. This mission closes the remaining escape hatches: audit every production `.execute()`, `pd.DataFrame`, `pd.concat`, and `ibis.memtable` round-trip in the engine; classify which materializations are legitimate final-output boundaries or tiny explicit metadata checks; and make any warehouse-backed local-compute fallback fail fast with a clear error instead of silently pulling data to Python.
+
+DuckDB local development remains supported. The thing being removed is BigQuery/warehouse data extraction for transformation compute.
+"""
+
+user_progress = "From 'Fyrnheim usually pushes work down, but some paths can still download warehouse data and compute locally' to 'warehouse pipelines either compile to backend-executable Ibis/SQL or fail fast with an explicit unsupported-feature error'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-guardrails", "fallback-removal", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "A warehouse-compute contract is documented in code/docs: warehouse backends may materialize only final outputs, explicit small metadata checks, or user-requested previews; transformation compute must remain as Ibis expressions",
+    "All engine production `.execute()` calls are audited and classified as allowed boundaries, DuckDB-only local-dev paths, or removed/rewritten warehouse fallbacks",
+    "BigQuery/warehouse execution cannot enter pandas-based transformation paths in analytics entity projection, metrics aggregation, snapshot diff/replay, event/source assembly, identity resolution, or activity derivation",
+    "Unsupported warehouse features that previously required local pandas compute raise a clear `UnsupportedWarehouseComputeError` (or equivalent) naming the feature and suggesting a backend-native alternative",
+    "Computed fields/columns that cannot be expressed as Ibis are either compiled to Ibis for warehouse backends or rejected before data is downloaded",
+    "Tests include guard/fake-backend coverage proving forbidden intermediate `.execute()` calls fail on warehouse backends while DuckDB local workflows continue to pass",
+    "Regression tests cover at least one AnalyticsEntity, one MetricsModel, one StateSource snapshot/diff case, and one EventSource path on the no-local-compute contract",
+    "Documentation and CHANGELOG explain that warehouse-local pandas fallbacks are intentionally removed and DuckDB remains the supported local compute backend",
+    "No new runtime dependencies; scripts/quality-gates.sh passes"
+]
+validator_context = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/activity_engine.py",
+    "tests/"
+]
+
+[context]
+related_docs = [
+    "VISION.md",
+    "VALUES.md",
+    "docs/M084-bigquery-pushdown-roadmap.md",
+    "CHANGELOG.md"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/executor.py",
+    "tests/"
+]
+related_missions = [
+    "M084 — warehouse-native event stream assembly",
+    "M085 — warehouse-native identity resolution",
+    "M086 — warehouse-native activity derivation",
+    "M087 — warehouse-native metrics aggregation",
+    "M088 — column pushdown for warehouse sources",
+    "M089 — parallel staging view materialization",
+    "M090 — v0.14.0 performance release"
+]
+
+[scope]
+in_scope = [
+    "Inventory and classify every engine-local pandas/materialization path that can run during warehouse-backed pipelines",
+    "Introduce a central execution/materialization policy or guard that distinguishes DuckDB local compute from warehouse compute",
+    "Remove or rewrite remaining warehouse fallbacks that transform downloaded data in pandas",
+    "Fail fast for warehouse-incompatible features rather than silently computing them locally",
+    "Preserve final table materialization/writes and explicitly documented small metadata checks",
+    "Add tests that detect accidental reintroduction of warehouse intermediate materialization",
+    "Update docs/changelog with the warehouse compute-only contract"
+]
+out_of_scope = [
+    "Removing DuckDB local development or local parquet fixture support",
+    "Building a full query planner beyond the guardrails needed for this contract",
+    "Adding new transformation features while replacing fallbacks",
+    "Changing public model APIs unless required to reject warehouse-unsafe options clearly",
+    "Guaranteeing every Ibis backend has identical feature coverage; the hard contract applies to supported warehouse backends, starting with BigQuery"
+]
+acceptable_breakage = [
+    "Warehouse pipelines that depended on implicit pandas fallback now fail fast until the feature is expressed in Ibis/SQL. This is intentional because local compute over warehouse data violates the core architecture.",
+    "DuckDB local outputs should remain compatible with existing tests. Any DuckDB behavior change must be explicitly justified."
+]
+
+[notes]
+considerations = """
+The product intent is not to abandon local development. Fyrnheim should still support fast local DuckDB/parquet workflows. The removed capability is using BigQuery as a remote file source and pandas as the transformation engine.
+
+Suggested implementation shape:
+1. Add an internal backend/materialization policy (for example, `ExecutionPolicy` or `MaterializationPolicy`) that can answer whether intermediate `.execute()` is allowed.
+2. Route engine materialization through named helper(s) instead of ad hoc `.execute()` calls where practical.
+3. Add test-only sentinels/mocks that make accidental intermediate execution visible.
+4. Convert remaining small post-aggregation pandas logic to Ibis where feasible; when not feasible, reject on warehouse backends before materialization.
+5. Keep allowed materialization boundaries narrow and documented: final user outputs, writes, explicit counts/schema probes, CLI previews.
+
+Known suspicious areas from planning search include:
+- `pipeline.py` projection/materialization loops and StateSource replay path
+- `analytics_entity_engine.py` computed fields and post-aggregation memtable round-trips
+- `metrics_engine.py` empty-result memtable handling
+- `diff_engine.py` DataFrame-based diff implementation
+- any test helper patterns that normalize production behavior through pandas
+"""

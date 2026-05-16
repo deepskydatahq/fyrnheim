@@ -1,0 +1,38 @@
+id = "M091-E002"
+parent = "M091"
+title = "Warehouse compute-only contract documentation"
+status = "complete"
+created = 2026-05-16
+depends_on = ["M091-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "Document the warehouse compute-only contract, including the audit classification of production materialization boundaries and the intentional removal of pandas fallbacks for warehouse backends."
+
+[job_story]
+description = "When a warehouse feature is rejected by Fyrnheim, I want documentation to explain why, which materialization boundaries are allowed, and how to proceed without local pandas compute."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Docs classify allowed and forbidden materialization boundaries",
+  "Docs list audited engine paths and disposition for known pandas round-trips",
+  "CHANGELOG documents the breaking warehouse-behavior change while preserving DuckDB local development",
+  "Mission is marked complete only after quality gates pass"
+]
+validator_context = [
+  "docs/warehouse-compute-contract.md",
+  "CHANGELOG.md",
+  "product/missions/M091-warehouse-compute-only-contract.toml"
+]
+
+[context]
+relevant_paths = [
+  "docs/warehouse-compute-contract.md",
+  "CHANGELOG.md",
+  "product/missions/M091-warehouse-compute-only-contract.toml"
+]
+dependencies = ["M091-E001"]
+
+[notes]
+considerations = "Document the product stance clearly: local DuckDB remains supported; warehouse local-compute fallbacks are not."

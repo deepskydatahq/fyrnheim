@@ -1,0 +1,40 @@
+id = "M094-E001"
+parent = "M094"
+title = "Warehouse phase capability contract"
+status = "complete"
+created = 2026-05-16
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Add an internal capability representation for Fyrnheim transformation phases and use it to drive warehouse compute guardrails."
+
+[job_story]
+description = "When a warehouse path is allowed or blocked, I want the engine to explain that through phase capabilities rather than scattered asset-type conditionals."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Capability contract records phase, backend, input schema, output schema, materialization policy, and compiler/tooling notes",
+  "M091 policy uses capability checks for blocked warehouse paths",
+  "Tests cover EventSource, StateSource, AnalyticsEntity, MetricsModel, activity, identity, and staging capabilities",
+  "Docs explain Fyrnheim-owned semantics over Ibis/SQLGlot implementation tools"
+]
+validator_context = [
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_warehouse_compute_policy.py",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+  "docs/warehouse-compute-contract.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_warehouse_compute_policy.py",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+  "docs/warehouse-compute-contract.md"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep this internal and lightweight. Do not change public model APIs."

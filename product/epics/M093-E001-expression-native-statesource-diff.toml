@@ -1,0 +1,45 @@
+id = "M093-E001"
+parent = "M093"
+title = "Expression-native StateSource diff"
+status = "complete"
+created = 2026-05-16
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Replace StateSource row-event construction and snapshot diff with backend-executable Ibis expressions so warehouse StateSource no longer requires pandas transformation compute."
+
+[job_story]
+description = "When I run StateSource on BigQuery, I want row_appeared, row_disappeared, and field_changed events built by the warehouse instead of by pandas on my machine."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Cold-start row_appeared events are expression-native",
+  "Appeared/disappeared/field_changed events use backend joins, filters, payload expressions, and UNION ALL",
+  "Full-refresh and empty-diff replay paths no longer execute current rows into pandas",
+  "M091 policy no longer blocks StateSource on warehouse backends",
+  "DuckDB snapshot_diff tests and BigQuery compile tests pass"
+]
+validator_context = [
+  "src/fyrnheim/engine/diff_engine.py",
+  "src/fyrnheim/engine/snapshot_diff.py",
+  "src/fyrnheim/engine/pipeline.py",
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_snapshot_diff.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/diff_engine.py",
+  "src/fyrnheim/engine/snapshot_diff.py",
+  "src/fyrnheim/engine/pipeline.py",
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_snapshot_diff.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+dependencies = []
+
+[notes]
+considerations = "Use Ibis first. Preserve pandas helper functions for local/private compatibility if tests import them, but production diff_snapshots should not call execute()."

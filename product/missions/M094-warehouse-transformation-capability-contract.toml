@@ -1,0 +1,73 @@
+# Mission: Warehouse transformation capability contract
+# Follow-up from M092 Ibis vs SQLGlot IR evaluation.
+
+id = "M094"
+title = "Warehouse transformation capability contract"
+status = "complete"
+created = 2026-05-16
+depends_on = ["M092"]
+
+[outcome]
+description = """
+Introduce a Fyrnheim-owned internal capability contract for warehouse-native transformation phases. The contract should make explicit which phases are expression-native for each backend, what input/output schemas they require, which materialization boundaries are allowed, and which compiler/debugging tools (Ibis, SQLGlot, raw SQL) are used behind the scenes.
+
+This prevents the engine from treating Ibis or SQLGlot as the product architecture. Fyrnheim owns the semantics; libraries are implementation tools.
+"""
+
+user_progress = "From 'warehouse support is inferred from scattered code paths' to 'each transformation phase declares whether it is warehouse-native, testable, and materialization-safe'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-policy", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Internal contract records phase name, backend, input schema, output schema, materialization policy, and compiler/tooling notes",
+    "M091 UnsupportedWarehouseComputeError uses capability checks rather than hard-coded asset-type guards where practical",
+    "Tests cover allowed and blocked capabilities for EventSource, StateSource, AnalyticsEntity, MetricsModel, activity, identity, and staging phases",
+    "Docs explain that Fyrnheim owns semantics while Ibis/SQLGlot are implementation tools",
+    "No public model API changes unless explicitly justified"
+]
+validator_context = [
+    "src/fyrnheim/engine/materialization_policy.py",
+    "src/fyrnheim/engine/",
+    "tests/test_warehouse_compute_policy.py",
+    "docs/M092-ibis-vs-sqlglot-warehouse-ir.md"
+]
+
+[context]
+related_docs = [
+    "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+    "docs/warehouse-compute-contract.md"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/materialization_policy.py",
+    "src/fyrnheim/engine/",
+    "tests/test_warehouse_compute_policy.py"
+]
+related_missions = [
+    "M091 — Warehouse compute-only contract",
+    "M092 — Evaluate Ibis vs SQLGlot as warehouse transformation IR"
+]
+
+[scope]
+in_scope = [
+    "Internal capability representation for transformation phases",
+    "Policy integration with warehouse compute guardrails",
+    "Tests for phase capability decisions",
+    "Documentation of architecture boundary"
+]
+out_of_scope = [
+    "Replacing Ibis or adding SQLGlot as a runtime dependency by itself",
+    "Implementing StateSource diff pushdown (tracked by M093)",
+    "Changing public APIs"
+]
+acceptable_breakage = [
+    "None expected; this should clarify internal decisions without changing supported behavior."
+]
+
+[notes]
+considerations = """
+This mission should happen before adding many more backend-specific exceptions. The goal is to avoid a pile of ad hoc checks and make unsupported warehouse paths explainable.
+"""

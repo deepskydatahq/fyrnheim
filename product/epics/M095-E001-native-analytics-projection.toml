@@ -1,0 +1,41 @@
+id = "M095-E001"
+parent = "M095"
+title = "Warehouse-native AnalyticsEntity projection"
+status = "complete"
+created = 2026-05-16
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Make supported AnalyticsEntity projections return backend-executable Ibis expressions on warehouse backends and fail fast for unsupported computed fields."
+
+[job_story]
+description = "When I run AnalyticsEntity on BigQuery, I want supported state/measure projections to stay in warehouse SQL and Python-only computed fields to be rejected before data is downloaded."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Warehouse AnalyticsEntity projections without computed_fields do not execute/re-register pandas results",
+  "Warehouse AnalyticsEntity projections with computed_fields raise UnsupportedWarehouseComputeError before materialization",
+  "BigQuery compile coverage includes state fields, latest/sum/count measures, and canonical_id grouping",
+  "DuckDB AnalyticsEntity tests remain compatible",
+  "M091/M094 capability policy allows supported AnalyticsEntity shapes and blocks computed_fields"
+]
+validator_context = [
+  "src/fyrnheim/engine/analytics_entity_engine.py",
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_analytics_entity_engine.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/analytics_entity_engine.py",
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_analytics_entity_engine.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep DuckDB local compatibility path for Python scalar restoration and computed fields. Warehouse path should be expression-only for supported shapes."

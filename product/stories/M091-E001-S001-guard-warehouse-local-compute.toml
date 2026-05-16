@@ -1,0 +1,56 @@
+id = "M091-E001-S001"
+parent = "M091-E001"
+title = "Guard warehouse pipelines against pandas transformation fallbacks"
+status = "complete"
+triage = "plan"
+created = 2026-05-16
+
+[outcome]
+description = "Add a central materialization policy and wire it into pipeline startup so known local pandas transformation paths fail before warehouse source data is downloaded."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "A central policy module defines warehouse backend classification and UnsupportedWarehouseComputeError."
+
+[[acceptance_criteria.criteria]]
+description = "run_pipeline rejects BigQuery/warehouse AnalyticsEntity projections before phase 1 source loading because projection currently materializes post-aggregation rows into pandas/memtable."
+
+[[acceptance_criteria.criteria]]
+description = "run_pipeline rejects BigQuery/warehouse StateSource inputs before phase 1 source loading because snapshot diff/full_refresh currently uses pandas row-event construction."
+
+[[acceptance_criteria.criteria]]
+description = "BigQuery/warehouse EventSource + MetricsModel-only pipelines remain allowed through policy validation."
+
+[[acceptance_criteria.criteria]]
+description = "DuckDB pipelines with StateSource and AnalyticsEntity are not rejected by the warehouse policy."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/materialization_policy.py",
+  "src/fyrnheim/engine/pipeline.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Introduce small pure functions so policy validation can be unit-tested without connecting to BigQuery.",
+  "Call policy validation near the start of run_pipeline, after assets are extracted and before staging/source phases.",
+  "Use backend != 'duckdb' as the conservative warehouse/local-compute boundary for now."
+]
+reference_files = [
+  "product/missions/M091-warehouse-compute-only-contract.toml",
+  "src/fyrnheim/engine/pipeline.py"
+]
+
+[execution]
+branch = "plan/M091-warehouse-compute-only-contract"
+worktree = ""
+pr = ""
+commit = "49fa6d5"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

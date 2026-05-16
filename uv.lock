@@ -496,6 +496,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "sqlglot" },
     { name = "types-pyyaml" },
 ]
 duckdb = [
@@ -523,6 +524,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
+    { name = "sqlglot", marker = "extra == 'dev'", specifier = ">=28.0.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
 ]
 provides-extras = ["duckdb", "bigquery", "clickhouse", "postgres", "dev"]

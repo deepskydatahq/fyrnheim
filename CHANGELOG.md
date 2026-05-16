@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Warehouse compute-only contract.** Warehouse-backed pipelines now fail fast
+  with `UnsupportedWarehouseComputeError` when an asset would require
+  downloading source or intermediate warehouse data for pandas transformation
+  compute. DuckDB/parquet local development remains supported, and final output
+  materialization is still an allowed boundary.
+
+- **Warehouse-native StateSource diff.** `StateSource` snapshot diff and
+  `full_refresh` paths now build `row_appeared`, `row_disappeared`, and
+  `field_changed` events as Ibis expressions using backend joins, filters,
+  JSON payload construction, and `UNION ALL` instead of pandas row loops.
+
+- **Warehouse phase capability contract.** The warehouse compute guard now uses
+  internal phase capabilities that record backend, input/output schema,
+  materialization policy, implementation tooling, and support status. This
+  keeps Fyrnheim's semantics explicit while treating Ibis/SQLGlot/raw SQL as
+  implementation tools.
+
+- **Warehouse-native AnalyticsEntity projection.** AnalyticsEntity state fields
+  and measures without Python `computed_fields` now return backend-executable
+  Ibis expressions on warehouse/unbound compile paths instead of executing the
+  post-aggregation result locally and re-registering an `ibis.memtable`.
+  Python `computed_fields` remain DuckDB/local-only and fail fast on warehouse
+  backends.
+
+- **SQLGlot SQL validation harness.** Tests can now compile Ibis expressions to
+  BigQuery SQL, parse/normalize them with SQLGlot, and assert structural SQL
+  properties for warehouse-native phases without live warehouse credentials.
+
+### Compatibility
+
+- This intentionally removes implicit warehouse-local pandas fallbacks.
+  `StateSource` snapshot/full-refresh paths and supported `AnalyticsEntity`
+  state/measure projections now have warehouse-native implementations;
+  `AnalyticsEntity.computed_fields` remain fail-fast on warehouse backends.
+
 ## [0.14.0] - 2026-04-28
 
 ### Added

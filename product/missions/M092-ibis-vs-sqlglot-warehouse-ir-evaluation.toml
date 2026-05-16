@@ -1,0 +1,85 @@
+# Mission: Evaluate Ibis vs SQLGlot as Fyrnheim's warehouse transformation IR
+# Investigation task opened from M091 review context.
+
+id = "M092"
+title = "Evaluate Ibis vs SQLGlot as warehouse transformation IR"
+status = "draft"
+created = 2026-05-16
+depends_on = ["M091"]
+
+[outcome]
+description = """
+Investigate whether Fyrnheim should continue using Ibis as the middle layer for warehouse-native transformation expressions, or move closer to SQL generation through SQLGlot.
+
+The evaluation should focus on Fyrnheim's post-M091 direction: warehouse backends must perform transformation compute, Python should orchestrate, and local pandas fallbacks are not acceptable. The question is whether Ibis remains the right abstraction for typed entity/source/activity/metric definitions, or whether SQLGlot would make pushdown, dialect control, compilation guarantees, and debugging simpler.
+"""
+
+user_progress = "From 'we assume Ibis is the right warehouse IR' to 'we have an evidence-backed architecture decision for Ibis, SQLGlot, or a hybrid boundary'"
+
+[execution]
+mode = "audit"
+outputs = ["architecture-decision", "prototype-notes", "follow-up-missions"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "Audit compares Ibis and SQLGlot against Fyrnheim's concrete workloads: EventSource normalization, StateSource diff, AnalyticsEntity projection, MetricsModel aggregation, source joins, JSON extraction, type casting, and final materialization",
+    "Prototype at least one blocked M091 path conceptually or in a spike: StateSource diff or AnalyticsEntity projection",
+    "Decision document explains tradeoffs for backend portability, BigQuery dialect fidelity, static validation, composability, debuggability, testing strategy, and migration cost",
+    "Recommendation explicitly covers whether to keep Ibis, move to SQLGlot, or use a hybrid model where Fyrnheim owns an internal IR and compiles through one or both libraries",
+    "Follow-up draft missions are filed for any recommended migration or hardening work"
+]
+validator_context = [
+    "docs/warehouse-compute-contract.md",
+    "src/fyrnheim/engine/",
+    "tests/test_*bigquery*",
+    "tests/test_metrics_engine.py",
+    "tests/test_event_source_loader.py",
+    "tests/test_analytics_entity_engine.py",
+    "tests/test_snapshot_diff.py"
+]
+
+[context]
+related_docs = [
+    "docs/warehouse-compute-contract.md",
+    "docs/M084-bigquery-pushdown-roadmap.md"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/activity_engine.py",
+    "src/fyrnheim/engine/analytics_entity_engine.py",
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/event_source_loader.py",
+    "src/fyrnheim/engine/identity_engine.py",
+    "src/fyrnheim/engine/metrics_engine.py",
+    "src/fyrnheim/engine/source_stage.py",
+    "tests/"
+]
+related_missions = [
+    "M091 — Warehouse compute-only contract"
+]
+
+[scope]
+in_scope = [
+    "Architecture comparison of Ibis vs SQLGlot for Fyrnheim's warehouse-native engine",
+    "Prototype or detailed design for one currently blocked local-compute path",
+    "Decision record under docs/",
+    "Follow-up mission TOMLs if architecture changes are recommended"
+]
+out_of_scope = [
+    "Full migration from Ibis to SQLGlot",
+    "Adding a new backend",
+    "Rewriting all existing engine paths during the investigation"
+]
+acceptable_breakage = [
+    "None. This is an investigation/audit mission only."
+]
+
+[notes]
+considerations = """
+Initial hypothesis to test:
+- Ibis is still strong as a composable relational expression API and protects Fyrnheim from hand-building SQL strings too early.
+- SQLGlot may be better for dialect-specific SQL generation, SQL parsing/transpilation, optimizer-style rewrites, and exact BigQuery debugging.
+- A hybrid may be best: keep Ibis for expression composition where it works, use SQLGlot for owned SQL rendering/validation or for features Ibis cannot express cleanly.
+
+The key risk is not library preference; it is whether Fyrnheim has a clear internal contract for transformations now that warehouse-local pandas fallback is forbidden.
+"""

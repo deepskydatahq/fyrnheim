@@ -27,6 +27,9 @@ from fyrnheim.engine.event_source_loader import (
 )
 from fyrnheim.engine.executor import IbisExecutor
 from fyrnheim.engine.identity_engine import enrich_events, resolve_identities
+from fyrnheim.engine.materialization_policy import (
+    assert_warehouse_compute_supported,
+)
 from fyrnheim.engine.metrics_engine import aggregate_metrics
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
@@ -284,6 +287,8 @@ def run_pipeline(
     metrics_models = assets.get("metrics_models", [])
     staging_views = assets.get("staging_views", [])
     source_column_requirements = collect_required_source_columns(assets)
+
+    assert_warehouse_compute_supported(backend=config.backend, assets=assets)
 
     # --- Phase 0: Materialize staging views (in-warehouse derived sources) ---
     if staging_views:

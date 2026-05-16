@@ -1,0 +1,38 @@
+id = "M091-E001"
+parent = "M091"
+title = "Central warehouse materialization policy"
+status = "ready"
+created = 2026-05-16
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Introduce a central engine policy that distinguishes DuckDB local compute from warehouse compute and rejects known pandas transformation fallbacks before data is downloaded."
+
+[job_story]
+description = "When I run a warehouse-backed Fyrnheim pipeline, I want unsupported local-compute paths to fail fast so that BigQuery is never used as a remote file source for pandas transformations."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Central policy exposes warehouse/local compute classification and a clear UnsupportedWarehouseComputeError",
+  "Pipeline validates warehouse-unsafe StateSource snapshot/full_refresh and AnalyticsEntity projection paths before source data is materialized",
+  "EventSource plus MetricsModel warehouse pipelines remain allowed because they stay expression-native until final output materialization",
+  "Focused tests cover blocked AnalyticsEntity, blocked StateSource, allowed EventSource/MetricsModel, and DuckDB local compatibility"
+]
+validator_context = [
+  "src/fyrnheim/engine/materialization_policy.py",
+  "src/fyrnheim/engine/pipeline.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/materialization_policy.py",
+  "src/fyrnheim/engine/pipeline.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep the first guard conservative: fail fast for known pandas transformation fallbacks rather than silently downloading warehouse data. DuckDB remains the local compute backend."

@@ -1,0 +1,53 @@
+id = "M091-E002-S001"
+parent = "M091-E002"
+title = "Document warehouse compute-only contract and audit dispositions"
+status = "ready"
+triage = "ready"
+created = 2026-05-16
+
+[outcome]
+description = "Document the warehouse compute-only contract and update release notes with the intentional removal of warehouse-local pandas fallbacks."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "docs/warehouse-compute-contract.md explains allowed materialization boundaries and forbidden local-compute fallbacks."
+
+[[acceptance_criteria.criteria]]
+description = "The docs classify audited engine pandas/materialization paths by disposition."
+
+[[acceptance_criteria.criteria]]
+description = "CHANGELOG.md includes an Unreleased entry for the warehouse compute-only contract and notes DuckDB local development remains supported."
+
+[[acceptance_criteria.criteria]]
+description = "Parent epic and mission TOML statuses are updated after validation."
+
+[context]
+relevant_paths = [
+  "docs/warehouse-compute-contract.md",
+  "CHANGELOG.md",
+  "product/epics/M091-E002-contract-documentation.toml",
+  "product/missions/M091-warehouse-compute-only-contract.toml"
+]
+input_fixtures = []
+depends_on = ["M091-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Keep docs concise and operational: what is allowed, what is blocked, how to fix blocked features.",
+  "Mention UnsupportedWarehouseComputeError by name."
+]
+reference_files = [
+  "product/missions/M091-warehouse-compute-only-contract.toml",
+  "docs/M084-bigquery-pushdown-roadmap.md"
+]
+
+[execution]
+branch = "plan/M091-warehouse-compute-only-contract"
+worktree = ""
+pr = ""
+commit = ""
+started = ""
+completed = ""
+failure_reason = ""

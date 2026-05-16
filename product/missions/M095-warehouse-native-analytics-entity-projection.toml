@@ -3,7 +3,7 @@
 
 id = "M095"
 title = "Warehouse-native AnalyticsEntity projection"
-status = "draft"
+status = "complete"
 created = 2026-05-16
 depends_on = ["M092", "M094"]
 

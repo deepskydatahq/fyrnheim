@@ -33,13 +33,11 @@ to extract scalar fields portably:
 
 Legacy pandas returned the raw JSON-decoded Python value for state fields
 (``latest``/``first``/``coalesce``) and the ``latest`` measure. SQL columns
-are fixed-type, so we push down the aggregation producing **JSON text**
-(via ``try_cast("string")``) and parse each value back to its original
-Python type on the client after ``.execute()``. This preserves the
-mixed-type contract (e.g. ``{"age": 30}`` → Python ``int`` 30,
-``{"is_active": true}`` → Python ``bool`` True, ``{"plan": "pro"}`` →
-Python ``str`` "pro"). The heavy grouping work still pushes down to the
-backend — only the one-row-per-group result is post-processed.
+are fixed-type, so the engine pushes down aggregation producing **JSON text**
+(via ``try_cast("string")``). On DuckDB local-development paths, that small
+result is parsed back to Python scalars for backwards compatibility. On
+warehouse/unbound compile paths, the JSON-text expression is returned directly
+so transformation compute remains backend-native.
 
 ## ``field_changed`` event shape
 
@@ -59,10 +57,9 @@ arm, or a matching event would be dropped.
 
 ## ``computed_fields``
 
-Still evaluated in Python (``eval``). After the aggregation expression is
-built, if any computed fields exist we ``.execute()`` the (now small)
-result, apply the computed fields in pandas, and wrap the frame back in
-``ibis.memtable``. The heavy grouping work still pushes down.
+Computed fields are DuckDB/local-only for now because they are Python row
+expressions. Warehouse paths raise ``UnsupportedWarehouseComputeError`` before
+materialization until a supported Ibis expression subset exists.
 """
 
 from __future__ import annotations
@@ -77,6 +74,7 @@ from ibis.expr.types import BooleanValue, StringValue, Table
 
 from fyrnheim.core.analytics_entity import AnalyticsEntity, Measure, StateField
 from fyrnheim.engine.expression_eval import evaluate_expression
+from fyrnheim.engine.materialization_policy import UnsupportedWarehouseComputeError
 
 
 class _RowProxy:
@@ -548,6 +546,43 @@ def _parse_json_text_columns(
     return out
 
 
+def _backend_name_or_none(expr: Table) -> str | None:
+    """Return bound backend name, or None for unbound compile-only expressions."""
+    try:
+        return str(expr.get_backend().name).lower()
+    except Exception:
+        return None
+
+
+def _uses_warehouse_native_projection(enriched_events: Table) -> bool:
+    """Return True when projection must stay expression-only.
+
+    DuckDB is the local-development backend and keeps the legacy compatibility
+    path that restores JSON text to Python scalars and evaluates computed
+    fields locally. Non-DuckDB and unbound expressions use the warehouse-native
+    path; unbound expressions are how tests compile representative SQL without
+    live warehouse credentials.
+    """
+    backend = _backend_name_or_none(enriched_events)
+    return backend != "duckdb"
+
+
+def _select_ordered_projection(
+    agg_expr: Table, enriched_events: Table, analytics_entity: AnalyticsEntity
+) -> Table:
+    group_key = (
+        "canonical_id"
+        if "canonical_id" in enriched_events.schema().names
+        else "entity_id"
+    )
+    ordered_cols = (
+        [group_key]
+        + [sf.name for sf in analytics_entity.state_fields]
+        + [m.name for m in analytics_entity.measures]
+    )
+    return agg_expr.select(ordered_cols)
+
+
 def project_analytics_entity(
     enriched_events: Table,
     analytics_entity: AnalyticsEntity,
@@ -555,13 +590,11 @@ def project_analytics_entity(
     """Project one row per entity from enriched events using an AnalyticsEntity.
 
     Returns an Ibis expression composed of ``filter`` -> ``group_by`` ->
-    ``aggregate`` over JSON payload extraction. State fields and the
-    ``latest`` measure are pushed down as JSON-text extracts and parsed
-    back to Python scalars on the client (preserving mixed int/float/str/
-    bool types). When the entity declares ``computed_fields``, the
-    post-processed frame is additionally passed through ``eval`` for each
-    computed column. In all cases the heavy grouping work pushes down to
-    the backend — only the one-row-per-group result is materialised.
+    ``aggregate`` over JSON payload extraction. Warehouse/unbound compile
+    paths return that expression directly when no ``computed_fields`` are
+    declared. DuckDB local-development paths retain the legacy compatibility
+    behavior that parses JSON-text state/latest values back to Python scalars
+    and evaluates ``computed_fields`` in Python.
 
     Args:
         enriched_events: Ibis table with columns ``source``, ``entity_id``,
@@ -571,12 +604,21 @@ def project_analytics_entity(
             measures, and computed fields.
 
     Returns:
-        Ibis ``Table`` (an ``ibis.memtable``) with one row per entity plus
-        all state, measure, and computed field columns. State and
-        ``latest``-measure columns carry Python-scalar values (object
-        dtype) to match the legacy pandas contract.
+        Ibis ``Table`` with one row per entity plus all state/measure columns
+        and, on DuckDB local paths, computed field columns. Warehouse paths
+        with computed fields raise ``UnsupportedWarehouseComputeError``.
     """
     agg_expr = _build_aggregation_expression(enriched_events, analytics_entity)
+
+    if _uses_warehouse_native_projection(enriched_events):
+        if analytics_entity.computed_fields:
+            raise UnsupportedWarehouseComputeError(
+                "AnalyticsEntity computed_fields are not supported on warehouse "
+                f"backends for entity {analytics_entity.name!r}. Computed fields "
+                "currently require Python row evaluation; remove computed_fields "
+                "or wait for a supported Ibis expression subset."
+            )
+        return _select_ordered_projection(agg_expr, enriched_events, analytics_entity)
 
     # Columns that were pushed down as JSON text and need client-side parsing.
     json_text_columns = [sf.name for sf in analytics_entity.state_fields] + [

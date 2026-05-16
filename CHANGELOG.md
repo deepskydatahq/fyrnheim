@@ -26,12 +26,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps Fyrnheim's semantics explicit while treating Ibis/SQLGlot/raw SQL as
   implementation tools.
 
+- **Warehouse-native AnalyticsEntity projection.** AnalyticsEntity state fields
+  and measures without Python `computed_fields` now return backend-executable
+  Ibis expressions on warehouse/unbound compile paths instead of executing the
+  post-aggregation result locally and re-registering an `ibis.memtable`.
+  Python `computed_fields` remain DuckDB/local-only and fail fast on warehouse
+  backends.
+
 ### Compatibility
 
 - This intentionally removes implicit warehouse-local pandas fallbacks.
-  `StateSource` snapshot/full-refresh paths now have warehouse-native event
-  construction; `AnalyticsEntity` projection remains fail-fast on warehouse
-  backends until it has a fully Ibis-native implementation.
+  `StateSource` snapshot/full-refresh paths and supported `AnalyticsEntity`
+  state/measure projections now have warehouse-native implementations;
+  `AnalyticsEntity.computed_fields` remain fail-fast on warehouse backends.
 
 ## [0.14.0] - 2026-04-28
 

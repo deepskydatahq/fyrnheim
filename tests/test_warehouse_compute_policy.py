@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
 from fyrnheim.core.analytics_entity import AnalyticsEntity, Measure
 from fyrnheim.core.metrics_model import MetricField, MetricsModel
@@ -48,10 +49,11 @@ def test_phase_capability_records_contract_fields() -> None:
     assert capability.warehouse_native is True
 
 
-def test_bigquery_analytics_entity_rejected_before_source_loading() -> None:
+def test_bigquery_analytics_entity_computed_fields_rejected_before_source_loading() -> None:
     entity = AnalyticsEntity(
         name="customers",
         measures=[Measure(name="opens", activity="opened", aggregation="count")],
+        computed_fields=[ComputedColumn(name="double_opens", expression="opens * 2")],
     )
     source = EventSource(
         name="events",
@@ -71,9 +73,9 @@ def test_bigquery_analytics_entity_rejected_before_source_loading() -> None:
         )
 
     message = str(exc_info.value)
-    assert "AnalyticsEntity projection" in message
+    assert "AnalyticsEntity computed_fields" in message
     assert "customers" in message
-    assert "memtable" in message
+    assert "computed_fields" in message
 
 
 def test_bigquery_state_source_is_policy_allowed_after_native_diff() -> None:
@@ -141,9 +143,25 @@ def test_bigquery_asset_capabilities_cover_core_phases() -> None:
     assert by_phase["identity"].warehouse_native is True
     assert by_phase["metrics"].warehouse_native is True
     assert by_phase["staging"].materialization_policy == "backend_ddl"
-    assert by_phase["analytics_entity"].warehouse_native is False
-    assert by_phase["analytics_entity"].materialization_policy == "unsupported"
-    assert "pandas" in by_phase["analytics_entity"].compiler_tools
+    assert by_phase["analytics_entity"].warehouse_native is True
+    assert by_phase["analytics_entity"].materialization_policy == "expression_only"
+    assert by_phase["analytics_entity"].compiler_tools == ("ibis",)
+
+
+def test_bigquery_analytics_entity_without_computed_fields_is_policy_allowed() -> None:
+    entity = AnalyticsEntity(
+        name="customers",
+        measures=[Measure(name="opens", activity="opened", aggregation="count")],
+    )
+
+    findings = find_warehouse_compute_findings(
+        backend="bigquery", assets={"analytics_entities": [entity]}
+    )
+
+    assert findings == []
+    assert_warehouse_compute_supported(
+        backend="bigquery", assets={"analytics_entities": [entity]}
+    )
 
 
 def test_bigquery_event_source_metrics_only_is_policy_allowed() -> None:

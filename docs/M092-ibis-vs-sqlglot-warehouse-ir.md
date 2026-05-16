@@ -40,7 +40,7 @@ The question is therefore not "Ibis vs SQL strings" in the abstract. It is wheth
 | Activity derivation | Predicates, projections, `UNION ALL` | Strong. Natural relational expression. | Possible but unnecessary. | Keep Ibis. |
 | Identity resolution | Filter, JSON extraction, deterministic hash, group, join/coalesce | Mostly strong. Backend-specific hash return type already handled. | Useful if hash dialects become brittle. | Keep Ibis with focused backend compile tests. |
 | MetricsModel aggregation | Filter, date grain, dimensions, aggregate expressions | Strong. Existing BigQuery compile test covers `GROUP BY`, JSON, count distinct. | Possible but duplicative. | Keep Ibis. |
-| AnalyticsEntity projection | Group/aggregate is Ibis; JSON scalar restoration and computed fields still pandas | Mixed. Relational pieces fit; Python computed fields do not. | Useful for owned SQL projection, but Python expression semantics still need a translation layer. | Add Ibis-native projection first; use SQLGlot for validation/debugging if SQL shape is complex. |
+| AnalyticsEntity projection | State/measure projection is Ibis-native; Python computed fields remain local-only | Mostly strong. Relational pieces fit; Python computed fields do not. | Useful for owned SQL projection, but Python expression semantics still need a translation layer. | Keep Ibis-native projection; block computed fields on warehouses until a supported expression subset exists. |
 | StateSource snapshot diff | Current code is pandas diff; desired shape is full outer/left anti joins + JSON event construction | Possible in Ibis, but complex around event row union and payload JSON. | Strong conceptual fit for exact SQL diff query, especially BigQuery. | Prototype both; likely Ibis for portable expression, SQLGlot if BigQuery SQL needs exact control. |
 | Final materialization | `.execute()` to parquet or `write_table` output boundary | Ibis connection/write integration is useful. | SQLGlot does not execute; still needs backend client. | Keep Ibis/executor. |
 
@@ -59,12 +59,11 @@ This is strong evidence that Ibis is not merely incidental. It is the current co
 
 ### The blocked M091 paths are not solved by SQLGlot alone
 
-`AnalyticsEntity` still has Python-only semantics:
+`AnalyticsEntity` still has one Python-only semantic surface:
 
-- JSON scalar restoration intentionally returns Python scalars for mixed JSON values.
 - `computed_fields` use Python expression evaluation over rows.
 
-SQLGlot can generate SQL, but it does not automatically translate Fyrnheim's Python computed-field semantics into backend expressions. Fyrnheim still needs an expression/capability layer either way.
+State/measure projection now returns warehouse-native Ibis expressions for supported shapes. SQLGlot can generate SQL, but it does not automatically translate Fyrnheim's Python computed-field semantics into backend expressions. Fyrnheim still needs an expression/capability layer either way.
 
 `StateSource` snapshot diff is more SQL-shaped:
 

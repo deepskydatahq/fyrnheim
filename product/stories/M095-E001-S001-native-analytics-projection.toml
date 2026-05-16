@@ -1,0 +1,54 @@
+id = "M095-E001-S001"
+parent = "M095-E001"
+title = "Return warehouse-native AnalyticsEntity projections"
+status = "complete"
+triage = "plan"
+created = 2026-05-16
+
+[outcome]
+description = "Route AnalyticsEntity projection through an expression-only warehouse path for supported shapes and update capability policy/tests accordingly."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "project_analytics_entity returns a backend-executable Ibis expression without .execute()/ibis.memtable on warehouse or unbound compile paths when computed_fields is empty."
+
+[[acceptance_criteria.criteria]]
+description = "project_analytics_entity and materialization policy reject warehouse AnalyticsEntity computed_fields with UnsupportedWarehouseComputeError."
+
+[[acceptance_criteria.criteria]]
+description = "BigQuery compile tests cover state field, count, sum, latest, and canonical_id grouping SQL shape."
+
+[[acceptance_criteria.criteria]]
+description = "DuckDB local AnalyticsEntity compatibility tests continue to pass."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/analytics_entity_engine.py",
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_analytics_entity_engine.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Detect DuckDB-bound tables and keep the current local parse/computed_fields path there.",
+  "Use expression-only path for non-DuckDB or unbound tables so ibis.to_sql can compile BigQuery tests.",
+  "Computed fields remain DuckDB/local-only until a supported expression subset exists."
+]
+reference_files = [
+  "product/missions/M095-warehouse-native-analytics-entity-projection.toml",
+  "docs/warehouse-compute-contract.md"
+]
+
+[execution]
+branch = "plan/M091-warehouse-compute-only-contract"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/160"
+commit = "pending"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

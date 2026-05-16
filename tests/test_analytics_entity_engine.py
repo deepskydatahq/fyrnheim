@@ -16,6 +16,7 @@ from fyrnheim.engine.analytics_entity_engine import (
     project_analytics_entity,
 )
 from fyrnheim.engine.analytics_entity_registry import AnalyticsEntityRegistry
+from fyrnheim.engine.materialization_policy import UnsupportedWarehouseComputeError
 from tests._legacy_pandas_projection import legacy_project_analytics_entity
 
 
@@ -28,6 +29,64 @@ def _make_events(rows: list[dict]) -> ibis.expr.types.Table:
             lambda v: json.dumps(v) if isinstance(v, dict) else v
         )
     return ibis.memtable(df)
+
+
+def test_analytics_entity_projection_compiles_to_bigquery_without_materialization() -> None:
+    events = ibis.table(
+        {
+            "source": "string",
+            "entity_id": "string",
+            "canonical_id": "string",
+            "ts": "string",
+            "event_type": "string",
+            "payload": "string",
+        },
+        name="enriched_events",
+    )
+    entity = AnalyticsEntity(
+        name="accounts",
+        state_fields=[
+            StateField(name="company_name", source="crm", field="name", strategy="latest"),
+        ],
+        measures=[
+            Measure(name="login_count", activity="login", aggregation="count"),
+            Measure(name="purchase_total", activity="purchase", aggregation="sum", field="amount"),
+            Measure(name="last_purchase", activity="purchase", aggregation="latest", field="amount"),
+        ],
+    )
+
+    sql = ibis.to_sql(project_analytics_entity(events, entity), dialect="bigquery")
+
+    assert "GROUP BY" in sql
+    assert "canonical_id" in sql
+    assert "company_name" in sql
+    assert "login_count" in sql
+    assert "purchase_total" in sql
+    assert "last_purchase" in sql
+    assert "JSON" in sql
+    assert "COUNT" in sql
+    assert "SUM" in sql
+
+
+def test_warehouse_computed_fields_raise_before_materialization() -> None:
+    events = ibis.table(
+        {
+            "source": "string",
+            "entity_id": "string",
+            "ts": "string",
+            "event_type": "string",
+            "payload": "string",
+        },
+        name="events",
+    )
+    entity = AnalyticsEntity(
+        name="accounts",
+        measures=[Measure(name="login_count", activity="login", aggregation="count")],
+        computed_fields=[ComputedColumn(name="double_login", expression="login_count * 2")],
+    )
+
+    with pytest.raises(UnsupportedWarehouseComputeError, match="computed_fields"):
+        project_analytics_entity(events, entity)
 
 
 # ---------------------------------------------------------------------------

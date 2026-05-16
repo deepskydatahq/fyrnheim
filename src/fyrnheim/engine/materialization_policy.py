@@ -136,18 +136,13 @@ def _warehouse_phase_capability(phase: PhaseName, *, backend: str) -> PhaseCapab
             backend=backend,
             input_schema=input_schema,
             output_schema=output_schema,
-            materialization_policy="unsupported",
-            compiler_tools=("ibis", "pandas"),
-            warehouse_native=False,
+            materialization_policy="expression_only",
+            compiler_tools=("ibis",),
+            warehouse_native=True,
             reason=(
-                "projection currently executes the post-aggregation result in "
-                "Python for JSON value parsing and computed field evaluation, "
-                "then re-registers it as a memtable"
-            ),
-            suggestion=(
-                "use MetricsModel outputs or wait for a fully Ibis-native "
-                "AnalyticsEntity projection before running this asset on a "
-                "warehouse backend"
+                "state fields and measures compose as backend-executable Ibis "
+                "expressions when the entity does not declare Python-only "
+                "computed_fields"
             ),
         )
 
@@ -202,7 +197,7 @@ def _phase_shape(
         return (
             (*CANONICAL_EVENT_SCHEMA, "canonical_id:string?"),
             ("analytics entity output table",),
-            ("ibis", "pandas"),
+            ("ibis",),
         )
     if phase == "staging":
         return (("staging SQL",), ("warehouse view/table",), ("raw_sql", "backend_client"))
@@ -254,15 +249,22 @@ def find_warehouse_compute_findings(
     findings: list[WarehouseComputeFinding] = []
 
     analytics_capability = by_phase.get("analytics_entity")
-    if analytics_capability is not None and not analytics_capability.warehouse_native:
+    if analytics_capability is not None:
         for entity in assets.get("analytics_entities", []):
-            if isinstance(entity, AnalyticsEntity):
+            if isinstance(entity, AnalyticsEntity) and entity.computed_fields:
                 findings.append(
                     WarehouseComputeFinding(
-                        feature="AnalyticsEntity projection",
+                        feature="AnalyticsEntity computed_fields",
                         asset_name=entity.name,
-                        reason=analytics_capability.reason,
-                        suggestion=analytics_capability.suggestion,
+                        reason=(
+                            "computed_fields currently require Python row "
+                            "evaluation after projection"
+                        ),
+                        suggestion=(
+                            "remove computed_fields or wait for a supported "
+                            "Ibis expression subset before running this entity "
+                            "on a warehouse backend"
+                        ),
                         capability=analytics_capability,
                     )
                 )

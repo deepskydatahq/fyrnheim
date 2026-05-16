@@ -1,0 +1,40 @@
+id = "M096-E001"
+parent = "M096"
+title = "SQLGlot SQL validation harness"
+status = "complete"
+created = 2026-05-16
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Add SQLGlot-backed test helpers and structural BigQuery SQL shape tests for warehouse-native Fyrnheim phases."
+
+[job_story]
+description = "When I change warehouse expression code, I want tests to parse generated BigQuery SQL and assert structural properties instead of relying only on brittle string checks."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Test helper compiles Ibis expressions to BigQuery SQL and parses/normalizes with SQLGlot",
+  "Structural SQL tests cover EventSource, activity, identity, MetricsModel, StateSource diff, and AnalyticsEntity projection",
+  "Tests require no live BigQuery credentials",
+  "Docs explain SQLGlot's test/debugging role"
+]
+validator_context = [
+  "tests/sql_shape.py",
+  "tests/test_sql_shape_harness.py",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+  "pyproject.toml"
+]
+
+[context]
+relevant_paths = [
+  "tests/sql_shape.py",
+  "tests/test_sql_shape_harness.py",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+  "pyproject.toml"
+]
+dependencies = []
+
+[notes]
+considerations = "Do not make SQLGlot the runtime IR; this is test/debug infrastructure."

@@ -1,0 +1,52 @@
+id = "M096-E001-S001"
+parent = "M096-E001"
+title = "Add SQLGlot BigQuery SQL shape tests"
+status = "complete"
+triage = "ready"
+created = 2026-05-16
+
+[outcome]
+description = "Add a SQLGlot-backed test helper and structural SQL shape coverage for warehouse-native Fyrnheim phases."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "tests/sql_shape.py compiles Ibis expressions to BigQuery SQL, parses them with SQLGlot, and exposes structural assertion helpers."
+
+[[acceptance_criteria.criteria]]
+description = "tests/test_sql_shape_harness.py covers EventSource payload construction, activity UNION ALL, identity join/coalesce, MetricsModel GROUP BY, StateSource diff, and AnalyticsEntity projection."
+
+[[acceptance_criteria.criteria]]
+description = "SQLGlot is declared directly for dev/test usage if tests import it."
+
+[[acceptance_criteria.criteria]]
+description = "Docs state SQLGlot is validation/debugging tooling, not Fyrnheim's runtime IR."
+
+[context]
+relevant_paths = [
+  "tests/sql_shape.py",
+  "tests/test_sql_shape_harness.py",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+  "pyproject.toml"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Prefer AST node assertions over exact SQL formatting.",
+  "Use unbound Ibis tables so tests compile SQL without warehouse credentials."
+]
+reference_files = [
+  "product/missions/M096-sqlglot-sql-validation-harness.toml"
+]
+
+[execution]
+branch = "plan/M091-warehouse-compute-only-contract"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/160"
+commit = "see enclosing commit"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

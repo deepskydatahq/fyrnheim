@@ -3,7 +3,7 @@
 
 id = "M096"
 title = "SQLGlot SQL validation harness"
-status = "draft"
+status = "complete"
 created = 2026-05-16
 depends_on = ["M092"]
 

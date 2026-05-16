@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python `computed_fields` remain DuckDB/local-only and fail fast on warehouse
   backends.
 
+- **SQLGlot SQL validation harness.** Tests can now compile Ibis expressions to
+  BigQuery SQL, parse/normalize them with SQLGlot, and assert structural SQL
+  properties for warehouse-native phases without live warehouse credentials.
+
 ### Compatibility
 
 - This intentionally removes implicit warehouse-local pandas fallbacks.

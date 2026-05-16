@@ -186,7 +186,7 @@ Winner: Ibis.
   - whether the phase is warehouse-native for a backend;
   - allowed materialization boundaries;
   - known dialect requirements.
-- Add SQL inspection tests that compile Ibis to SQL and parse with SQLGlot for BigQuery where useful.
+- Keep SQL inspection tests that compile Ibis to SQL and parse with SQLGlot for BigQuery where useful.
 - Consider SQLGlot-backed rendering only for isolated subqueries that Ibis cannot express correctly.
 
 ### Do not do now
@@ -199,6 +199,7 @@ Winner: Ibis.
 
 - `M093` — Warehouse-native StateSource snapshot diff spike (completed: implemented first in Ibis, with BigQuery compile coverage).
 - `M094` — Internal warehouse transformation capability contract (completed: phase capabilities now record backend, schema, materialization policy, tooling, and support status; M091 guardrails use those capabilities).
+- `M096` — SQLGlot SQL validation harness (completed: tests compile Ibis expressions to BigQuery SQL, parse/normalize with SQLGlot, and assert structural AST properties for warehouse-native phases).
 
 ## Final answer to the original question
 

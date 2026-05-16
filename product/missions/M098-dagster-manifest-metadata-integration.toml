@@ -1,0 +1,67 @@
+# Mission: Dagster manifest metadata integration
+
+id = "M098"
+title = "Dagster manifest metadata integration"
+status = "complete"
+created = 2026-05-16
+depends_on = ["M097"]
+
+[outcome]
+description = """
+Provide a lightweight integration helper that lets Dagster jobs attach Fyrnheim manifest identity metadata to runs or materializations, so external meta tools can correlate Dagster runtime state with the exact Fyrnheim semantic graph version.
+"""
+
+user_progress = "From 'Dagster can run Fyrnheim but a meta tool must infer which semantic graph was used' to 'Dagster metadata can carry a stable Fyrnheim manifest hash and commit identity for correlation'."
+
+[execution]
+mode = "implementation"
+outputs = ["integration-helper", "docs", "tests"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A public helper builds deterministic manifest metadata suitable for attaching to Dagster runs or materializations without importing Dagster",
+  "The helper includes schema version, manifest hash, git commit, project path, entities directory, and asset counts",
+  "The manifest hash is stable for semantically identical manifest JSON and changes when the manifest changes",
+  "Docs show how Dagster code can attach the metadata while keeping Fyrnheim independent of Dagster as a dependency"
+]
+validator_context = [
+  "src/fyrnheim/integrations/dagster.py",
+  "src/fyrnheim/inspect.py",
+  "tests/test_dagster_manifest_metadata.py",
+  "docs/project-manifest.md"
+]
+
+[context]
+related_docs = [
+  "docs/project-manifest.md"
+]
+relevant_paths = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/integrations/",
+  "tests/",
+  "docs/project-manifest.md"
+]
+related_missions = [
+  "M097 — Fyrnheim project manifest export"
+]
+
+[scope]
+in_scope = [
+  "Manifest hash helper",
+  "Dagster-compatible metadata dictionary helper without a Dagster runtime dependency",
+  "Tests for determinism and change detection",
+  "Docs with Dagster attachment examples"
+]
+out_of_scope = [
+  "Adding Dagster as a dependency",
+  "Generating Dagster Definitions or assets",
+  "Calling Dagster APIs",
+  "Live GitHub integration"
+]
+acceptable_breakage = [
+  "No runtime behavior changes expected; helpers are additive."
+]
+
+[notes]
+considerations = "Keep Dagster optional. The integration should return plain Python/JSON values that Dagster callers can attach as metadata themselves."

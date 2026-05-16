@@ -107,6 +107,41 @@ A meta tool that has both GitHub and Dagster access should:
 
 This keeps responsibilities clean: GitHub/Fyrnheim provides the versioned semantic graph, while Dagster provides the operational state of that graph.
 
+## Attaching Fyrnheim metadata in Dagster
+
+Fyrnheim provides a small Dagster-compatible helper that does not import or depend on Dagster. It returns plain JSON-compatible values that your Dagster job can attach to runs, observations, or materializations.
+
+```python
+from fyrnheim.integrations.dagster import build_manifest_metadata
+
+metadata = build_manifest_metadata(
+    entities_dir="entities",
+    project_path=".",
+)
+```
+
+Example inside Dagster code:
+
+```python
+from dagster import MetadataValue, asset
+from fyrnheim.integrations.dagster import build_manifest_metadata
+
+@asset
+def fyrnheim_pipeline(context):
+    metadata = build_manifest_metadata("entities", project_path=".")
+    context.add_output_metadata(
+        {
+            "fyrnheim_manifest_hash": metadata["fyrnheim_manifest_hash"],
+            "fyrnheim_git_commit": metadata["fyrnheim_git_commit"],
+            "fyrnheim_schema_version": metadata["fyrnheim_schema_version"],
+            "fyrnheim_asset_counts": MetadataValue.json(metadata["fyrnheim_asset_counts"]),
+        }
+    )
+    # Run Fyrnheim pipeline here.
+```
+
+The key field for correlation is `fyrnheim_manifest_hash`. A meta tool can compare that hash with a manifest exported from the GitHub checkout for the same commit. `fyrnheim_git_commit`, `fyrnheim_project_path`, `fyrnheim_entities_dir`, and the asset counts are included to make debugging mismatches easier.
+
 ## Security note
 
 Manifest discovery imports project Python files. When inspecting third-party or user-submitted repositories, run discovery in a restricted container or sandbox without production credentials.

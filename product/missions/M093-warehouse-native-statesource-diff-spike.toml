@@ -1,0 +1,76 @@
+# Mission: Warehouse-native StateSource snapshot diff spike
+# Follow-up from M092 Ibis vs SQLGlot IR evaluation.
+
+id = "M093"
+title = "Warehouse-native StateSource snapshot diff spike"
+status = "draft"
+created = 2026-05-16
+depends_on = ["M092"]
+
+[outcome]
+description = """
+Prototype and then implement a warehouse-native StateSource snapshot diff path so StateSource can be re-enabled for BigQuery/warehouse backends without downloading current/previous snapshots into pandas.
+
+The implementation should build appeared/disappeared/field_changed canonical event rows as backend-executable expressions, with DuckDB parity and BigQuery compile coverage.
+"""
+
+user_progress = "From 'warehouse StateSource is blocked by M091 because diff uses pandas' to 'StateSource diff composes backend SQL/Ibis events and is allowed on BigQuery again'"
+
+[execution]
+mode = "implementation"
+outputs = ["engine-refactor", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+    "StateSource cold-start row_appeared events are built as Ibis/backend expressions without current.execute() on warehouse backends",
+    "StateSource appeared/disappeared/field_changed diff is built as backend joins/filters/unions without pandas DataFrame diff on warehouse backends",
+    "Payload JSON construction matches existing DuckDB test expectations for supported scalar field types",
+    "BigQuery compile tests verify row_appeared, row_disappeared, field_changed, null-safe comparisons, and UNION ALL SQL shape",
+    "M091 materialization policy allows StateSource on BigQuery only after this expression-native path is used",
+    "Existing DuckDB snapshot_diff tests pass"
+]
+validator_context = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/pipeline.py",
+    "src/fyrnheim/engine/materialization_policy.py",
+    "tests/test_snapshot_diff.py"
+]
+
+[context]
+related_docs = [
+    "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+    "docs/warehouse-compute-contract.md"
+]
+relevant_paths = [
+    "src/fyrnheim/engine/diff_engine.py",
+    "src/fyrnheim/engine/snapshot_diff.py",
+    "src/fyrnheim/engine/materialization_policy.py",
+    "tests/test_snapshot_diff.py"
+]
+related_missions = [
+    "M091 — Warehouse compute-only contract",
+    "M092 — Evaluate Ibis vs SQLGlot as warehouse transformation IR"
+]
+
+[scope]
+in_scope = [
+    "Expression-native StateSource diff spike and implementation",
+    "BigQuery SQL compile coverage",
+    "DuckDB parity tests",
+    "Policy update to unblock warehouse StateSource when using native diff"
+]
+out_of_scope = [
+    "Wholesale Ibis-to-SQLGlot migration",
+    "Complex nested payload types beyond current StateSource support unless required by existing tests",
+    "Changing StateSource public API"
+]
+acceptable_breakage = [
+    "None expected for DuckDB. Warehouse StateSource behavior changes from fail-fast to supported only when expression-native diff criteria pass."
+]
+
+[notes]
+considerations = """
+Start with Ibis expression implementation because source-stage tables and downstream event streams are already Ibis tables. Use SQLGlot as a validation/debugging aid if BigQuery SQL shape becomes hard to reason about.
+"""

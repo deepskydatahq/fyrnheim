@@ -15,11 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compute. DuckDB/parquet local development remains supported, and final output
   materialization is still an allowed boundary.
 
+- **Warehouse-native StateSource diff.** `StateSource` snapshot diff and
+  `full_refresh` paths now build `row_appeared`, `row_disappeared`, and
+  `field_changed` events as Ibis expressions using backend joins, filters,
+  JSON payload construction, and `UNION ALL` instead of pandas row loops.
+
 ### Compatibility
 
-- This intentionally removes implicit warehouse-local pandas fallbacks for
-  `StateSource` snapshot/full-refresh paths and `AnalyticsEntity` projection
-  until those features have fully Ibis-native implementations.
+- This intentionally removes implicit warehouse-local pandas fallbacks.
+  `StateSource` snapshot/full-refresh paths now have warehouse-native event
+  construction; `AnalyticsEntity` projection remains fail-fast on warehouse
+  backends until it has a fully Ibis-native implementation.
 
 ## [0.14.0] - 2026-04-28
 

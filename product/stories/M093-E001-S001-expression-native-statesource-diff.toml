@@ -1,0 +1,60 @@
+id = "M093-E001-S001"
+parent = "M093-E001"
+title = "Build StateSource diff events as Ibis expressions"
+status = "complete"
+triage = "plan"
+created = 2026-05-16
+
+[outcome]
+description = "Implement expression-native StateSource diff and replay/full_refresh event construction, update warehouse compute policy, and add BigQuery compile coverage."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "diff_snapshots builds cold-start row_appeared events without current.execute() and returns canonical event schema."
+
+[[acceptance_criteria.criteria]]
+description = "diff_snapshots builds appeared/disappeared/field_changed events with joins/filters/unions and null-safe field comparison, without pandas DataFrame diff."
+
+[[acceptance_criteria.criteria]]
+description = "SnapshotDiffPipeline replay and StateSource full_refresh use expression-native row_appeared construction rather than executing current rows into pandas."
+
+[[acceptance_criteria.criteria]]
+description = "BigQuery compile tests cover row_appeared, row_disappeared, field_changed, and UNION ALL SQL shape."
+
+[[acceptance_criteria.criteria]]
+description = "M091 materialization policy no longer blocks StateSource on BigQuery, while AnalyticsEntity remains blocked."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/diff_engine.py",
+  "src/fyrnheim/engine/snapshot_diff.py",
+  "src/fyrnheim/engine/pipeline.py",
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_snapshot_diff.py",
+  "tests/test_warehouse_compute_policy.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Create a helper like make_row_appeared_events(table, source_name, id_field, snapshot_date).",
+  "For changed fields, rename previous columns with a private prefix before joining to avoid collisions.",
+  "Use Ibis identical_to or equivalent null-safe comparison for field changes.",
+  "Keep existing pandas helpers if needed for backwards-compatible private tests, but production paths should avoid them."
+]
+reference_files = [
+  "product/missions/M093-warehouse-native-statesource-diff-spike.toml",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md"
+]
+
+[execution]
+branch = "plan/M091-warehouse-compute-only-contract"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/160"
+commit = "pending"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

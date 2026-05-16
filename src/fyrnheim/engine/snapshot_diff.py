@@ -11,9 +11,8 @@ import datetime
 import logging
 
 import ibis
-import pandas as pd
 
-from fyrnheim.engine.diff_engine import _make_appeared_events, diff_snapshots
+from fyrnheim.engine.diff_engine import build_row_appeared_events, diff_snapshots
 from fyrnheim.engine.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
@@ -99,13 +98,12 @@ class SnapshotDiffPipeline:
             # backend round trip on every normal run.
             current_count = int(current_table.count().execute())
             if current_count > 0:
-                replay_events = _make_appeared_events(
-                    current_table.execute(),
-                    source_name,
-                    id_field,
-                    snapshot_date.isoformat(),
+                events = build_row_appeared_events(
+                    current_table,
+                    source_name=source_name,
+                    id_field=id_field,
+                    snapshot_date=snapshot_date.isoformat(),
                 )
-                events = ibis.memtable(pd.DataFrame(replay_events))
                 log.info(
                     "StateSource %s: diff empty, replayed %d rows as row_appeared",
                     source_name,

@@ -37,7 +37,7 @@ Warehouse-backed runs must not:
 | `MetricsModel` aggregation | Allowed | v0.14 uses backend filtering, grouping, and aggregate expressions. |
 | Staging view materialization | Allowed | Executes backend SQL/view creation; no pandas row transformation. |
 | Final output write/materialization | Allowed | This is an explicit output boundary. |
-| `StateSource` snapshot diff and `full_refresh` | Blocked by `UnsupportedWarehouseComputeError` | Current diff/replay code materializes rows into pandas and constructs row events locally. Use an `EventSource` or staging-derived event stream for warehouse runs until StateSource diff is rewritten in SQL/Ibis. |
+| `StateSource` snapshot diff and `full_refresh` | Allowed | Diff/replay builds row_appeared, row_disappeared, and field_changed events as Ibis expressions using backend joins, filters, payload construction, and UNION ALL. |
 | `AnalyticsEntity` projection | Blocked by `UnsupportedWarehouseComputeError` | Current projection executes the post-aggregation result in Python for JSON scalar parsing/computed fields and re-registers a memtable. Use `MetricsModel` outputs or wait for a fully Ibis-native entity projection. |
 | Private empty-result helpers using `ibis.memtable(pd.DataFrame(...))` | Allowed only for DuckDB/local compatibility or non-row-transforming empty schemas | These helpers must not become a warehouse transformation fallback. |
 
@@ -47,7 +47,7 @@ When `UnsupportedWarehouseComputeError` names an asset:
 
 1. Prefer an existing warehouse-native model (`EventSource`, activity definitions, identity graphs, `MetricsModel`, or staging views).
 2. Move source-specific SQL joins/normalization into a `StagingView` if that keeps the work in the warehouse.
-3. For state-like data, emit a warehouse-native event stream instead of using `StateSource` snapshot diff until SQL/Ibis diff support exists.
+3. For entity projections, prefer `MetricsModel` or another warehouse-native output until AnalyticsEntity projection is fully expression-native.
 4. Do not work around the guard by calling `.execute()` manually in engine code; add a backend-native expression path or keep the feature DuckDB-only.
 
 DuckDB remains the supported local development backend for parquet fixtures and local iteration.

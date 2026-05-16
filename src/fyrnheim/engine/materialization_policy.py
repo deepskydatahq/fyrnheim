@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from fyrnheim.core.analytics_entity import AnalyticsEntity
-from fyrnheim.core.source import StateSource
 
 LOCAL_COMPUTE_BACKENDS = frozenset({"duckdb"})
 
@@ -56,36 +55,17 @@ def find_warehouse_compute_findings(
     The first M091 guard is intentionally conservative and blocks known engine
     paths that still construct transformation results through pandas:
 
-    * StateSource diff/full_refresh builds row events from pandas DataFrames.
     * AnalyticsEntity projection executes the aggregate result locally for JSON
       post-processing/computed fields and wraps it as an ``ibis.memtable``.
 
-    EventSource, activities, identity, metrics, and staging views remain allowed
-    by this policy because their v0.14 paths compose Ibis expressions and only
-    materialize at final output/write boundaries.
+    StateSource diff/full_refresh, EventSource, activities, identity, metrics,
+    and staging views remain allowed by this policy because their current paths
+    compose Ibis expressions and only materialize at documented boundaries.
     """
     if not is_warehouse_backend(backend):
         return []
 
     findings: list[WarehouseComputeFinding] = []
-    for source in assets.get("sources", []):
-        if isinstance(source, StateSource):
-            findings.append(
-                WarehouseComputeFinding(
-                    feature="StateSource snapshot/full_refresh",
-                    asset_name=source.name,
-                    reason=(
-                        "snapshot diff and full_refresh still materialize rows "
-                        "into pandas to build row_appeared/field_changed events"
-                    ),
-                    suggestion=(
-                        "use an EventSource or a StagingView-backed event stream "
-                        "for warehouse runs until StateSource diff is rewritten "
-                        "as backend-native Ibis/SQL"
-                    ),
-                )
-            )
-
     for entity in assets.get("analytics_entities", []):
         if isinstance(entity, AnalyticsEntity):
             findings.append(

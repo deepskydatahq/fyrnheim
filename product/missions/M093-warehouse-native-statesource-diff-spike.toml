@@ -3,7 +3,7 @@
 
 id = "M093"
 title = "Warehouse-native StateSource snapshot diff spike"
-status = "draft"
+status = "complete"
 created = 2026-05-16
 depends_on = ["M092"]
 

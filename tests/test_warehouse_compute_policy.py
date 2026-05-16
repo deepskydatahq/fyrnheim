@@ -62,7 +62,7 @@ def test_bigquery_analytics_entity_rejected_before_source_loading() -> None:
     assert "memtable" in message
 
 
-def test_bigquery_state_source_rejected_before_snapshot_diff() -> None:
+def test_bigquery_state_source_is_policy_allowed_after_native_diff() -> None:
     source = StateSource(
         name="accounts",
         project="p",
@@ -71,17 +71,12 @@ def test_bigquery_state_source_rejected_before_snapshot_diff() -> None:
         id_field="id",
     )
 
-    with pytest.raises(UnsupportedWarehouseComputeError) as exc_info:
-        run_pipeline(
-            {"sources": [source]},
-            _config("bigquery"),
-            _NoSourceLoadExecutor(),  # type: ignore[arg-type]
-        )
+    findings = find_warehouse_compute_findings(
+        backend="bigquery", assets={"sources": [source]}
+    )
 
-    message = str(exc_info.value)
-    assert "StateSource snapshot/full_refresh" in message
-    assert "accounts" in message
-    assert "pandas" in message
+    assert findings == []
+    assert_warehouse_compute_supported(backend="bigquery", assets={"sources": [source]})
 
 
 def test_bigquery_event_source_metrics_only_is_policy_allowed() -> None:

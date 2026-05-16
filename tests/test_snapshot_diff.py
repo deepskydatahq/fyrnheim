@@ -13,6 +13,7 @@ import pytest
 from fyrnheim.components.computed_column import ComputedColumn
 from fyrnheim.config import ResolvedConfig
 from fyrnheim.core.source import Field, Rename, SourceTransforms, StateSource
+from fyrnheim.engine.diff_engine import diff_snapshots
 from fyrnheim.engine.pipeline import _load_state_source
 from fyrnheim.engine.snapshot_diff import SnapshotDiffPipeline
 from fyrnheim.engine.snapshot_store import SnapshotStore
@@ -29,6 +30,44 @@ def pipeline(tmp_path, duckdb_conn):
     """Create a SnapshotDiffPipeline with a temp store."""
     store = SnapshotStore(base_dir=tmp_path / "snapshots", conn=duckdb_conn)
     return SnapshotDiffPipeline(store=store, conn=duckdb_conn)
+
+
+def test_snapshot_diff_compiles_to_bigquery_union_all_sql() -> None:
+    """Warehouse StateSource diff compiles without local materialization."""
+    current = ibis.table(
+        {"id": "int64", "name": "string", "plan": "string"},
+        name="current_customers",
+    )
+    previous = ibis.table(
+        {"id": "int64", "name": "string", "plan": "string"},
+        name="previous_customers",
+    )
+
+    sql = ibis.to_sql(
+        diff_snapshots(
+            current=current,
+            previous=previous,
+            source_name="customers",
+            id_field="id",
+            snapshot_date="2026-01-02",
+        ),
+        dialect="bigquery",
+    )
+
+    assert "UNION ALL" in sql
+    assert "row_appeared" in sql
+    assert "row_disappeared" in sql
+    assert "field_changed" in sql
+    assert "IS NOT DISTINCT FROM" in sql
+    assert "STRUCT" in sql
+
+
+def test_snapshot_diff_source_does_not_materialize_inputs() -> None:
+    source = Path("src/fyrnheim/engine/diff_engine.py").read_text()
+    body = source.split("def _stringify_id", maxsplit=1)[0]
+
+    assert ".execute(" not in body
+    assert "pd.DataFrame" not in body
 
 
 # ---------------------------------------------------------------------------

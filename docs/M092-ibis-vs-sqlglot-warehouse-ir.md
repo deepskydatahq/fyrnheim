@@ -199,7 +199,7 @@ Winner: Ibis.
 ## Follow-up work filed
 
 - `M093` — Warehouse-native StateSource snapshot diff spike (completed: implemented first in Ibis, with BigQuery compile coverage).
-- `M094` — Internal warehouse transformation capability contract.
+- `M094` — Internal warehouse transformation capability contract (completed: phase capabilities now record backend, schema, materialization policy, tooling, and support status; M091 guardrails use those capabilities).
 
 ## Final answer to the original question
 

@@ -7,6 +7,8 @@ Fyrnheim supports two execution modes with different materialization rules:
 
 If a warehouse run reaches a feature that still requires local pandas transformation compute, Fyrnheim raises `UnsupportedWarehouseComputeError` before source loading instead of silently extracting data from the warehouse.
 
+Internally, this is represented as a **phase capability contract**: each transformation phase declares its backend, expected input/output schema, allowed materialization policy, implementation tools (`ibis`, `sqlglot`, `raw_sql`, `backend_client`, or local compatibility helpers), and whether it is warehouse-native. Fyrnheim owns this semantic contract; Ibis/SQLGlot/raw SQL are implementation tools behind it.
+
 ## Allowed materialization boundaries
 
 Warehouse-backed runs may materialize data only at explicit boundaries:

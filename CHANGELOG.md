@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `field_changed` events as Ibis expressions using backend joins, filters,
   JSON payload construction, and `UNION ALL` instead of pandas row loops.
 
+- **Warehouse phase capability contract.** The warehouse compute guard now uses
+  internal phase capabilities that record backend, input/output schema,
+  materialization policy, implementation tooling, and support status. This
+  keeps Fyrnheim's semantics explicit while treating Ibis/SQLGlot/raw SQL as
+  implementation tools.
+
 ### Compatibility
 
 - This intentionally removes implicit warehouse-local pandas fallbacks.

@@ -1,0 +1,54 @@
+id = "M094-E001-S001"
+parent = "M094-E001"
+title = "Add warehouse transformation capability contract"
+status = "complete"
+triage = "plan"
+created = 2026-05-16
+
+[outcome]
+description = "Define internal phase capabilities and route warehouse compute guardrails through them."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "Internal contract records phase name, backend, input schema, output schema, materialization policy, compiler/tooling notes, and support status."
+
+[[acceptance_criteria.criteria]]
+description = "UnsupportedWarehouseComputeError is produced from unsupported phase capabilities where practical instead of direct AnalyticsEntity-only hard coding."
+
+[[acceptance_criteria.criteria]]
+description = "Tests cover allowed/blocked capabilities for EventSource, StateSource, AnalyticsEntity, MetricsModel, activity, identity, and staging phases."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain Fyrnheim owns transformation semantics; Ibis/SQLGlot/raw SQL are implementation tools."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/engine/materialization_policy.py",
+  "tests/test_warehouse_compute_policy.py",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md",
+  "docs/warehouse-compute-contract.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use small dataclasses/enums or literals; keep API internal.",
+  "Expose helper functions so tests can inspect capabilities without running pipelines.",
+  "Keep M091 behavior unchanged except that StateSource remains allowed after M093 and AnalyticsEntity remains blocked."
+]
+reference_files = [
+  "product/missions/M094-warehouse-transformation-capability-contract.toml",
+  "docs/M092-ibis-vs-sqlglot-warehouse-ir.md"
+]
+
+[execution]
+branch = "plan/M091-warehouse-compute-only-contract"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/160"
+commit = "pending"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

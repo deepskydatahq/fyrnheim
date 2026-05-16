@@ -1,7 +1,7 @@
 id = "M091-E002-S001"
 parent = "M091-E002"
 title = "Document warehouse compute-only contract and audit dispositions"
-status = "ready"
+status = "complete"
 triage = "ready"
 created = 2026-05-16
 
@@ -47,7 +47,7 @@ reference_files = [
 branch = "plan/M091-warehouse-compute-only-contract"
 worktree = ""
 pr = ""
-commit = ""
-started = ""
-completed = ""
+commit = "0ddd36a"
+started = "2026-05-16"
+completed = "2026-05-16"
 failure_reason = ""

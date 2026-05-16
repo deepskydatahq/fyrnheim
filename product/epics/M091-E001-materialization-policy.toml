@@ -1,7 +1,7 @@
 id = "M091-E001"
 parent = "M091"
 title = "Central warehouse materialization policy"
-status = "ready"
+status = "complete"
 created = 2026-05-16
 depends_on = []
 estimated_stories = 1

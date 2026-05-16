@@ -3,7 +3,7 @@
 
 id = "M091"
 title = "Warehouse compute-only contract"
-status = "ready"
+status = "complete"
 created = 2026-05-16
 depends_on = ["M090"]
 

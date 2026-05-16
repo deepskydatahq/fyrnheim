@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Warehouse compute-only contract.** Warehouse-backed pipelines now fail fast
+  with `UnsupportedWarehouseComputeError` when an asset would require
+  downloading source or intermediate warehouse data for pandas transformation
+  compute. DuckDB/parquet local development remains supported, and final output
+  materialization is still an allowed boundary.
+
+### Compatibility
+
+- This intentionally removes implicit warehouse-local pandas fallbacks for
+  `StateSource` snapshot/full-refresh paths and `AnalyticsEntity` projection
+  until those features have fully Ibis-native implementations.
+
 ## [0.14.0] - 2026-04-28
 
 ### Added

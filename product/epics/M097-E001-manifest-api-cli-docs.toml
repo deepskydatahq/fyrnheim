@@ -1,0 +1,40 @@
+id = "M097-E001"
+parent = "M097"
+title = "Project manifest API, CLI, and docs"
+status = "complete"
+created = 2026-05-16
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Expose a stable JSON-serializable Fyrnheim project manifest API, CLI command, relationship graph derivation, and consumer documentation."
+
+[job_story]
+description = "When a meta tool has access to a Fyrnheim repo, I want one supported interface that returns the project's semantic graph so I can combine it with Dagster runtime metadata."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Manifest builder discovers project assets and returns deterministic JSON-serializable data",
+  "Manifest includes schema/project metadata and relationship edges",
+  "CLI exports deterministic JSON without running the pipeline",
+  "Docs explain GitHub/repo and Dagster responsibilities"
+]
+validator_context = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/cli.py",
+  "tests/test_manifest.py",
+  "docs/project-manifest.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/cli.py",
+  "tests/test_manifest.py",
+  "docs/project-manifest.md"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep this as metadata/export functionality only; it must not execute pipeline transformations."

@@ -104,87 +104,10 @@ def init(project_name: str | None) -> None:
 
 
 def _discover_assets(entities_dir: Path) -> dict[str, list]:
-    """Discover pipeline assets by importing Python files from entities_dir.
+    """Discover pipeline assets by importing Python files from entities_dir."""
+    from fyrnheim.inspect import discover_assets
 
-    Scans for module-level variables of known asset types.
-    """
-    import importlib.util
-    import sys
-
-    from fyrnheim.core.activity import ActivityDefinition
-    from fyrnheim.core.analytics_entity import AnalyticsEntity
-    from fyrnheim.core.identity import IdentityGraph
-    from fyrnheim.core.metrics_model import MetricsModel
-    from fyrnheim.core.source import EventSource, StateSource
-    from fyrnheim.core.staging_view import StagingView
-
-    assets: dict[str, list] = {
-        "sources": [],
-        "activities": [],
-        "identity_graphs": [],
-        "analytics_entities": [],
-        "metrics_models": [],
-        "staging_views": [],
-    }
-
-    if not entities_dir.is_dir():
-        return assets
-
-    type_map: dict[type, tuple[str, bool]] = {
-        StateSource: ("sources", False),
-        EventSource: ("sources", False),
-        ActivityDefinition: ("activities", False),
-        IdentityGraph: ("identity_graphs", False),
-        AnalyticsEntity: ("analytics_entities", False),
-        MetricsModel: ("metrics_models", False),
-        StagingView: ("staging_views", False),
-    }
-
-    for py_file in sorted(entities_dir.glob("*.py")):
-        module_name = f"_fyrnheim_entity_{py_file.stem}"
-        spec = importlib.util.spec_from_file_location(module_name, py_file)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        try:
-            spec.loader.exec_module(module)  # type: ignore[union-attr]
-        except Exception as exc:
-            logging.getLogger("fyrnheim").warning(
-                "Failed to import %s: %s", py_file.name, exc
-            )
-            continue
-
-        for attr_name in dir(module):
-            if attr_name.startswith("_"):
-                continue
-            val = getattr(module, attr_name)
-
-            # Check single instances
-            for typ, (key, _) in type_map.items():
-                if isinstance(val, typ):
-                    assets[key].append(val)
-                    break
-
-            # Check lists
-            if isinstance(val, list) and val:
-                for typ, (key, _) in type_map.items():
-                    if isinstance(val[0], typ):
-                        assets[key].extend(val)
-                        break
-
-    # Deduplicate by name — same source can be defined in multiple files
-    for key in assets:
-        seen_names: set[str] = set()
-        deduped: list = []
-        for item in assets[key]:
-            item_name = getattr(item, "name", None) or str(id(item))
-            if item_name not in seen_names:
-                seen_names.add(item_name)
-                deduped.append(item)
-        assets[key] = deduped
-
-    return assets
+    return discover_assets(entities_dir, strict=False)
 
 
 @main.command()
@@ -223,6 +146,49 @@ def dag(ctx: click.Context, entities_dir: str, output: str | None) -> None:
             tmp_path = f.name
         click.echo(f"Opening DAG in browser: {tmp_path}")
         webbrowser.open(f"file://{tmp_path}")
+
+
+@main.command()
+@click.option(
+    "--entities-dir", default="entities", help="Directory with entity definitions"
+)
+@click.option(
+    "--project-path",
+    default=None,
+    help="Project root for manifest metadata and git commit detection",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json"]),
+    default="json",
+    show_default=True,
+    help="Manifest output format",
+)
+@click.option("--no-git", is_flag=True, help="Skip git commit detection")
+def manifest(
+    entities_dir: str,
+    project_path: str | None,
+    output_format: str,
+    no_git: bool,
+) -> None:
+    """Export a machine-readable Fyrnheim project manifest."""
+    from fyrnheim.inspect import build_manifest, manifest_json
+
+    if output_format != "json":
+        raise click.ClickException(f"Unsupported manifest format: {output_format}")
+
+    try:
+        payload = build_manifest(
+            entities_dir,
+            project_path=project_path,
+            include_git=not no_git,
+            strict=True,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(manifest_json(payload), nl=False)
 
 
 @main.command()

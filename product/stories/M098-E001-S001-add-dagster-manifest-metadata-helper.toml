@@ -1,0 +1,56 @@
+id = "M098-E001-S001"
+parent = "M098-E001"
+title = "Add Dagster manifest metadata helper"
+status = "complete"
+triage = "ready"
+created = 2026-05-16
+
+[outcome]
+description = "Add deterministic manifest hash and Dagster-compatible metadata helpers, tests, and documentation examples."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "A public helper returns a deterministic SHA-256 hash for a Fyrnheim manifest."
+
+[[acceptance_criteria.criteria]]
+description = "A public helper builds a JSON-serializable metadata dictionary containing schema version, manifest hash, git commit, project path, entities directory, and counts for asset collections and edges."
+
+[[acceptance_criteria.criteria]]
+description = "The integration module does not import Dagster or require a Dagster dependency."
+
+[[acceptance_criteria.criteria]]
+description = "Tests prove hash determinism, change sensitivity, and metadata shape."
+
+[[acceptance_criteria.criteria]]
+description = "Docs include a Dagster example for attaching the metadata to a run/materialization context."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/integrations/dagster.py",
+  "src/fyrnheim/inspect.py",
+  "tests/test_dagster_manifest_metadata.py",
+  "docs/project-manifest.md"
+]
+input_fixtures = []
+depends_on = ["M097-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Use manifest_json() for canonical serialization before hashing.",
+  "Return plain strings/ints/dicts so callers can pass them to Dagster metadata APIs.",
+  "Avoid importing dagster in production code or tests."
+]
+reference_files = [
+  "product/missions/M098-dagster-manifest-metadata-integration.toml"
+]
+
+[execution]
+branch = "plan/M098-dagster-manifest-metadata"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/162"
+commit = "see enclosing commit"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

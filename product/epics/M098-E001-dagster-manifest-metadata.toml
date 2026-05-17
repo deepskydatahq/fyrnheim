@@ -1,0 +1,38 @@
+id = "M098-E001"
+parent = "M098"
+title = "Dagster-compatible manifest metadata helper"
+status = "complete"
+created = 2026-05-16
+depends_on = ["M097-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "Add plain-Python helpers and docs for attaching Fyrnheim manifest identity metadata to Dagster runs/materializations."
+
+[job_story]
+description = "When a Dagster job runs Fyrnheim, I want to attach a stable manifest hash and commit metadata so external tools can join Dagster runtime state to the Fyrnheim semantic graph."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Helpers return JSON-serializable metadata without importing Dagster",
+  "Manifest hash is deterministic and sensitive to manifest changes",
+  "Docs show a Dagster usage pattern"
+]
+validator_context = [
+  "src/fyrnheim/integrations/dagster.py",
+  "tests/test_dagster_manifest_metadata.py",
+  "docs/project-manifest.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/integrations/dagster.py",
+  "src/fyrnheim/inspect.py",
+  "tests/test_dagster_manifest_metadata.py",
+  "docs/project-manifest.md"
+]
+dependencies = ["M097-E001"]
+
+[notes]
+considerations = "No Dagster dependency; callers adapt the metadata dictionary to Dagster APIs."

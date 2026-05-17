@@ -1,0 +1,41 @@
+id = "M100-E001"
+parent = "M100"
+title = "Read-only insight recipes and MCP tools"
+status = "complete"
+created = 2026-05-17
+depends_on = ["M099-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "Add validated insight recipes, safe read-only Ibis execution, MCP-ready tools, and docs for recipe-driven analytical answers."
+
+[job_story]
+description = "When an agent needs a business answer, I want it to run a predefined bounded insight recipe instead of composing arbitrary SQL or changing the pipeline."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Recipe validation accepts supported table_top and joined_top shapes and rejects unsafe/unknown fields",
+  "Read-only adapter applies allowed filters/orderings and mandatory limit caps",
+  "MCP tools expose recipe listing and execution helpers",
+  "Docs include Propel-oriented recipes without hardcoding Propel logic"
+]
+validator_context = [
+  "src/fyrnheim/insights.py",
+  "src/fyrnheim/mcp/insight_tools.py",
+  "tests/test_insight_tools.py",
+  "docs/mcp-insight-query-tools.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/insights.py",
+  "src/fyrnheim/mcp/insight_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_insight_tools.py",
+  "docs/mcp-insight-query-tools.md"
+]
+dependencies = ["M099-E001"]
+
+[notes]
+considerations = "Use Ibis table expressions, not raw SQL, for read-only query construction."

@@ -1,0 +1,57 @@
+id = "M100-E001-S001"
+parent = "M100-E001"
+title = "Add read-only MCP insight query tools"
+status = "complete"
+triage = "ready"
+created = 2026-05-17
+
+[outcome]
+description = "Add generic recipe-driven read-only insight query tools for MCP usage, backed by Ibis and safe limits."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "Insight recipe parsing supports table_top and joined_top recipes with columns, allowed orderings, allowed filters, tags, and limit caps."
+
+[[acceptance_criteria.criteria]]
+description = "Read-only execution uses Ibis expressions, applies only declared filters/orderings, and enforces a mandatory capped limit."
+
+[[acceptance_criteria.criteria]]
+description = "MCP-ready tools expose list_insight_recipes, run_insight_recipe, top_content_items, and find_promising_records as JSON-compatible functions."
+
+[[acceptance_criteria.criteria]]
+description = "Tests cover DuckDB fixture execution for table_top and joined_top recipes, sort/filter behavior, invalid inputs, and limit caps."
+
+[[acceptance_criteria.criteria]]
+description = "Docs describe safety constraints and include Propel Data example recipes for LinkedIn content and promising leads."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/insights.py",
+  "src/fyrnheim/mcp/insight_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_insight_tools.py",
+  "docs/mcp-insight-query-tools.md"
+]
+input_fixtures = []
+depends_on = ["M099-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Use Ibis table expressions and execute the bounded result set only.",
+  "Allow recipes to reference manifest asset names or explicit physical table coordinates.",
+  "Do not add project-specific Propel logic to Fyrnheim core."
+]
+reference_files = [
+  "product/missions/M100-read-only-mcp-insight-query-tools.toml"
+]
+
+[execution]
+branch = "plan/M100-read-only-mcp-insights"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/164"
+commit = "see enclosing commit"
+started = "2026-05-17"
+completed = "2026-05-17"
+failure_reason = ""

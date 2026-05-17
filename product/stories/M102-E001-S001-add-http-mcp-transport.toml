@@ -52,7 +52,7 @@ reference_files = [
 [execution]
 branch = "plan/M102-streamable-http-mcp-transport"
 pr = "https://github.com/deepskydatahq/fyrnheim/pull/166"
-commit = "5ed6000"
+commit = "babec45"
 started = "2026-05-17"
 completed = "2026-05-17"
 failure_reason = ""

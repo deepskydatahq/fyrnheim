@@ -61,6 +61,7 @@ dev = [
 [project.scripts]
 fyr = "fyrnheim.cli:main"
 fyr-mcp-analytics = "fyrnheim.mcp.analytics_server:main"
+fyr-mcp-analytics-http = "fyrnheim.mcp.analytics_server:main_http"
 
 [project.urls]
 Homepage = "https://github.com/deepskydatahq/fyrnheim"

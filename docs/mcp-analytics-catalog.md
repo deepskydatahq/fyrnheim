@@ -82,6 +82,8 @@ The server registers these tools:
 - `describe_metric`
 - `describe_dimension`
 
+For hosted clients that need an MCP URL instead of a launched process, see [Streamable HTTP MCP transport](mcp-http-transport.md).
+
 Example Claude Desktop-style configuration:
 
 ```json

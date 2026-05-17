@@ -1,0 +1,32 @@
+entities_dir: entities
+backend: duckdb
+backend_config:
+  db_path: data/smoke.duckdb
+
+insights:
+  recipes:
+    top_content_items:
+      type: table_top
+      table: content_scores
+      tags: [content, smoke]
+      columns:
+        - content_id
+        - title
+        - channel
+        - impressions
+        - total_engagement
+        - engagement_rate_pct
+        - performance_tier
+      order_by:
+        default: total_engagement
+        allowed:
+          - impressions
+          - total_engagement
+          - engagement_rate_pct
+      filters:
+        allowed:
+          - channel
+          - performance_tier
+      limit:
+        default: 5
+        max: 25

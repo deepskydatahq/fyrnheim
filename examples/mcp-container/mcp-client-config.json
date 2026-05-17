@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "fyrnheim-analytics-container": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "fyrnheim-mcp-analytics",
+        "--mount",
+        "type=bind,src=/absolute/path/to/your/fyrnheim-project,dst=/project,readonly",
+        "--env",
+        "CLICKHOUSE_HOST",
+        "--env",
+        "CLICKHOUSE_PORT",
+        "--env",
+        "CLICKHOUSE_USER",
+        "--env",
+        "CLICKHOUSE_PASSWORD",
+        "--env",
+        "CLICKHOUSE_DATABASE",
+        "fyrnheim-mcp-analytics:local",
+        "--entities-dir",
+        "/project/entities",
+        "--project-path",
+        "/project",
+        "--config",
+        "/project/fyrnheim.yaml"
+      ]
+    }
+  }
+}

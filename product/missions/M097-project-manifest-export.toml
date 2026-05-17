@@ -1,0 +1,71 @@
+# Mission: Fyrnheim project manifest export
+
+id = "M097"
+title = "Fyrnheim project manifest export"
+status = "complete"
+created = 2026-05-16
+depends_on = []
+
+[outcome]
+description = """
+Expose a stable machine-readable manifest of a Fyrnheim project so external tools can inspect sources, activities, identity graphs, analytics entities, metrics models, staging views, and their relationships without scraping Python internals or depending on Dagster-specific metadata.
+"""
+
+user_progress = "From 'a meta tool has to guess how a Fyrnheim project is wired together' to 'a meta tool can call one stable Fyrnheim interface and get the full semantic graph'."
+
+[execution]
+mode = "implementation"
+outputs = ["manifest-api", "cli", "docs", "tests"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A public Python API builds a deterministic, JSON-serializable manifest from a Fyrnheim entities directory",
+  "The manifest includes sources, activities, identity graphs, analytics entities, metrics models, staging views, schema version, project path, entities directory, and optional git commit metadata",
+  "The manifest includes derived relationship edges for source/activity/identity/entity/metrics/staging relationships",
+  "A CLI command exports the manifest as deterministic JSON without running the pipeline",
+  "Docs explain GitHub/repo usage as semantic source of truth and Dagster as runtime/status context"
+]
+validator_context = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/cli.py",
+  "tests/test_manifest.py",
+  "tests/test_cli.py",
+  "docs/project-manifest.md"
+]
+
+[context]
+related_docs = [
+  "docs/project-manifest.md"
+]
+relevant_paths = [
+  "src/fyrnheim/cli.py",
+  "src/fyrnheim/core/",
+  "src/fyrnheim/visualization.py",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M091-M096 — Warehouse-native contract and validation work"
+]
+
+[scope]
+in_scope = [
+  "Public manifest builder API",
+  "CLI JSON export command",
+  "Relationship edge derivation from Fyrnheim definitions",
+  "Tests with sample entity definitions",
+  "Documentation for meta-tool and Dagster consumers"
+]
+out_of_scope = [
+  "Live Dagster integration",
+  "GitHub API integration",
+  "Executing the pipeline",
+  "Runtime freshness or run-status inference"
+]
+acceptable_breakage = [
+  "Manifest schema starts at v1 and may add optional fields later without breaking existing consumers."
+]
+
+[notes]
+considerations = "Discovery imports project Python files; docs should recommend sandboxed discovery for third-party repositories."

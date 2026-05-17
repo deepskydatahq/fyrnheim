@@ -1,0 +1,56 @@
+id = "M097-E001-S001"
+parent = "M097-E001"
+title = "Add Fyrnheim project manifest export"
+status = "complete"
+triage = "plan"
+created = 2026-05-16
+
+[outcome]
+description = "Add a public manifest builder, CLI JSON export, derived semantic graph edges, tests, and docs for external meta-tool consumption."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "A public Python API in src/fyrnheim/inspect.py builds a deterministic, JSON-serializable manifest from an entities directory without running the pipeline."
+
+[[acceptance_criteria.criteria]]
+description = "The manifest includes schema_version, project_path, entities_dir, git_commit, sources, activities, identity_graphs, analytics_entities, metrics_models, staging_views, and relationship edges."
+
+[[acceptance_criteria.criteria]]
+description = "Relationship edges cover source-to-activity, source-to-identity, identity-to-entity, source-to-entity state fields, activity-to-entity measures, source joins, source upstream staging views, staging view dependencies, and source-to-metrics relationships."
+
+[[acceptance_criteria.criteria]]
+description = "A `fyr manifest --entities-dir ...` command emits deterministic JSON and has CLI test coverage."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain how GitHub/repo consumers and Dagster runtime consumers should use the manifest."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/cli.py",
+  "tests/test_manifest.py",
+  "docs/project-manifest.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Reuse Fyrnheim's existing import-based discovery semantics.",
+  "Sort assets and edges to keep JSON output deterministic.",
+  "Avoid importing Dagster or making network calls."
+]
+reference_files = [
+  "product/missions/M097-project-manifest-export.toml"
+]
+
+[execution]
+branch = "plan/M097-project-manifest-export"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/161"
+commit = "see enclosing commit"
+started = "2026-05-16"
+completed = "2026-05-16"
+failure_reason = ""

@@ -1,0 +1,57 @@
+id = "M099-E001-S001"
+parent = "M099-E001"
+title = "Add analytics catalog MCP tools"
+status = "complete"
+triage = "ready"
+created = 2026-05-17
+
+[outcome]
+description = "Add a manifest-derived analytics catalog plus MCP-ready functions and optional server for listing/describing Fyrnheim metrics and dimensions."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "A catalog builder derives analytics models, metrics, and dimensions from manifest dictionaries."
+
+[[acceptance_criteria.criteria]]
+description = "Tool functions expose list_analytics_models, list_metrics, list_dimensions, describe_metric, and describe_dimension as JSON-compatible results."
+
+[[acceptance_criteria.criteria]]
+description = "AnalyticsEntity measures/state/computed fields and MetricsModel metric_fields/dimensions are represented with useful metadata."
+
+[[acceptance_criteria.criteria]]
+description = "An optional MCP server entrypoint registers the tools but MCP remains an optional dependency."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain the read-only no-query-execution scope and show MCP client configuration."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/",
+  "tests/test_analytics_catalog.py",
+  "docs/mcp-analytics-catalog.md",
+  "pyproject.toml"
+]
+input_fixtures = []
+depends_on = ["M097-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Build over manifest dicts so tools can reuse M097 without importing arbitrary project modules repeatedly.",
+  "Represent ambiguous metric/dimension names explicitly rather than guessing.",
+  "Keep MCP import inside the optional server path."
+]
+reference_files = [
+  "product/missions/M099-mcp-analytics-catalog.toml"
+]
+
+[execution]
+branch = "plan/M099-mcp-analytics-catalog"
+worktree = ""
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/163"
+commit = "see enclosing commit"
+started = "2026-05-17"
+completed = "2026-05-17"
+failure_reason = ""

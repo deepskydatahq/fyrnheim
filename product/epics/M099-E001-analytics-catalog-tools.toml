@@ -1,0 +1,41 @@
+id = "M099-E001"
+parent = "M099"
+title = "Analytics catalog and MCP-ready tools"
+status = "complete"
+created = 2026-05-17
+depends_on = ["M097-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "Build a manifest-derived analytics catalog and expose read-only tool functions and an optional MCP server for metrics/dimensions discovery."
+
+[job_story]
+description = "When an agent wants to work with a Fyrnheim project, I want it to list and describe analytics metrics and dimensions through stable tools instead of reading entity Python files."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Catalog includes analytics entities and metrics models",
+  "Metrics and dimensions include model/type/source metadata",
+  "Tool functions support list and describe operations",
+  "Optional MCP entrypoint does not make MCP mandatory for core imports"
+]
+validator_context = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/",
+  "tests/test_analytics_catalog.py",
+  "docs/mcp-analytics-catalog.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/",
+  "tests/test_analytics_catalog.py",
+  "docs/mcp-analytics-catalog.md",
+  "pyproject.toml"
+]
+dependencies = ["M097-E001"]
+
+[notes]
+considerations = "No query execution; tools return JSON-compatible metadata only."

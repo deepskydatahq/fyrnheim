@@ -46,6 +46,9 @@ clickhouse = [
 postgres = [
     "ibis-framework[postgres]>=11.0.0",
 ]
+mcp = [
+    "mcp>=1.13.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
@@ -57,6 +60,7 @@ dev = [
 
 [project.scripts]
 fyr = "fyrnheim.cli:main"
+fyr-mcp-analytics = "fyrnheim.mcp.analytics_server:main"
 
 [project.urls]
 Homepage = "https://github.com/deepskydatahq/fyrnheim"

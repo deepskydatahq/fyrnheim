@@ -1,0 +1,43 @@
+# Epic: HTTP MCP transport
+
+id = "M102-E001"
+parent = "M102"
+title = "HTTP MCP transport"
+status = "complete"
+created = 2026-05-17
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = """
+Expose the existing Fyrnheim analytics catalog and read-only insight tools through a Streamable HTTP MCP entrypoint while preserving the existing stdio entrypoint.
+"""
+
+[job_story]
+description = "When a hosted MCP client such as Claude cannot launch a local stdio process, it can connect to a Fyrnheim-hosted HTTP endpoint that exposes the same safe tools."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A new HTTP entrypoint runs FastMCP with Streamable HTTP transport",
+  "The stdio entrypoint remains unchanged for local/container clients",
+  "Tests exercise initialize, tools/list, and tools/call over HTTP for catalog and insight tools",
+  "Docs explain Claude/hosted-client setup, secret handling, and Supabase compatibility limits"
+]
+validator_context = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_mcp_http_transport.py",
+  "docs/mcp-http-transport.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "pyproject.toml",
+  "docs/",
+  "tests/"
+]
+dependencies = ["M099", "M100"]
+
+[notes]
+considerations = "Use the MCP Python SDK's FastMCP streamable-http transport. Keep the HTTP server unauthenticated in core docs/examples, with deployment guidance to place it behind an access-controlled boundary until Fyrnheim adds auth support."

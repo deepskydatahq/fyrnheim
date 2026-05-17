@@ -28,6 +28,11 @@ def create_server(
     entities_dir: Path | str = "entities",
     project_path: Path | str | None = None,
     config_path: Path | str = "fyrnheim.yaml",
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    streamable_http_path: str = "/mcp",
+    json_response: bool = False,
+    stateless_http: bool = False,
 ) -> Any:
     """Create a FastMCP server exposing Fyrnheim analytics catalog tools."""
     try:
@@ -38,7 +43,14 @@ def create_server(
             "Install with: pip install 'fyrnheim[mcp]'"
         ) from exc
 
-    server = FastMCP("fyrnheim-analytics")
+    server = FastMCP(
+        "fyrnheim-analytics",
+        host=host,
+        port=port,
+        streamable_http_path=streamable_http_path,
+        json_response=json_response,
+        stateless_http=stateless_http,
+    )
 
     def catalog() -> dict[str, Any]:
         manifest = build_manifest(
@@ -128,12 +140,41 @@ def create_server(
     return server
 
 
-def main() -> None:
-    """Run the Fyrnheim analytics MCP server over stdio."""
-    parser = argparse.ArgumentParser(description="Run Fyrnheim analytics MCP server")
+def create_streamable_http_app(
+    *,
+    entities_dir: Path | str = "entities",
+    project_path: Path | str | None = None,
+    config_path: Path | str = "fyrnheim.yaml",
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    path: str = "/mcp",
+    json_response: bool = False,
+    stateless_http: bool = False,
+) -> Any:
+    """Create a Starlette app for Streamable HTTP MCP transport."""
+    server = create_server(
+        entities_dir=entities_dir,
+        project_path=project_path,
+        config_path=config_path,
+        host=host,
+        port=port,
+        streamable_http_path=path,
+        json_response=json_response,
+        stateless_http=stateless_http,
+    )
+    return server.streamable_http_app()
+
+
+def _add_project_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--entities-dir", default="entities")
     parser.add_argument("--project-path", default=None)
     parser.add_argument("--config", default="fyrnheim.yaml")
+
+
+def main() -> None:
+    """Run the Fyrnheim analytics MCP server over stdio."""
+    parser = argparse.ArgumentParser(description="Run Fyrnheim analytics MCP server over stdio")
+    _add_project_args(parser)
     args = parser.parse_args()
 
     server = create_server(
@@ -142,6 +183,40 @@ def main() -> None:
         config_path=args.config,
     )
     server.run()
+
+
+def main_http() -> None:
+    """Run the Fyrnheim analytics MCP server over Streamable HTTP."""
+    parser = argparse.ArgumentParser(
+        description="Run Fyrnheim analytics MCP server over Streamable HTTP"
+    )
+    _add_project_args(parser)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--path", default="/mcp")
+    parser.add_argument(
+        "--json-response",
+        action="store_true",
+        help="Return JSON responses instead of SSE where the MCP SDK supports it.",
+    )
+    parser.add_argument(
+        "--stateless-http",
+        action="store_true",
+        help="Use stateless HTTP sessions; useful behind some proxies and for tests.",
+    )
+    args = parser.parse_args()
+
+    server = create_server(
+        entities_dir=args.entities_dir,
+        project_path=args.project_path,
+        config_path=args.config,
+        host=args.host,
+        port=args.port,
+        streamable_http_path=args.path,
+        json_response=args.json_response,
+        stateless_http=args.stateless_http,
+    )
+    server.run("streamable-http")
 
 
 if __name__ == "__main__":

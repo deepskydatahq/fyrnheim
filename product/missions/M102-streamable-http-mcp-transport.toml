@@ -1,0 +1,88 @@
+# Mission: Streamable HTTP MCP transport
+
+id = "M102"
+title = "Streamable HTTP MCP transport"
+status = "complete"
+created = 2026-05-17
+depends_on = ["M099", "M100"]
+
+[outcome]
+description = """
+Add a Streamable HTTP-compatible MCP transport for Fyrnheim analytics and read-only insight tools, so hosted clients such as Claude can connect to Fyrnheim over an HTTP URL instead of launching a local stdio process.
+"""
+
+user_progress = "From 'Claude can use Fyrnheim MCP only by launching a local/container stdio server' to 'Claude can connect to a hosted Fyrnheim MCP endpoint over Streamable HTTP'."
+
+[execution]
+mode = "implementation"
+outputs = ["http-mcp-entrypoint", "transport-tests", "container-http-docs", "supabase-compatibility-notes"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Fyrnheim keeps the existing stdio MCP server behavior for local and Docker-launched clients",
+  "A new HTTP MCP server entrypoint exposes the existing analytics catalog and read-only insight tools over Streamable HTTP or the closest supported MCP Python SDK transport",
+  "Tests cover MCP initialize/tools-list/tools-call behavior for at least one catalog tool and one insight recipe tool over the HTTP transport",
+  "Docs explain when to use stdio versus HTTP, how Claude or another hosted MCP client should connect, and how to pass project/config/warehouse credentials safely",
+  "Docs explicitly evaluate Supabase Edge Function BYO MCP compatibility and clarify whether Fyrnheim's Python HTTP server can run there directly or requires a TypeScript adapter/proxy"
+]
+validator_context = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "src/fyrnheim/mcp/",
+  "docs/mcp-container-deployment.md",
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "examples/mcp-container/",
+  "tests/"
+]
+
+[context]
+related_docs = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "docs/mcp-container-deployment.md",
+  "https://supabase.com/docs/guides/ai-tools/byo-mcp"
+]
+relevant_paths = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/insight_tools.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/insights.py",
+  "pyproject.toml",
+  "docs/",
+  "examples/",
+  "tests/"
+]
+related_missions = [
+  "M099 — MCP analytics catalog for Fyrnheim",
+  "M100 — Read-only MCP insight query tools",
+  "M101 — MCP container deployment reference"
+]
+
+[scope]
+in_scope = [
+  "HTTP/Streamable HTTP MCP server entrypoint for existing Fyrnheim analytics and insight tools",
+  "CLI or script entrypoint such as fyr-mcp-analytics-http, if supported by the MCP Python SDK",
+  "Configuration for host/port/project path/entities dir/fyrnheim.yaml path",
+  "Tests for HTTP MCP request/response behavior using a DuckDB-backed fixture project",
+  "Container deployment guidance for hosted HTTP use",
+  "Claude-facing connection instructions for a hosted MCP endpoint",
+  "Supabase BYO MCP compatibility assessment and recommended adapter/proxy path if Edge Functions cannot run the Python server directly"
+]
+out_of_scope = [
+  "Removing or replacing the existing stdio MCP server",
+  "Arbitrary SQL tools or unrestricted query execution",
+  "Writes, materializations, pipeline execution, or warehouse mutations through MCP",
+  "Implementing OAuth or multi-tenant authorization unless the selected MCP transport requires a minimal token gate",
+  "Deploying production infrastructure for Propel Data",
+  "Rewriting Fyrnheim MCP tools in TypeScript for Supabase Edge Functions as part of this mission"
+]
+acceptable_breakage = [
+  "The HTTP transport may require an additional optional dependency or may be documented as unavailable if the current MCP Python SDK lacks stable Streamable HTTP server support."
+]
+
+[notes]
+considerations = """
+The Supabase BYO MCP guide targets Deno Edge Functions and the TypeScript SDK's WebStandardStreamableHTTPServerTransport. Fyrnheim's current MCP server is Python FastMCP over stdio, so direct Supabase Edge deployment is not expected to work without a TypeScript adapter/proxy. Prefer a Python HTTP MCP server on a container host for Claude remote access, then document Supabase as either proxy-only or future TypeScript-adapter work.
+"""

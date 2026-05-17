@@ -1,0 +1,58 @@
+# Story: Add HTTP MCP transport
+
+id = "M102-E001-S001"
+parent = "M102-E001"
+title = "Add HTTP MCP transport"
+status = "complete"
+triage = "ready"
+created = 2026-05-17
+
+[outcome]
+description = "Add a Streamable HTTP MCP entrypoint, HTTP transport tests, and hosted-client deployment docs for Fyrnheim analytics tools."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "A new package script/CLI entrypoint runs fyr-mcp-analytics over Streamable HTTP with configurable host, port, path, entities dir, project path, and config path."
+
+[[acceptance_criteria.criteria]]
+description = "The existing fyr-mcp-analytics stdio entrypoint remains compatible with current local and Docker MCP clients."
+
+[[acceptance_criteria.criteria]]
+description = "HTTP tests cover initialize, tools/list, list_analytics_models, list_insight_recipes, and top_content_items using a DuckDB-backed fixture project."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain stdio versus HTTP usage, Claude/hosted-client configuration, credential handling, and Supabase BYO MCP compatibility limits."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "pyproject.toml",
+  "tests/test_mcp_http_transport.py",
+  "docs/mcp-http-transport.md",
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "FastMCP supports run('streamable-http') and streamable_http_app() in mcp>=1.13.",
+  "Use stateless_http/json_response for deterministic tests against Starlette TestClient.",
+  "Document that Supabase Edge Functions use Deno/TypeScript and cannot directly run the Python FastMCP server."
+]
+reference_files = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_analytics_catalog.py",
+  "tests/test_insight_tools.py"
+]
+
+[execution]
+branch = "plan/M102-streamable-http-mcp-transport"
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/166"
+commit = "babec45"
+started = "2026-05-17"
+completed = "2026-05-17"
+failure_reason = ""

@@ -15,12 +15,19 @@ from fyrnheim.analytics_catalog import (
     list_metrics as catalog_list_metrics,
 )
 from fyrnheim.inspect import build_manifest
+from fyrnheim.mcp.insight_tools import (
+    find_promising_records as tool_find_promising_records,
+    list_insight_recipes as tool_list_insight_recipes,
+    run_insight_recipe as tool_run_insight_recipe,
+    top_content_items as tool_top_content_items,
+)
 
 
 def create_server(
     *,
     entities_dir: Path | str = "entities",
     project_path: Path | str | None = None,
+    config_path: Path | str = "fyrnheim.yaml",
 ) -> Any:
     """Create a FastMCP server exposing Fyrnheim analytics catalog tools."""
     try:
@@ -67,6 +74,57 @@ def create_server(
         """Describe a Fyrnheim dimension by name or dimension id."""
         return catalog_describe_dimension(catalog(), dimension, model=model)
 
+    @server.tool()
+    def list_insight_recipes() -> dict[str, Any]:
+        """List configured read-only Fyrnheim insight recipes."""
+        return tool_list_insight_recipes(config_path)
+
+    @server.tool()
+    def run_insight_recipe(
+        recipe: str,
+        order_by: str | None = None,
+        filters: dict[str, Any] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Run a configured read-only Fyrnheim insight recipe."""
+        return tool_run_insight_recipe(
+            recipe,
+            config_path=config_path,
+            order_by=order_by,
+            filters=filters,
+            limit=limit,
+        )
+
+    @server.tool()
+    def top_content_items(
+        recipe: str | None = None,
+        metric: str | None = None,
+        filters: dict[str, Any] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Run a content-tagged read-only insight recipe."""
+        return tool_top_content_items(
+            config_path=config_path,
+            recipe=recipe,
+            metric=metric,
+            filters=filters,
+            limit=limit,
+        )
+
+    @server.tool()
+    def find_promising_records(
+        recipe: str | None = None,
+        filters: dict[str, Any] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Run a leads/prospects-tagged read-only insight recipe."""
+        return tool_find_promising_records(
+            config_path=config_path,
+            recipe=recipe,
+            filters=filters,
+            limit=limit,
+        )
+
     return server
 
 
@@ -75,11 +133,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Fyrnheim analytics MCP server")
     parser.add_argument("--entities-dir", default="entities")
     parser.add_argument("--project-path", default=None)
+    parser.add_argument("--config", default="fyrnheim.yaml")
     args = parser.parse_args()
 
     server = create_server(
         entities_dir=args.entities_dir,
         project_path=args.project_path,
+        config_path=args.config,
     )
     server.run()
 

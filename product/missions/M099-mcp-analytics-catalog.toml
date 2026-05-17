@@ -1,0 +1,74 @@
+# Mission: MCP analytics catalog for Fyrnheim
+
+id = "M099"
+title = "MCP analytics catalog for Fyrnheim"
+status = "complete"
+created = 2026-05-17
+depends_on = ["M097"]
+
+[outcome]
+description = """
+Expose Fyrnheim analytics models through a narrow MCP-ready catalog so agents can query available metrics, dimensions, model summaries, and metric/dimension details before any query execution exists.
+"""
+
+user_progress = "From 'an agent has to inspect Python entity files to know what metrics and dimensions exist' to 'an MCP tool can list and describe Fyrnheim analytics metrics and dimensions from the manifest'."
+
+[execution]
+mode = "implementation"
+outputs = ["analytics-catalog", "mcp-tools", "docs", "tests"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A catalog builder derives analytics models, metrics, and dimensions from a Fyrnheim manifest",
+  "AnalyticsEntity measures/state/computed fields and MetricsModel metric_fields/dimensions are represented with model/type/aggregation/source metadata",
+  "MCP-ready tool functions expose list_analytics_models, list_metrics, list_dimensions, describe_metric, and describe_dimension without executing queries",
+  "An optional MCP server entrypoint can expose those tools without making MCP a required core dependency",
+  "Docs show how to use the catalog and configure an MCP client"
+]
+validator_context = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/",
+  "tests/test_analytics_catalog.py",
+  "docs/mcp-analytics-catalog.md",
+  "pyproject.toml"
+]
+
+[context]
+related_docs = [
+  "docs/project-manifest.md",
+  "docs/mcp-analytics-catalog.md"
+]
+relevant_paths = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/",
+  "tests/",
+  "docs/",
+  "pyproject.toml"
+]
+related_missions = [
+  "M097 — Fyrnheim project manifest export",
+  "M098 — Dagster manifest metadata integration"
+]
+
+[scope]
+in_scope = [
+  "Read-only analytics catalog derived from manifest JSON",
+  "MCP-ready tools for listing/describing metrics and dimensions",
+  "Optional MCP server wrapper",
+  "Tests over sample Fyrnheim definitions",
+  "Docs with MCP configuration example"
+]
+out_of_scope = [
+  "Executing metric queries",
+  "Warehouse credentials or live database access",
+  "Dagster runtime status lookup",
+  "Full project lineage MCP beyond metrics/dimensions"
+]
+acceptable_breakage = [
+  "Catalog schema starts as v1 and may add optional fields later."
+]
+
+[notes]
+considerations = "Keep the first MCP slice narrow: analytics models, metrics, and dimensions only. Query execution belongs in a later mission."

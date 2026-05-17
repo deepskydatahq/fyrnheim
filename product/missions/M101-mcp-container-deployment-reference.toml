@@ -1,0 +1,75 @@
+# Mission: MCP container deployment reference
+
+id = "M101"
+title = "MCP container deployment reference"
+status = "draft"
+created = 2026-05-17
+depends_on = ["M099", "M100"]
+
+[outcome]
+description = """
+Provide a production-oriented Docker deployment reference for Fyrnheim MCP analytics and read-only insight tools, so project teams such as Propel Data can run the MCP server reproducibly with pinned dependencies, configured recipes, and warehouse credentials supplied through environment/secrets.
+"""
+
+user_progress = "From 'run the MCP with uv on a developer laptop' to 'run a repeatable containerized MCP server that teams and agents can point at safely'."
+
+[execution]
+mode = "implementation"
+outputs = ["docker-reference", "compose-example", "mcp-client-config", "deployment-docs", "smoke-tests"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A Docker reference for fyr-mcp-analytics exists and documents dependency pinning, config mounting/copying, and environment variable handling",
+  "A docker compose or equivalent example shows how to run the MCP server with a project directory, fyrnheim.yaml, and warehouse secrets",
+  "Docs include MCP client configuration examples for launching the containerized server, including a Propel Data-oriented example",
+  "The deployment reference keeps Fyrnheim generic and does not hardcode Propel-specific fields or credentials into core code",
+  "A local smoke test or documented verification path confirms the container can expose catalog tools and configured insight recipes against a DuckDB fixture/project"
+]
+validator_context = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "docs/",
+  "examples/",
+  "pyproject.toml"
+]
+
+[context]
+related_docs = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "docs/project-manifest.md"
+]
+relevant_paths = [
+  "src/fyrnheim/mcp/",
+  "src/fyrnheim/insights.py",
+  "docs/",
+  "examples/"
+]
+related_missions = [
+  "M099 — MCP analytics catalog for Fyrnheim",
+  "M100 — Read-only MCP insight query tools"
+]
+
+[scope]
+in_scope = [
+  "Reference Dockerfile or container recipe for running fyr-mcp-analytics",
+  "Docker Compose or equivalent local deployment example",
+  "MCP client configuration examples that launch the containerized server",
+  "Guidance for passing ClickHouse/warehouse credentials via environment variables or secrets",
+  "Propel Data briefing section that explains the recommended rollout without embedding Propel-specific code in Fyrnheim",
+  "Smoke-test instructions using a local DuckDB-backed fixture/project"
+]
+out_of_scope = [
+  "Actually deploying infrastructure for Propel Data",
+  "Committing Propel Data repository changes",
+  "Hardcoding Propel Data recipes, credentials, table names, or business rules into Fyrnheim core",
+  "Adding remote query execution beyond the read-only recipe model",
+  "Changing MCP transport semantics unless required for container launch documentation"
+]
+acceptable_breakage = [
+  "Reference deployment files may start as examples and can be adapted by downstream projects."
+]
+
+[notes]
+considerations = "Treat uv-based execution as the local development path and Docker as the recommended shared/team deployment path. Prefer pinned Fyrnheim releases or commit SHAs in downstream project images. Keep secrets out of images and documentation examples."

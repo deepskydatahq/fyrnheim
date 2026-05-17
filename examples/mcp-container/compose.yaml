@@ -1,0 +1,31 @@
+services:
+  fyrnheim-mcp-analytics:
+    build:
+      context: ../..
+      dockerfile: examples/mcp-container/Dockerfile
+    image: fyrnheim-mcp-analytics:local
+    stdin_open: true
+    tty: false
+    working_dir: /project
+    volumes:
+      # Replace ./smoke-project with a downstream project checkout, e.g.
+      # /home/tmo/roadtothebeach/propel/propel-data:/project:ro
+      - ./smoke-project:/project:ro
+    environment:
+      FYRNHEIM_PROJECT: /project
+      FYRNHEIM_ENTITIES_DIR: /project/entities
+      FYRNHEIM_CONFIG: /project/fyrnheim.yaml
+      # Warehouse credentials/config should come from environment variables or
+      # Compose secrets. Do not bake real credentials into the image.
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-}
+    command:
+      - --entities-dir
+      - /project/entities
+      - --project-path
+      - /project
+      - --config
+      - /project/fyrnheim.yaml

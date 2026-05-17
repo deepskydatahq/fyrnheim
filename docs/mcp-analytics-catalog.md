@@ -68,11 +68,13 @@ Install the optional MCP extra when you want to run Fyrnheim as an MCP server:
 pip install 'fyrnheim[mcp]'
 ```
 
-Then run:
+Then run locally:
 
 ```bash
 fyr-mcp-analytics --entities-dir /path/to/project/entities --project-path /path/to/project
 ```
+
+For shared/team deployments, prefer the container reference in [Container deployment for Fyrnheim MCP analytics](mcp-container-deployment.md).
 
 The server registers these tools:
 

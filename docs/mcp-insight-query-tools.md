@@ -102,7 +102,7 @@ The MCP server now exposes these read-only insight tools in addition to the anal
 - `top_content_items`
 - `find_promising_records`
 
-Example MCP server command:
+Example local MCP server command:
 
 ```bash
 fyr-mcp-analytics \
@@ -110,6 +110,8 @@ fyr-mcp-analytics \
   --project-path /path/to/project \
   --config /path/to/project/fyrnheim.yaml
 ```
+
+For shared/team deployments, prefer the Docker reference in [Container deployment for Fyrnheim MCP analytics](mcp-container-deployment.md).
 
 `top_content_items` chooses a recipe tagged `content` unless you pass a specific recipe. `find_promising_records` chooses a recipe tagged `leads` or `promising_records` unless you pass a specific recipe.
 

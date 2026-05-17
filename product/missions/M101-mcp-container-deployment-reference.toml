@@ -2,7 +2,7 @@
 
 id = "M101"
 title = "MCP container deployment reference"
-status = "draft"
+status = "complete"
 created = 2026-05-17
 depends_on = ["M099", "M100"]
 

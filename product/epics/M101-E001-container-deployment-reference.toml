@@ -1,0 +1,44 @@
+# Epic: Container deployment reference for MCP analytics
+
+id = "M101-E001"
+parent = "M101"
+title = "Container deployment reference for MCP analytics"
+status = "complete"
+created = 2026-05-17
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = """
+Create generic Docker and Compose examples, MCP client configuration, smoke-project fixtures, and deployment documentation for running fyr-mcp-analytics as a reproducible containerized MCP server.
+"""
+
+[job_story]
+description = "When a project team wants to offer Fyrnheim analytics and insight tools to agents, they can copy/adapt a documented container reference rather than relying on each user to run uv locally."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Reference files show Docker and Compose invocation for fyr-mcp-analytics over stdio",
+  "Examples document project mounting, config paths, and warehouse credentials via environment or secrets",
+  "MCP client config demonstrates a containerized server command",
+  "A smoke project demonstrates catalog and insight recipe configuration without hardcoded Propel core logic",
+  "Tests validate example shape and smoke project recipe loading"
+]
+validator_context = [
+  "examples/mcp-container/",
+  "docs/mcp-container-deployment.md",
+  "tests/test_mcp_container_examples.py"
+]
+
+[context]
+relevant_paths = [
+  "examples/",
+  "docs/",
+  "src/fyrnheim/mcp/",
+  "tests/"
+]
+dependencies = ["M099", "M100"]
+
+[notes]
+considerations = "Keep the reference transport aligned with the current stdio MCP server: use docker run -i or docker compose run -i rather than detached HTTP service examples."

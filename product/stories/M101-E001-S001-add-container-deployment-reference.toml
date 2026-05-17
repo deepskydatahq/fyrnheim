@@ -1,0 +1,58 @@
+# Story: Add container deployment reference
+
+id = "M101-E001-S001"
+parent = "M101-E001"
+title = "Add container deployment reference"
+status = "complete"
+triage = "ready"
+created = 2026-05-17
+
+[outcome]
+description = "Add generic Docker/Compose/MCP-client examples, docs, and smoke-project validation for running the Fyrnheim analytics MCP server in a container."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "examples/mcp-container contains a reference Dockerfile and Compose file for fyr-mcp-analytics over stdio."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain local uv execution versus containerized team deployment, with secret/environment handling and Propel Data rollout guidance."
+
+[[acceptance_criteria.criteria]]
+description = "An MCP client config example launches the containerized server and passes project/config paths."
+
+[[acceptance_criteria.criteria]]
+description = "A DuckDB-backed smoke project demonstrates catalog entities and a content insight recipe without Propel-specific code in Fyrnheim core."
+
+[[acceptance_criteria.criteria]]
+description = "Tests validate the example files and smoke recipe loading."
+
+[context]
+relevant_paths = [
+  "examples/mcp-container/",
+  "docs/mcp-container-deployment.md",
+  "tests/test_mcp_container_examples.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use docker run -i or docker compose run -i because the current MCP server uses stdio transport.",
+  "Keep ClickHouse/warehouse values as environment variable examples, not real credentials.",
+  "Smoke-test the example with DuckDB and the existing insight recipe loader rather than requiring Docker in CI."
+]
+reference_files = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "src/fyrnheim/mcp/analytics_server.py"
+]
+
+[execution]
+branch = "plan/M101-mcp-container-deployment"
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/165"
+commit = "19b946c"
+started = "2026-05-17"
+completed = "2026-05-17"
+failure_reason = ""

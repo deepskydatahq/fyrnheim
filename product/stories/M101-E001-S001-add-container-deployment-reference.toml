@@ -52,7 +52,7 @@ reference_files = [
 [execution]
 branch = "plan/M101-mcp-container-deployment"
 pr = "https://github.com/deepskydatahq/fyrnheim/pull/165"
-commit = "19b946c"
+commit = "88c3ae3"
 started = "2026-05-17"
 completed = "2026-05-17"
 failure_reason = ""

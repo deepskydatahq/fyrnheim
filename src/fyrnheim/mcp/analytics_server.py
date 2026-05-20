@@ -8,6 +8,7 @@ from typing import Any
 
 from fyrnheim.analytics_catalog import (
     build_analytics_catalog,
+    describe_analytics_model as catalog_describe_analytics_model,
     describe_dimension as catalog_describe_dimension,
     describe_metric as catalog_describe_metric,
     list_analytics_models as catalog_list_analytics_models,
@@ -15,6 +16,10 @@ from fyrnheim.analytics_catalog import (
     list_metrics as catalog_list_metrics,
 )
 from fyrnheim.inspect import build_manifest
+from fyrnheim.mcp.analytics_tools import (
+    preview_analytics_query_sql as tool_preview_analytics_query_sql,
+    query_analytics_model as tool_query_analytics_model,
+)
 from fyrnheim.mcp.insight_tools import (
     find_promising_records as tool_find_promising_records,
     list_insight_recipes as tool_list_insight_recipes,
@@ -67,6 +72,11 @@ def create_server(
         return catalog_list_analytics_models(catalog())
 
     @server.tool()
+    def describe_analytics_model(model: str) -> dict[str, Any]:
+        """Describe a Fyrnheim analytics model, including grain and limitations."""
+        return catalog_describe_analytics_model(catalog(), model)
+
+    @server.tool()
     def list_metrics(model: str | None = None) -> dict[str, Any]:
         """List Fyrnheim metrics/measures, optionally filtered to one model."""
         return catalog_list_metrics(catalog(), model=model)
@@ -85,6 +95,50 @@ def create_server(
     def describe_dimension(dimension: str, model: str | None = None) -> dict[str, Any]:
         """Describe a Fyrnheim dimension by name or dimension id."""
         return catalog_describe_dimension(catalog(), dimension, model=model)
+
+    @server.tool()
+    def query_analytics_model(
+        model: str,
+        metrics: list[str],
+        dimensions: list[str] | None = None,
+        filters: dict[str, Any] | None = None,
+        order_by: list[dict[str, str]] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Run a bounded read-only query over declared model metrics/dimensions."""
+        return tool_query_analytics_model(
+            config_path,
+            model,
+            metrics,
+            dimensions=dimensions,
+            filters=filters,
+            order_by=order_by,
+            limit=limit,
+            entities_dir=entities_dir,
+            project_path=project_path,
+        )
+
+    @server.tool()
+    def preview_analytics_query_sql(
+        model: str,
+        metrics: list[str],
+        dimensions: list[str] | None = None,
+        filters: dict[str, Any] | None = None,
+        order_by: list[dict[str, str]] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Preview generated SQL for a bounded analytics model query."""
+        return tool_preview_analytics_query_sql(
+            config_path,
+            model,
+            metrics,
+            dimensions=dimensions,
+            filters=filters,
+            order_by=order_by,
+            limit=limit,
+            entities_dir=entities_dir,
+            project_path=project_path,
+        )
 
     @server.tool()
     def list_insight_recipes() -> dict[str, Any]:

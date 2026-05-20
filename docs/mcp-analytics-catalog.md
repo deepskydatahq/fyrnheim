@@ -1,6 +1,8 @@
 # Fyrnheim MCP analytics catalog
 
-Fyrnheim exposes a read-only analytics catalog that is suitable for MCP tools. The first MCP slice is intentionally narrow: it answers what analytics models, metrics, and dimensions are available in a project. It does **not** execute queries or connect to a warehouse.
+Fyrnheim exposes a read-only analytics catalog and safe model-query surface that is suitable for agents. Agents should reason from declared analytics models, their grain, metrics, dimensions, and limitations instead of guessing physical source tables.
+
+The MCP tools do **not** accept arbitrary SQL and do not write, materialize, or run pipelines.
 
 ## What the catalog covers
 
@@ -13,7 +15,15 @@ The catalog is derived from the Fyrnheim project manifest:
   - metrics: `metric_fields`
   - dimensions: declared `dimensions` plus the `_date` time-grain column
 
-Each metric and dimension record includes model name, model type, kind/source metadata, and identifiers that are stable enough for agents to reference.
+Each model includes concise agent-facing context:
+
+- model type and grain;
+- defining entity / aggregate level;
+- metrics and dimensions;
+- recommended question shapes;
+- limitations, especially where the model grain cannot answer lower-grain questions.
+
+Each metric and dimension includes usage hints for safe selection, grouping, filtering, and sorting.
 
 ## Python usage
 
@@ -21,6 +31,7 @@ Each metric and dimension record includes model name, model type, kind/source me
 from fyrnheim.inspect import build_manifest
 from fyrnheim.analytics_catalog import (
     build_analytics_catalog,
+    describe_analytics_model,
     list_analytics_models,
     list_metrics,
     list_dimensions,
@@ -32,11 +43,39 @@ manifest = build_manifest("entities")
 catalog = build_analytics_catalog(manifest)
 
 models = list_analytics_models(catalog)
+content = describe_analytics_model(catalog, "content_metrics_daily")
 metrics = list_metrics(catalog)
 dimensions = list_dimensions(catalog)
 workshop_count = describe_metric(catalog, "workshop_count")
 lead_level = describe_dimension(catalog, "lead_level")
 ```
+
+## Generic analytics model queries
+
+Use `query_analytics_model` to query declared model metrics and dimensions only. Fyrnheim builds the Ibis expression and applies a mandatory capped limit.
+
+```python
+from fyrnheim.mcp.analytics_tools import query_analytics_model, preview_analytics_query_sql
+
+result = query_analytics_model(
+    "fyrnheim.yaml",
+    "content_metrics_daily",
+    ["impressions", "reactions"],
+    dimensions=["source"],
+    filters={"_date": {"gte": "2026-01-01"}},
+    order_by=[{"field": "impressions", "direction": "desc"}],
+    limit=25,
+)
+
+preview = preview_analytics_query_sql(
+    "fyrnheim.yaml",
+    "content_metrics_daily",
+    ["impressions"],
+    dimensions=["source"],
+)
+```
+
+`preview_analytics_query_sql` compiles the generated query. It does not accept agent-written SQL.
 
 ## MCP-ready tool functions
 
@@ -44,14 +83,18 @@ The tool functions in `fyrnheim.mcp.analytics_tools` load the manifest/catalog f
 
 ```python
 from fyrnheim.mcp.analytics_tools import (
+    describe_analytics_model,
     list_analytics_models,
     list_metrics,
     list_dimensions,
     describe_metric,
     describe_dimension,
+    query_analytics_model,
+    preview_analytics_query_sql,
 )
 
 list_analytics_models("entities")
+describe_analytics_model("entities", "content_metrics_daily")
 list_metrics("entities", model="accounts")
 list_dimensions("entities", model="accounts")
 describe_metric("entities", "workshop_count")
@@ -68,19 +111,29 @@ Install the optional MCP extra when you want to run Fyrnheim as an MCP server:
 pip install 'fyrnheim[mcp]'
 ```
 
-Then run:
+Then run locally over stdio:
 
 ```bash
-fyr-mcp-analytics --entities-dir /path/to/project/entities --project-path /path/to/project
+fyr-mcp-analytics --entities-dir /path/to/project/entities --project-path /path/to/project --config /path/to/project/fyrnheim.yaml
 ```
 
-The server registers these tools:
+The server registers these catalog/query tools:
 
 - `list_analytics_models`
+- `describe_analytics_model`
 - `list_metrics`
 - `list_dimensions`
 - `describe_metric`
 - `describe_dimension`
+- `query_analytics_model`
+- `preview_analytics_query_sql`
+
+It also keeps the recipe-oriented insight tools:
+
+- `list_insight_recipes`
+- `run_insight_recipe`
+- `top_content_items`
+- `find_promising_records`
 
 For hosted clients that need an MCP URL instead of a launched process, see [Streamable HTTP MCP transport](mcp-http-transport.md).
 
@@ -95,7 +148,9 @@ Example Claude Desktop-style configuration:
         "--entities-dir",
         "/path/to/project/entities",
         "--project-path",
-        "/path/to/project"
+        "/path/to/project",
+        "--config",
+        "/path/to/project/fyrnheim.yaml"
       ]
     }
   }
@@ -106,6 +161,19 @@ Example Claude Desktop-style configuration:
 
 Metric and dimension names can repeat across models. `describe_metric()` and `describe_dimension()` do not guess when a name is ambiguous. They return all matches and set `ambiguous: true`. Pass the `model` argument, or use a full `metric_id` / `dimension_id`, to select one record.
 
-## No query execution yet
+## Agent guidance for model grain
 
-This mission intentionally stops at metadata. Future work may add safe query planning or query execution, but that requires a filter grammar, backend credentials, limits, permissions, and materialization-location rules. For now, these tools help agents discover the analytical surface before proposing changes or asking a human which metric to use.
+Agents should inspect `describe_analytics_model` before querying. If a model is daily/channel-grain, it can rank channels or days but cannot rank individual source records unless the record identifier is declared as a dimension.
+
+For Propel Data, `content_metrics_daily` is useful for questions like:
+
+- Which content source/channel generated the most impressions this week?
+- How did LinkedIn compare to website content by day?
+- Which day had the highest aggregate engagement?
+
+It is **not** sufficient for:
+
+- Which individual LinkedIn post performed best?
+- Which AuthoredUp post had the highest engagement?
+
+Those require a per-post model or a reliable per-post source table exposed as a declared analytics model. If only `content_metrics_daily` is available, the agent should answer at channel/day grain and explain the limitation instead of guessing physical source table names such as `authoredup_posts`.

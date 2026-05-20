@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-05-17
+
+### Added
+
+- **Project manifest export.** Added a stable JSON manifest API and `fyr manifest`
+  command so projects can export sources, activities, identity graphs,
+  analytics entities, metrics models, staging views, and semantic edges for
+  agent and orchestration integrations.
+
+- **Dagster manifest metadata helper.** Added optional Dagster-compatible
+  metadata helpers that attach manifest hash/version/correlation fields without
+  importing Dagster at runtime.
+
+- **MCP analytics catalog tools.** Added optional `fyrnheim[mcp]` support and a
+  `fyr-mcp-analytics` server exposing read-only analytics model, metric, and
+  dimension discovery tools derived from the project manifest.
+
+- **Read-only MCP insight recipes.** Added bounded recipe-driven insight tools
+  (`list_insight_recipes`, `run_insight_recipe`, `top_content_items`, and
+  `find_promising_records`) over configured project tables. Recipes validate
+  selected columns, filters, orderings, and limit caps; agents cannot submit
+  arbitrary SQL through this surface.
+
+- **Streamable HTTP MCP transport.** Added `fyr-mcp-analytics-http` so hosted
+  MCP clients can connect to Fyrnheim over Streamable HTTP while preserving the
+  existing stdio MCP entrypoint for local and Docker-launched clients.
+
+- **Semantic analytics model context and query tools.** Analytics catalog
+  records now include concise model, metric, and dimension context such as
+  grain, defining entity, recommended questions, limitations, descriptions, and
+  safe usage hints. Added safe generic model query and generated-SQL preview
+  tools over declared metrics/dimensions only.
+
 ### Changed
 
 - **Warehouse compute-only contract.** Warehouse-backed pipelines now fail fast

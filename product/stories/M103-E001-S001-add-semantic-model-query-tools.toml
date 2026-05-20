@@ -62,7 +62,7 @@ reference_files = [
 [execution]
 branch = "plan/M103-semantic-analytics-query-tools"
 pr = "https://github.com/deepskydatahq/fyrnheim/pull/167"
-commit = ""
+commit = "f0117bf"
 started = "2026-05-17"
 completed = "2026-05-17"
 failure_reason = ""

@@ -1,0 +1,68 @@
+# Story: Add semantic model query tools
+
+id = "M103-E001-S001"
+parent = "M103-E001"
+title = "Add semantic model query tools"
+status = "complete"
+triage = "plan"
+created = 2026-05-17
+
+[outcome]
+description = "Add model-centric semantic catalog context plus safe generic analytics model query and SQL preview tools."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "Analytics catalog model descriptions include model kind, grain, defining entity, metrics, dimensions, recommended questions, and limitations."
+
+[[acceptance_criteria.criteria]]
+description = "Metric and dimension records include descriptions and safe usage hints for grouping, filtering, sorting, and aggregation."
+
+[[acceptance_criteria.criteria]]
+description = "MCP tools expose describe_analytics_model, query_analytics_model, and preview_analytics_query_sql."
+
+[[acceptance_criteria.criteria]]
+description = "query_analytics_model executes bounded read-only Ibis queries over declared model metrics/dimensions and rejects undeclared fields."
+
+[[acceptance_criteria.criteria]]
+description = "preview_analytics_query_sql returns generated SQL shape without accepting arbitrary SQL."
+
+[[acceptance_criteria.criteria]]
+description = "DuckDB tests cover a content_metrics_daily-style model, descriptions, grouped queries, rejected fields, limit caps, and SQL preview."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain model-grain reasoning and Propel's channel-rollup versus per-post distinction."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_semantic_analytics_query.py",
+  "docs/mcp-analytics-catalog.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use Ibis table expressions and connection.table(model_name) for materialized model queries in the first slice.",
+  "Use metrics_model metric output_name fields for physical columns, e.g. impressions_sum.",
+  "Keep arbitrary execute_sql out of scope; SQL preview should compile generated Ibis only."
+]
+reference_files = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "tests/test_analytics_catalog.py",
+  "tests/test_insight_tools.py"
+]
+
+[execution]
+branch = "plan/M103-semantic-analytics-query-tools"
+pr = "https://github.com/deepskydatahq/fyrnheim/pull/167"
+commit = "f0117bf"
+started = "2026-05-17"
+completed = "2026-05-17"
+failure_reason = ""

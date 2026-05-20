@@ -1,0 +1,91 @@
+# Mission: Semantic analytics model context and generic query tools
+
+id = "M103"
+title = "Semantic analytics model context and generic query tools"
+status = "complete"
+created = 2026-05-17
+depends_on = ["M099", "M102"]
+
+[outcome]
+description = """
+Make Fyrnheim's MCP analytics surface useful when source-table recipes are brittle by exposing concise semantic context for each analytics model, metric, and dimension, plus a safe generic query tool over declared analytics models. Agents should be able to discover what questions each model can answer, understand grain/limitations, and run bounded read-only metric/dimension queries without relying on physical source table names or arbitrary SQL.
+"""
+
+user_progress = "From 'agents can list metrics or run brittle source-table recipes' to 'agents can understand analytics model semantics and safely query declared metrics/dimensions at the model's actual grain'."
+
+[execution]
+mode = "implementation"
+outputs = ["semantic-catalog", "model-describe-tool", "generic-query-tool", "sql-preview", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Analytics catalog exposes short model-level context including model kind, grain, defining entity, metrics, dimensions, recommended questions, and limitations where available",
+  "Metric and dimension records include short descriptions and safe usage hints for grouping, filtering, sorting, and aggregation",
+  "MCP tools include describe_analytics_model and a bounded query_analytics_model tool that only accepts declared metrics/dimensions and applies mandatory limits",
+  "A preview_analytics_query_sql or equivalent debug surface shows generated SQL for supported backends without accepting arbitrary SQL from agents",
+  "DuckDB tests cover a content_metrics_daily-style model, model description, valid grouped metric queries, rejected undeclared fields, limit caps, and SQL preview shape",
+  "Docs explain how agents should reason from model grain and limitations, with Propel examples that clarify daily channel rollups versus unavailable per-post ranking"
+]
+validator_context = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "src/fyrnheim/insights.py",
+  "tests/",
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "docs/mcp-http-transport.md"
+]
+
+[context]
+related_docs = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md",
+  "docs/mcp-http-transport.md"
+]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "src/fyrnheim/engine/executor.py",
+  "src/fyrnheim/core/metrics_model.py",
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/inspect.py",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M099 — MCP analytics catalog for Fyrnheim",
+  "M100 — Read-only MCP insight query tools",
+  "M102 — Streamable HTTP MCP transport"
+]
+
+[scope]
+in_scope = [
+  "Concise agent-facing context for analytics models, metrics, and dimensions",
+  "Defining entity/grain/limitation metadata derived from Fyrnheim objects where possible and configurable where needed",
+  "describe_analytics_model MCP tool for model-centric context",
+  "Generic read-only query_analytics_model tool over declared metrics and dimensions",
+  "Safe generated SQL/Ibis only; no arbitrary SQL input from agents",
+  "SQL preview for generated model queries",
+  "Mandatory limit caps and validation of selected fields, filters, grouping, sorting, and date constraints",
+  "DuckDB-backed tests using a content_metrics_daily-style fixture",
+  "Propel Data documentation showing channel-level rollup analysis and explaining why per-post top-content requires a per-post model/source"
+]
+out_of_scope = [
+  "Unrestricted execute_sql or arbitrary agent-written SQL",
+  "Writes, materializations, pipeline execution, or warehouse mutations through MCP",
+  "Fixing Propel Data's AuthoredUp/LinkedIn source table sync or physical table naming",
+  "Hardcoding Propel-specific business logic into Fyrnheim core",
+  "Building a full semantic layer optimizer or planner beyond declared model metrics/dimensions",
+  "Promising-leads recipe fixes or entity computed-field migrations"
+]
+acceptable_breakage = [
+  "Existing recipe-based insight tools may remain available, but generic model queries should become the recommended path for agent analytics exploration."
+]
+
+[notes]
+considerations = """
+This mission is motivated by a real Propel MCP failure: the content recipe pointed at source=linkedin_posts, but execution resolved toward authoredup_posts and failed. The correct agent behavior would have been to inspect available analytics models, discover that content_metrics_daily is daily/channel-grain rather than per-post, and either answer a channel-level question or explain that per-post ranking requires a per-post model. Keep the generic query surface read-only, declared-field-only, and model-grain-aware.
+"""

@@ -1,0 +1,49 @@
+# Epic: Semantic model query tools
+
+id = "M103-E001"
+parent = "M103"
+title = "Semantic model query tools"
+status = "complete"
+created = 2026-05-17
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = """
+Add semantic analytics model descriptions and safe generic metric/dimension query tools over declared Fyrnheim analytics models.
+"""
+
+[job_story]
+description = "When an agent needs to answer an analytics question, it can understand each model's grain and limitations, choose declared metrics/dimensions, and run a bounded query without guessing physical source tables."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Catalog model, metric, and dimension records include concise agent-facing context and safe usage hints",
+  "MCP exposes describe_analytics_model, query_analytics_model, and preview_analytics_query_sql",
+  "Queries validate declared metrics/dimensions/filter/order fields and cap limits",
+  "DuckDB tests cover content_metrics_daily-style query behavior and rejection paths",
+  "Docs explain Propel channel rollups versus per-post limitations"
+]
+validator_context = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_semantic_analytics_query.py",
+  "docs/mcp-analytics-catalog.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/",
+  "docs/"
+]
+dependencies = ["M099", "M102"]
+
+[notes]
+considerations = "Keep the query surface declared-field-only and bounded. Do not add arbitrary SQL execution."

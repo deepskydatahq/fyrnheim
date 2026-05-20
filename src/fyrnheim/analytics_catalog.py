@@ -48,7 +48,11 @@ def list_analytics_models(catalog: dict[str, Any]) -> dict[str, Any]:
             {
                 "name": model["name"],
                 "model_type": model["model_type"],
+                "description": model.get("description"),
                 "grain": model.get("grain"),
+                "defining_entity": model.get("defining_entity"),
+                "limitations": model.get("limitations", []),
+                "recommended_questions": model.get("recommended_questions", []),
                 "metric_count": len(model["metrics"]),
                 "dimension_count": len(model["dimensions"]),
                 "metrics": [metric["name"] for metric in model["metrics"]],
@@ -73,6 +77,30 @@ def list_dimensions(catalog: dict[str, Any], *, model: str | None = None) -> dic
     if model is not None:
         dimensions = [dimension for dimension in dimensions if dimension["model"] == model]
     return {"dimensions": dimensions}
+
+
+def describe_analytics_model(catalog: dict[str, Any], model: str) -> dict[str, Any]:
+    """Describe one analytics model with concise agent-facing context."""
+    matches = [candidate for candidate in catalog["models"] if candidate["name"] == model]
+    response: dict[str, Any] = {"query": model, "matches": matches, "count": len(matches)}
+    if len(matches) == 1:
+        match = matches[0]
+        response["model"] = match
+        response["model_summary"] = {
+            "name": match["name"],
+            "model_type": match["model_type"],
+            "description": match.get("description"),
+            "grain": match.get("grain"),
+            "defining_entity": match.get("defining_entity"),
+            "metrics": [metric["name"] for metric in match["metrics"]],
+            "dimensions": [dimension["name"] for dimension in match["dimensions"]],
+            "limitations": match.get("limitations", []),
+            "recommended_questions": match.get("recommended_questions", []),
+        }
+        response["ambiguous"] = False
+    else:
+        response["ambiguous"] = len(matches) > 1
+    return response
 
 
 def describe_metric(
@@ -151,6 +179,8 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
             "activity": measure["activity"],
             "field": measure.get("field"),
             "output_name": measure["name"],
+            "description": _metric_description(measure["name"], measure["aggregation"]),
+            "usage": _metric_usage(measure["aggregation"]),
         }
         for measure in config.get("measures", [])
     ]
@@ -165,6 +195,8 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
             "source": config.get("identity_graph"),
             "field": "canonical_id",
             "strategy": None,
+            "description": "Stable canonical identifier for the analytics entity row.",
+            "usage": _dimension_usage(can_group=True, can_filter=True, can_sort=True),
         }
     ]
     dimensions.extend(
@@ -177,6 +209,8 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
             "source": field["source"],
             "field": field["field"],
             "strategy": field["strategy"],
+            "description": _dimension_description(field["name"], field.get("source")),
+            "usage": _dimension_usage(can_group=True, can_filter=True, can_sort=True),
         }
         for field in config.get("state_fields", [])
     )
@@ -191,7 +225,8 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
             "field": field["name"],
             "strategy": None,
             "expression": field.get("expression"),
-            "description": field.get("description"),
+            "description": field.get("description") or _dimension_description(field["name"], "computed_fields"),
+            "usage": _dimension_usage(can_group=True, can_filter=True, can_sort=True),
         }
         for field in config.get("computed_fields", [])
     )
@@ -201,6 +236,14 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
         "model_type": "analytics_entity",
         "identity_graph": config.get("identity_graph"),
         "materialization": config.get("materialization"),
+        "table": config.get("table") or model_name,
+        "description": f"Analytics entity '{model_name}' with state fields and measures.",
+        "defining_entity": model_name,
+        "limitations": ["Entity-level row grain; measures are precomputed on the entity table."],
+        "recommended_questions": [
+            f"Which {model_name} have the highest measures?",
+            f"How do {model_name} break down by declared dimensions?",
+        ],
         "metrics": sorted(metrics, key=lambda metric: metric["metric_id"]),
         "dimensions": sorted(dimensions, key=lambda dimension: dimension["dimension_id"]),
     }
@@ -219,6 +262,8 @@ def _metrics_model(record: dict[str, Any]) -> dict[str, Any]:
             "aggregation": field["aggregation"],
             "distinct_field": field.get("distinct_field"),
             "output_name": f"{field['field_name']}_{field['aggregation']}",
+            "description": _metric_description(field["field_name"], field["aggregation"]),
+            "usage": _metric_usage(field["aggregation"]),
             "grain": config["grain"],
             "sources": list(config.get("sources", [])),
         }
@@ -234,6 +279,8 @@ def _metrics_model(record: dict[str, Any]) -> dict[str, Any]:
             "grain": config["grain"],
             "source": "event_timestamp",
             "field": "ts",
+            "description": f"{config['grain'].title()} time bucket for the metrics model.",
+            "usage": _dimension_usage(can_group=True, can_filter=True, can_sort=True),
         }
     ]
     dimensions.extend(
@@ -246,6 +293,8 @@ def _metrics_model(record: dict[str, Any]) -> dict[str, Any]:
             "source": "metrics_model.dimensions",
             "field": dimension,
             "grain": config["grain"],
+            "description": _dimension_description(dimension, "metrics_model.dimensions"),
+            "usage": _dimension_usage(can_group=True, can_filter=True, can_sort=True),
         }
         for dimension in config.get("dimensions", [])
     )
@@ -256,9 +305,57 @@ def _metrics_model(record: dict[str, Any]) -> dict[str, Any]:
         "grain": config["grain"],
         "sources": list(config.get("sources", [])),
         "materialization": config.get("materialization"),
+        "table": config.get("table") or model_name,
+        "description": _metrics_model_description(model_name, config["grain"], config.get("sources", [])),
+        "defining_entity": _metrics_model_defining_entity(config.get("sources", []), config["grain"]),
+        "limitations": [
+            f"{config['grain']} aggregate grain; lower-grain records such as individual posts are not available unless declared as dimensions or exposed by another model."
+        ],
+        "recommended_questions": [
+            f"Which dimensions drive {model_name} metrics?",
+            f"How do metrics trend by _date at {config['grain']} grain?",
+        ],
         "metrics": sorted(metrics, key=lambda metric: metric["metric_id"]),
         "dimensions": sorted(dimensions, key=lambda dimension: dimension["dimension_id"]),
     }
+
+
+def _metric_description(name: str, aggregation: str) -> str:
+    return f"Metric '{name}' using {aggregation} aggregation."
+
+
+def _metric_usage(aggregation: str) -> dict[str, Any]:
+    return {
+        "safe_for_select": True,
+        "safe_for_order_by": True,
+        "safe_for_filter": False,
+        "safe_for_group_by": False,
+        "aggregation": aggregation,
+    }
+
+
+def _dimension_description(name: str, source: str | None) -> str:
+    suffix = f" from {source}" if source else ""
+    return f"Dimension '{name}'{suffix}."
+
+
+def _dimension_usage(*, can_group: bool, can_filter: bool, can_sort: bool) -> dict[str, bool]:
+    return {
+        "safe_for_select": True,
+        "safe_for_group_by": can_group,
+        "safe_for_filter": can_filter,
+        "safe_for_order_by": can_sort,
+    }
+
+
+def _metrics_model_description(model_name: str, grain: str, sources: list[str]) -> str:
+    source_text = ", ".join(sources) if sources else "declared sources"
+    return f"{grain.title()} metrics model '{model_name}' aggregated from {source_text}."
+
+
+def _metrics_model_defining_entity(sources: list[str], grain: str) -> str:
+    source_text = ", ".join(sources) if sources else "declared source events"
+    return f"{grain} aggregate over {source_text}"
 
 
 def _metrics_model_metric_id(model_name: str, field: dict[str, Any]) -> str:

@@ -110,10 +110,13 @@ For Propel Data, the most direct path is a Python container-hosted HTTP MCP endp
 The HTTP transport exposes the same tools as stdio:
 
 - `list_analytics_models`
+- `describe_analytics_model`
 - `list_metrics`
 - `list_dimensions`
 - `describe_metric`
 - `describe_dimension`
+- `query_analytics_model`
+- `preview_analytics_query_sql`
 - `list_insight_recipes`
 - `run_insight_recipe`
 - `top_content_items`

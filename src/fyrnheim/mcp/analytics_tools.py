@@ -11,11 +11,16 @@ from typing import Any
 
 from fyrnheim.analytics_catalog import (
     build_analytics_catalog,
+    describe_analytics_model as catalog_describe_analytics_model,
     describe_dimension as catalog_describe_dimension,
     describe_metric as catalog_describe_metric,
     list_analytics_models as catalog_list_analytics_models,
     list_dimensions as catalog_list_dimensions,
     list_metrics as catalog_list_metrics,
+)
+from fyrnheim.analytics_query import (
+    preview_project_analytics_query_sql,
+    run_project_analytics_query,
 )
 from fyrnheim.inspect import build_manifest
 
@@ -44,6 +49,19 @@ def list_analytics_models(
 ) -> dict[str, Any]:
     """List analytics entities and metrics models with metric/dimension names."""
     return catalog_list_analytics_models(load_catalog(entities_dir, project_path=project_path))
+
+
+def describe_analytics_model(
+    entities_dir: Path | str,
+    model: str,
+    *,
+    project_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Describe one analytics model with metrics, dimensions, grain, and limitations."""
+    return catalog_describe_analytics_model(
+        load_catalog(entities_dir, project_path=project_path),
+        model,
+    )
 
 
 def list_metrics(
@@ -99,4 +117,56 @@ def describe_dimension(
         load_catalog(entities_dir, project_path=project_path),
         dimension,
         model=model,
+    )
+
+
+def query_analytics_model(
+    config_path: Path | str,
+    model: str,
+    metrics: list[str],
+    *,
+    dimensions: list[str] | None = None,
+    filters: dict[str, Any] | None = None,
+    order_by: list[dict[str, str]] | None = None,
+    limit: int | None = None,
+    entities_dir: Path | str | None = None,
+    project_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Run a safe bounded analytics model query over declared fields."""
+    return run_project_analytics_query(
+        config_path,
+        model=model,
+        metrics=metrics,
+        dimensions=dimensions,
+        filters=filters,
+        order_by=order_by,
+        limit=limit,
+        entities_dir=entities_dir,
+        project_path=project_path,
+    )
+
+
+def preview_analytics_query_sql(
+    config_path: Path | str,
+    model: str,
+    metrics: list[str],
+    *,
+    dimensions: list[str] | None = None,
+    filters: dict[str, Any] | None = None,
+    order_by: list[dict[str, str]] | None = None,
+    limit: int | None = None,
+    entities_dir: Path | str | None = None,
+    project_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Preview SQL for a safe analytics model query over declared fields."""
+    return preview_project_analytics_query_sql(
+        config_path,
+        model=model,
+        metrics=metrics,
+        dimensions=dimensions,
+        filters=filters,
+        order_by=order_by,
+        limit=limit,
+        entities_dir=entities_dir,
+        project_path=project_path,
     )

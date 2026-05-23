@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from fyrnheim.core.source import EventSource
+from fyrnheim.engine.diff_engine import _EVENT_SCHEMA
 from fyrnheim.engine.source_stage import build_source_stage_table
 
 log = logging.getLogger("fyrnheim.event_source_loader")
@@ -114,7 +115,45 @@ def load_event_source(
             required_columns=required_columns,
         )
 
+    if backend == "clickhouse":
+        return _build_event_source_event_memtable(table, event_source)
+
     return build_event_source_event_table(table, event_source)
+
+
+def _build_event_source_event_memtable(
+    table: ibis.Table,
+    event_source: EventSource,
+) -> ibis.Table:
+    """Convert a ClickHouse EventSource to events via pandas JSON packing."""
+    frame = table.execute()
+    entity_id_col = event_source.entity_id_field
+    ts_col = event_source.timestamp_field
+    exclude_cols = {entity_id_col, ts_col}
+    if event_source.event_type_field is not None:
+        exclude_cols.add(event_source.event_type_field)
+    exclude_cols.update(event_source.payload_exclude)
+    payload_cols = [col for col in frame.columns if col not in exclude_cols]
+
+    rows: list[dict[str, str]] = []
+    for record in frame.to_dict(orient="records"):
+        if event_source.event_type is not None:
+            event_type = event_source.event_type
+        elif event_source.event_type_field is not None:
+            event_type = record.get(event_source.event_type_field)
+        else:
+            event_type = event_source.name
+        payload = {col: _serialize_value(record.get(col)) for col in payload_cols}
+        rows.append(
+            {
+                "source": event_source.name,
+                "entity_id": str(record.get(entity_id_col)),
+                "ts": str(record.get(ts_col)),
+                "event_type": str(event_type),
+                "payload": json.dumps(payload),
+            }
+        )
+    return ibis.memtable(rows, schema=_EVENT_SCHEMA) if rows else ibis.memtable([], schema=_EVENT_SCHEMA)
 
 
 def build_event_source_event_table(

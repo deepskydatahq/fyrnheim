@@ -258,20 +258,26 @@ class TestWriteTable:
         assert job_config.write_disposition == "WRITE_TRUNCATE"
         fake_job.result.assert_called_once()
 
-    def test_clickhouse_raises_not_implemented(self):
+    def test_clickhouse_writes_table(self):
         import pandas as pd
         fake_conn = MagicMock(name="clickhouse_connection")
         fake_conn.name = "clickhouse"
         executor = IbisExecutor(conn=fake_conn, backend="clickhouse")
-        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
-            executor.write_table("p", "d", "n", pd.DataFrame({"x": [1]}))
+        df = pd.DataFrame({"x": [1], "all_null": [None]})
+
+        executor.write_table("p", "d", "n", df)
+
+        fake_conn.drop_table.assert_called_once_with("n", force=True)
+        written = fake_conn.create_table.call_args.args[1]
+        assert fake_conn.create_table.call_args.args[0] == "n"
+        assert str(written["all_null"].dtype) == "string"
 
     def test_postgres_raises_not_implemented(self):
         import pandas as pd
         fake_conn = MagicMock(name="postgres_connection")
         fake_conn.name = "postgres"
         executor = IbisExecutor(conn=fake_conn, backend="postgres")
-        with pytest.raises(NotImplementedError, match="v1 supports BigQuery and DuckDB"):
+        with pytest.raises(NotImplementedError, match="v1 supports BigQuery, ClickHouse, and DuckDB"):
             executor.write_table("p", "d", "n", pd.DataFrame({"x": [1]}))
 
 

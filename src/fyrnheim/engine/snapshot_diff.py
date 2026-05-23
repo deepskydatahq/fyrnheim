@@ -11,8 +11,15 @@ import datetime
 import logging
 
 import ibis
+import pandas as pd
 
-from fyrnheim.engine.diff_engine import build_row_appeared_events, diff_snapshots
+from fyrnheim.engine.diff_engine import (
+    _EVENT_SCHEMA,
+    _diff_dataframes,
+    _make_appeared_events,
+    build_row_appeared_events,
+    diff_snapshots,
+)
 from fyrnheim.engine.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
@@ -66,6 +73,50 @@ class SnapshotDiffPipeline:
 
         # Step 1: get previous snapshot
         previous = self._store.get_previous(source_name, snapshot_date)
+
+        # ClickHouse 24.1 cannot execute the warehouse-native JSON payload and
+        # null-safe diff expressions used below for all schemas (notably
+        # nullable fields and isNotDistinctFrom outside JOIN ON). Use the
+        # existing pandas diff implementation for ClickHouse until the SQL path
+        # can be expressed with backend-compatible JSON construction.
+        if getattr(self._conn, "name", None) == "clickhouse":
+            current_df = current_table.execute()
+            if previous is None:
+                event_rows = _make_appeared_events(
+                    current_df, source_name, id_field, snapshot_date.isoformat()
+                )
+            else:
+                previous_df = previous.execute()
+                for column in current_df.columns:
+                    if column not in previous_df.columns:
+                        previous_df[column] = pd.NA
+                for column in previous_df.columns:
+                    if column not in current_df.columns:
+                        current_df[column] = pd.NA
+                previous_df = previous_df[list(current_df.columns)]
+                event_rows = _diff_dataframes(
+                    current_df,
+                    previous_df,
+                    source_name,
+                    id_field,
+                    snapshot_date.isoformat(),
+                    exclude_fields or [],
+                )
+                if not event_rows and len(current_df) > 0:
+                    event_rows = _make_appeared_events(
+                        current_df, source_name, id_field, snapshot_date.isoformat()
+                    )
+                    log.info(
+                        "StateSource %s: diff empty, replayed %d rows as row_appeared",
+                        source_name,
+                        len(current_df),
+                    )
+            snapshot_dir = self._store._base_dir / source_name
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            current_df.to_parquet(snapshot_dir / f"{snapshot_date.isoformat()}.parquet", index=False)
+            if event_rows:
+                return ibis.memtable(event_rows, schema=_EVENT_SCHEMA)
+            return ibis.memtable([], schema=_EVENT_SCHEMA)
 
         # Step 2: diff
         events = diff_snapshots(

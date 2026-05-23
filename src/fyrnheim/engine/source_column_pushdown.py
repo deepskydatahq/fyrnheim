@@ -144,9 +144,12 @@ def required_raw_columns_for_source(
     if getattr(source, "filter", None):
         post.update(expression_column_references(source.filter or ""))
     for computed in getattr(source, "computed_columns", None) or []:
-        if computed.name in post:
-            post.update(expression_column_references(computed.expression))
-            post.discard(computed.name)
+        # Source-stage execution currently applies every computed column, not
+        # only downstream-required computed outputs. Keep all raw expression
+        # inputs so column pushdown cannot remove fields needed while building
+        # the source-stage table.
+        post.update(expression_column_references(computed.expression))
+        post.discard(computed.name)
 
     # JSON fields produce f.name from f.source_column (or f.name). If the
     # produced column is needed, keep the source JSON column.

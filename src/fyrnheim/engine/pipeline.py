@@ -535,6 +535,13 @@ def run_pipeline(
             log.info("Wrote %s: %s (%d rows)", label, name, len(df))
         return destination, len(df), time.monotonic() - t_write
 
+    if config.backend == "clickhouse" and (analytics_entities or metrics_models):
+        # ClickHouse 24.1 lacks Ibis JSON unwrap compilation used by semantic
+        # projection over event payloads. Source loading/diff still runs against
+        # ClickHouse, then projections run over an in-process event memtable and
+        # final outputs are written back to ClickHouse.
+        enriched_events = ibis.memtable(enriched_events.execute())
+
     if analytics_entities:
         ae_pending: list[tuple[Any, pd.DataFrame, float]] = []
         for ae in analytics_entities:

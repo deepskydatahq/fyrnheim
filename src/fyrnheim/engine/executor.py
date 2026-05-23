@@ -279,6 +279,13 @@ class IbisExecutor:
                 self._conn.create_table(
                     name, df, database=dataset, overwrite=True
                 )
+            elif backend == "clickhouse":
+                frame = df.copy()
+                for column in frame.columns:
+                    if frame[column].isna().all():
+                        frame[column] = frame[column].astype("string")
+                self._conn.drop_table(name, force=True)
+                self._conn.create_table(name, frame)
             elif backend == "bigquery":
                 from google.cloud import bigquery as bq
 
@@ -299,7 +306,7 @@ class IbisExecutor:
             else:
                 raise NotImplementedError(
                     f"write_table not supported for backend {backend!r}; "
-                    "v1 supports BigQuery and DuckDB"
+                    "v1 supports BigQuery, ClickHouse, and DuckDB"
                 )
 
     def execute_parameterized(

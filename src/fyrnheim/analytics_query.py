@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,12 +24,22 @@ class AnalyticsQueryError(ValueError):
     """Raised when an analytics model query is invalid or cannot execute safely."""
 
 
+@dataclass(frozen=True)
+class QueryProject:
+    """Loaded project pieces needed for safe analytics queries."""
+
+    catalog: dict[str, Any]
+    executor: IbisExecutor
+    project_path: Path
+    output_dir: Path
+
+
 def load_query_project(
     config_path: Path | str,
     *,
     entities_dir: Path | str | None = None,
     project_path: Path | str | None = None,
-) -> tuple[dict[str, Any], IbisExecutor]:
+) -> QueryProject:
     """Load project catalog and backend executor for analytics model queries."""
     config_file = Path(config_path)
     project = Path(project_path) if project_path is not None else config_file.parent
@@ -37,11 +48,12 @@ def load_query_project(
     resolved_entities = _resolve_project_path(project, raw_entities)
     backend = str(raw.get("backend", "duckdb"))
     backend_config = raw.get("backend_config") if isinstance(raw.get("backend_config"), dict) else None
+    output_dir = _resolve_project_path(project, raw.get("output_dir", "generated"))
 
     manifest = build_manifest(resolved_entities, project_path=project, include_git=False, strict=True)
     catalog = build_analytics_catalog(manifest)
     executor = IbisExecutor.from_config(backend, backend_config=backend_config)
-    return catalog, executor
+    return QueryProject(catalog=catalog, executor=executor, project_path=project, output_dir=output_dir)
 
 
 def query_analytics_model(
@@ -54,6 +66,7 @@ def query_analytics_model(
     filters: dict[str, Any] | None = None,
     order_by: list[dict[str, str]] | None = None,
     limit: int | None = None,
+    parquet_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Execute a bounded read-only query over declared analytics model fields."""
     expression, query_context = build_analytics_query_expression(
@@ -65,6 +78,7 @@ def query_analytics_model(
         filters=filters,
         order_by=order_by,
         limit=limit,
+        parquet_dir=parquet_dir,
     )
     rows = expression.execute().to_dict(orient="records")
     return {
@@ -85,6 +99,7 @@ def preview_analytics_query_sql(
     filters: dict[str, Any] | None = None,
     order_by: list[dict[str, str]] | None = None,
     limit: int | None = None,
+    parquet_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Compile a safe analytics model query to SQL without executing it."""
     expression, query_context = build_analytics_query_expression(
@@ -96,6 +111,7 @@ def preview_analytics_query_sql(
         filters=filters,
         order_by=order_by,
         limit=limit,
+        parquet_dir=parquet_dir,
     )
     return {"schema_version": QUERY_SCHEMA_VERSION, **query_context, "sql": expression.compile()}
 
@@ -113,16 +129,17 @@ def run_project_analytics_query(
     project_path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Load project config and execute a safe analytics model query."""
-    catalog, executor = load_query_project(config_path, entities_dir=entities_dir, project_path=project_path)
+    project = load_query_project(config_path, entities_dir=entities_dir, project_path=project_path)
     return query_analytics_model(
-        catalog,
-        executor.connection,
+        project.catalog,
+        project.executor.connection,
         model=model,
         metrics=metrics,
         dimensions=dimensions,
         filters=filters,
         order_by=order_by,
         limit=limit,
+        parquet_dir=project.output_dir,
     )
 
 
@@ -139,16 +156,17 @@ def preview_project_analytics_query_sql(
     project_path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Load project config and preview generated SQL for a safe analytics query."""
-    catalog, executor = load_query_project(config_path, entities_dir=entities_dir, project_path=project_path)
+    project = load_query_project(config_path, entities_dir=entities_dir, project_path=project_path)
     return preview_analytics_query_sql(
-        catalog,
-        executor.connection,
+        project.catalog,
+        project.executor.connection,
         model=model,
         metrics=metrics,
         dimensions=dimensions,
         filters=filters,
         order_by=order_by,
         limit=limit,
+        parquet_dir=project.output_dir,
     )
 
 
@@ -162,6 +180,7 @@ def build_analytics_query_expression(
     filters: dict[str, Any] | None = None,
     order_by: list[dict[str, str]] | None = None,
     limit: int | None = None,
+    parquet_dir: Path | str | None = None,
 ) -> tuple[ibis.Table, dict[str, Any]]:
     """Build a validated Ibis expression for a model query."""
     model_context = describe_analytics_model(catalog, model)
@@ -177,7 +196,7 @@ def build_analytics_query_expression(
     _validate_names(requested_metrics, metric_map, "metric", model)
     _validate_names(requested_dimensions, dimension_map, "dimension", model)
 
-    table = connection.table(_physical_table_name(model_record))
+    table = _model_table(connection, model_record, parquet_dir=parquet_dir)
     table_columns = set(table.columns)
     table = _apply_filters(table, filters or {}, {**metric_map, **dimension_map}, model)
     aggregations: dict[str, Any] = {}
@@ -216,6 +235,36 @@ def build_analytics_query_expression(
         "model_context": model_context["model_summary"],
     }
     return expression, context
+
+
+def _model_table(
+    connection: ibis.BaseBackend,
+    model: dict[str, Any],
+    *,
+    parquet_dir: Path | str | None,
+) -> ibis.Table:
+    table_name = _physical_table_name(model)
+    try:
+        return connection.table(table_name)
+    except Exception as exc:
+        if model.get("materialization") != "parquet" or parquet_dir is None:
+            raise AnalyticsQueryError(
+                f"Model {model['name']!r} is not available as table {table_name!r}. "
+                "Run the pipeline or configure the model materialization for the query backend."
+            ) from exc
+        parquet_path = Path(parquet_dir) / f"{model['name']}.parquet"
+        if not parquet_path.exists():
+            raise AnalyticsQueryError(
+                f"Model {model['name']!r} is materialized as parquet, but {parquet_path} does not exist. "
+                "Run the pipeline before querying this model."
+            ) from exc
+        try:
+            return connection.read_parquet(parquet_path)
+        except AttributeError as attr_exc:
+            raise AnalyticsQueryError(
+                f"Backend cannot read parquet materialization for model {model['name']!r}. "
+                "Use a DuckDB-backed MCP query config or table materialization."
+            ) from attr_exc
 
 
 def _apply_filters(

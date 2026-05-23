@@ -224,6 +224,44 @@ def test_preview_analytics_query_sql_compiles_generated_query(tmp_path: Path) ->
     assert preview["limit"] == 5
 
 
+def test_project_query_reads_parquet_materialized_model_when_table_is_not_registered(tmp_path: Path) -> None:
+    config_path, _, conn = _write_project(tmp_path)
+    table = conn.table("content_metrics_daily").execute()
+    output_dir = tmp_path / "generated"
+    output_dir.mkdir()
+    table.to_parquet(output_dir / "content_metrics_daily.parquet")
+
+    parquet_config = tmp_path / "fyrnheim-parquet.yaml"
+    parquet_config.write_text(
+        """
+entities_dir: entities
+output_dir: generated
+backend: duckdb
+backend_config:
+  db_path: ":memory:"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = tool_query_analytics_model(
+        parquet_config,
+        "content_metrics_daily",
+        ["impressions"],
+        dimensions=["source"],
+        order_by=[{"field": "impressions", "direction": "desc"}],
+    )
+    preview = tool_preview_analytics_query_sql(
+        parquet_config,
+        "content_metrics_daily",
+        ["impressions"],
+        dimensions=["source"],
+    )
+
+    assert result["rows"][0] == {"source": "linkedin", "impressions": 2500}
+    assert "ibis_read_parquet" in preview["sql"]
+    assert config_path.exists()
+
+
 def test_mcp_tools_query_project_config(tmp_path: Path) -> None:
     config_path, entities_dir, _ = _write_project(tmp_path)
 

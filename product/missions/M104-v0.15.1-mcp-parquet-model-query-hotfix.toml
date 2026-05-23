@@ -1,0 +1,53 @@
+# Mission: v0.15.1 MCP parquet model query hotfix
+
+id = "M104"
+title = "v0.15.1 MCP parquet model query hotfix"
+status = "complete"
+created = 2026-05-20
+depends_on = ["M103"]
+
+[outcome]
+description = "Fix semantic MCP analytics model queries so DuckDB-backed project configs can query parquet materialized models from output_dir when the model is not registered as a live backend table."
+user_progress = "From catalog-only model discovery with query failures to working read-only MCP queries over generated parquet model outputs."
+
+[execution]
+mode = "implementation"
+outputs = ["parquet-query-hotfix", "tests", "patch-release"]
+
+[testing]
+approach = "automated"
+criteria = [
+  "query_analytics_model reads output_dir/<model>.parquet for parquet materializations when no live table is registered",
+  "preview_analytics_query_sql compiles the same parquet-backed generated query",
+  "Full Fyrnheim quality gates pass before release"
+]
+validator_context = [
+  "src/fyrnheim/analytics_query.py",
+  "tests/test_semantic_analytics_query.py",
+  "pyproject.toml",
+  "src/fyrnheim/__init__.py"
+]
+
+[context]
+related_docs = ["docs/mcp-analytics-catalog.md"]
+relevant_paths = [
+  "src/fyrnheim/analytics_query.py",
+  "tests/test_semantic_analytics_query.py",
+  "pyproject.toml",
+  "src/fyrnheim/__init__.py",
+  "CHANGELOG.md"
+]
+related_missions = ["M103 — Semantic analytics model context and generic query tools"]
+
+[scope]
+in_scope = [
+  "DuckDB parquet-backed semantic analytics model queries",
+  "Clear errors when parquet outputs are missing or unsupported by the backend",
+  "v0.15.1 patch release metadata"
+]
+out_of_scope = [
+  "Propel-specific table/source fixes",
+  "Arbitrary SQL execution",
+  "Warehouse write or materialization through MCP"
+]
+acceptable_breakage = []

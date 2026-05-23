@@ -1,0 +1,29 @@
+# Epic: Parquet-backed semantic query hotfix
+
+id = "M104-E001"
+parent = "M104"
+title = "Parquet-backed semantic query hotfix"
+status = "complete"
+created = 2026-05-20
+
+[outcome]
+description = "Teach semantic analytics model query helpers to resolve project output_dir and read parquet materializations through DuckDB/Ibis when no live table is registered."
+
+[scope]
+in_scope = [
+  "Load output_dir from fyrnheim.yaml",
+  "Read parquet materialized model files for query and SQL preview helpers",
+  "Regression test for project config query with only parquet output"
+]
+out_of_scope = ["Propel project data changes", "MCP gateway deployment changes"]
+
+[testing]
+criteria = ["Full quality gates pass"]
+
+[execution]
+branch = "hotfix/v0.15.1-mcp-parquet-model-queries"
+pr = ""
+commit = ""
+started = "2026-05-20"
+completed = "2026-05-20"
+failure_reason = ""

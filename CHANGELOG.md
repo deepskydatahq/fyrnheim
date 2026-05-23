@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-05-20
+
+### Fixed
+
+- **MCP semantic analytics queries over parquet materializations.** Generic
+  analytics model queries now read `<output_dir>/<model>.parquet` for models
+  with `materialization = "parquet"` when the model is not registered as a live
+  backend table. This fixes MCP query/SQL preview failures where catalog
+  metadata was available but `query_analytics_model` failed with only the model
+  name (for example `content_metrics_daily` or `accounts`).
+
 ## [0.15.0] - 2026-05-17
 
 ### Added

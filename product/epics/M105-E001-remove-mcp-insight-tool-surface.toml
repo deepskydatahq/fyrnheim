@@ -1,0 +1,29 @@
+# Epic: Remove MCP insight tool surface
+
+id = "M105-E001"
+parent = "M105"
+title = "Remove MCP insight tool surface"
+status = "complete"
+created = 2026-05-23
+
+[outcome]
+description = "Narrow the MCP server to analytics catalog and semantic model query tools by removing the recipe-oriented insight tool registrations."
+
+[scope]
+in_scope = [
+  "Remove insight recipe tool registrations from analytics_server",
+  "Assert removed tools are absent from HTTP MCP tools/list",
+  "Update docs to describe the semantic-only MCP surface"
+]
+out_of_scope = ["Delete compatibility recipe helper code"]
+
+[testing]
+criteria = ["HTTP MCP tests cover tool presence and absence", "Quality gates pass"]
+
+[execution]
+branch = "remove/mcp-specialized-insight-tools"
+pr = ""
+commit = ""
+started = "2026-05-23"
+completed = "2026-05-23"
+failure_reason = ""

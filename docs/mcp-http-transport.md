@@ -1,6 +1,6 @@
 # Streamable HTTP MCP transport
 
-Fyrnheim supports two MCP transports for analytics catalog and read-only insight tools:
+Fyrnheim supports two MCP transports for analytics catalog and semantic read-only model query tools:
 
 - **stdio** via `fyr-mcp-analytics` for local clients that can launch a process, including Docker-launched desktop workflows.
 - **Streamable HTTP** via `fyr-mcp-analytics-http` for hosted clients such as Claude that connect to an MCP server URL.
@@ -65,7 +65,7 @@ Operational recommendations:
 2. Mount or bake the project files at a fixed path such as `/app`.
 3. Pass ClickHouse or warehouse credentials via environment variables/secrets.
 4. Put the endpoint behind TLS and an authenticated gateway until Fyrnheim adds first-class MCP auth.
-5. Start with catalog and bounded insight recipes only.
+5. Start with catalog and semantic model query tools only.
 
 Do not expose an unauthenticated production MCP endpoint to the public internet.
 
@@ -117,7 +117,5 @@ The HTTP transport exposes the same tools as stdio:
 - `describe_dimension`
 - `query_analytics_model`
 - `preview_analytics_query_sql`
-- `list_insight_recipes`
-- `run_insight_recipe`
-- `top_content_items`
-- `find_promising_records`
+
+Recipe-oriented tools such as `list_insight_recipes`, `run_insight_recipe`, `top_content_items`, and `find_promising_records` are not registered on the MCP server. Use `describe_analytics_model` and `query_analytics_model` instead.

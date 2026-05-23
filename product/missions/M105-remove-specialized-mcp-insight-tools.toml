@@ -1,0 +1,63 @@
+# Mission: Remove specialized MCP insight tools
+
+id = "M105"
+title = "Remove specialized MCP insight tools"
+status = "complete"
+created = 2026-05-23
+depends_on = ["M103", "M104"]
+
+[outcome]
+description = "Remove recipe-oriented and business-specific insight tools from Fyrnheim's MCP server so agents use semantic analytics model context and declared-field model queries instead."
+user_progress = "From brittle specialized tools that invite physical table guessing to a narrower MCP surface centered on semantic model discovery and safe model queries."
+
+[execution]
+mode = "implementation"
+outputs = ["mcp-tool-removal", "tests", "docs"]
+
+[testing]
+approach = "automated"
+criteria = [
+  "MCP tools/list no longer includes list_insight_recipes, run_insight_recipe, top_content_items, or find_promising_records",
+  "MCP tools/list still includes analytics catalog and semantic query tools",
+  "Docs direct agents to semantic analytics model tools instead of recipe tools",
+  "Quality gates pass"
+]
+validator_context = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_mcp_http_transport.py",
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-http-transport.md",
+  "docs/mcp-insight-query-tools.md"
+]
+
+[context]
+related_docs = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-http-transport.md",
+  "docs/mcp-insight-query-tools.md"
+]
+relevant_paths = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_mcp_http_transport.py",
+  "docs/"
+]
+related_missions = [
+  "M100 — Read-only MCP insight query tools",
+  "M103 — Semantic analytics model context and generic query tools",
+  "M104 — v0.15.1 MCP parquet model query hotfix"
+]
+
+[scope]
+in_scope = [
+  "Remove recipe and specialized insight tools from the MCP server tool registry",
+  "Keep semantic analytics model tools available",
+  "Update MCP transport/catalog docs and tests"
+]
+out_of_scope = [
+  "Deleting compatibility Python recipe helper modules",
+  "Adding Propel-specific model definitions",
+  "Adding arbitrary SQL execution"
+]
+acceptable_breakage = [
+  "MCP clients that still call recipe-oriented insight tools must migrate to semantic model query tools."
+]

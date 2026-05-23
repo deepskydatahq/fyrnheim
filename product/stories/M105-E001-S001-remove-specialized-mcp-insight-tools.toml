@@ -1,0 +1,52 @@
+# Story: Remove specialized MCP insight tools
+
+id = "M105-E001-S001"
+parent = "M105-E001"
+title = "Remove specialized MCP insight tools"
+status = "complete"
+triage = "ready"
+created = 2026-05-23
+
+[outcome]
+description = "Stop registering recipe-oriented and business-specific insight tools on the Fyrnheim MCP server."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "The MCP server no longer registers list_insight_recipes or run_insight_recipe."
+
+[[acceptance_criteria.criteria]]
+description = "The MCP server no longer registers top_content_items or find_promising_records."
+
+[[acceptance_criteria.criteria]]
+description = "The MCP server still registers analytics catalog and semantic query tools."
+
+[[acceptance_criteria.criteria]]
+description = "Docs tell agents to use semantic model tools and explain that recipe tools are no longer exposed over MCP."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_mcp_http_transport.py",
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-http-transport.md",
+  "docs/mcp-insight-query-tools.md"
+]
+input_fixtures = []
+depends_on = ["M104-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Prefer removing tool registrations over deleting compatibility helpers in the first cut.",
+  "Keep describe_analytics_model/query_analytics_model/preview_analytics_query_sql available."
+]
+reference_files = ["src/fyrnheim/mcp/analytics_server.py", "tests/test_mcp_http_transport.py"]
+
+[execution]
+branch = "remove/mcp-specialized-insight-tools"
+pr = ""
+commit = ""
+started = "2026-05-23"
+completed = "2026-05-23"
+failure_reason = ""

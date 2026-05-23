@@ -20,12 +20,6 @@ from fyrnheim.mcp.analytics_tools import (
     preview_analytics_query_sql as tool_preview_analytics_query_sql,
     query_analytics_model as tool_query_analytics_model,
 )
-from fyrnheim.mcp.insight_tools import (
-    find_promising_records as tool_find_promising_records,
-    list_insight_recipes as tool_list_insight_recipes,
-    run_insight_recipe as tool_run_insight_recipe,
-    top_content_items as tool_top_content_items,
-)
 
 
 def create_server(
@@ -138,57 +132,6 @@ def create_server(
             limit=limit,
             entities_dir=entities_dir,
             project_path=project_path,
-        )
-
-    @server.tool()
-    def list_insight_recipes() -> dict[str, Any]:
-        """List configured read-only Fyrnheim insight recipes."""
-        return tool_list_insight_recipes(config_path)
-
-    @server.tool()
-    def run_insight_recipe(
-        recipe: str,
-        order_by: str | None = None,
-        filters: dict[str, Any] | None = None,
-        limit: int | None = None,
-    ) -> dict[str, Any]:
-        """Run a configured read-only Fyrnheim insight recipe."""
-        return tool_run_insight_recipe(
-            recipe,
-            config_path=config_path,
-            order_by=order_by,
-            filters=filters,
-            limit=limit,
-        )
-
-    @server.tool()
-    def top_content_items(
-        recipe: str | None = None,
-        metric: str | None = None,
-        filters: dict[str, Any] | None = None,
-        limit: int | None = None,
-    ) -> dict[str, Any]:
-        """Run a content-tagged read-only insight recipe."""
-        return tool_top_content_items(
-            config_path=config_path,
-            recipe=recipe,
-            metric=metric,
-            filters=filters,
-            limit=limit,
-        )
-
-    @server.tool()
-    def find_promising_records(
-        recipe: str | None = None,
-        filters: dict[str, Any] | None = None,
-        limit: int | None = None,
-    ) -> dict[str, Any]:
-        """Run a leads/prospects-tagged read-only insight recipe."""
-        return tool_find_promising_records(
-            config_path=config_path,
-            recipe=recipe,
-            filters=filters,
-            limit=limit,
         )
 
     return server

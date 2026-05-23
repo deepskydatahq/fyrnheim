@@ -143,7 +143,7 @@ def _tool_payload(result: dict[str, Any]) -> dict[str, Any]:
     return json.loads(text)
 
 
-def test_streamable_http_transport_lists_and_calls_catalog_and_insight_tools(tmp_path: Path) -> None:
+def test_streamable_http_transport_exposes_catalog_and_semantic_query_tools_only(tmp_path: Path) -> None:
     config_path = _write_project(tmp_path)
     app = create_streamable_http_app(
         entities_dir=tmp_path / "entities",
@@ -160,8 +160,13 @@ def test_streamable_http_transport_lists_and_calls_catalog_and_insight_tools(tmp
         tools = _rpc(client, "tools/list", rpc_id=2)
         tool_names = {tool["name"] for tool in tools["result"]["tools"]}
         assert "list_analytics_models" in tool_names
-        assert "list_insight_recipes" in tool_names
-        assert "top_content_items" in tool_names
+        assert "describe_analytics_model" in tool_names
+        assert "query_analytics_model" in tool_names
+        assert "preview_analytics_query_sql" in tool_names
+        assert "list_insight_recipes" not in tool_names
+        assert "run_insight_recipe" not in tool_names
+        assert "top_content_items" not in tool_names
+        assert "find_promising_records" not in tool_names
 
         models = _tool_payload(
             _rpc(
@@ -173,26 +178,12 @@ def test_streamable_http_transport_lists_and_calls_catalog_and_insight_tools(tmp
         )
         assert [model["name"] for model in models["models"]] == ["content_metrics_daily"]
 
-        recipes = _tool_payload(
+        description = _tool_payload(
             _rpc(
                 client,
                 "tools/call",
-                {"name": "list_insight_recipes", "arguments": {}},
+                {"name": "describe_analytics_model", "arguments": {"model": "content_metrics_daily"}},
                 rpc_id=4,
             )
         )
-        assert [recipe["name"] for recipe in recipes["recipes"]] == ["top_content_items"]
-
-        content = _tool_payload(
-            _rpc(
-                client,
-                "tools/call",
-                {
-                    "name": "top_content_items",
-                    "arguments": {"metric": "total_engagement", "limit": 1},
-                },
-                rpc_id=5,
-            )
-        )
-        assert content["rows"][0]["content_id"] == "post-001"
-        assert content["limit"] == 1
+        assert description["model_summary"]["name"] == "content_metrics_daily"

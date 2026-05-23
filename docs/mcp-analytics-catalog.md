@@ -128,12 +128,7 @@ The server registers these catalog/query tools:
 - `query_analytics_model`
 - `preview_analytics_query_sql`
 
-It also keeps the recipe-oriented insight tools:
-
-- `list_insight_recipes`
-- `run_insight_recipe`
-- `top_content_items`
-- `find_promising_records`
+The server intentionally does **not** register recipe-oriented or business-specific insight tools such as `top_content_items` or `find_promising_records`. Agents should use the semantic model tools above so they reason from declared model grain, metrics, dimensions, and limitations.
 
 For hosted clients that need an MCP URL instead of a launched process, see [Streamable HTTP MCP transport](mcp-http-transport.md).
 

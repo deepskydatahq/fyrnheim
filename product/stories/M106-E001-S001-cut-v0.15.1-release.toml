@@ -1,0 +1,43 @@
+# Story: Cut v0.15.1 release
+
+id = "M106-E001-S001"
+parent = "M106-E001"
+title = "Cut v0.15.1 release"
+status = "complete"
+triage = "ready"
+created = 2026-05-23
+
+[outcome]
+description = "Tag and publish Fyrnheim v0.15.1 from main."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "CHANGELOG.md documents v0.15.1 release contents."
+
+[[acceptance_criteria.criteria]]
+description = "Quality gates and package build pass."
+
+[[acceptance_criteria.criteria]]
+description = "The v0.15.1 git tag is pushed."
+
+[[acceptance_criteria.criteria]]
+description = "GitHub release and PyPI publish workflow complete successfully."
+
+[context]
+relevant_paths = ["CHANGELOG.md", "pyproject.toml", "src/fyrnheim/__init__.py"]
+input_fixtures = []
+depends_on = ["M104-E001-S001", "M105-E001-S001"]
+
+[handoff]
+implementation_hints = ["Use the existing tag-triggered PyPI publish workflow."]
+reference_files = [".github/workflows/publish.yml"]
+
+[execution]
+branch = "main"
+pr = ""
+commit = ""
+started = "2026-05-23"
+completed = "2026-05-23"
+failure_reason = ""

@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.15.1] - 2026-05-20
+## [0.15.1] - 2026-05-23
+
+### Removed
+
+- **Specialized MCP insight tools.** The MCP server no longer registers
+  recipe-oriented tools (`list_insight_recipes`, `run_insight_recipe`,
+  `top_content_items`, and `find_promising_records`). Agents should use the
+  semantic analytics model tools (`describe_analytics_model`,
+  `query_analytics_model`, and `preview_analytics_query_sql`) so queries stay
+  model-grain-aware and declared-field-only.
 
 ### Fixed
 

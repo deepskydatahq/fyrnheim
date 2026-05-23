@@ -1,0 +1,25 @@
+# Epic: Release v0.15.1
+
+id = "M106-E001"
+parent = "M106"
+title = "Release v0.15.1"
+status = "complete"
+created = 2026-05-23
+
+[outcome]
+description = "Cut the v0.15.1 package release from main after M104 and M105."
+
+[scope]
+in_scope = ["Changelog finalization", "Quality gates", "Tag and release"]
+out_of_scope = ["Propel Data deployment"]
+
+[testing]
+criteria = ["Quality gates and build pass", "Publish workflow succeeds"]
+
+[execution]
+branch = "main"
+pr = ""
+commit = ""
+started = "2026-05-23"
+completed = "2026-05-23"
+failure_reason = ""

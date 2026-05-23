@@ -1,0 +1,43 @@
+# Mission: v0.15.1 release
+
+id = "M106"
+title = "v0.15.1 release"
+status = "complete"
+created = 2026-05-23
+depends_on = ["M104", "M105"]
+
+[outcome]
+description = "Release Fyrnheim v0.15.1 so Propel Data can return to a released PyPI dependency with parquet-backed semantic MCP queries and without specialized MCP insight tools."
+user_progress = "From source branch dependency to released package dependency for Propel MCP runtime updates."
+
+[execution]
+mode = "release"
+outputs = ["changelog", "tag", "github-release", "pypi-publish"]
+
+[testing]
+approach = "automated"
+criteria = [
+  "Quality gates pass on the release commit",
+  "Package builds with version 0.15.1",
+  "v0.15.1 tag is pushed",
+  "GitHub release exists",
+  "PyPI publish workflow succeeds"
+]
+validator_context = ["CHANGELOG.md", "pyproject.toml", "src/fyrnheim/__init__.py"]
+
+[context]
+related_docs = ["CHANGELOG.md"]
+relevant_paths = ["CHANGELOG.md", "pyproject.toml", "src/fyrnheim/__init__.py"]
+related_missions = [
+  "M104 — v0.15.1 MCP parquet model query hotfix",
+  "M105 — Remove specialized MCP insight tools"
+]
+
+[scope]
+in_scope = [
+  "Finalize v0.15.1 changelog",
+  "Build and tag v0.15.1",
+  "Create GitHub release and trigger PyPI publishing"
+]
+out_of_scope = ["Propel Data dependency update", "MCP container redeployment"]
+acceptable_breakage = []

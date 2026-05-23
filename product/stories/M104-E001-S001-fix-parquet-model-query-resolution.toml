@@ -1,0 +1,52 @@
+# Story: Fix parquet model query resolution
+
+id = "M104-E001-S001"
+parent = "M104-E001"
+title = "Fix parquet model query resolution"
+status = "complete"
+triage = "plan"
+created = 2026-05-20
+
+[outcome]
+description = "Make project-level semantic analytics query helpers use output_dir parquet files for parquet materialized models when no backend table is registered."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "load_query_project returns output_dir resolved relative to the project config."
+
+[[acceptance_criteria.criteria]]
+description = "query_analytics_model and preview_analytics_query_sql can read a parquet materialized model file without pre-registering a DuckDB table."
+
+[[acceptance_criteria.criteria]]
+description = "Missing parquet outputs produce a clear AnalyticsQueryError."
+
+[[acceptance_criteria.criteria]]
+description = "Version metadata and changelog are updated for v0.15.1."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_query.py",
+  "tests/test_semantic_analytics_query.py",
+  "pyproject.toml",
+  "src/fyrnheim/__init__.py",
+  "CHANGELOG.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Keep MCP query surfaces read-only and declared-field-only.",
+  "Use DuckDB/Ibis read_parquet rather than pandas materialization."
+]
+reference_files = ["src/fyrnheim/analytics_query.py", "tests/test_semantic_analytics_query.py"]
+
+[execution]
+branch = "hotfix/v0.15.1-mcp-parquet-model-queries"
+pr = ""
+commit = ""
+started = "2026-05-20"
+completed = "2026-05-20"
+failure_reason = ""

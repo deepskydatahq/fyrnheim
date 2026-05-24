@@ -13,6 +13,7 @@ import pytest
 from fyrnheim.analytics_catalog import build_analytics_catalog, describe_analytics_model
 from fyrnheim.analytics_query import (
     AnalyticsQueryError,
+    describe_query_syntax,
     preview_analytics_query_sql,
     query_analytics_model,
 )
@@ -189,6 +190,20 @@ def test_query_analytics_model_filters_dimensions(tmp_path: Path) -> None:
     ]
 
 
+def test_query_syntax_describes_order_by_contract() -> None:
+    syntax = describe_query_syntax()
+
+    assert syntax["schema_version"] == "fyrnheim.analytics_query_syntax.v1"
+    assert {"field": "reactions", "direction": "desc"} in syntax["order_by_schema"]["example"]
+    assert syntax["examples"][0]["arguments"] == {
+        "model": "content_metrics_daily",
+        "metrics": ["reactions"],
+        "dimensions": ["source"],
+        "order_by": [{"field": "reactions", "direction": "desc"}],
+        "limit": 5,
+    }
+
+
 def test_query_analytics_model_rejects_undeclared_fields(tmp_path: Path) -> None:
     _, entities_dir, conn = _write_project(tmp_path)
     catalog = _catalog(entities_dir, tmp_path)
@@ -202,6 +217,39 @@ def test_query_analytics_model_rejects_undeclared_fields(tmp_path: Path) -> None
             model="content_metrics_daily",
             metrics=["impressions"],
             dimensions=["post_id"],
+        )
+
+
+def test_query_analytics_model_rejects_malformed_order_by(tmp_path: Path) -> None:
+    _, entities_dir, conn = _write_project(tmp_path)
+    catalog = _catalog(entities_dir, tmp_path)
+
+    with pytest.raises(AnalyticsQueryError, match="order_by must be an array of objects"):
+        query_analytics_model(
+            catalog,
+            conn,
+            model="content_metrics_daily",
+            metrics=["reactions"],
+            dimensions=["source"],
+            order_by={"reactions": "desc"},  # type: ignore[arg-type]
+        )
+    with pytest.raises(AnalyticsQueryError, match="unknown key"):
+        query_analytics_model(
+            catalog,
+            conn,
+            model="content_metrics_daily",
+            metrics=["reactions"],
+            dimensions=["source"],
+            order_by=[{"reactions": "desc"}],  # type: ignore[list-item]
+        )
+    with pytest.raises(AnalyticsQueryError, match="not a backing column name"):
+        query_analytics_model(
+            catalog,
+            conn,
+            model="content_metrics_daily",
+            metrics=["reactions"],
+            dimensions=["source"],
+            order_by=[{"field": "reactions_sum_delta", "direction": "desc"}],
         )
 
 
@@ -332,7 +380,22 @@ def test_http_mcp_exposes_semantic_query_tools(tmp_path: Path) -> None:
         _initialize(client)
         tools = _rpc(client, "tools/list", rpc_id=2)
         tool_names = {tool["name"] for tool in tools["result"]["tools"]}
-        assert {"describe_analytics_model", "query_analytics_model", "preview_analytics_query_sql"} <= tool_names
+        assert {
+            "describe_analytics_model",
+            "describe_query_syntax",
+            "query_analytics_model",
+            "preview_analytics_query_sql",
+        } <= tool_names
+
+        syntax = _tool_payload(
+            _rpc(
+                client,
+                "tools/call",
+                {"name": "describe_query_syntax", "arguments": {}},
+                rpc_id=3,
+            )
+        )
+        assert syntax["order_by_schema"]["example"] == [{"field": "reactions", "direction": "desc"}]
 
         payload = _tool_payload(
             _rpc(
@@ -347,7 +410,7 @@ def test_http_mcp_exposes_semantic_query_tools(tmp_path: Path) -> None:
                         "limit": 1,
                     },
                 },
-                rpc_id=3,
+                rpc_id=4,
             )
         )
         assert payload["row_count"] == 1

@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 import ibis
 import yaml
+from typing_extensions import TypedDict
 
 from fyrnheim.analytics_catalog import build_analytics_catalog, describe_analytics_model
 from fyrnheim.engine.executor import IbisExecutor
@@ -17,7 +18,16 @@ from fyrnheim.inspect import build_manifest
 QUERY_SCHEMA_VERSION = "fyrnheim.analytics_query.v1"
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 500
+QUERY_SYNTAX_SCHEMA_VERSION = "fyrnheim.analytics_query_syntax.v1"
 FilterOperator = Literal["eq", "in", "gte", "lte", "gt", "lt"]
+OrderDirection = Literal["asc", "desc"]
+
+
+class OrderByInput(TypedDict, total=False):
+    """Declared query sort key accepted by MCP analytics query tools."""
+
+    field: str
+    direction: OrderDirection
 
 
 class AnalyticsQueryError(ValueError):
@@ -32,6 +42,58 @@ class QueryProject:
     executor: IbisExecutor
     project_path: Path
     output_dir: Path
+
+
+def describe_query_syntax() -> dict[str, Any]:
+    """Return a compact cookbook for MCP analytics query arguments."""
+    return {
+        "schema_version": QUERY_SYNTAX_SCHEMA_VERSION,
+        "tools": ["query_analytics_model", "preview_analytics_query_sql"],
+        "contract": [
+            "Use metric and dimension names exactly as returned by list_metrics/list_dimensions.",
+            "Use semantic metric names such as 'reactions', not backing columns such as 'reactions_sum_delta'.",
+            "order_by must be an array of objects: [{'field': 'reactions', 'direction': 'desc'}].",
+            "order_by.field must be selected in metrics or dimensions.",
+            "direction must be 'asc' or 'desc'; omit it to default to 'desc'.",
+            "For latest rows, select dimensions ['_date'], order by _date descending, and set limit to 1.",
+            "If a query fails, call preview_analytics_query_sql with the same arguments to inspect generated SQL.",
+        ],
+        "order_by_schema": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["field"],
+                "properties": {
+                    "field": {"type": "string", "description": "Selected metric or dimension name."},
+                    "direction": {"enum": ["asc", "desc"], "default": "desc"},
+                },
+            },
+            "example": [{"field": "reactions", "direction": "desc"}],
+            "invalid_examples": [{"reactions": "desc"}, {"field": "reactions", "dir": "desc"}],
+        },
+        "examples": [
+            {
+                "title": "Query reactions by source",
+                "arguments": {
+                    "model": "content_metrics_daily",
+                    "metrics": ["reactions"],
+                    "dimensions": ["source"],
+                    "order_by": [{"field": "reactions", "direction": "desc"}],
+                    "limit": 5,
+                },
+            },
+            {
+                "title": "Latest available date",
+                "arguments": {
+                    "model": "content_metrics_daily",
+                    "metrics": ["reactions"],
+                    "dimensions": ["_date"],
+                    "order_by": [{"field": "_date", "direction": "desc"}],
+                    "limit": 1,
+                },
+            },
+        ],
+    }
 
 
 def load_query_project(
@@ -64,7 +126,7 @@ def query_analytics_model(
     metrics: list[str],
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     parquet_dir: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -97,7 +159,7 @@ def preview_analytics_query_sql(
     metrics: list[str],
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     parquet_dir: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -123,7 +185,7 @@ def run_project_analytics_query(
     metrics: list[str],
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     entities_dir: Path | str | None = None,
     project_path: Path | str | None = None,
@@ -150,7 +212,7 @@ def preview_project_analytics_query_sql(
     metrics: list[str],
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     entities_dir: Path | str | None = None,
     project_path: Path | str | None = None,
@@ -178,7 +240,7 @@ def build_analytics_query_expression(
     metrics: list[str],
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     parquet_dir: Path | str | None = None,
 ) -> tuple[ibis.Table, dict[str, Any]]:
@@ -287,18 +349,44 @@ def _apply_filters(
 
 def _apply_ordering(
     expression: ibis.Table,
-    order_by: list[dict[str, str]] | None,
+    order_by: list[OrderByInput] | None,
     available_columns: set[str],
     model: str,
 ) -> ibis.Table:
     if not order_by:
         return expression
+    if not isinstance(order_by, list):
+        raise AnalyticsQueryError(
+            "order_by must be an array of objects like "
+            "[{'field': 'reactions', 'direction': 'desc'}]; "
+            f"got {type(order_by).__name__}"
+        )
     sort_keys = []
-    for item in order_by:
+    for index, item in enumerate(order_by):
+        if not isinstance(item, dict):
+            raise AnalyticsQueryError(
+                "order_by must be an array of objects like "
+                "[{'field': 'reactions', 'direction': 'desc'}]; "
+                f"item {index} is {type(item).__name__}"
+            )
+        unknown_keys = set(item) - {"field", "direction"}
+        if unknown_keys:
+            raise AnalyticsQueryError(
+                "order_by items must use keys {'field', 'direction'}; "
+                f"item {index} has unknown key(s): {', '.join(sorted(unknown_keys))}"
+            )
         field = item.get("field")
+        if not isinstance(field, str) or not field:
+            raise AnalyticsQueryError(
+                "order_by items must include a non-empty string field, e.g. "
+                "{'field': 'reactions', 'direction': 'desc'}"
+            )
         direction = item.get("direction", "desc")
         if field not in available_columns:
-            raise AnalyticsQueryError(f"order_by field {field!r} is not selected on model {model!r}")
+            raise AnalyticsQueryError(
+                f"order_by field {field!r} is not selected on model {model!r}. "
+                "Use a selected metric/dimension name, not a backing column name."
+            )
         if direction not in {"asc", "desc"}:
             raise AnalyticsQueryError("order_by direction must be 'asc' or 'desc'")
         sort_keys.append(ibis.asc(field) if direction == "asc" else ibis.desc(field))

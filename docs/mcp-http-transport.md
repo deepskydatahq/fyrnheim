@@ -115,6 +115,7 @@ The HTTP transport exposes the same tools as stdio:
 - `list_dimensions`
 - `describe_metric`
 - `describe_dimension`
+- `describe_query_syntax`
 - `query_analytics_model`
 - `preview_analytics_query_sql`
 

@@ -77,6 +77,42 @@ preview = preview_analytics_query_sql(
 
 `preview_analytics_query_sql` compiles the generated query. It does not accept agent-written SQL.
 
+### Query contract cookbook
+
+For `query_analytics_model` and `preview_analytics_query_sql`:
+
+- Use metrics/dimensions exactly as returned by `list_metrics` and `list_dimensions`.
+- Use semantic output names such as `"reactions"`, not backing columns such as `"reactions_sum_delta"`.
+- `order_by` must be an array of objects:
+  ```json
+  [{"field": "reactions", "direction": "desc"}]
+  ```
+  not an object such as `{"reactions": "desc"}`.
+- `order_by.field` must be one of the selected metric or dimension names.
+- For latest rows, use:
+  ```json
+  {
+    "dimensions": ["_date"],
+    "order_by": [{"field": "_date", "direction": "desc"}],
+    "limit": 1
+  }
+  ```
+- If a query fails, call `preview_analytics_query_sql` with the same arguments to inspect generated SQL.
+
+Example: query reactions by source.
+
+```json
+{
+  "model": "content_metrics_daily",
+  "metrics": ["reactions"],
+  "dimensions": ["source"],
+  "order_by": [{"field": "reactions", "direction": "desc"}],
+  "limit": 5
+}
+```
+
+Agents can also call `describe_query_syntax` to retrieve this contract and examples through MCP.
+
 ## MCP-ready tool functions
 
 The tool functions in `fyrnheim.mcp.analytics_tools` load the manifest/catalog from an entities directory and return JSON-compatible dictionaries:
@@ -89,6 +125,7 @@ from fyrnheim.mcp.analytics_tools import (
     list_dimensions,
     describe_metric,
     describe_dimension,
+    describe_query_syntax,
     query_analytics_model,
     preview_analytics_query_sql,
 )
@@ -125,6 +162,7 @@ The server registers these catalog/query tools:
 - `list_dimensions`
 - `describe_metric`
 - `describe_dimension`
+- `describe_query_syntax`
 - `query_analytics_model`
 - `preview_analytics_query_sql`
 

@@ -19,6 +19,8 @@ from fyrnheim.analytics_catalog import (
     list_metrics as catalog_list_metrics,
 )
 from fyrnheim.analytics_query import (
+    OrderByInput,
+    describe_query_syntax as query_syntax_contract,
     preview_project_analytics_query_sql,
     run_project_analytics_query,
 )
@@ -120,6 +122,11 @@ def describe_dimension(
     )
 
 
+def describe_query_syntax() -> dict[str, Any]:
+    """Describe the safe analytics query argument contract with examples."""
+    return query_syntax_contract()
+
+
 def query_analytics_model(
     config_path: Path | str,
     model: str,
@@ -127,7 +134,7 @@ def query_analytics_model(
     *,
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     entities_dir: Path | str | None = None,
     project_path: Path | str | None = None,
@@ -153,7 +160,7 @@ def preview_analytics_query_sql(
     *,
     dimensions: list[str] | None = None,
     filters: dict[str, Any] | None = None,
-    order_by: list[dict[str, str]] | None = None,
+    order_by: list[OrderByInput] | None = None,
     limit: int | None = None,
     entities_dir: Path | str | None = None,
     project_path: Path | str | None = None,

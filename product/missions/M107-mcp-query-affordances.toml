@@ -1,0 +1,61 @@
+# Mission: MCP query affordances
+
+id = "M107"
+title = "MCP query affordances"
+status = "complete"
+created = 2026-05-23
+depends_on = ["M103", "M105", "M106"]
+
+[outcome]
+description = "Make the semantic analytics MCP tools easier for agents to call correctly by exposing a compact query syntax cookbook, richer tool descriptions, examples, and clearer validation errors."
+user_progress = "From agents guessing malformed query arguments to agents self-correcting from tool-provided query contract and examples."
+
+[execution]
+mode = "implementation"
+outputs = ["query-syntax-tool", "validation-errors", "docs", "tests"]
+
+[testing]
+approach = "automated"
+criteria = [
+  "MCP exposes describe_query_syntax with order_by contract and examples",
+  "query_analytics_model and preview_analytics_query_sql descriptions include order_by shape and latest-row guidance",
+  "Malformed order_by objects produce clear AnalyticsQueryError guidance",
+  "Docs include the query contract and example calls",
+  "Quality gates pass"
+]
+validator_context = [
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_semantic_analytics_query.py",
+  "docs/mcp-analytics-catalog.md"
+]
+
+[context]
+related_docs = ["docs/mcp-analytics-catalog.md", "docs/mcp-http-transport.md"]
+relevant_paths = [
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_semantic_analytics_query.py",
+  "docs/"
+]
+related_missions = [
+  "M103 — Semantic analytics model context and generic query tools",
+  "M105 — Remove specialized MCP insight tools",
+  "M106 — v0.15.1 release"
+]
+
+[scope]
+in_scope = [
+  "Agent-facing query syntax/cookbook MCP tool",
+  "Examples for common content metrics queries and latest-row pattern",
+  "Clear validation errors for malformed order_by inputs",
+  "Docs and tests"
+]
+out_of_scope = [
+  "Arbitrary SQL execution",
+  "Business-specific recipe tools",
+  "Propel Explorer application changes"
+]
+acceptable_breakage = []

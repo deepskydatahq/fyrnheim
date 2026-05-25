@@ -1,0 +1,55 @@
+# Story: Add MCP query cookbook
+
+id = "M107-E001-S001"
+parent = "M107-E001"
+title = "Add MCP query cookbook"
+status = "complete"
+triage = "ready"
+created = 2026-05-23
+
+[outcome]
+description = "Add a describe_query_syntax tool, query examples, and clearer order_by validation for semantic analytics MCP tools."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "MCP tools/list includes describe_query_syntax."
+
+[[acceptance_criteria.criteria]]
+description = "describe_query_syntax returns order_by schema guidance and example query arguments."
+
+[[acceptance_criteria.criteria]]
+description = "query_analytics_model rejects object-shaped order_by values with a clear array-of-objects message."
+
+[[acceptance_criteria.criteria]]
+description = "query_analytics_model warns agents to use selected semantic fields rather than backing columns for order_by."
+
+[[acceptance_criteria.criteria]]
+description = "Docs include the query contract, latest-row pattern, and reactions-by-source example."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_semantic_analytics_query.py",
+  "docs/mcp-analytics-catalog.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Keep query tools read-only and declared-field-only.",
+  "Prefer a small self-service syntax tool over broader business-specific tools."
+]
+reference_files = ["src/fyrnheim/mcp/analytics_server.py", "src/fyrnheim/analytics_query.py"]
+
+[execution]
+branch = "improve/mcp-query-cookbook"
+pr = ""
+commit = ""
+started = "2026-05-23"
+completed = "2026-05-23"
+failure_reason = ""

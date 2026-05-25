@@ -1,0 +1,30 @@
+# Epic: Query contract cookbook
+
+id = "M107-E001"
+parent = "M107"
+title = "Query contract cookbook"
+status = "complete"
+created = 2026-05-23
+
+[outcome]
+description = "Expose MCP query syntax guidance, examples, and validation improvements for semantic analytics model queries."
+
+[scope]
+in_scope = [
+  "describe_query_syntax MCP tool",
+  "Richer query tool descriptions",
+  "order_by validation improvements",
+  "Docs and tests"
+]
+out_of_scope = ["Propel Explorer prompt deployment"]
+
+[testing]
+criteria = ["Focused semantic MCP tests pass", "Quality gates pass"]
+
+[execution]
+branch = "improve/mcp-query-cookbook"
+pr = ""
+commit = ""
+started = "2026-05-23"
+completed = "2026-05-23"
+failure_reason = ""

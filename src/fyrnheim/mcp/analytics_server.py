@@ -15,8 +15,10 @@ from fyrnheim.analytics_catalog import (
     list_dimensions as catalog_list_dimensions,
     list_metrics as catalog_list_metrics,
 )
+from fyrnheim.analytics_query import OrderByInput
 from fyrnheim.inspect import build_manifest
 from fyrnheim.mcp.analytics_tools import (
+    describe_query_syntax as tool_describe_query_syntax,
     preview_analytics_query_sql as tool_preview_analytics_query_sql,
     query_analytics_model as tool_query_analytics_model,
 )
@@ -91,15 +93,27 @@ def create_server(
         return catalog_describe_dimension(catalog(), dimension, model=model)
 
     @server.tool()
+    def describe_query_syntax() -> dict[str, Any]:
+        """Describe query_analytics_model syntax, order_by shape, and examples."""
+        return tool_describe_query_syntax()
+
+    @server.tool()
     def query_analytics_model(
         model: str,
         metrics: list[str],
         dimensions: list[str] | None = None,
         filters: dict[str, Any] | None = None,
-        order_by: list[dict[str, str]] | None = None,
+        order_by: list[OrderByInput] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        """Run a bounded read-only query over declared model metrics/dimensions."""
+        """Run a bounded read-only query over declared model metrics/dimensions.
+
+        Use metric/dimension names exactly as returned by list_metrics/list_dimensions.
+        order_by must be a list of objects like [{"field": "reactions", "direction": "desc"}],
+        not an object like {"reactions": "desc"}. Use semantic metric names such as
+        "reactions", not backing columns such as "reactions_sum_delta". For latest rows,
+        use dimensions=["_date"], order_by=[{"field": "_date", "direction": "desc"}], limit=1.
+        """
         return tool_query_analytics_model(
             config_path,
             model,
@@ -118,10 +132,14 @@ def create_server(
         metrics: list[str],
         dimensions: list[str] | None = None,
         filters: dict[str, Any] | None = None,
-        order_by: list[dict[str, str]] | None = None,
+        order_by: list[OrderByInput] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        """Preview generated SQL for a bounded analytics model query."""
+        """Preview generated SQL for a bounded analytics model query.
+
+        Uses the same syntax as query_analytics_model and never accepts arbitrary SQL.
+        Use this tool to inspect generated SQL when a query_analytics_model call fails.
+        """
         return tool_preview_analytics_query_sql(
             config_path,
             model,

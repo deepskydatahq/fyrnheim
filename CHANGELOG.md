@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MCP analytics query syntax cookbook.** Added `describe_query_syntax` plus
+  richer query tool descriptions so agents can learn the required `order_by`
+  shape, semantic metric/dimension naming, latest-row pattern, and example
+  calls before querying.
+
+### Fixed
+
+- **Clearer analytics query validation.** Malformed `order_by` inputs now return
+  explicit guidance such as `order_by must be an array of objects` and remind
+  agents to use selected semantic fields rather than backing column names.
+
 ## [0.15.1] - 2026-05-23
 
 ### Removed

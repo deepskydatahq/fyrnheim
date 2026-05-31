@@ -4,7 +4,7 @@ id = "M108-E001-S001"
 parent = "M108-E001"
 title = "Add PropertyBag primitive"
 status = "complete"
-triage = "brainstorm"
+triage = "ready"
 created = 2026-05-31
 
 [outcome]

@@ -91,4 +91,5 @@ LIMIT {int(limit)}"""
 
 def _sql_string(value: str) -> str:
     """Return a single-quoted SQL string literal."""
-    return "'" + value.replace("'", "''") + "'"
+    escaped = value.replace("\\", "\\\\").replace("'", "''")
+    return "'" + escaped + "'"

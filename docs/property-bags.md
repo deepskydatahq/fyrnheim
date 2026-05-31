@@ -24,8 +24,8 @@ Property bags are catalog metadata, not expanded declared dimensions. Agents sho
 ## MCP workflow
 
 1. `list_property_bags(model="workshop_people")` — find declared bags.
-2. `discover_property_keys(model="workshop_people", property_bag="custom_properties", limit=100)` — list bounded keys with `row_count` and `distinct_value_count`.
-3. `sample_property_values(model="workshop_people", property_bag="custom_properties", key="company", limit=50)` — inspect examples and rough type inference.
+2. `discover_property_keys(model="workshop_people", property_bag="workshop_custom_properties", limit=100)` — list bounded keys with `row_count` and `distinct_value_count`.
+3. `sample_property_values(model="workshop_people", property_bag="workshop_custom_properties", key="company", limit=50)` — inspect examples and rough type inference.
 4. `query_analytics_model(...)` — query a validated property through explicit syntax such as `custom_properties.company` or `custom_properties['job_title']`.
 
 Example query:

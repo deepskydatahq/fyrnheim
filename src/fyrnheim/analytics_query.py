@@ -195,17 +195,18 @@ def run_project_analytics_query(
 ) -> dict[str, Any]:
     """Load project config and execute a safe analytics model query."""
     project = load_query_project(config_path, entities_dir=entities_dir, project_path=project_path)
-    return query_analytics_model(
-        project.catalog,
-        project.executor.connection,
-        model=model,
-        metrics=metrics,
-        dimensions=dimensions,
-        filters=filters,
-        order_by=order_by,
-        limit=limit,
-        parquet_dir=project.output_dir,
-    )
+    with project.executor:
+        return query_analytics_model(
+            project.catalog,
+            project.executor.connection,
+            model=model,
+            metrics=metrics,
+            dimensions=dimensions,
+            filters=filters,
+            order_by=order_by,
+            limit=limit,
+            parquet_dir=project.output_dir,
+        )
 
 
 def preview_project_analytics_query_sql(
@@ -222,17 +223,18 @@ def preview_project_analytics_query_sql(
 ) -> dict[str, Any]:
     """Load project config and preview generated SQL for a safe analytics query."""
     project = load_query_project(config_path, entities_dir=entities_dir, project_path=project_path)
-    return preview_analytics_query_sql(
-        project.catalog,
-        project.executor.connection,
-        model=model,
-        metrics=metrics,
-        dimensions=dimensions,
-        filters=filters,
-        order_by=order_by,
-        limit=limit,
-        parquet_dir=project.output_dir,
-    )
+    with project.executor:
+        return preview_analytics_query_sql(
+            project.catalog,
+            project.executor.connection,
+            model=model,
+            metrics=metrics,
+            dimensions=dimensions,
+            filters=filters,
+            order_by=order_by,
+            limit=limit,
+            parquet_dir=project.output_dir,
+        )
 
 
 def build_analytics_query_expression(
@@ -442,7 +444,8 @@ def _build_property_sql_query(
         available_aliases.add(metric_name)
 
     where_clauses = [
-        _filter_sql(connection, model_record, field, raw_filter) for field, raw_filter in filters.items()
+        _filter_sql(connection, model_record, field, raw_filter, model=model)
+        for field, raw_filter in filters.items()
     ]
     sql = f"SELECT {', '.join(selected_exprs)}\nFROM {_quote_identifier(_physical_table_name(model_record))}"
     if where_clauses:
@@ -475,7 +478,7 @@ def _filters_include_property(filters: dict[str, Any], model_record: dict[str, A
 
 
 def _parse_property_path(field: str, model_record: dict[str, Any]) -> tuple[dict[str, Any], str] | None:
-    match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z0-9_ -?]+)", field)
+    match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z0-9_ ?-]+)", field)
     if match is None:
         match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\[['\"](.+)['\"]\]", field)
     if match is None:
@@ -575,9 +578,17 @@ def _filter_sql(
     model_record: dict[str, Any],
     field_name: str,
     raw_filter: Any,
+    *,
+    model: str,
 ) -> str:
     parsed = _parse_property_path(field_name, model_record)
     if parsed is None:
+        allowed_fields = {
+            *[metric["name"] for metric in model_record["metrics"]],
+            *[dimension["name"] for dimension in model_record["dimensions"]],
+        }
+        if field_name not in allowed_fields:
+            raise AnalyticsQueryError(f"Filter field {field_name!r} is not declared on model {model!r}")
         op, value = _parse_filter(raw_filter)
         if op == "in":
             return f"{_quote_identifier(field_name)} IN ({', '.join(_sql_literal(item) for item in value)})"
@@ -649,7 +660,8 @@ def _sql_literal(value: Any) -> str:
 
 
 def _sql_string(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
+    escaped = value.replace("\\", "\\\\").replace("'", "''")
+    return "'" + escaped + "'"
 
 
 def _quote_identifier(value: str) -> str:

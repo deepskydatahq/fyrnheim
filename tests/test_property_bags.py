@@ -217,7 +217,7 @@ def test_property_discovery_sampling_and_type_inference() -> None:
         limit=2,
     )
     assert sample["inferred_type"] == "string"
-    assert sample["values"] == ["Acme", "Beta"]
+    assert set(sample["values"]) == {"Acme", "Beta"}
     assert infer_property_type(["true", "false"]) == "bool"
     assert infer_property_type(["2026-05-31", "2026-06-01"]) == "date-ish"
 

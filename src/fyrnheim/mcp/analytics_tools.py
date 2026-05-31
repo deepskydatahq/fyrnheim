@@ -156,13 +156,14 @@ def discover_property_keys(
         entities_dir=entities_dir,
         project_path=project_path,
     )
-    return query_discover_property_keys(
-        project.catalog,
-        project.executor.connection,
-        model=model,
-        property_bag=property_bag,
-        limit=limit,
-    )
+    with project.executor:
+        return query_discover_property_keys(
+            project.catalog,
+            project.executor.connection,
+            model=model,
+            property_bag=property_bag,
+            limit=limit,
+        )
 
 
 def sample_property_values(
@@ -181,14 +182,15 @@ def sample_property_values(
         entities_dir=entities_dir,
         project_path=project_path,
     )
-    return query_sample_property_values(
-        project.catalog,
-        project.executor.connection,
-        model=model,
-        property_bag=property_bag,
-        key=key,
-        limit=limit,
-    )
+    with project.executor:
+        return query_sample_property_values(
+            project.catalog,
+            project.executor.connection,
+            model=model,
+            property_bag=property_bag,
+            key=key,
+            limit=limit,
+        )
 
 
 def query_analytics_model(

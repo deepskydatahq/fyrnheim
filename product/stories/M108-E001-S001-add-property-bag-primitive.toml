@@ -3,7 +3,7 @@
 id = "M108-E001-S001"
 parent = "M108-E001"
 title = "Add PropertyBag primitive"
-status = "ready"
+status = "complete"
 triage = "brainstorm"
 created = 2026-05-31
 

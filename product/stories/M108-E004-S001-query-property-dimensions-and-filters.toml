@@ -3,7 +3,7 @@
 id = "M108-E004-S001"
 parent = "M108-E004"
 title = "Query property dimensions and filters"
-status = "ready"
+status = "complete"
 triage = "brainstorm"
 created = 2026-05-31
 

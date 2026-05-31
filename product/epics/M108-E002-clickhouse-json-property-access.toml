@@ -3,7 +3,7 @@
 id = "M108-E002"
 parent = "M108"
 title = "ClickHouse JSON property access"
-status = "ready"
+status = "complete"
 created = 2026-05-31
 depends_on = ["M108-E001"]
 estimated_stories = 1

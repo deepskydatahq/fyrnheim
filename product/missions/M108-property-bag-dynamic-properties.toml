@@ -2,7 +2,7 @@
 
 id = "M108"
 title = "Property bag dynamic properties"
-status = "ready"
+status = "complete"
 created = 2026-05-31
 depends_on = ["M103"]
 

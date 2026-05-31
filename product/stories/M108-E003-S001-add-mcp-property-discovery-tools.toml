@@ -3,7 +3,7 @@
 id = "M108-E003-S001"
 parent = "M108-E003"
 title = "Add MCP property discovery tools"
-status = "ready"
+status = "complete"
 triage = "brainstorm"
 created = 2026-05-31
 

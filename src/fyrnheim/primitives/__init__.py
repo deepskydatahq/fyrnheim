@@ -49,6 +49,10 @@ from .hashing import (
 
 # JSON
 from .json_ops import (
+    clickhouse_json_extract_bool,
+    clickhouse_json_extract_raw,
+    clickhouse_json_extract_string,
+    clickhouse_json_property_discovery_sql,
     json_extract_scalar,
     json_value,
     to_json_struct,
@@ -93,6 +97,10 @@ __all__ = [
     "to_json_struct",
     "json_extract_scalar",
     "json_value",
+    "clickhouse_json_extract_string",
+    "clickhouse_json_extract_bool",
+    "clickhouse_json_extract_raw",
+    "clickhouse_json_property_discovery_sql",
     # Aggregations
     "row_number_by",
     "cumulative_sum",

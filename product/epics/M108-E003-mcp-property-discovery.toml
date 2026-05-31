@@ -3,7 +3,7 @@
 id = "M108-E003"
 parent = "M108"
 title = "MCP property discovery"
-status = "ready"
+status = "complete"
 created = 2026-05-31
 depends_on = ["M108-E001", "M108-E002"]
 estimated_stories = 1

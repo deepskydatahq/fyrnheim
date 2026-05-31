@@ -27,6 +27,14 @@ def build_analytics_catalog(manifest: dict[str, Any]) -> dict[str, Any]:
         [dimension for model in models for dimension in model["dimensions"]],
         key=lambda dimension: (dimension["name"], dimension["model"], dimension["dimension_id"]),
     )
+    property_bags = sorted(
+        [property_bag for model in models for property_bag in model.get("property_bags", [])],
+        key=lambda property_bag: (
+            property_bag["name"],
+            property_bag["model"],
+            property_bag["property_bag_id"],
+        ),
+    )
 
     return {
         "schema_version": CATALOG_SCHEMA_VERSION,
@@ -37,6 +45,7 @@ def build_analytics_catalog(manifest: dict[str, Any]) -> dict[str, Any]:
         "models": models,
         "metrics": metrics,
         "dimensions": dimensions,
+        "property_bags": property_bags,
     }
 
 
@@ -57,6 +66,7 @@ def list_analytics_models(catalog: dict[str, Any]) -> dict[str, Any]:
                 "dimension_count": len(model["dimensions"]),
                 "metrics": [metric["name"] for metric in model["metrics"]],
                 "dimensions": [dimension["name"] for dimension in model["dimensions"]],
+                "property_bags": [property_bag["name"] for property_bag in model.get("property_bags", [])],
             }
             for model in catalog["models"]
         ],
@@ -86,7 +96,7 @@ def describe_analytics_model(catalog: dict[str, Any], model: str) -> dict[str, A
     if len(matches) == 1:
         match = matches[0]
         response["model"] = match
-        response["model_summary"] = {
+        model_summary = {
             "name": match["name"],
             "model_type": match["model_type"],
             "description": match.get("description"),
@@ -97,6 +107,11 @@ def describe_analytics_model(catalog: dict[str, Any], model: str) -> dict[str, A
             "limitations": match.get("limitations", []),
             "recommended_questions": match.get("recommended_questions", []),
         }
+        if match.get("property_bags"):
+            model_summary["property_bags"] = [
+                property_bag["name"] for property_bag in match.get("property_bags", [])
+            ]
+        response["model_summary"] = model_summary
         response["ambiguous"] = False
     else:
         response["ambiguous"] = len(matches) > 1
@@ -230,6 +245,33 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
         }
         for field in config.get("computed_fields", [])
     )
+    property_bags = [
+        {
+            "property_bag_id": f"analytics_entity:{model_name}:property_bag:{property_bag['name']}",
+            "name": property_bag["name"],
+            "model": model_name,
+            "model_type": "analytics_entity",
+            "kind": "property_bag",
+            "source": property_bag["source"],
+            "field": property_bag["field"],
+            "backend_type": property_bag.get("backend_type", "json"),
+            "discoverable": property_bag.get("discoverable", True),
+            "description": (
+                f"Dynamic JSON property bag '{property_bag['name']}' from "
+                f"{property_bag['source']}.{property_bag['field']}."
+            ),
+            "usage": {
+                "can_discover_keys": property_bag.get("discoverable", True),
+                "can_sample_values": property_bag.get("discoverable", True),
+                "dynamic_dimension_syntax": [
+                    f"{property_bag['name']}.<key>",
+                    f"{property_bag['field']}.<key>",
+                    f"{property_bag['field']}['<key>']",
+                ],
+            },
+        }
+        for property_bag in config.get("property_bags", [])
+    ]
 
     return {
         "name": model_name,
@@ -246,6 +288,7 @@ def _analytics_entity_model(record: dict[str, Any]) -> dict[str, Any]:
         ],
         "metrics": sorted(metrics, key=lambda metric: metric["metric_id"]),
         "dimensions": sorted(dimensions, key=lambda dimension: dimension["dimension_id"]),
+        "property_bags": sorted(property_bags, key=lambda property_bag: property_bag["property_bag_id"]),
     }
 
 

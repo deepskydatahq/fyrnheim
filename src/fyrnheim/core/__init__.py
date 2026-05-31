@@ -19,6 +19,7 @@ from .activity import (
 from .analytics_entity import (
     AnalyticsEntity as AnalyticsEntity,
     Measure as Measure,
+    PropertyBag as PropertyBag,
     StateField as StateField,
 )
 from .identity import (

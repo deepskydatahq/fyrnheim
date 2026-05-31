@@ -42,11 +42,21 @@ class StateField(BaseModel):
         return self
 
 
+class PropertyBag(BaseModel):
+    """Declares a semi-structured JSON/property-bag field for discovery/querying."""
+
+    name: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    field: str = Field(min_length=1)
+    backend_type: Literal["json"] = "json"
+    discoverable: bool = True
+
+
 class AnalyticsEntity(BaseModel):
     """Combines state field projection with activity-derived measures in one asset.
 
     One row per entity with state fields + measures + computed fields.
-    At least one of state_fields or measures must be non-empty.
+    At least one of state_fields, property_bags, or measures must be non-empty.
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -54,6 +64,7 @@ class AnalyticsEntity(BaseModel):
     name: str = Field(min_length=1)
     identity_graph: str | None = None
     state_fields: list[StateField] = Field(default_factory=list)
+    property_bags: list[PropertyBag] = Field(default_factory=list)
     measures: list[Measure] = Field(default_factory=list)
     computed_fields: list[ComputedColumn] = Field(default_factory=list)
     quality_checks: list[QualityCheck] = Field(default_factory=list)
@@ -64,9 +75,9 @@ class AnalyticsEntity(BaseModel):
 
     @model_validator(mode="after")
     def _require_at_least_one_field_or_measure(self) -> "AnalyticsEntity":
-        if not self.state_fields and not self.measures:
+        if not self.state_fields and not self.property_bags and not self.measures:
             raise ValueError(
-                "AnalyticsEntity requires at least one state_field or measure"
+                "AnalyticsEntity requires at least one state_field or measure, or a property_bag"
             )
         return self
 

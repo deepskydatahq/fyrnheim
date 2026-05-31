@@ -3,7 +3,7 @@
 id = "M108-E002-S001"
 parent = "M108-E002"
 title = "Add ClickHouse JSON helpers"
-status = "ready"
+status = "complete"
 triage = "plan"
 created = 2026-05-31
 

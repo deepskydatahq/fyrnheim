@@ -25,6 +25,8 @@ Each model includes concise agent-facing context:
 
 Each metric and dimension includes usage hints for safe selection, grouping, filtering, and sorting.
 
+Declared `PropertyBag` fields are listed separately from dimensions. They can be discovered and queried through explicit dynamic-property syntax; see [Property bags and dynamic JSON properties](./property-bags.md).
+
 ## Python usage
 
 ```python

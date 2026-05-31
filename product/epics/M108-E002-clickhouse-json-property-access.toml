@@ -1,0 +1,40 @@
+# Epic: ClickHouse JSON property access
+
+id = "M108-E002"
+parent = "M108"
+title = "ClickHouse JSON property access"
+status = "ready"
+created = 2026-05-31
+depends_on = ["M108-E001"]
+estimated_stories = 1
+
+[outcome]
+description = """
+Add ClickHouse-oriented JSON/property-bag SQL helpers for extracting typed values and discovering key/value pairs from JSON-ish source fields.
+"""
+
+[job_story]
+description = "When Fyrnheim needs to inspect or query dynamic properties on ClickHouse, generated SQL uses safe backend-specific JSON functions instead of BigQuery-flavored helpers or arbitrary SQL snippets."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "JSON helper APIs generate ClickHouse SQL for JSONExtractString(toString(field), key), JSONExtractBool(toString(field), key), JSONExtractRaw(toString(field), key), and key/value discovery",
+  "Discovery SQL uses JSONExtractKeysAndValuesRaw with ARRAY JOIN and bounded aggregation fields such as row_count and distinct_value_count",
+  "Helpers quote/escape keys safely and reject unsupported backend_type values when appropriate",
+  "Existing BigQuery-flavored json_ops functions remain backward-compatible"
+]
+validator_context = [
+  "src/fyrnheim/primitives/json_ops.py",
+  "tests/"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/primitives/json_ops.py",
+  "tests/"
+]
+dependencies = ["M108-E001"]
+
+[notes]
+considerations = "Keep this as generated helper SQL for ClickHouse first. Broader backend abstractions can follow after MCP discovery/query behavior proves the contract."

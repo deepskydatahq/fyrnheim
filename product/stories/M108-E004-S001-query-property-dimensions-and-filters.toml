@@ -1,0 +1,52 @@
+# Story: Query property dimensions and filters
+
+id = "M108-E004-S001"
+parent = "M108-E004"
+title = "Query property dimensions and filters"
+status = "ready"
+triage = "brainstorm"
+created = 2026-05-31
+
+[outcome]
+description = "Allow safe analytics model queries to group and filter by validated property-bag keys through explicit dynamic property syntax."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "query_analytics_model accepts explicit property dimension syntax such as custom_properties.company or custom_properties['job_title'] for declared property bags."
+
+[[acceptance_criteria.criteria]]
+description = "Property dimensions appear in result rows with stable, safe aliases that do not collide with declared metric/dimension names."
+
+[[acceptance_criteria.criteria]]
+description = "Property filters support at least eq/in/contains for string-like extraction and bool/null checks where supported."
+
+[[acceptance_criteria.criteria]]
+description = "preview_analytics_query_sql shows generated JSON extraction SQL for property dimensions and filters without accepting arbitrary SQL."
+
+[[acceptance_criteria.criteria]]
+description = "Queries reject undeclared bags, unsafe keys, unknown selected/order fields, unsupported operators, and limit violations."
+
+[[acceptance_criteria.criteria]]
+description = "Tests cover successful property grouping/filtering and rejection cases."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/primitives/json_ops.py",
+  "tests/"
+]
+input_fixtures = []
+depends_on = ["M108-E003-S001"]
+
+[handoff]
+implementation_hints = [
+  "Preserve M103's declared metric/dimension validation for ordinary fields; property access should go through a separate parser/validator.",
+  "Start with ClickHouse SQL preview shape and DuckDB/mockable behavior if full backend execution is not practical in one slice."
+]
+reference_files = [
+  "src/fyrnheim/analytics_query.py",
+  "tests/test_semantic_analytics_query.py"
+]

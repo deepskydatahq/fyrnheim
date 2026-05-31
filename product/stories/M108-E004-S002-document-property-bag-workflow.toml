@@ -1,0 +1,48 @@
+# Story: Document property bag workflow
+
+id = "M108-E004-S002"
+parent = "M108-E004"
+title = "Document property bag workflow"
+status = "ready"
+triage = "ready"
+created = 2026-05-31
+
+[outcome]
+description = "Document how to declare, discover, query, and eventually promote dynamic JSON properties using the workshop custom_properties example."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "Docs show a PropertyBag declaration for workshop_attendees.custom_properties."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain MCP steps for listing bags, discovering keys, sampling values, and querying properties as dimensions/filters."
+
+[[acceptance_criteria.criteria]]
+description = "Docs include ClickHouse SQL examples for JSONExtractString, JSONExtractBool, JSONExtractRaw, and key discovery."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explain safety limits and when to promote stable keys like company or job title into declared semantic fields."
+
+[[acceptance_criteria.criteria]]
+description = "Docs explicitly mark Propel workshop wiring as a downstream implementation after Fyrnheim support lands."
+
+[context]
+relevant_paths = [
+  "docs/",
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/mcp/analytics_tools.py"
+]
+input_fixtures = []
+depends_on = ["M108-E004-S001"]
+
+[handoff]
+implementation_hints = [
+  "Add to docs/mcp-analytics-catalog.md or create a focused docs/property-bags.md and link from MCP docs.",
+  "Keep examples backend-aware and avoid promising automatic key promotion."
+]
+reference_files = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md"
+]

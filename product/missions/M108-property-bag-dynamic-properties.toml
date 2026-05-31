@@ -1,0 +1,91 @@
+# Mission: Property bag dynamic properties
+
+id = "M108"
+title = "Property bag dynamic properties"
+status = "ready"
+created = 2026-05-31
+depends_on = ["M103"]
+
+[outcome]
+description = """
+Teach Fyrnheim to model semi-structured JSON/property-bag columns as semantic, discoverable property bags so agents can inspect keys, sample values, infer rough types, and safely query selected properties as dimensions or filters without prematurely promoting messy workshop/export fields into fixed columns.
+"""
+
+user_progress = "From 'JSON payload keys are opaque and unavailable to MCP analytics queries' to 'agents can discover and safely query bounded dynamic properties, then promote stable keys later'."
+
+[execution]
+mode = "implementation"
+outputs = ["property-bag-primitive", "clickhouse-json-helpers", "mcp-property-discovery", "property-aware-querying", "tests", "docs"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Fyrnheim exposes a PropertyBag primitive for declaring a source, field, backend_type, and discoverability policy on analytics entities or related semantic models",
+  "Manifest and analytics catalog output include property bag metadata without expanding unbounded keys into declared dimensions by default",
+  "ClickHouse JSON helper SQL supports string, bool, raw, and key/value discovery access patterns over JSON-ish fields using bounded generated SQL",
+  "MCP tools can list property bags, list discovered keys, sample bounded values per key, and report rough inferred types such as string, number, bool, and date-ish",
+  "query_analytics_model can use a discovered property path as a dynamic dimension/filter only through explicit property-bag syntax and safe validation/limits",
+  "Tests cover manifest/catalog serialization, ClickHouse SQL generation shape, MCP discovery output, property dimensions, property filters, and rejection of unsafe/unknown bags or keys",
+  "Docs show the workshop custom_properties pattern and explain when to leave keys dynamic versus promote them into declared semantic fields"
+]
+validator_context = [
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "src/fyrnheim/primitives/json_ops.py",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "docs/mcp-analytics-catalog.md",
+  "docs/mcp-insight-query-tools.md"
+]
+relevant_paths = [
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/core/source.py",
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "src/fyrnheim/primitives/json_ops.py",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M099 — MCP analytics catalog for Fyrnheim",
+  "M103 — Semantic analytics model context and generic query tools",
+  "M107 — MCP query affordances"
+]
+
+[scope]
+in_scope = [
+  "PropertyBag model primitive for semi-structured source fields",
+  "Manifest and analytics catalog representation for declared property bags",
+  "ClickHouse-oriented JSON extraction and discovery SQL helpers",
+  "Read-only MCP catalog/discovery surface for property bags and keys",
+  "Bounded value sampling and rough type inference for discovered keys",
+  "Safe property path validation for querying a property as a dimension or filter",
+  "Generated SQL/Ibis only; no arbitrary agent-written SQL",
+  "Docs and tests using a workshop_attendees custom_properties example"
+]
+out_of_scope = [
+  "Propel-specific implementation changes to workshop_attendees or activity payloads",
+  "Automatic promotion of JSON keys into permanent declared fields",
+  "Unbounded scans or unrestricted JSON key expansion through MCP",
+  "Arbitrary SQL execution or write/materialization operations through MCP",
+  "Full cross-backend parity beyond the minimal existing BigQuery helpers and the required ClickHouse path"
+]
+acceptable_breakage = [
+  "Existing declared metric/dimension queries should continue to reject undeclared ordinary fields; dynamic property access must use explicit property-bag syntax."
+]
+
+[notes]
+considerations = """
+This request is motivated by messy workshop exports where a source field such as workshop_attendees.custom_properties contains user-defined keys like company, job title, and booleans. Keep raw property bags inspectable and queryable, but avoid turning every observed key into a first-class declared dimension by default. Propel should consume this only after Fyrnheim core can reason about property bags.
+"""

@@ -1,0 +1,49 @@
+# Epic: Property-aware analytics query
+
+id = "M108-E004"
+parent = "M108"
+title = "Property-aware analytics query"
+status = "ready"
+created = 2026-05-31
+depends_on = ["M108-E001", "M108-E002", "M108-E003"]
+estimated_stories = 2
+
+[outcome]
+description = """
+Allow query_analytics_model and SQL preview to use validated property-bag keys as dynamic dimensions and filters while preserving the declared-field-only contract for ordinary fields.
+"""
+
+[job_story]
+description = "When a discovered property key is relevant, an agent can group or filter analytics results by that key through explicit property-bag syntax without guessing physical JSON SQL or bypassing query safety."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "query_analytics_model accepts an explicit property dimension syntax such as custom_properties.company or custom_properties['job_title'] for declared property bags",
+  "Property filters support safe operators such as eq, in, contains, bool, and null checks where backend support exists",
+  "Generated SQL preview shows JSON extraction expressions for ClickHouse without accepting arbitrary SQL",
+  "Queries reject unknown bags, unknown or unsafe keys, unsupported operators, invalid output aliases, and excessive limits",
+  "Docs explain dynamic property querying and later promotion to StateField/computed semantic dimensions"
+]
+validator_context = [
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/primitives/json_ops.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "tests/",
+  "docs/"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/primitives/json_ops.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "tests/",
+  "docs/"
+]
+dependencies = ["M108-E001", "M108-E002", "M108-E003"]
+
+[notes]
+considerations = "Keep dynamic property access opt-in and syntactically distinct from declared dimensions so M103's safe declared-field query contract remains clear."

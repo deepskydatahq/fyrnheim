@@ -1,0 +1,54 @@
+# Story: Add MCP property discovery tools
+
+id = "M108-E003-S001"
+parent = "M108-E003"
+title = "Add MCP property discovery tools"
+status = "complete"
+triage = "brainstorm"
+created = 2026-05-31
+
+[outcome]
+description = "Expose read-only MCP tooling to list property bags, discover keys, sample values, and infer rough property types under bounded limits."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "MCP analytics tools include a property-bag listing/description tool for declared bags on analytics models."
+
+[[acceptance_criteria.criteria]]
+description = "MCP analytics tools include a bounded key discovery tool returning key, row_count, distinct_value_count, and source bag metadata."
+
+[[acceptance_criteria.criteria]]
+description = "MCP analytics tools include bounded value sampling for a selected property key."
+
+[[acceptance_criteria.criteria]]
+description = "Value samples produce rough type inference for string, number, bool, date-ish, mixed, null-heavy, or unknown values."
+
+[[acceptance_criteria.criteria]]
+description = "Tools reject unknown models, unknown bags, undiscoverable bags, missing/unsafe keys, unsupported backends, and excessive limits."
+
+[[acceptance_criteria.criteria]]
+description = "Tests cover MCP registration and direct tool helper behavior without requiring arbitrary SQL input."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/"
+]
+input_fixtures = []
+depends_on = ["M108-E001-S002", "M108-E002-S001"]
+
+[handoff]
+implementation_hints = [
+  "Mirror the M103 query tool safety style: generated read-only queries, capped limits, structured errors.",
+  "Consider keeping backend execution helpers in analytics_query.py and MCP wrappers thin."
+]
+reference_files = [
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/test_semantic_analytics_query.py"
+]

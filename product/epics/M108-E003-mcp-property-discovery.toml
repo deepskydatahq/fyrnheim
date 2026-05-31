@@ -1,0 +1,47 @@
+# Epic: MCP property discovery
+
+id = "M108-E003"
+parent = "M108"
+title = "MCP property discovery"
+status = "complete"
+created = 2026-05-31
+depends_on = ["M108-E001", "M108-E002"]
+estimated_stories = 1
+
+[outcome]
+description = """
+Expose property bags through the MCP analytics surface so agents can list bags, discover keys, sample values, and see rough inferred types under safe query bounds.
+"""
+
+[job_story]
+description = "When an agent sees a custom_properties bag, it can ask Fyrnheim what keys exist and what their values look like before deciding whether to query or recommend promoting a property."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "MCP tools list declared property bags for a model with source/field/discoverable metadata",
+  "MCP discovery returns bounded key rows with row_count and distinct_value_count",
+  "MCP sampling returns bounded example values for a selected key",
+  "Rough type inference labels observed values as string, number, bool, date-ish, mixed, null-heavy, or unknown",
+  "Tools reject undiscoverable bags, unknown models/bags, missing keys, excessive limits, and arbitrary SQL input"
+]
+validator_context = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/analytics_catalog.py",
+  "src/fyrnheim/analytics_query.py",
+  "src/fyrnheim/mcp/analytics_tools.py",
+  "src/fyrnheim/mcp/analytics_server.py",
+  "tests/"
+]
+dependencies = ["M108-E001", "M108-E002"]
+
+[notes]
+considerations = "Prefer read-only generated queries with hard row/key/sample caps. Discovery should not mutate catalogs or auto-promote keys."

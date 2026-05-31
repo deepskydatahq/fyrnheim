@@ -177,6 +177,9 @@ def build_manifest_edges(assets: AssetMap) -> list[dict[str, str]]:
         for state_field in entity.state_fields:
             if state_field.source in source_names:
                 edges.append(_edge("source", state_field.source, "analytics_entity", entity.name, "state_field"))
+        for property_bag in entity.property_bags:
+            if property_bag.source in source_names:
+                edges.append(_edge("source", property_bag.source, "analytics_entity", entity.name, "property_bag"))
         for measure in entity.measures:
             if measure.activity in activity_names:
                 edges.append(_edge("activity", measure.activity, "analytics_entity", entity.name, "measure"))

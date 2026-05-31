@@ -21,8 +21,12 @@ from fyrnheim.analytics_catalog import (
 from fyrnheim.analytics_query import (
     OrderByInput,
     describe_query_syntax as query_syntax_contract,
+    discover_property_keys as query_discover_property_keys,
+    list_property_bags as query_list_property_bags,
+    load_query_project,
     preview_project_analytics_query_sql,
     run_project_analytics_query,
+    sample_property_values as query_sample_property_values,
 )
 from fyrnheim.inspect import build_manifest
 
@@ -125,6 +129,68 @@ def describe_dimension(
 def describe_query_syntax() -> dict[str, Any]:
     """Describe the safe analytics query argument contract with examples."""
     return query_syntax_contract()
+
+
+def list_property_bags(
+    entities_dir: Path | str,
+    *,
+    project_path: Path | str | None = None,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """List declared property bags, optionally filtered to one model."""
+    return query_list_property_bags(load_catalog(entities_dir, project_path=project_path), model=model)
+
+
+def discover_property_keys(
+    config_path: Path | str,
+    model: str,
+    property_bag: str,
+    *,
+    limit: int | None = None,
+    entities_dir: Path | str | None = None,
+    project_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Discover bounded keys for a declared property bag."""
+    project = load_query_project(
+        config_path,
+        entities_dir=entities_dir,
+        project_path=project_path,
+    )
+    with project.executor:
+        return query_discover_property_keys(
+            project.catalog,
+            project.executor.connection,
+            model=model,
+            property_bag=property_bag,
+            limit=limit,
+        )
+
+
+def sample_property_values(
+    config_path: Path | str,
+    model: str,
+    property_bag: str,
+    key: str,
+    *,
+    limit: int | None = None,
+    entities_dir: Path | str | None = None,
+    project_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Sample bounded values for a declared property key."""
+    project = load_query_project(
+        config_path,
+        entities_dir=entities_dir,
+        project_path=project_path,
+    )
+    with project.executor:
+        return query_sample_property_values(
+            project.catalog,
+            project.executor.connection,
+            model=model,
+            property_bag=property_bag,
+            key=key,
+            limit=limit,
+        )
 
 
 def query_analytics_model(

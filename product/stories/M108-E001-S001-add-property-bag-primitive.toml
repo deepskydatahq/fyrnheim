@@ -1,0 +1,45 @@
+# Story: Add PropertyBag primitive
+
+id = "M108-E001-S001"
+parent = "M108-E001"
+title = "Add PropertyBag primitive"
+status = "complete"
+triage = "ready"
+created = 2026-05-31
+
+[outcome]
+description = "Add a validated PropertyBag model and attach it to the appropriate semantic container for semi-structured source fields."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "PropertyBag validates name, source, field, backend_type='json', and discoverable defaults."
+
+[[acceptance_criteria.criteria]]
+description = "AnalyticsEntity or a justified adjacent semantic container accepts property_bags without requiring state_fields for individual JSON keys."
+
+[[acceptance_criteria.criteria]]
+description = "PropertyBag is exported from public core imports used by entity definitions."
+
+[[acceptance_criteria.criteria]]
+description = "Unit tests cover valid declarations, invalid empty fields, unsupported backend_type values, and coexistence with state_fields/measures."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/core/__init__.py",
+  "tests/test_analytics_entity.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Start with the API from the request: PropertyBag(name='workshop_custom_properties', source='workshop_attendees', field='custom_properties', backend_type='json', discoverable=True).",
+  "Decide whether property_bags should count toward AnalyticsEntity's at-least-one field/measure validation; document the decision in tests."
+]
+reference_files = [
+  "src/fyrnheim/core/analytics_entity.py",
+  "tests/test_analytics_entity.py"
+]

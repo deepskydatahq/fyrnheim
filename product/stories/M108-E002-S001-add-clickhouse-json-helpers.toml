@@ -1,0 +1,46 @@
+# Story: Add ClickHouse JSON helpers
+
+id = "M108-E002-S001"
+parent = "M108-E002"
+title = "Add ClickHouse JSON helpers"
+status = "complete"
+triage = "plan"
+created = 2026-05-31
+
+[outcome]
+description = "Add ClickHouse-oriented JSON extraction and discovery SQL helpers for property-bag access."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "json_ops exposes helpers for ClickHouse string, bool, raw, and optionally numeric/date-ish JSON extraction from toString(json_field)."
+
+[[acceptance_criteria.criteria]]
+description = "json_ops exposes a helper that builds key/value discovery SQL using JSONExtractKeysAndValuesRaw and ARRAY JOIN with row_count and distinct_value_count."
+
+[[acceptance_criteria.criteria]]
+description = "Helpers safely quote JSON keys containing spaces, punctuation, and apostrophes."
+
+[[acceptance_criteria.criteria]]
+description = "Existing to_json_struct, json_extract_scalar, and json_value behavior is unchanged."
+
+[[acceptance_criteria.criteria]]
+description = "Unit tests assert generated SQL shape for company, job title, has_joined_event, and a question-style key."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/primitives/json_ops.py",
+  "tests/"
+]
+input_fixtures = []
+depends_on = ["M108-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Include examples like JSONExtractString(toString(custom_properties), 'What company do you work for?').",
+  "Keep helper output deterministic and small; do not execute SQL in this story."
+]
+reference_files = [
+  "src/fyrnheim/primitives/json_ops.py"
+]

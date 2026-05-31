@@ -1,0 +1,50 @@
+# Story: Catalog property bag metadata
+
+id = "M108-E001-S002"
+parent = "M108-E001"
+title = "Catalog property bag metadata"
+status = "complete"
+triage = "plan"
+created = 2026-05-31
+
+[outcome]
+description = "Serialize PropertyBag declarations into the manifest and analytics catalog as property_bags metadata separate from declared dimensions."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+description = "build_manifest includes property_bags in analytics entity config via deterministic Pydantic serialization."
+
+[[acceptance_criteria.criteria]]
+description = "build_manifest_edges includes source-to-analytics_entity edges for property bag sources where useful and non-duplicative."
+
+[[acceptance_criteria.criteria]]
+description = "build_analytics_catalog includes each model's property_bags and top-level property_bags list or equivalent discoverable surface."
+
+[[acceptance_criteria.criteria]]
+description = "Declared dimensions remain limited to canonical_id, state_fields, and computed_fields; property bags are not expanded into dimensions by default."
+
+[[acceptance_criteria.criteria]]
+description = "Tests cover manifest JSON and analytics catalog output for a workshop_attendees.custom_properties example."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "tests/test_manifest.py",
+  "tests/test_analytics_catalog.py"
+]
+input_fixtures = []
+depends_on = ["M108-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Follow existing analytics_entity config serialization in inspect._asset_record.",
+  "Use distinct IDs such as analytics_entity:<model>:property_bag:<bag_name> for catalog records."
+]
+reference_files = [
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "tests/test_analytics_catalog.py"
+]

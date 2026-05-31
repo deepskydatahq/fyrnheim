@@ -1,0 +1,48 @@
+# Epic: PropertyBag semantic model
+
+id = "M108-E001"
+parent = "M108"
+title = "PropertyBag semantic model"
+status = "complete"
+created = 2026-05-31
+depends_on = []
+estimated_stories = 2
+
+[outcome]
+description = """
+Add a first-class PropertyBag primitive and include property-bag declarations in Fyrnheim manifests and analytics catalog metadata without expanding every dynamic key into a declared dimension.
+"""
+
+[job_story]
+description = "When a model has a JSON-ish field such as custom_properties, an engineer can declare it once as an inspectable property bag so agents understand where dynamic keys live and how they may be queried safely."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "PropertyBag validates name, source, field, backend_type, and discoverable fields",
+  "AnalyticsEntity or the chosen semantic container accepts property_bags alongside state_fields, measures, and computed_fields",
+  "build_manifest serializes property_bags deterministically",
+  "analytics catalog exposes property_bags metadata separately from declared dimensions",
+  "Existing StateField and declared dimension behavior remains unchanged"
+]
+validator_context = [
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "tests/test_analytics_entity.py",
+  "tests/test_manifest.py",
+  "tests/test_analytics_catalog.py"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/core/analytics_entity.py",
+  "src/fyrnheim/core/__init__.py",
+  "src/fyrnheim/inspect.py",
+  "src/fyrnheim/analytics_catalog.py",
+  "tests/"
+]
+dependencies = []
+
+[notes]
+considerations = "Prefer a minimal model such as PropertyBag(name, source, field, backend_type='json', discoverable=True). Do not require users to declare known keys in this epic."

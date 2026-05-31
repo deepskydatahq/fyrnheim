@@ -1,5 +1,7 @@
 """JSON operation primitives."""
 
+from __future__ import annotations
+
 
 def to_json_struct(fields: dict[str, str]) -> str:
     """Convert field mappings to TO_JSON_STRING(STRUCT(...)).
@@ -50,3 +52,44 @@ def json_value(json_col: str, path: str) -> str:
         SQL JSON_VALUE expression
     """
     return f"JSON_VALUE({json_col}, '{path}')"
+
+
+def clickhouse_json_extract_string(json_col: str, key: str) -> str:
+    """Generate ClickHouse SQL to extract a JSON property as string."""
+    return f"JSONExtractString(toString({json_col}), {_sql_string(key)})"
+
+
+def clickhouse_json_extract_bool(json_col: str, key: str) -> str:
+    """Generate ClickHouse SQL to extract a JSON property as bool."""
+    return f"JSONExtractBool(toString({json_col}), {_sql_string(key)})"
+
+
+def clickhouse_json_extract_raw(json_col: str, key: str) -> str:
+    """Generate ClickHouse SQL to extract a JSON property as raw JSON."""
+    return f"JSONExtractRaw(toString({json_col}), {_sql_string(key)})"
+
+
+def clickhouse_json_property_discovery_sql(
+    table: str,
+    json_col: str,
+    *,
+    limit: int = 100,
+) -> str:
+    """Generate bounded ClickHouse SQL for JSON property key discovery."""
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
+    return f"""SELECT
+  kv.1 AS key,
+  count() AS row_count,
+  uniqExact(kv.2) AS distinct_value_count
+FROM {table}
+ARRAY JOIN JSONExtractKeysAndValuesRaw(toString({json_col})) AS kv
+GROUP BY key
+ORDER BY row_count DESC, key ASC
+LIMIT {int(limit)}"""
+
+
+def _sql_string(value: str) -> str:
+    """Return a single-quoted SQL string literal."""
+    escaped = value.replace("\\", "\\\\").replace("'", "''")
+    return "'" + escaped + "'"

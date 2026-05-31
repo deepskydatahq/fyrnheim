@@ -19,8 +19,11 @@ from fyrnheim.analytics_query import OrderByInput
 from fyrnheim.inspect import build_manifest
 from fyrnheim.mcp.analytics_tools import (
     describe_query_syntax as tool_describe_query_syntax,
+    discover_property_keys as tool_discover_property_keys,
+    list_property_bags as tool_list_property_bags,
     preview_analytics_query_sql as tool_preview_analytics_query_sql,
     query_analytics_model as tool_query_analytics_model,
+    sample_property_values as tool_sample_property_values,
 )
 
 
@@ -96,6 +99,45 @@ def create_server(
     def describe_query_syntax() -> dict[str, Any]:
         """Describe query_analytics_model syntax, order_by shape, and examples."""
         return tool_describe_query_syntax()
+
+    @server.tool()
+    def list_property_bags(model: str | None = None) -> dict[str, Any]:
+        """List declared JSON/property bags, optionally filtered to one model."""
+        return tool_list_property_bags(entities_dir, project_path=project_path, model=model)
+
+    @server.tool()
+    def discover_property_keys(
+        model: str,
+        property_bag: str,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Discover bounded keys for a declared property bag."""
+        return tool_discover_property_keys(
+            config_path,
+            model,
+            property_bag,
+            limit=limit,
+            entities_dir=entities_dir,
+            project_path=project_path,
+        )
+
+    @server.tool()
+    def sample_property_values(
+        model: str,
+        property_bag: str,
+        key: str,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Sample bounded values for a declared property key."""
+        return tool_sample_property_values(
+            config_path,
+            model,
+            property_bag,
+            key,
+            limit=limit,
+            entities_dir=entities_dir,
+            project_path=project_path,
+        )
 
     @server.tool()
     def query_analytics_model(

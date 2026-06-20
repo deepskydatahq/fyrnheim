@@ -1,0 +1,75 @@
+# Mission: dbt Project Inventory MVP
+
+id = "M115"
+title = "dbt Project Inventory MVP"
+status = "draft"
+created = 2026-06-20
+depends_on = []
+
+[outcome]
+description = """
+Fyrnheim can run inside a dbt project and produce a structured inventory of the project’s data models and related resources. Users get an initial map of models, sources, tests, metadata, and lineage that humans and coding agents can use as context.
+"""
+
+user_progress = "From 'I need to inspect a dbt project manually to understand what exists' to 'Fyrnheim gives me a structured inventory of models, metadata, and lineage in minutes'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "dbt-resource-discovery",
+  "model-inventory-artifact",
+  "inventory-cli",
+  "tests",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Fyrnheim can read a dbt manifest.json when present and extract models, sources, tests, exposures, metrics, macros, lineage, materializations, tags, descriptions, and owner/meta fields where available.",
+  "Fyrnheim has a documented fallback path for basic dbt project files when manifest.json is absent, at minimum dbt_project.yml plus models/**/*.sql and models/**/*.yml.",
+  "A CLI command produces a versioned machine-readable inventory artifact and a concise human-readable summary.",
+  "Tests cover a representative fixture dbt project with upstream/downstream lineage and missing metadata cases.",
+  "Docs explain how to run the inventory command inside a dbt project and how to interpret the output."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "src/",
+  "tests/",
+  "docs/",
+  "product/missions/M115-dbt-project-inventory-mvp.toml"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "https://docs.getdbt.com/reference/artifacts/manifest-json"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/"
+]
+related_missions = []
+
+[scope]
+in_scope = [
+  "Define the first inventory artifact schema for dbt resources.",
+  "Parse manifest.json as the preferred source of truth when available.",
+  "Implement a lightweight fallback scan for projects without generated artifacts.",
+  "Expose inventory generation through the existing Fyrnheim CLI or a new dbt-focused subcommand.",
+  "Add fixtures and tests for model metadata and lineage extraction."
+]
+out_of_scope = [
+  "Executing dbt or compiling SQL beyond what is necessary for inventory discovery.",
+  "Classifying model jobs or enforcing principles; those are later missions.",
+  "Full semantic understanding of arbitrary SQL.",
+  "Replacing dbt’s manifest format."
+]
+
+[notes]
+considerations = """
+This mission starts the post-pivot product track. Prefer a small, durable artifact schema over broad but shallow parsing. The manifest path should be the happy path because it is dbt’s generated source of truth; fallback scanning can be intentionally limited and documented.
+"""

@@ -1,0 +1,81 @@
+# Mission: Context Artifact Format
+
+id = "M121"
+title = "Context Artifact Format"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M115", "M116", "M118", "M119"]
+
+[outcome]
+description = """
+Fyrnheim stabilizes the machine-readable context artifact formats used by inventory, classification, principle checks, and agent context. Users and integrations can rely on versioned schemas instead of ad hoc CLI output.
+"""
+
+user_progress = "From 'Fyrnheim context is useful but hard to integrate safely' to 'Fyrnheim emits versioned artifacts that agents, scripts, and future integrations can depend on'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "versioned-schemas",
+  "artifact-validation",
+  "snapshot-tests",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Inventory, classification, principle findings, and agent context artifacts have explicit schema versions and documented compatibility expectations.",
+  "Fyrnheim can validate its own emitted artifacts and report schema errors clearly.",
+  "Snapshot or golden-file tests protect representative artifact shapes from accidental drift.",
+  "Docs explain how Pi, Claude Code, scripts, and future integrations should consume the artifacts.",
+  "The schema design leaves room for dbt manifest evolution and team-defined classification/principle extensions."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "product/missions/M115-dbt-project-inventory-mvp.toml",
+  "product/missions/M116-model-classification-rules.toml",
+  "product/missions/M118-data-model-principles-engine.toml",
+  "product/missions/M119-agent-context-cli.toml",
+  "src/",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "docs/multi-model-coding-workflow.md"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M115 — dbt Project Inventory MVP",
+  "M116 — Model Classification Rules",
+  "M118 — Data Model Principles Engine",
+  "M119 — Agent Context CLI"
+]
+
+[scope]
+in_scope = [
+  "Define version fields and compatibility expectations for context artifacts.",
+  "Add artifact validation helpers and CLI validation where appropriate.",
+  "Document artifact schemas and extension points.",
+  "Add golden-file tests for representative artifacts."
+]
+out_of_scope = [
+  "Freezing every field forever before real usage validates them.",
+  "Building a remote registry or service for artifacts.",
+  "Adding non-dbt project formats.",
+  "Publishing a separate package solely for schemas."
+]
+
+[notes]
+considerations = """
+This mission can happen after the first useful artifact shapes exist. It should prevent accidental drift without over-constraining the early product. Prefer explicit versioning and validation over premature standardization.
+"""

@@ -1,0 +1,80 @@
+# Mission: dbt Change Review Assistant
+
+id = "M120"
+title = "dbt Change Review Assistant"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M115", "M116", "M118", "M119"]
+
+[outcome]
+description = """
+Fyrnheim can review changed dbt files against inventory, classification, lineage, and data model principles. Developers and agents get focused feedback about downstream impact, missing metadata/test updates, and modeling risks before a pull request review.
+"""
+
+user_progress = "From 'dbt model review relies on manual context gathering' to 'Fyrnheim summarizes the impact and modeling risks of changed files'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "git-change-detection",
+  "change-review-report",
+  "principle-aware-feedback",
+  "tests",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Fyrnheim can identify changed dbt model/YAML files from git diff or an explicit file list.",
+  "The review report includes changed models, downstream impact, classification context, relevant tests/docs, and principle findings where available.",
+  "The report flags likely missing companion changes such as YAML docs/tests when SQL changes affect model behavior.",
+  "Output is useful both as human-readable markdown and machine-readable JSON.",
+  "Tests cover changed SQL only, changed YAML only, deleted/renamed models, missing inventory, and no-op changes."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "product/missions/M118-data-model-principles-engine.toml",
+  "product/missions/M119-agent-context-cli.toml",
+  "src/",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "HOW_WE_WORK.md"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M115 — dbt Project Inventory MVP",
+  "M116 — Model Classification Rules",
+  "M118 — Data Model Principles Engine",
+  "M119 — Agent Context CLI"
+]
+
+[scope]
+in_scope = [
+  "Detect changed dbt files from git state or explicit paths.",
+  "Connect changed files to inventory resources and lineage impact.",
+  "Report modeling risks and missing companion updates.",
+  "Produce outputs that can be pasted into PRs or consumed by agents."
+]
+out_of_scope = [
+  "Posting GitHub PR comments automatically.",
+  "Blocking CI builds by default.",
+  "Automatically editing changed files.",
+  "Replacing dbt build, dbt test, or SQL linting."
+]
+
+[notes]
+considerations = """
+This mission should make Fyrnheim useful in the review loop without requiring team workflow integration yet. Keep feedback specific and avoid noisy generic advice.
+"""

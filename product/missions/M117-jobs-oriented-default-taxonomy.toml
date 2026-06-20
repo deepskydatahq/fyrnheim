@@ -1,0 +1,76 @@
+# Mission: Jobs-Oriented Default Taxonomy
+
+id = "M117"
+title = "Jobs-Oriented Default Taxonomy"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M116"]
+
+[outcome]
+description = """
+Fyrnheim ships an opinionated default taxonomy that classifies dbt models by the job each model performs, not only by the folder or layer where it lives. Users get a practical starting point for discussing model purpose and for guiding AI-assisted changes.
+"""
+
+user_progress = "From 'we debate whether this belongs in staging or intermediate' to 'we can describe the job this transformation performs and why it belongs in the model graph'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "default-taxonomy",
+  "job-signals",
+  "classification-explanations",
+  "examples",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Fyrnheim documents a default set of model jobs inspired by the layers-and-jobs framing: source mapping, format alignment, data contract enforcement, entity definition, business rule application, analytical output shaping, and quality validation.",
+  "Each default job includes a description, typical signals, examples, anti-examples, and suggested principles to apply later.",
+  "The default taxonomy can be loaded by the M116 classification engine without requiring custom user configuration.",
+  "Classification output explains why a model appears to perform a given job and flags layer/job mismatches where evidence supports it.",
+  "Examples cover common dbt structures such as staging/intermediate/marts and medallion-style bronze/silver/gold naming."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "product/missions/M116-model-classification-rules.toml",
+  "src/",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "https://timo.space/blog/data-model-layers-and-jobs"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M116 — Model Classification Rules"
+]
+
+[scope]
+in_scope = [
+  "Translate the jobs-oriented modeling idea into a concrete default taxonomy.",
+  "Make the defaults overridable by project/team configuration.",
+  "Produce model-level explanations suitable for humans and coding agents.",
+  "Document how jobs relate to, but do not replace, familiar dbt layers."
+]
+out_of_scope = [
+  "Claiming the taxonomy is universal or complete.",
+  "Enforcing principles; M118 handles enforcement.",
+  "Large-scale empirical validation across many real dbt projects.",
+  "Automated refactoring based on taxonomy findings."
+]
+
+[notes]
+considerations = """
+This mission should preserve the nuance from the blog post: layers are useful organizing structures, but they are not enough. Fyrnheim’s default jobs should be useful as a starting point while remaining configurable and humble.
+"""

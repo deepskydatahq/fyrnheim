@@ -1,0 +1,77 @@
+# Mission: Model Classification Rules
+
+id = "M116"
+title = "Model Classification Rules"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M115"]
+
+[outcome]
+description = """
+Fyrnheim can classify dbt models using configurable rules over inventory metadata, paths, naming conventions, tags, and lineage position. Users can see which models are clearly classified, which are ambiguous, and which need better context.
+"""
+
+user_progress = "From 'model purpose is hidden in folder names and tribal knowledge' to 'Fyrnheim labels model purpose with evidence and highlights ambiguity'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "classification-config",
+  "classification-engine",
+  "classification-report",
+  "tests",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A configurable classification format supports rules based on model path, name, tags, meta fields, materialization, upstream/downstream lineage, and inventory metadata.",
+  "The classifier outputs model labels with evidence explaining which rules matched.",
+  "The report distinguishes classified, unclassified, and ambiguous models.",
+  "Classification results are available as machine-readable artifacts and concise CLI output.",
+  "Tests cover overlapping rules, no-match cases, precedence, and multiple labels per model where allowed."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "product/missions/M115-dbt-project-inventory-mvp.toml",
+  "src/",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "docs/multi-model-coding-workflow.md"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M115 — dbt Project Inventory MVP"
+]
+
+[scope]
+in_scope = [
+  "Define and document a first classification rules schema.",
+  "Apply classification rules to inventory artifacts from M115.",
+  "Provide evidence and confidence/ambiguity signals for model labels.",
+  "Expose classification through CLI output and artifacts.",
+  "Support team-defined classification categories, not only Fyrnheim defaults."
+]
+out_of_scope = [
+  "Finalizing the opinionated default jobs taxonomy; M117 handles that.",
+  "Enforcing modeling principles; M118 handles that.",
+  "Using an LLM as the primary classifier in the MVP.",
+  "Changing dbt project files automatically."
+]
+
+[notes]
+considerations = """
+Keep the engine boring and inspectable. The product value comes from trustworthy evidence: users should understand why Fyrnheim classified a model a certain way and how to adjust the rules.
+"""

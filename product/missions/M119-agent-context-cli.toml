@@ -1,0 +1,81 @@
+# Mission: Agent Context CLI
+
+id = "M119"
+title = "Agent Context CLI"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M115", "M116"]
+
+[outcome]
+description = """
+Fyrnheim exposes dbt model context through CLI commands designed for humans and coding agents. Pi, Claude Code, and developers can ask for concise context before editing a model, planning a change, or reviewing impact.
+"""
+
+user_progress = "From 'an agent edits dbt files with little project awareness' to 'an agent can ask Fyrnheim for model purpose, lineage, classification, and guardrails before making changes'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "context-cli",
+  "agent-friendly-markdown-output",
+  "json-output",
+  "tests",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "CLI commands can return context for a model, a lineage neighborhood, a folder/domain, and changed dbt paths where feasible.",
+  "Context output includes model summary, classification, upstream/downstream impact, metadata gaps, relevant tests/docs, and applicable principle placeholders when M118 is available.",
+  "The CLI supports both concise markdown for agents and structured JSON for automation.",
+  "Outputs are short enough to be useful in agent prompts while linking to deeper artifacts for detail.",
+  "Tests cover missing models, multiple matching models, stale/missing inventory artifacts, and JSON/markdown output modes."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "product/missions/M115-dbt-project-inventory-mvp.toml",
+  "product/missions/M116-model-classification-rules.toml",
+  "src/",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "docs/openrouter-provider-setup.md",
+  "docs/multi-model-coding-workflow.md"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/",
+  ".pi/"
+]
+related_missions = [
+  "M115 — dbt Project Inventory MVP",
+  "M116 — Model Classification Rules",
+  "M118 — Data Model Principles Engine"
+]
+
+[scope]
+in_scope = [
+  "Add CLI commands for retrieving model and lineage context from inventory/classification artifacts.",
+  "Design outputs for direct use in Pi or Claude Code prompts.",
+  "Document agent usage patterns and example prompts.",
+  "Handle missing/stale artifacts with clear remediation instructions."
+]
+out_of_scope = [
+  "Automated model editing or PR review; M120 handles review workflows.",
+  "Building a long-running server or MCP interface.",
+  "Requiring an LLM provider to use the context CLI.",
+  "Full principle enforcement if M118 is not yet complete."
+]
+
+[notes]
+considerations = """
+This is the product wedge for the pivot. The first version should optimize for 'useful context before editing' rather than completeness. Keep prompts and outputs compact and evidence-backed.
+"""

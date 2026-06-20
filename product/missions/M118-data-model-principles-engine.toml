@@ -1,0 +1,79 @@
+# Mission: Data Model Principles Engine
+
+id = "M118"
+title = "Data Model Principles Engine"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M116"]
+
+[outcome]
+description = """
+Fyrnheim can evaluate dbt models against configurable data modeling principles. Users get actionable findings about model quality, documentation, grain clarity, ownership, tests, and complexity instead of only knowing whether SQL compiles.
+"""
+
+user_progress = "From 'our modeling standards live in docs and review comments' to 'Fyrnheim checks which principles apply to each model and reports evidence-backed findings'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "principle-config",
+  "principle-check-engine",
+  "principle-findings-artifact",
+  "cli-report",
+  "tests",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A principle configuration format can express requirements conditioned on model classification, metadata, path, materialization, and lineage context.",
+  "Built-in starter principles cover owner presence, description presence, grain clarity for analytical outputs, source contract tests, high-risk model tests, and complexity warnings.",
+  "Principle checks produce actionable findings with severity, evidence, affected model, and suggested remediation.",
+  "The CLI can report principle results for a project and for an individual model.",
+  "Tests cover passing, failing, warning, not-applicable, and configuration-error cases."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "product/missions/M116-model-classification-rules.toml",
+  "product/missions/M117-jobs-oriented-default-taxonomy.toml",
+  "src/",
+  "tests/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "https://timo.space/blog/data-model-layers-and-jobs"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/"
+]
+related_missions = [
+  "M116 — Model Classification Rules",
+  "M117 — Jobs-Oriented Default Taxonomy"
+]
+
+[scope]
+in_scope = [
+  "Define the first principle config schema.",
+  "Implement a small built-in principle library tied to inventory and classification data.",
+  "Emit machine-readable findings and human-readable reports.",
+  "Document how teams can encode their modeling philosophy."
+]
+out_of_scope = [
+  "Replacing dbt tests or SQLFluff.",
+  "Automatically fixing principle violations.",
+  "Creating a complete universal data modeling standard.",
+  "CI/PR annotation integrations; those are later workflow missions."
+]
+
+[notes]
+considerations = """
+Principles should feel like data modeling review guidance, not generic lint. Prefer a small number of high-signal checks that explain why they apply.
+"""

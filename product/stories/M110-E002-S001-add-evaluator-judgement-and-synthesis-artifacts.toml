@@ -1,0 +1,52 @@
+# Story: Add evaluator judgement and synthesis artifacts
+
+id = "M110-E002-S001"
+parent = "M110-E002"
+title = "Add evaluator judgement and synthesis artifacts"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Extend the local workflow script with structured evaluator judgement writing and synthesis prompt generation."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Judgement writing supports accept_candidate, synthesize, and all_failed decisions with validation."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Judgement artifacts include criteria results, per-candidate summaries, risks, follow-up work, and decision metadata."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "A synthesis candidate can be added with guidance that references useful parts of earlier candidates."
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py"
+]
+input_fixtures = []
+depends_on = ["M110-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Represent evaluator output as TOML under the run directory.",
+  "Synthesis should create a new candidate prompt; it does not need to automatically merge code."
+]
+reference_files = [
+  "product/missions/M110-parallel-multi-model-coding-evaluation.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

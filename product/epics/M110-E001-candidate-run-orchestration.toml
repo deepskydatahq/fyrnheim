@@ -1,0 +1,40 @@
+# Epic: Candidate run orchestration
+
+id = "M110-E001"
+parent = "M110"
+title = "Candidate run orchestration"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Define and implement the local run model for launching multiple isolated coding candidates from one story or task."
+job_story = """
+When I want several coding models to try the same story,
+I want a repeatable worktree setup with explicit variant metadata,
+so that every candidate can work independently and leave comparable artifacts.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Candidate metadata records story path, run id, model/build variant, branch, worktree, status, and artifact paths.",
+  "Worktree setup can be planned in dry-run mode for tests and executed through git worktree for real runs.",
+  "Generated candidate prompts include the story and isolation/push expectations."
+]
+validator_context = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[context]
+relevant_paths = [
+  "scripts/",
+  "tests/",
+  "docs/"
+]
+dependencies = []
+
+[notes]
+considerations = "Prefer a small local CLI/script over provider-specific automation. The first version may run candidates sequentially but must preserve worktree isolation."
+estimated_stories = 1

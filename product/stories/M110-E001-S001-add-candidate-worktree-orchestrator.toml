@@ -1,0 +1,53 @@
+# Story: Add candidate worktree orchestrator
+
+id = "M110-E001-S001"
+parent = "M110-E001"
+title = "Add candidate worktree orchestrator"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Add a local CLI/script that creates a run directory and candidate metadata/prompts for multiple model/build variants, with optional git worktree creation."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Preparing a run records run id, story path, variants, branches, worktree paths, artifact paths, and created status."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dry-run preparation writes metadata and prompts without invoking git worktree."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Generated candidate prompts include story context, isolation rules, artifact expectations, quality gates, and push discipline."
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use Python stdlib argparse/tomllib and deterministic TOML writing.",
+  "Keep provider execution out of scope; this story prepares candidate workspaces and prompts."
+]
+reference_files = [
+  "scripts/run-parallel.sh",
+  "product/missions/M110-parallel-multi-model-coding-evaluation.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

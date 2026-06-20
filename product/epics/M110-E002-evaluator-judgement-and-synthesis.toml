@@ -1,0 +1,40 @@
+# Epic: Evaluator judgement and synthesis
+
+id = "M110-E002"
+parent = "M110"
+title = "Evaluator judgement and synthesis"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Provide an auditable evaluator artifact that compares candidates and records whether to accept, synthesize, or fail the run."
+job_story = """
+When multiple candidate implementations exist,
+I want an evaluator to record a structured judgement with evidence,
+so that the selected implementation or synthesis request is understandable later.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Judgement artifacts support accept_candidate, synthesize, and all_failed decisions.",
+  "Judgements capture criteria results, per-candidate findings, risks, follow-up work, and selected/synthesis metadata.",
+  "A synthesis prompt can be generated in a fresh candidate context from evaluator guidance."
+]
+validator_context = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[context]
+relevant_paths = [
+  "scripts/",
+  "tests/",
+  "docs/"
+]
+dependencies = ["M110-E001"]
+
+[notes]
+considerations = "The evaluator artifact should be simple TOML so agents can read it without a service dependency."
+estimated_stories = 1

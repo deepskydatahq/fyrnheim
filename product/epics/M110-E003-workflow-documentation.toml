@@ -1,0 +1,38 @@
+# Epic: Workflow documentation
+
+id = "M110-E003"
+parent = "M110"
+title = "Workflow documentation"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Document the parallel multi-model coding workflow so future Pi sessions can run, evaluate, synthesize, and promote candidates safely."
+job_story = """
+When I hand this workflow to another agent,
+I want concrete commands, artifact locations, and promotion rules,
+so that candidates remain isolated until an explicit judgement selects the final implementation.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Docs explain setup, candidate execution, evaluator comparison, synthesis, and promotion.",
+  "Docs define artifact locations and schemas at a high level.",
+  "Docs explicitly preserve product TOML, quality gates, commits, pushes, and PR discipline."
+]
+validator_context = [
+  "docs/multi-model-coding-workflow.md",
+  "scripts/multi_model_coding.py"
+]
+
+[context]
+relevant_paths = [
+  "docs/",
+  "scripts/"
+]
+dependencies = ["M110-E001", "M110-E002"]
+
+[notes]
+considerations = "Keep documentation provider-neutral and local-first."
+estimated_stories = 1

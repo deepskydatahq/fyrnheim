@@ -1,0 +1,54 @@
+# Story: Document multi-model coding workflow
+
+id = "M110-E003-S001"
+parent = "M110-E003"
+title = "Document multi-model coding workflow"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Document how to run candidate worktrees, evaluate them, request synthesis, and promote the selected result back into the normal Fyrnheim product workflow."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs include the prepare, judge, synthesize, and promote workflow steps."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain run directory structure, candidate metadata, judgement artifacts, and synthesis prompts."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs state that product TOML stories remain canonical and selected work still requires quality gates, commit, push, and PR."
+
+[context]
+relevant_paths = [
+  "docs/multi-model-coding-workflow.md",
+  "scripts/multi_model_coding.py"
+]
+input_fixtures = []
+depends_on = ["M110-E001-S001", "M110-E002-S001"]
+
+[handoff]
+implementation_hints = [
+  "Keep examples copy-pastable but mark candidate agent execution as provider/tool specific.",
+  "Avoid Beads references except to say product TOML is canonical."
+]
+reference_files = [
+  "AGENTS.md",
+  "HOW_WE_WORK.md",
+  "product/missions/M110-parallel-multi-model-coding-evaluation.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

@@ -16,6 +16,10 @@ from fyrnheim.core import (
     Measure as Measure,
     MetricField as MetricField,
     MetricsModel as MetricsModel,
+    ModelCondition as ModelCondition,
+    ModelRule as ModelRule,
+    MultiModelDefinition as MultiModelDefinition,
+    MultiModelFlow as MultiModelFlow,
     Multiply as Multiply,
     PropertyBag as PropertyBag,
     Rename as Rename,
@@ -26,6 +30,8 @@ from fyrnheim.core import (
     StateSource as StateSource,
     TableSource as TableSource,
     TypeCast as TypeCast,
+    load_multi_model as load_multi_model,
+    load_multi_model_flow as load_multi_model_flow,
 )
 from fyrnheim.core.staging_view import StagingView as StagingView
 from fyrnheim.primitives import (
@@ -118,6 +124,13 @@ __all__ = [
     # Metrics
     "MetricsModel",
     "MetricField",
+    # Multi-model classification
+    "ModelCondition",
+    "ModelRule",
+    "MultiModelDefinition",
+    "MultiModelFlow",
+    "load_multi_model",
+    "load_multi_model_flow",
     # Components
     "ComputedColumn",
     # Quality

@@ -1,0 +1,41 @@
+# Mission: Multi-model classification flow
+
+id = "M109"
+title = "Multi-model classification flow"
+status = "active"
+created = 2026-06-20
+
+[outcome]
+description = """
+Fyrnheim users can bring Propel Explorer-style ordered YAML models into Python projects and evaluate multiple model variants side-by-side. This enables attribution/channel experiments to live in the transformation layer rather than only in the Explorer UI.
+"""
+user_progress = "From 'classification experiments live in an app-specific frontend flow' to 'classification models can be loaded, tested, and projected in Fyrnheim pipelines'."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "YAML model definitions can be loaded with validation.",
+  "Records and Ibis tables can be evaluated across multiple model variants.",
+  "The public API is exported for direct Fyrnheim use."
+]
+validator_context = [
+  "src/fyrnheim/core/multi_model.py",
+  "tests/test_multi_model.py",
+  "src/fyrnheim/__init__.py"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/src/lib/models.ts",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/models/"
+]
+relevant_paths = [
+  "src/fyrnheim/core/",
+  "tests/test_multi_model.py"
+]
+
+[notes]
+considerations = """
+Adapted the Propel Explorer YAML concepts: model name/description, ordered rules, target_channel, optional sub_channel, and field/operator/value conditions. Extended the flow for backend use by adding in-memory record evaluation and Ibis table projection.
+"""

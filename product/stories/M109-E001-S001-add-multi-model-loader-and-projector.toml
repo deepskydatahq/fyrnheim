@@ -1,0 +1,51 @@
+# Story: Add multi-model loader and projector
+
+id = "M109-E001-S001"
+parent = "M109-E001"
+title = "Add multi-model loader and projector"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Implement a Fyrnheim core API for Propel Explorer-style ordered YAML models, including validation, in-memory evaluation, and Ibis table projection."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "YAML model files load into validated model definitions with rule and condition structure."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "In-memory record evaluation returns the first matching rule, target channel, optional sub-channel, and fallback defaults."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "A multi-model flow projects per-model channel, sub-channel, and rule columns onto an Ibis table."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Unknown fields can be rejected with an allowlist and malformed conditions fail validation."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/core/multi_model.py",
+  "src/fyrnheim/core/__init__.py",
+  "src/fyrnheim/__init__.py",
+  "tests/test_multi_model.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use Propel Explorer's models/*.yaml schema as the compatibility baseline.",
+  "Keep operators backend-friendly so generated Ibis expressions can execute on DuckDB and compile elsewhere."
+]
+reference_files = [
+  "/home/tmo/roadtothebeach/propel/propel-explorer/src/lib/models.ts",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/models/paid-priority.yaml",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/models/survey-priority.yaml"
+]

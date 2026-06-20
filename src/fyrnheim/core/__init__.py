@@ -30,6 +30,14 @@ from .metrics_model import (
     MetricField as MetricField,
     MetricsModel as MetricsModel,
 )
+from .multi_model import (
+    ModelCondition as ModelCondition,
+    ModelRule as ModelRule,
+    MultiModelDefinition as MultiModelDefinition,
+    MultiModelFlow as MultiModelFlow,
+    load_multi_model as load_multi_model,
+    load_multi_model_flow as load_multi_model_flow,
+)
 from .source import (
     BaseTableSource as BaseTableSource,
     Divide as Divide,

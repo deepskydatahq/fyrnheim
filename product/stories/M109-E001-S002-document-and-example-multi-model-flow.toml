@@ -1,0 +1,46 @@
+# Story: Document and example multi-model flow
+
+id = "M109-E001-S002"
+parent = "M109-E001"
+title = "Document and example multi-model flow"
+status = "draft"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Add user-facing documentation and an executable example showing how to port Propel Explorer attribution model YAML files into a Fyrnheim project."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain the YAML schema, supported operators, field allowlists, and generated output columns."
+
+[[acceptance_criteria.criteria]]
+test = "integration"
+description = "An example loads at least two model YAML files and projects model outputs against sample touchpoint data."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs call out extension points for model comparison, custom output naming, and downstream metrics models."
+
+[context]
+relevant_paths = [
+  "docs/",
+  "examples/",
+  "src/fyrnheim/core/multi_model.py"
+]
+input_fixtures = []
+depends_on = ["M109-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Reuse small versions of Propel Explorer's paid-priority and survey-priority YAML examples.",
+  "Prefer a lightweight DuckDB/Ibis example that can be exercised in CI."
+]
+reference_files = [
+  "src/fyrnheim/core/multi_model.py",
+  "tests/test_multi_model.py",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/models/"
+]

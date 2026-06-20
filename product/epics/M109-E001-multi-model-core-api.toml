@@ -1,0 +1,40 @@
+# Epic: Multi-model core API
+
+id = "M109-E001"
+parent = "M109"
+title = "Multi-model core API"
+status = "active"
+created = 2026-06-20
+
+[outcome]
+description = "Fyrnheim exposes a tested Python API for loading ordered YAML model definitions and projecting multiple model outputs onto an Ibis table."
+job_story = """
+When I am comparing attribution or classification variants,
+I want to keep each model as an ordered YAML rule set,
+so that I can run multiple variants against the same data and inspect their differences.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Model YAML loading validates rule structure and field allowlists.",
+  "Model order determines the winning channel/rule for in-memory records.",
+  "Multi-model projection adds channel, sub-channel, and rule columns to Ibis tables."
+]
+validator_context = [
+  "src/fyrnheim/core/multi_model.py",
+  "tests/test_multi_model.py"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/core/multi_model.py",
+  "src/fyrnheim/core/__init__.py",
+  "src/fyrnheim/__init__.py",
+  "tests/test_multi_model.py"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep this API generic; attribution channels are one concrete use case, not the only possible classification target."
+estimated_stories = 2

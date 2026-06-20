@@ -1,0 +1,4 @@
+Manual synthesis candidate. Docs-only change.
+Checks performed:
+- Inspected Markdown heading and table formatting.
+- Full repository quality gates will run after promotion from the source checkout.

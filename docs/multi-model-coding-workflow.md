@@ -171,6 +171,18 @@ Do not automatically merge unreviewed candidate code into `main`. Product TOML s
 - `[[candidates.summary]]`
 - `[[evaluation.criteria]]`
 
+## Troubleshooting
+
+Use these recovery steps when a candidate run gets messy:
+
+| Problem | Recovery |
+| --- | --- |
+| `gh` reports bad credentials when creating a PR | Keep the pushed branch, re-authenticate with `gh auth login`, then create or update the PR without rerunning candidates. |
+| A candidate did not write artifacts | Treat the candidate as incomplete until `notes.md`, `quality-gates.txt`, and `status.toml` exist. Record missing artifacts as evaluator risks or rejection reasons. |
+| Candidate worktree has scratch changes | Inspect with `git -C <worktree> status`, save useful notes, then commit or discard before removal. |
+| Worktree cleanup fails or a directory was removed manually | Check `git worktree list`, remove clean worktrees with `git worktree remove <path>`, then run `git worktree prune` if needed. |
+| No single candidate wins | Choose `synthesize`, write guidance naming the useful pieces from each candidate, and create a fresh synthesis candidate instead of merging patches blindly. |
+
 ## Current limits
 
 - The script prepares and records workflow artifacts; it does not launch provider-specific coding agents.

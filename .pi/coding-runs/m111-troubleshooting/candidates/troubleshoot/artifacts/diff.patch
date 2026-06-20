@@ -1,0 +1,18 @@
+diff --git a/docs/multi-model-coding-workflow.md b/docs/multi-model-coding-workflow.md
+index 5126b81..52126df 100644
+--- a/docs/multi-model-coding-workflow.md
++++ b/docs/multi-model-coding-workflow.md
+@@ -171,6 +171,13 @@ Do not automatically merge unreviewed candidate code into `main`. Product TOML s
+ - `[[candidates.summary]]`
+ - `[[evaluation.criteria]]`
+ 
++## Troubleshooting
++
++- **`gh` reports bad credentials when creating a PR.** The workflow is still valid when the branch is pushed but PR creation fails. Re-authenticate with `gh auth login`, then create the PR from the selected branch.
++- **A candidate did not write artifacts.** Treat the candidate as incomplete until `notes.md`, `quality-gates.txt`, and `status.toml` exist under its artifact directory. The evaluator should record the missing artifact as a risk or rejection reason.
++- **Worktree cleanup fails.** Check `git worktree list`, commit or discard local changes in the candidate worktree, then run `git worktree remove <path>`. Use `git worktree prune` after manual directory removal.
++- **No single candidate wins.** Choose `synthesize`, write explicit guidance naming the useful pieces from each candidate, and create a fresh synthesis candidate instead of merging patches blindly.
++
+ ## Current limits
+ 
+ - The script prepares and records workflow artifacts; it does not launch provider-specific coding agents.

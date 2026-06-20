@@ -1,0 +1,62 @@
+schema_version = "fyrnheim.coding_judgement.v1"
+run_id = "m111-troubleshooting"
+decision = "synthesize"
+winner = ""
+reason = "Troubleshoot variant has stronger synthesis guidance; cleanup variant has clearer worktree/PR recovery commands. Combine both into one concise troubleshooting section."
+synthesis_guidance = "Create a single Troubleshooting section. Use troubleshoot candidate's coverage of missing artifacts and synthesis choice, and cleanup candidate's concrete worktree prune and PR auth recovery commands."
+created_at = "2026-06-20T18:37:33Z"
+risks = ["Candidate artifacts are manually simulated rather than produced by external providers."]
+follow_up = ["Add an automated compare command for candidate artifact completeness."]
+
+[candidates]
+
+[[candidates.summary]]
+variant = "cleanup"
+slug = "cleanup"
+branch = "coding/m111-e001-s001-m111-troubleshooting-cleanup"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m111-troubleshooting/cleanup"
+status = "complete"
+disposition = "synthesis_input"
+
+[[candidates.summary]]
+variant = "troubleshoot"
+slug = "troubleshoot"
+branch = "coding/m111-e001-s001-m111-troubleshooting-troubleshoot"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m111-troubleshooting/troubleshoot"
+status = "complete"
+disposition = "synthesis_input"
+
+[[candidates.summary]]
+variant = "synthesis"
+slug = "synthesis"
+branch = "coding/m111-e001-s001-m111-troubleshooting-synthesis"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m111-troubleshooting/synthesis"
+status = "complete"
+disposition = "promoted"
+
+[evaluation]
+
+[[evaluation.criteria]]
+criterion = "A multi-candidate run is prepared with two distinct variants for this story."
+status = "pass"
+evidence = "run.toml plus cleanup and troubleshoot candidate.toml files exist under .pi/coding-runs/m111-troubleshooting."
+
+[[evaluation.criteria]]
+criterion = "Each candidate artifact directory contains notes.md, quality-gates.txt, and status.toml."
+status = "pass"
+evidence = "cleanup, troubleshoot, and synthesis artifact directories include notes.md, quality-gates.txt, status.toml, and diff.patch."
+
+[[evaluation.criteria]]
+criterion = "judgement.toml records an evaluator decision with rationale and candidate dispositions."
+status = "pass"
+evidence = "decision = synthesize with rationale, risk, follow-up, and candidate dispositions in this file."
+
+[[evaluation.criteria]]
+criterion = "docs/multi-model-coding-workflow.md gains concise troubleshooting guidance informed by the candidate run."
+status = "pass"
+evidence = "Promoted synthesis candidate's Troubleshooting section to docs/multi-model-coding-workflow.md."
+
+[[evaluation.criteria]]
+criterion = "A retro note or follow-up story captures friction discovered while dogfooding."
+status = "pass"
+evidence = "docs/m111-parallel-coding-dogfood-retro.md and product/stories/M110-E002-S002-add-candidate-artifact-completeness-check.toml."

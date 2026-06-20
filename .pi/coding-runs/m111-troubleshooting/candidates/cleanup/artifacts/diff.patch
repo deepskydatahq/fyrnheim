@@ -1,0 +1,22 @@
+diff --git a/docs/multi-model-coding-workflow.md b/docs/multi-model-coding-workflow.md
+index 5126b81..6c1dab9 100644
+--- a/docs/multi-model-coding-workflow.md
++++ b/docs/multi-model-coding-workflow.md
+@@ -171,6 +171,17 @@ Do not automatically merge unreviewed candidate code into `main`. Product TOML s
+ - `[[candidates.summary]]`
+ - `[[evaluation.criteria]]`
+ 
++## Cleanup and recovery
++
++Use these checks when a candidate run gets messy:
++
++| Problem | Recovery |
++| --- | --- |
++| Candidate worktree has uncommitted scratch changes | Inspect with `git -C <worktree> status`, save useful notes, then commit or discard before removal. |
++| Worktree directory was deleted manually | Run `git worktree prune` from the source checkout. |
++| Evaluator cannot compare candidates | Require each candidate to fill `artifacts/notes.md`, `artifacts/quality-gates.txt`, and `artifacts/status.toml` before judging. |
++| PR creation fails after promotion | Keep the pushed branch, fix authentication, then create/update the PR without rerunning candidates. |
++
+ ## Current limits
+ 
+ - The script prepares and records workflow artifacts; it does not launch provider-specific coding agents.

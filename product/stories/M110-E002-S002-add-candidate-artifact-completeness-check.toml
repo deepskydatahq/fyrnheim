@@ -1,0 +1,45 @@
+# Story: Add candidate artifact completeness check
+
+id = "M110-E002-S002"
+parent = "M110-E002"
+title = "Add candidate artifact completeness check"
+status = "draft"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Add a small command that checks whether each candidate in a run has the expected evaluator artifacts before judgement."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The command reports missing notes.md, quality-gates.txt, status.toml, and diff.patch for each candidate."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The command exits successfully only when all candidates have the required artifacts or an explicit incomplete status."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain using the check before writing evaluator judgement."
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Dogfood M111 showed artifact completeness is currently manual.",
+  "Prefer a provider-neutral `check-artifacts` subcommand over embedding evaluator policy in candidate execution."
+]
+reference_files = [
+  "docs/m111-parallel-coding-dogfood-retro.md",
+  ".pi/coding-runs/m111-troubleshooting/judgement.toml"
+]

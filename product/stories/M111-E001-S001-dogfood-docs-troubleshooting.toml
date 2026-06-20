@@ -1,0 +1,64 @@
+# Story: Dogfood docs troubleshooting
+
+id = "M111-E001-S001"
+parent = "M111-E001"
+title = "Dogfood docs troubleshooting"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Use the M110 multi-model coding workflow to add troubleshooting guidance to the workflow docs and capture the dogfood judgement artifacts."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "A multi-candidate run is prepared with two distinct variants for this story."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Each candidate artifact directory contains notes.md, quality-gates.txt, and status.toml."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "judgement.toml records an evaluator decision with rationale and candidate dispositions."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "docs/multi-model-coding-workflow.md gains concise troubleshooting guidance informed by the candidate run."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "A retro note or follow-up story captures friction discovered while dogfooding."
+
+[context]
+relevant_paths = [
+  ".pi/coding-runs/",
+  "docs/multi-model-coding-workflow.md",
+  "product/stories/"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use scripts/multi_model_coding.py prepare with two variants.",
+  "Simulated/manual candidate implementations are acceptable, but artifacts and evaluator judgement must be real.",
+  "Keep the promoted docs change small and concrete."
+]
+reference_files = [
+  "product/missions/M111-dogfood-parallel-coding-workflow.toml",
+  "product/missions/M110-parallel-multi-model-coding-evaluation.toml",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "fe50065"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

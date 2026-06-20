@@ -1,0 +1,12 @@
+schema_version = "fyrnheim.coding_candidate.v1"
+run_id = "m111-troubleshooting"
+story_id = "M111-E001-S001"
+variant_name = "troubleshoot"
+model = "manual"
+build = "troubleshooting"
+branch = "coding/m111-e001-s001-m111-troubleshooting-troubleshoot"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m111-troubleshooting/troubleshoot"
+artifact_dir = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m111-troubleshooting/candidates/troubleshoot/artifacts"
+status = "complete"
+created_at = "2026-06-20T18:36:50Z"
+dry_run = false

@@ -1,0 +1,4 @@
+Manual docs candidate. No code changed in candidate worktree.
+Checks performed:
+- Inspected Markdown table formatting.
+- No pytest/ruff/mypy run in candidate because change is docs-only and will be validated after promotion.

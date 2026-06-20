@@ -1,0 +1,40 @@
+# Epic: Dogfood docs candidate run
+
+id = "M111-E001"
+parent = "M111"
+title = "Dogfood docs candidate run"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Run the M110 multi-model coding workflow on a small documentation improvement and preserve the candidate/evaluator artifacts."
+job_story = """
+When the workflow has only unit tests,
+I want a small real dogfood run with competing documentation candidates,
+so that we can validate candidate setup, judgement, synthesis, and promotion ergonomics.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A candidate run exists under .pi/coding-runs with two distinct candidate variants.",
+  "Candidate artifacts include notes, status, and quality/output evidence for evaluator comparison.",
+  "The evaluator judgement records a clear decision and the selected or synthesis path is promoted into docs."
+]
+validator_context = [
+  ".pi/coding-runs/",
+  "docs/multi-model-coding-workflow.md",
+  "product/stories/M111-E001-S001-dogfood-docs-troubleshooting.toml"
+]
+
+[context]
+relevant_paths = [
+  ".pi/coding-runs/",
+  "docs/multi-model-coding-workflow.md",
+  "product/"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep the docs change small: add a troubleshooting section and record friction discovered during the dogfood run."
+estimated_stories = 1

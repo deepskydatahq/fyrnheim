@@ -1,0 +1,89 @@
+# Mission: Dogfood parallel coding workflow
+
+id = "M111"
+title = "Dogfood parallel coding workflow"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M110"]
+
+[outcome]
+description = """
+Use the new parallel multi-model coding workflow on a low-risk documentation improvement so we can validate the run setup, candidate prompts, evaluator judgement, synthesis path, and promotion discipline with real artifacts rather than only unit tests.
+"""
+
+user_progress = "From 'the workflow exists but has only been unit-tested' to 'we have dogfooded it end-to-end on a small change and captured what worked or needs adjustment'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "candidate-worktree-run",
+  "candidate-artifacts",
+  "evaluator-judgement",
+  "optional-synthesis-candidate",
+  "promoted-docs-change",
+  "workflow-retro-notes"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A small documentation story is prepared as a multi-candidate run using scripts/multi_model_coding.py.",
+  "At least two candidate worktrees or dry-run-equivalent candidate artifacts are created from the same story with distinct model/build metadata.",
+  "Each candidate produces inspectable notes, status, and quality/output artifacts sufficient for evaluator comparison.",
+  "The evaluator writes judgement.toml with a clear accept_candidate, synthesize, or all_failed decision and evidence for the decision.",
+  "If synthesis is chosen, a synthesis candidate prompt/artifact is generated and used or explicitly deferred with rationale.",
+  "The selected or synthesized documentation improvement is promoted through the normal product workflow with quality gates, commit, push, and PR discipline.",
+  "A short retro note captures friction, missing automation, and follow-up stories for improving M110."
+]
+validator_context = [
+  "docs/multi-model-coding-workflow.md",
+  "scripts/multi_model_coding.py",
+  ".pi/coding-runs/",
+  "product/stories/",
+  "product/epics/"
+]
+
+[context]
+related_docs = [
+  "docs/multi-model-coding-workflow.md",
+  "product/missions/M110-parallel-multi-model-coding-evaluation.toml",
+  "AGENTS.md",
+  "HOW_WE_WORK.md"
+]
+relevant_paths = [
+  "docs/multi-model-coding-workflow.md",
+  "scripts/multi_model_coding.py",
+  "product/",
+  ".pi/coding-runs/"
+]
+related_missions = [
+  "M110 — Parallel multi-model coding evaluation"
+]
+
+[scope]
+in_scope = [
+  "Create a small documentation story, preferably adding troubleshooting or examples to docs/multi-model-coding-workflow.md.",
+  "Use scripts/multi_model_coding.py prepare to create at least two candidate variants for that story.",
+  "Run or simulate candidate implementation attempts in isolated candidate worktrees/artifact directories.",
+  "Fill candidate artifacts: notes.md, quality-gates.txt, and status.toml.",
+  "Use scripts/multi_model_coding.py judge to write an evaluator judgement artifact.",
+  "Optionally use scripts/multi_model_coding.py synthesize if the evaluator decides no single candidate should win.",
+  "Promote the chosen documentation change to the main feature branch and update product TOML status.",
+  "Write a brief retro note or follow-up story for workflow improvements discovered during dogfooding."
+]
+out_of_scope = [
+  "Large code changes to the workflow orchestrator unless a blocking defect prevents dogfooding.",
+  "Provider-specific automation for launching external coding agents.",
+  "A full UI for candidate comparison.",
+  "Merging candidate code automatically without evaluator judgement."
+]
+acceptable_breakage = [
+  "Candidate implementation attempts may be manual or simulated if external model/provider execution is unavailable, but the artifact structure and evaluator judgement must be real."
+]
+
+[notes]
+considerations = """
+Keep this mission deliberately small. The purpose is to test the workflow, not to make a large documentation rewrite. A good target story is adding a Troubleshooting section to docs/multi-model-coding-workflow.md covering common issues such as gh auth failure, worktree cleanup, candidate artifacts missing, and when to choose synthesis.
+
+If the workflow feels awkward, prefer filing concrete follow-up stories over expanding this mission. The retro should answer: Were the prompts clear? Were the artifacts enough for evaluation? Was promotion obvious? Did worktree cleanup need better commands?
+"""

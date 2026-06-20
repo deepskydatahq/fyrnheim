@@ -1,0 +1,5 @@
+Provider command failed before implementation, so candidate-specific quality gates were not run.
+
+Observed command result is recorded in execution.toml, stderr.txt, and stdout.txt.
+
+Repository quality gates were run from the promoted branch after fallback candidate promotion.

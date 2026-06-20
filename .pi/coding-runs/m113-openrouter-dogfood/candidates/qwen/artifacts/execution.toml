@@ -1,0 +1,10 @@
+candidate = "qwen"
+status = "failed"
+command = "pi --no-session --model openrouter-capped/qwen/qwen3-coder --print \"Read /home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/qwen/prompt.md and say ok.\""
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m113-openrouter-dogfood/qwen"
+exit_code = 1
+duration_seconds = 0.321
+started_at = "2026-06-20T19:28:31Z"
+completed_at = "2026-06-20T19:28:31Z"
+stdout = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/qwen/artifacts/stdout.txt"
+stderr = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/qwen/artifacts/stderr.txt"

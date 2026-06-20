@@ -1,0 +1,18 @@
+Proposed, committed, and pushed a concise clarification.
+
+- Path: `docs/multi-model-coding-workflow.md`
+- Commit: `efcdf5a Clarify provider candidate command paths`
+- Branch: `coding/m113-e001-s001-m113-openrouter-dogfood-fallback`
+
+Clarification added:
+- Use absolute `--run-dir "$(pwd)/.pi/coding-runs/<run-id>"`.
+- Avoid hard-coded repo-relative paths in provider command mappings.
+- Prefer `{prompt}` / `{artifact_dir}` because commands execute from each candidate worktree.
+
+Quality gates passed:
+- `uv run pytest`
+- `uv run ruff check src/ tests/`
+- `uv run mypy src/`
+
+Candidate artifacts updated under:
+`/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/fallback/artifacts`

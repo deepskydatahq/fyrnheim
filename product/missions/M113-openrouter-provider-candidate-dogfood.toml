@@ -2,7 +2,7 @@
 
 id = "M113"
 title = "OpenRouter provider candidate dogfood"
-status = "draft"
+status = "complete"
 created = 2026-06-20
 depends_on = ["M112"]
 

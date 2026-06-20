@@ -1,0 +1,3 @@
+status = "complete"
+updated_at = "2026-06-20T19:27:47Z"
+summary = "Documentation clarification proposed for run-candidates provider command paths. Required quality gates passed in the candidate worktree."

@@ -1,0 +1,71 @@
+# Mission: Fyrnheim OpenRouter provider configuration
+
+id = "M114"
+title = "Fyrnheim OpenRouter provider configuration"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M113"]
+
+[outcome]
+description = """
+Add or document a Fyrnheim-local OpenRouter provider configuration so the multi-model coding workflow can run `openrouter-capped/qwen/qwen3-coder` directly from this repository rather than depending on Propel Explorer's local `.pi` setup.
+"""
+
+user_progress = "From 'Qwen/OpenRouter candidate fails because the provider is not registered in Fyrnheim' to 'Fyrnheim can run the low-cost OpenRouter code candidate or reports missing credentials clearly'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "openrouter-provider-config",
+  "credential-guardrails",
+  "qwen-smoke-test",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Fyrnheim has a local provider configuration or documented setup path for `openrouter-capped/qwen/qwen3-coder`.",
+  "Provider setup does not commit secrets and fails closed with a clear missing-credential message.",
+  "A smoke test verifies whether Pi can resolve the OpenRouter capped model in this repo.",
+  "Docs explain token cap, expected environment variables, and how to use the model in M112/M113 candidate commands."
+]
+validator_context = [
+  ".pi/",
+  "docs/multi-model-coding-workflow.md",
+  "docs/m113-openrouter-provider-dogfood-retro.md",
+  "product/missions/M113-openrouter-provider-candidate-dogfood.toml"
+]
+
+[context]
+related_docs = [
+  "docs/m113-openrouter-provider-dogfood-retro.md",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/extensions/openrouter-capped.ts",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/prompts/multi-model-mission.md"
+]
+relevant_paths = [
+  ".pi/",
+  "docs/",
+  "product/"
+]
+related_missions = [
+  "M113 — OpenRouter provider candidate dogfood"
+]
+
+[scope]
+in_scope = [
+  "Decide whether Fyrnheim should copy/adapt Propel Explorer's openrouter-capped extension or use a shared reusable setup.",
+  "Add credential guardrails so OPENROUTER_API_KEY is never committed or printed.",
+  "Document how to run qwen as a candidate command through scripts/multi_model_coding.py.",
+  "Run a smoke test that proves model resolution or documents exact credential/provider blockers."
+]
+out_of_scope = [
+  "Provider billing management beyond documenting where cost data comes from.",
+  "Adding many OpenRouter models before the qwen path works.",
+  "Committing secrets or .env files."
+]
+
+[notes]
+considerations = """
+M113 showed that `openrouter-capped/qwen/qwen3-coder` is a good candidate based on Propel Explorer's setup, but Fyrnheim does not currently register the provider, so Pi reports `Model not found` before making an OpenRouter request.
+"""

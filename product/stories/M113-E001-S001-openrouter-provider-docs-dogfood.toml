@@ -1,0 +1,70 @@
+# Story: OpenRouter provider docs dogfood
+
+id = "M113-E001-S001"
+parent = "M113-E001"
+title = "OpenRouter provider docs dogfood"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Use provider-backed candidate execution to produce and evaluate a tiny documentation improvement about OpenRouter candidate selection and provider command behavior."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Candidate selection notes document qwen/openrouter-capped and fallback model choices from Propel Explorer configuration."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "A run under .pi/coding-runs contains qwen and fallback candidates with execution artifacts from run-candidates."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "check-artifacts is run and its output is preserved."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "judgement.toml explains provider success/blockers, quality, cost/token observations, and selected outcome."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "docs/multi-model-coding-workflow.md receives a small promoted clarification if a candidate/fallback output is usable."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "cleanup removes candidate worktrees or documents an exact blocker."
+
+[context]
+relevant_paths = [
+  ".pi/coding-runs/",
+  "docs/multi-model-coding-workflow.md",
+  "docs/m113-openrouter-provider-dogfood-retro.md",
+  "product/stories/"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use scripts/multi_model_coding.py prepare with qwen and fallback variants.",
+  "Use run-candidates with qwen=openrouter-capped/qwen/qwen3-coder and fallback=openai-codex/gpt-5.5:high commands where possible.",
+  "Do not commit secrets; preserve command stderr/stdout only after checking it contains no keys."
+]
+reference_files = [
+  "product/missions/M113-openrouter-provider-candidate-dogfood.toml",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/extensions/openrouter-capped.ts",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/scripts/multi-model-mission.sh",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

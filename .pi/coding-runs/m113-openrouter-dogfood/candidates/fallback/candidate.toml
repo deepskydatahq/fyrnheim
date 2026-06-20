@@ -1,0 +1,15 @@
+schema_version = "fyrnheim.coding_candidate.v1"
+run_id = "m113-openrouter-dogfood"
+story_id = "M113-E001-S001"
+variant_name = "fallback"
+model = "openai-codex"
+build = "gpt-5.5-high"
+branch = "coding/m113-e001-s001-m113-openrouter-dogfood-fallback"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m113-openrouter-dogfood/fallback"
+artifact_dir = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/fallback/artifacts"
+status = "run_complete"
+created_at = "2026-06-20T19:21:39Z"
+dry_run = false
+execution_command = "pi --no-session --model openai-codex/gpt-5.5:high --print \"Provider-backed fallback candidate fallback; prompt path /home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/fallback/prompt.md; propose a concise docs clarification for provider command paths.\""
+last_exit_code = 0
+updated_at = "2026-06-20T19:28:31Z"

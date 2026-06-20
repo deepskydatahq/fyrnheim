@@ -1,0 +1,59 @@
+schema_version = "fyrnheim.coding_judgement.v1"
+run_id = "m113-openrouter-dogfood"
+decision = "accept_candidate"
+winner = "fallback"
+reason = "Qwen/OpenRouter matched Propel Explorer's low-cost candidate choice but is unavailable in this Fyrnheim checkout because the openrouter-capped provider is not registered. The fallback GPT-5.5 command executed successfully, produced usable docs guidance, and observed/fixed a command-path issue."
+synthesis_guidance = ""
+created_at = "2026-06-20T19:29:24Z"
+risks = ["No OpenRouter request was made, so real token/cost observations for Qwen remain unvalidated."]
+follow_up = ["Add Fyrnheim-local OpenRouter provider configuration before rerunning Qwen candidate dogfood."]
+
+[candidates]
+
+[[candidates.summary]]
+variant = "fallback"
+slug = "fallback"
+branch = "coding/m113-e001-s001-m113-openrouter-dogfood-fallback"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m113-openrouter-dogfood/fallback"
+status = "run_complete"
+disposition = "selected"
+
+[[candidates.summary]]
+variant = "qwen"
+slug = "qwen"
+branch = "coding/m113-e001-s001-m113-openrouter-dogfood-qwen"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m113-openrouter-dogfood/qwen"
+status = "run_failed"
+disposition = "not_selected"
+
+[evaluation]
+
+[[evaluation.criteria]]
+criterion = "Candidate selection notes document qwen/openrouter-capped and fallback model choices from Propel Explorer configuration."
+status = "pass"
+evidence = ".pi/coding-runs/m113-openrouter-dogfood/candidate-selection-notes.md"
+
+[[evaluation.criteria]]
+criterion = "A run under .pi/coding-runs contains qwen and fallback candidates with execution artifacts from run-candidates."
+status = "pass"
+evidence = "run-candidates-final.out plus each candidate's artifacts/execution.toml, stdout.txt, and stderr.txt."
+
+[[evaluation.criteria]]
+criterion = "check-artifacts is run and its output is preserved."
+status = "pass"
+evidence = ".pi/coding-runs/m113-openrouter-dogfood/check-artifacts.out exits ready for fallback complete and qwen explicit failed status."
+
+[[evaluation.criteria]]
+criterion = "judgement.toml explains provider success/blockers, quality, cost/token observations, and selected outcome."
+status = "pass"
+evidence = "This judgement records qwen provider-not-found blocker, fallback success, no OpenRouter token/cost observation, and accept_candidate fallback decision."
+
+[[evaluation.criteria]]
+criterion = "docs/multi-model-coding-workflow.md receives a small promoted clarification if a candidate/fallback output is usable."
+status = "pass"
+evidence = "Promoted fallback docs clarification about absolute --run-dir and provider command paths."
+
+[[evaluation.criteria]]
+criterion = "cleanup removes candidate worktrees or documents an exact blocker."
+status = "pass"
+evidence = "cleanup-dry-run.out and cleanup.out show fallback and qwen worktrees removed cleanly."

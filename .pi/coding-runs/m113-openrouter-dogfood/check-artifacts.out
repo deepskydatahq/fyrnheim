@@ -1,0 +1,2 @@
+candidate=fallback artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/fallback/artifacts status=complete missing=[] ready=True explicitly_incomplete=False
+candidate=qwen artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m113-openrouter-dogfood/candidates/qwen/artifacts status=failed missing=[] ready=True explicitly_incomplete=True

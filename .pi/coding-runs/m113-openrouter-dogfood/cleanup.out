@@ -1,0 +1,2 @@
+candidate=fallback worktree=/home/tmo/roadtothebeach/open/worktrees/coding-runs/m113-openrouter-dogfood/fallback status=removed clean=True
+candidate=qwen worktree=/home/tmo/roadtothebeach/open/worktrees/coding-runs/m113-openrouter-dogfood/qwen status=removed clean=True

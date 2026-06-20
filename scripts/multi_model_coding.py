@@ -384,7 +384,7 @@ def _candidate_command(candidate: dict[str, Any], commands: dict[str, str]) -> s
 def _format_command(command: str, candidate_dir: Path, candidate: dict[str, Any]) -> str:
     artifact_dir = Path(str(candidate["artifact_dir"]))
     return command.format(
-        prompt=str(candidate_dir / "prompt.md"),
+        prompt=str((candidate_dir / "prompt.md").resolve()),
         artifact_dir=str(artifact_dir),
         worktree=str(candidate["worktree"]),
         candidate=_candidate_slug(candidate),

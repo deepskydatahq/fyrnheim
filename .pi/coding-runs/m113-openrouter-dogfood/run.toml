@@ -1,0 +1,10 @@
+schema_version = "fyrnheim.coding_run.v1"
+run_id = "m113-openrouter-dogfood"
+story_id = "M113-E001-S001"
+story_path = "product/stories/M113-E001-S001-openrouter-provider-docs-dogfood.toml"
+repo_root = "/home/tmo/roadtothebeach/open/fyrnheim"
+base_ref = "HEAD"
+status = "prepared"
+created_at = "2026-06-20T19:21:39Z"
+dry_run = false
+candidate_count = 2

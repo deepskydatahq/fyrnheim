@@ -1,0 +1,33 @@
+diff --git a/docs/multi-model-coding-workflow.md b/docs/multi-model-coding-workflow.md
+index fd89f37..df9c8e3 100644
+--- a/docs/multi-model-coding-workflow.md
++++ b/docs/multi-model-coding-workflow.md
+@@ -60,7 +60,7 @@ You can run candidates manually by opening each worktree and feeding `prompt.md`
+ 
+ ```bash
+ python scripts/multi_model_coding.py run-candidates \
+-  --run-dir .pi/coding-runs/<run-id> \
++  --run-dir "$(pwd)/.pi/coding-runs/<run-id>" \
+   --command 'sonnet=claude -p "$(cat {prompt})"' \
+   --command 'gpt=codex exec {prompt}'
+ ```
+@@ -69,7 +69,7 @@ Use `default=...` to provide one command for every candidate without a specific
+ 
+ ```bash
+ python scripts/multi_model_coding.py run-candidates \
+-  --run-dir .pi/coding-runs/<run-id> \
++  --run-dir "$(pwd)/.pi/coding-runs/<run-id>" \
+   --command 'default=python -c "print(open(\"{prompt}\").read())"' \
+   --dry-run
+ ```
+@@ -81,7 +81,9 @@ Command templates support:
+ - `{worktree}` — candidate worktree path
+ - `{candidate}` — candidate slug
+ 
+-The runner executes each command from that candidate's worktree and writes:
++The runner executes each command from that candidate's worktree, so avoid hard-coded repo-relative paths in command mappings. Prefer an absolute `--run-dir` (for example `--run-dir "$(pwd)/.pi/coding-runs/<run-id>"`) and the `{prompt}`/`{artifact_dir}` placeholders so provider commands can still read prompts and write artifacts after the working directory changes.
++
++The runner writes:
+ 
+ - `artifacts/execution.toml` — command, worktree, exit code, duration, timestamps
+ - `artifacts/stdout.txt` — provider stdout

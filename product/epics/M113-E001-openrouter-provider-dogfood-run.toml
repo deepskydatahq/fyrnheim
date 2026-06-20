@@ -1,0 +1,41 @@
+# Epic: OpenRouter provider dogfood run
+
+id = "M113-E001"
+parent = "M113"
+title = "OpenRouter provider dogfood run"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Run a tiny docs task through the provider-backed candidate workflow using the Propel Explorer OpenRouter candidate mix and record execution/judgement/cleanup evidence."
+job_story = """
+When provider-backed candidate execution exists,
+I want to test the Propel Explorer OpenRouter model mix on a safe docs task,
+so that we know whether real provider commands, artifact checks, judgement, and cleanup work together.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Candidate selection notes cite Propel Explorer's OpenRouter capped Qwen3 Coder setup and fallback model defaults.",
+  "A prepared run includes qwen and fallback candidates with isolated worktrees and metadata.",
+  "Provider command execution artifacts, readiness checks, judgement, promoted docs, and cleanup evidence are preserved."
+]
+validator_context = [
+  ".pi/coding-runs/",
+  "docs/multi-model-coding-workflow.md",
+  "docs/m113-openrouter-provider-dogfood-retro.md",
+  "product/stories/M113-E001-S001-openrouter-provider-docs-dogfood.toml"
+]
+
+[context]
+relevant_paths = [
+  ".pi/coding-runs/",
+  "docs/",
+  "product/"
+]
+dependencies = []
+
+[notes]
+considerations = "If OpenRouter provider resolution fails in this repo, record it as evidence and still compare with the stronger available fallback command."
+estimated_stories = 1

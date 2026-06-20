@@ -147,6 +147,7 @@ def test_run_candidates_dry_run_records_execution_plan(tmp_path: Path) -> None:
 
     assert results[0]["status"] == "dry_run"
     assert execution["command"].startswith("echo sonnet")
+    assert str(run_dir / "candidates" / "sonnet" / "prompt.md") in execution["command"]
     assert execution["worktree"] == str(tmp_path / "worktrees" / "run-dry" / "sonnet")
 
 

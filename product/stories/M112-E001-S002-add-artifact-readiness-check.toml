@@ -1,0 +1,49 @@
+# Story: Add artifact readiness check
+
+id = "M112-E001-S002"
+parent = "M112-E001"
+title = "Add artifact readiness check"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Add a command that reports candidate artifact completeness before evaluator judgement."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The check reports missing notes.md, quality-gates.txt, status.toml, and diff.patch for each candidate."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "The check exits successfully only when all candidates have required artifacts or explicitly failed/blocked/incomplete status."
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py"
+]
+input_fixtures = []
+depends_on = ["M112-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Use M111 dogfood artifacts as the model for expected files.",
+  "Make output readable enough for evaluator use."
+]
+reference_files = [
+  "docs/m111-parallel-coding-dogfood-retro.md",
+  ".pi/coding-runs/m111-troubleshooting/judgement.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

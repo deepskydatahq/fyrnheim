@@ -56,17 +56,57 @@ Each candidate receives:
 
 ## Execute candidates
 
-Open each candidate worktree and run the generated `prompt.md` with the intended coding model/tool. Candidate agents must:
+You can run candidates manually by opening each worktree and feeding `prompt.md` to the intended coding model/tool. For provider-backed local execution, use `run-candidates` with command mappings:
+
+```bash
+python scripts/multi_model_coding.py run-candidates \
+  --run-dir .pi/coding-runs/<run-id> \
+  --command 'sonnet=claude -p "$(cat {prompt})"' \
+  --command 'gpt=codex exec {prompt}'
+```
+
+Use `default=...` to provide one command for every candidate without a specific mapping:
+
+```bash
+python scripts/multi_model_coding.py run-candidates \
+  --run-dir .pi/coding-runs/<run-id> \
+  --command 'default=python -c "print(open(\"{prompt}\").read())"' \
+  --dry-run
+```
+
+Command templates support:
+
+- `{prompt}` — candidate prompt path
+- `{artifact_dir}` — candidate artifact directory
+- `{worktree}` — candidate worktree path
+- `{candidate}` — candidate slug
+
+The runner executes each command from that candidate's worktree and writes:
+
+- `artifacts/execution.toml` — command, worktree, exit code, duration, timestamps
+- `artifacts/stdout.txt` — provider stdout
+- `artifacts/stderr.txt` — provider stderr
+
+Candidate agents must:
 
 1. Work only inside their own worktree.
 2. Avoid mutating sibling worktrees or the source checkout.
-3. Keep candidate commits on the candidate branch.
+3. Keep candidate commits scoped to the candidate branch.
 4. Write implementation notes and quality output under the candidate artifact directory.
 5. Push the candidate branch when complete.
 
 Candidate runs should not mark the shared story complete unless that candidate has later been selected and promoted.
 
 ## Evaluate candidates
+
+Before judging, check artifact readiness:
+
+```bash
+python scripts/multi_model_coding.py check-artifacts \
+  --run-dir .pi/coding-runs/<run-id>
+```
+
+The check reports missing `notes.md`, `quality-gates.txt`, `status.toml`, and `diff.patch` for each candidate. It exits successfully only when candidates have all expected artifacts, or when a candidate explicitly reports an incomplete terminal status such as `failed`, `blocked`, `incomplete`, or `skipped` in `status.toml`.
 
 The evaluator compares each candidate using at least these inputs:
 
@@ -136,6 +176,25 @@ Promotion is explicit and happens only after judgement:
 
 Do not automatically merge unreviewed candidate code into `main`. Product TOML stories remain canonical; candidate artifacts are provenance for how a decision was made.
 
+## Clean up candidate worktrees
+
+After promotion and review, remove candidate worktrees safely:
+
+```bash
+python scripts/multi_model_coding.py cleanup \
+  --run-dir .pi/coding-runs/<run-id> \
+  --dry-run
+```
+
+When the dry run looks right, remove clean worktrees:
+
+```bash
+python scripts/multi_model_coding.py cleanup \
+  --run-dir .pi/coding-runs/<run-id>
+```
+
+Dirty worktrees are protected by default. Inspect them with `git -C <worktree> status`; only use `--force` when you intentionally want to discard candidate scratch work.
+
 ## Artifact schema summary
 
 `run.toml`:
@@ -158,6 +217,19 @@ Do not automatically merge unreviewed candidate code into `main`. Product TOML s
 - `worktree`
 - `artifact_dir`
 - `status`
+
+`execution.toml`:
+
+- `candidate`
+- `status`
+- `command`
+- `worktree`
+- `exit_code`
+- `duration_seconds`
+- `started_at`
+- `completed_at`
+- `stdout`
+- `stderr`
 
 `judgement.toml`:
 
@@ -185,6 +257,6 @@ Use these recovery steps when a candidate run gets messy:
 
 ## Current limits
 
-- The script prepares and records workflow artifacts; it does not launch provider-specific coding agents.
-- The first version is local-first. Parallelism can be achieved by running candidate agents in separate shells/sessions against the prepared worktrees.
+- Provider-backed execution is command-based. The workflow does not import provider SDKs or manage provider credentials.
+- The first version is local-first. Parallelism can be achieved by running candidate commands from separate shells/sessions, or by launching one run at a time through `run-candidates`.
 - Quality-gate collection is currently a candidate responsibility recorded in artifacts; evaluator automation can be added later.

@@ -1,0 +1,53 @@
+# Story: Add safe cleanup and docs
+
+id = "M112-E001-S003"
+parent = "M112-E001"
+title = "Add safe cleanup and docs"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Add safe candidate worktree cleanup and document provider-backed execution, readiness checks, and cleanup lifecycle."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Cleanup lists candidate worktrees and removes only clean worktrees unless an explicit force flag is provided."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain run-candidates, check-artifacts, and cleanup commands with dry-run examples."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain where execution logs are written and how to inspect failed candidates."
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+input_fixtures = []
+depends_on = ["M112-E001-S001", "M112-E001-S002"]
+
+[handoff]
+implementation_hints = [
+  "Use `git -C <worktree> status --porcelain` for dirty checks.",
+  "Prefer dry-run first and require --force for dirty cleanup."
+]
+reference_files = [
+  "docs/multi-model-coding-workflow.md"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

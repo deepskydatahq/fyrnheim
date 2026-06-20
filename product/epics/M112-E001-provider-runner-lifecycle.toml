@@ -1,0 +1,40 @@
+# Epic: Provider runner lifecycle
+
+id = "M112-E001"
+parent = "M112"
+title = "Provider runner lifecycle"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Extend the candidate workflow with command-based provider execution, artifact readiness checks, and safe worktree cleanup."
+job_story = """
+When candidate prompts have been prepared,
+I want configurable provider commands to run inside each candidate worktree and produce auditable logs,
+so that multi-model execution can happen through the workflow instead of manual simulation.
+"""
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Provider commands are configurable per candidate without hard-coded providers.",
+  "Candidate command execution writes stdout/stderr/exit/duration artifacts.",
+  "Artifact readiness checks and cleanup lifecycle are available before/after judgement."
+]
+validator_context = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep execution command-based and provider-neutral. Use dry-run paths in tests where possible."
+estimated_stories = 3

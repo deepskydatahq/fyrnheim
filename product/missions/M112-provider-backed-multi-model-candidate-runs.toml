@@ -2,7 +2,7 @@
 
 id = "M112"
 title = "Provider-backed multi-model candidate runs"
-status = "draft"
+status = "complete"
 created = 2026-06-20
 depends_on = ["M110", "M111"]
 

@@ -2,12 +2,17 @@ from pathlib import Path
 
 import pytest
 
+import scripts.multi_model_coding as mmc
 from scripts.multi_model_coding import (
     Variant,
     add_synthesis_candidate,
+    check_artifacts,
+    cleanup_worktrees,
+    parse_command_mappings,
     parse_variant,
     prepare_run,
     read_toml,
+    run_candidates,
     slugify,
     write_judgement,
 )
@@ -119,6 +124,136 @@ def test_write_judgement_validates_decisions_and_winner(tmp_path: Path) -> None:
         if candidate["disposition"] == "selected"
     ]
     assert selected[0]["slug"] == "sonnet"
+
+
+def test_run_candidates_dry_run_records_execution_plan(tmp_path: Path) -> None:
+    story = write_story(tmp_path)
+    run_dir = prepare_run(
+        story_path=story,
+        variants=[Variant("sonnet", "claude")],
+        run_id="run-dry",
+        repo_root=tmp_path,
+        run_root=tmp_path / ".pi" / "coding-runs",
+        worktree_root=tmp_path / "worktrees",
+        dry_run=True,
+    )
+
+    results = run_candidates(
+        run_dir=run_dir,
+        commands=parse_command_mappings(["sonnet=echo {candidate} {prompt}"]),
+        dry_run=True,
+    )
+    execution = read_toml(run_dir / "candidates" / "sonnet" / "artifacts" / "execution.toml")
+
+    assert results[0]["status"] == "dry_run"
+    assert execution["command"].startswith("echo sonnet")
+    assert execution["worktree"] == str(tmp_path / "worktrees" / "run-dry" / "sonnet")
+
+
+def test_run_candidates_executes_command_and_captures_logs(tmp_path: Path) -> None:
+    story = write_story(tmp_path)
+    run_dir = prepare_run(
+        story_path=story,
+        variants=[Variant("sonnet", "claude")],
+        run_id="run-real",
+        repo_root=tmp_path,
+        run_root=tmp_path / ".pi" / "coding-runs",
+        worktree_root=tmp_path / "worktrees",
+        dry_run=True,
+    )
+    worktree = tmp_path / "worktrees" / "run-real" / "sonnet"
+    worktree.mkdir(parents=True)
+
+    results = run_candidates(
+        run_dir=run_dir,
+        commands=parse_command_mappings([
+            "sonnet=python -c \"import sys; print('out'); print('err', file=sys.stderr)\""
+        ]),
+    )
+    artifact_dir = run_dir / "candidates" / "sonnet" / "artifacts"
+    execution = read_toml(artifact_dir / "execution.toml")
+    candidate = read_toml(run_dir / "candidates" / "sonnet" / "candidate.toml")
+
+    assert results[0]["exit_code"] == 0
+    assert execution["status"] == "complete"
+    assert (artifact_dir / "stdout.txt").read_text().strip() == "out"
+    assert (artifact_dir / "stderr.txt").read_text().strip() == "err"
+    assert candidate["status"] == "run_complete"
+
+
+def test_check_artifacts_reports_missing_and_ready_candidates(tmp_path: Path) -> None:
+    story = write_story(tmp_path)
+    run_dir = prepare_run(
+        story_path=story,
+        variants=[Variant("sonnet", "claude"), Variant("blocked", "manual")],
+        run_id="run-check",
+        repo_root=tmp_path,
+        run_root=tmp_path / ".pi" / "coding-runs",
+        dry_run=True,
+    )
+    artifact_dir = run_dir / "candidates" / "sonnet" / "artifacts"
+    for name in ["notes.md", "quality-gates.txt", "diff.patch"]:
+        (artifact_dir / name).write_text("ok")
+    blocked_artifacts = run_dir / "candidates" / "blocked" / "artifacts"
+    (blocked_artifacts / "status.toml").write_text('status = "blocked"\n')
+
+    ready, reports = check_artifacts(run_dir)
+
+    assert ready is True
+    report_by_candidate = {report["candidate"]: report for report in reports}
+    assert report_by_candidate["sonnet"]["missing"] == []
+    assert report_by_candidate["blocked"]["explicitly_incomplete"] is True
+
+
+def test_check_artifacts_fails_when_required_files_are_missing(tmp_path: Path) -> None:
+    story = write_story(tmp_path)
+    run_dir = prepare_run(
+        story_path=story,
+        variants=[Variant("sonnet", "claude")],
+        run_id="run-missing",
+        repo_root=tmp_path,
+        run_root=tmp_path / ".pi" / "coding-runs",
+        dry_run=True,
+    )
+
+    ready, reports = check_artifacts(run_dir)
+
+    assert ready is False
+    assert "notes.md" in reports[0]["missing"]
+    assert "diff.patch" in reports[0]["missing"]
+
+
+def test_cleanup_worktrees_dry_run_and_dirty_protection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    story = write_story(tmp_path)
+    run_dir = prepare_run(
+        story_path=story,
+        variants=[Variant("sonnet", "claude")],
+        run_id="run-cleanup",
+        repo_root=tmp_path,
+        run_root=tmp_path / ".pi" / "coding-runs",
+        worktree_root=tmp_path / "worktrees",
+        dry_run=True,
+    )
+    worktree = tmp_path / "worktrees" / "run-cleanup" / "sonnet"
+    worktree.mkdir(parents=True)
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str, cwd: Path | None = None) -> str:
+        calls.append(args)
+        if args[:3] == ("-C", str(worktree), "status"):
+            return " M dirty.txt"
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(tmp_path)
+        return ""
+
+    monkeypatch.setattr(mmc, "git", fake_git)
+
+    dirty = cleanup_worktrees(run_dir=run_dir)
+    forced_dry_run = cleanup_worktrees(run_dir=run_dir, dry_run=True, force=True)
+
+    assert dirty[0]["status"] == "dirty"
+    assert forced_dry_run[0]["status"] == "would_remove"
+    assert not any(call[:2] == ("worktree", "remove") for call in calls)
 
 
 def test_synthesize_decision_and_candidate_prompt(tmp_path: Path) -> None:

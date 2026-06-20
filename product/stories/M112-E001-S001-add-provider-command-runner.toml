@@ -1,0 +1,53 @@
+# Story: Add provider command runner
+
+id = "M112-E001-S001"
+parent = "M112-E001"
+title = "Add provider command runner"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Add a provider-neutral command runner that executes configured candidate commands from each candidate worktree and records logs."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Per-candidate commands can be parsed from CLI mappings without hard-coded providers."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Dry-run execution records the command and worktree target without launching a process."
+
+[[acceptance_criteria.criteria]]
+test = "unit"
+description = "Real execution captures stdout, stderr, exit code, duration, and command metadata under the candidate artifact directory."
+
+[context]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use shell commands as the provider-neutral integration layer.",
+  "Support mapping by candidate slug or a default command."
+]
+reference_files = [
+  "product/missions/M112-provider-backed-multi-model-candidate-runs.toml",
+  "scripts/multi_model_coding.py"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

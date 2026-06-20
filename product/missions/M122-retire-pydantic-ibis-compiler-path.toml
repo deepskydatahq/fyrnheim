@@ -1,0 +1,88 @@
+# Mission: Retire Pydantic-to-Ibis compiler path
+
+id = "M122"
+title = "Retire Pydantic-to-Ibis compiler path"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M115"]
+
+[outcome]
+description = """
+Remove or quarantine the old Pydantic entity-to-Ibis compiler implementation so Fyrnheim's codebase, CLI, docs, and tests align with the new dbt data model context layer direction. Users and contributors should no longer be guided toward the abandoned compiler workflow.
+"""
+
+user_progress = "From 'the repository still looks like a transformation compiler with conflicting old concepts' to 'the codebase clearly supports the dbt context-layer direction with old compiler pieces removed or explicitly archived'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "code-removal-plan",
+  "compiler-code-removal-or-quarantine",
+  "cli-cleanup",
+  "docs-cleanup",
+  "test-suite-cleanup",
+  "migration-notes"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Old Pydantic entity/Ibis compiler APIs, commands, docs, and tests are inventoried before removal so no useful primitives are accidentally lost.",
+  "Code paths that directly support the abandoned compiler workflow are removed, archived, or clearly marked legacy according to the removal plan.",
+  "CLI help, README/docs, examples, and product docs no longer present the compiler approach as Fyrnheim's active product direction.",
+  "The remaining test suite passes and no tests assert abandoned compiler behavior unless explicitly kept as legacy compatibility.",
+  "A migration or archive note explains what was removed, why it was removed, and what future dbt-context missions replace it with."
+]
+validator_context = [
+  "VISION.md",
+  "VALUES.md",
+  "README.md",
+  "docs/",
+  "src/",
+  "tests/",
+  "examples/",
+  "product/missions/M115-dbt-project-inventory-mvp.toml",
+  "product/missions/M122-retire-pydantic-ibis-compiler-path.toml"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "README.md",
+  "CLAUDE.md",
+  "HOW_WE_WORK.md"
+]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/",
+  "docs/",
+  "examples/",
+  "README.md",
+  "pyproject.toml"
+]
+related_missions = [
+  "M115 — dbt Project Inventory MVP",
+  "M116 — Model Classification Rules",
+  "M119 — Agent Context CLI"
+]
+
+[scope]
+in_scope = [
+  "Inventory old compiler-era modules, CLI commands, docs, examples, and tests.",
+  "Decide which pieces are deleted, moved to an archive, or temporarily retained as reusable infrastructure.",
+  "Remove active product references to Pydantic entity definitions, Ibis compilation, generated transformation layers, and run-any-backend compiler promises.",
+  "Keep or extract genuinely reusable utilities only when they support the dbt context-layer roadmap.",
+  "Update package exports and CLI surfaces so new users do not discover abandoned APIs first."
+]
+out_of_scope = [
+  "Implementing the dbt inventory/classification features themselves; M115 and M116 handle that.",
+  "Maintaining backward compatibility for old compiler users unless explicitly chosen during the removal plan.",
+  "Large rewrites unrelated to removing or quarantining the old compiler path.",
+  "Deleting product history or completed mission records."
+]
+
+[notes]
+considerations = """
+This mission should probably run after M115 establishes the first dbt-context code path, so the repository does not temporarily become directionless. Start with an audit/removal plan, then remove in focused slices. Be conservative with generic utilities, CLI scaffolding, test helpers, and product workflow code that can still support the new direction.
+"""

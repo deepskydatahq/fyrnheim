@@ -28,6 +28,8 @@ Skills in `.pi/skills/` provide on-demand workflow instructions:
 
 ## Extension
 
+`.pi/extensions/openrouter-capped.ts` registers `openrouter-capped/qwen/qwen3-coder` for OpenRouter-backed candidate runs. It uses `OPENROUTER_API_KEY` from the environment and fails closed with a clear missing-credential message; see `docs/openrouter-provider-setup.md`.
+
 `.pi/extensions/fyrnheim-workflow/index.ts` adds project commands:
 
 - `/fyrnheim-status`

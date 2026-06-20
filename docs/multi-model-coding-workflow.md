@@ -56,6 +56,8 @@ Each candidate receives:
 
 ## Execute candidates
 
+Fyrnheim includes a project-local OpenRouter provider for the low-cost Qwen code candidate used during dogfood runs: `openrouter-capped/qwen/qwen3-coder`. See `docs/openrouter-provider-setup.md` for credential guardrails, token cap configuration, and smoke tests.
+
 You can run candidates manually by opening each worktree and feeding `prompt.md` to the intended coding model/tool. For provider-backed local execution, use `run-candidates` with command mappings:
 
 ```bash

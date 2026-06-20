@@ -1,0 +1,24 @@
+schema_version = "fyrnheim.provider_smoke.v1"
+mission = "M114"
+story = "M114-E001-S001"
+decision = "pass_with_missing_credentials"
+created_at = "2026-06-20T00:00:00Z"
+
+[provider]
+name = "openrouter-capped"
+model = "qwen/qwen3-coder"
+model_ref = "openrouter-capped/qwen/qwen3-coder"
+extension = ".pi/extensions/openrouter-capped.ts"
+
+[results]
+model_listed = true
+missing_key_exit_code = 1
+missing_key_message = "OPENROUTER_API_KEY is required for openrouter-capped/qwen/qwen3-coder. Set it in the environment; do not commit it to the repository."
+real_provider_request_run = false
+real_provider_request_reason = "OPENROUTER_API_KEY is not present in this environment."
+
+[evidence]
+list_models = ".pi/coding-runs/m114-openrouter-provider/list-models.out"
+missing_key_stdout = ".pi/coding-runs/m114-openrouter-provider/missing-key-smoke.out"
+missing_key_stderr = ".pi/coding-runs/m114-openrouter-provider/missing-key-smoke.err"
+missing_key_exit = ".pi/coding-runs/m114-openrouter-provider/missing-key-smoke.exit"

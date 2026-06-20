@@ -1,0 +1,18 @@
+# Epic: OpenRouter provider configuration
+
+id = "M114-E001"
+parent = "M114"
+title = "OpenRouter provider configuration"
+status = "complete"
+created = 2026-06-20
+
+[outcome]
+description = "Fyrnheim registers and documents a project-local OpenRouter capped Qwen provider with safe missing-credential behavior."
+
+[acceptance_criteria]
+criteria = [
+  "Project-local Pi extension registers `openrouter-capped/qwen/qwen3-coder`.",
+  "Missing `OPENROUTER_API_KEY` fails before network execution with a clear non-secret message.",
+  "Smoke test artifacts prove model registration and missing-key behavior.",
+  "Docs explain setup, token cap override, and candidate workflow usage."
+]

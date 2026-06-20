@@ -1,0 +1,61 @@
+# Story: Register OpenRouter capped provider
+
+id = "M114-E001-S001"
+parent = "M114-E001"
+title = "Register OpenRouter capped provider"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Add a Fyrnheim-local Pi provider for `openrouter-capped/qwen/qwen3-coder` with credential guardrails and smoke-test evidence."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "`.pi/extensions/openrouter-capped.ts` registers `openrouter-capped/qwen/qwen3-coder`."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "`pi --list-models` lists the capped Qwen model in this checkout."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Without `OPENROUTER_API_KEY`, execution fails locally with a clear missing-credential message and no secret output."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain setup, token cap override, and candidate workflow usage."
+
+[context]
+relevant_paths = [
+  ".pi/extensions/openrouter-capped.ts",
+  ".pi/README.md",
+  "docs/openrouter-provider-setup.md",
+  "docs/multi-model-coding-workflow.md",
+  ".pi/coding-runs/m114-openrouter-provider/"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Adapt Propel Explorer's `.pi/extensions/openrouter-capped.ts` for Fyrnheim.",
+  "Do not commit OpenRouter credentials.",
+  "Preserve smoke-test outputs only after checking they contain no secrets."
+]
+reference_files = [
+  "product/missions/M114-fyrnheim-openrouter-provider-configuration.toml",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/extensions/openrouter-capped.ts"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

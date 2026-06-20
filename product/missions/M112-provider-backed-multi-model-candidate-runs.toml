@@ -1,0 +1,83 @@
+# Mission: Provider-backed multi-model candidate runs
+
+id = "M112"
+title = "Provider-backed multi-model candidate runs"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M110", "M111"]
+
+[outcome]
+description = """
+Move the parallel coding workflow from prepared prompts and manual/simulated candidate execution to configurable provider-backed candidate runs. The workflow should be able to launch each variant command in its own worktree, capture execution artifacts, and safely clean up candidate worktrees after judgement and promotion.
+"""
+
+user_progress = "From 'candidate prompts are prepared but model execution is manual' to 'candidate model commands can be launched, logged, judged, and cleaned up through the workflow'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "provider-command-runner",
+  "candidate-execution-logs",
+  "artifact-completeness-check",
+  "safe-worktree-cleanup",
+  "docs-and-tests"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A run configuration can declare per-variant execution commands such as `claude -p prompt.md` or `codex exec prompt.md` without hard-coding providers.",
+  "The runner executes each candidate command from its own worktree, captures stdout/stderr/exit code/duration, and writes artifacts under the candidate artifact directory.",
+  "A dry-run mode shows commands and target worktrees without launching providers.",
+  "An artifact completeness check reports missing notes.md, quality-gates.txt, status.toml, and diff.patch for each candidate before judgement.",
+  "A cleanup command lists and removes candidate worktrees only when they are clean or when an explicit force flag is provided.",
+  "Docs explain how to run real provider-backed candidates, inspect logs, judge outputs, and clean up worktrees after promotion."
+]
+validator_context = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md",
+  "docs/m111-parallel-coding-dogfood-retro.md"
+]
+
+[context]
+related_docs = [
+  "docs/multi-model-coding-workflow.md",
+  "docs/m111-parallel-coding-dogfood-retro.md",
+  "product/missions/M110-parallel-multi-model-coding-evaluation.toml",
+  "product/missions/M111-dogfood-parallel-coding-workflow.toml"
+]
+relevant_paths = [
+  "scripts/multi_model_coding.py",
+  "tests/test_multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md",
+  "product/"
+]
+related_missions = [
+  "M110 — Parallel multi-model coding evaluation",
+  "M111 — Dogfood parallel coding workflow"
+]
+
+[scope]
+in_scope = [
+  "Command-based provider runner for candidates; no provider SDK dependency required.",
+  "Per-candidate stdout/stderr/exit-code/duration artifacts.",
+  "Dry-run support for runner and cleanup operations.",
+  "Artifact completeness checking before judgement.",
+  "Safe worktree cleanup with dirty-worktree protection and explicit force override.",
+  "Docs and tests for provider-backed execution and cleanup lifecycle."
+]
+out_of_scope = [
+  "Full hosted job scheduling or distributed execution.",
+  "Provider billing/account management.",
+  "A UI for candidate monitoring.",
+  "Automatic merging of candidate code without evaluator judgement."
+]
+acceptable_breakage = [
+  "Provider commands may be represented as shell commands in config for the first version; robust provider adapters can come later."
+]
+
+[notes]
+considerations = """
+M111 dogfooding showed that preparation, judgement, synthesis, and promotion work, but candidate execution remained manual/simulated. This mission should close that gap while keeping the workflow provider-neutral and local-first. Prefer explicit, inspectable artifacts over hidden automation.
+"""

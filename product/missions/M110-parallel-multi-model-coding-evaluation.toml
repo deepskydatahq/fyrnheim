@@ -1,0 +1,94 @@
+# Mission: Parallel multi-model coding evaluation
+
+id = "M110"
+title = "Parallel multi-model coding evaluation"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M109"]
+
+[outcome]
+description = """
+Enable a coding workflow where the same implementation story can be attempted by multiple model/build variants in parallel, each isolated in its own git worktree. An evaluator then compares the resulting diffs, tests, and product criteria, records a judgement, and either selects a winner or triggers a synthesis run that combines the best parts.
+"""
+
+user_progress = "From 'one model produces one implementation path and the user manually judges alternatives' to 'multiple isolated coding attempts can run in parallel and an evaluator produces an auditable decision or synthesis request'."
+
+[execution]
+mode = "workflow-implementation"
+outputs = [
+  "worktree-run-orchestrator",
+  "model-build-variant-config",
+  "evaluation-judgement-log",
+  "winner-or-synthesis-decision",
+  "quality-gate-comparison",
+  "tests-and-docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A story or coding task can be expanded into multiple isolated worktree runs with separate branch names, logs, and model/build metadata.",
+  "Each coding run executes without mutating sibling worktrees and leaves behind enough artifacts to inspect prompts, commands, diffs, tests, and outcome status.",
+  "An evaluator can compare candidate outputs against the story acceptance criteria, code quality, test results, simplicity, and maintainability.",
+  "The evaluator writes a durable judgement log that explains the winning candidate, rejected candidates, risks, and follow-up work.",
+  "The evaluator can choose one of three decisions: accept a candidate, request an additional synthesis run, or mark all candidates failed/blocked with reasons.",
+  "A synthesis run can be created in a fresh worktree with explicit instructions naming the useful parts to combine from previous candidates.",
+  "The final selected/synthesized result can be promoted back into the normal product workflow with status updates, quality gates, commit, and push discipline."
+]
+validator_context = [
+  "AGENTS.md",
+  "HOW_WE_WORK.md",
+  "product/stories/",
+  "scripts/",
+  ".pi/skills/",
+  "docs/"
+]
+
+[context]
+related_docs = [
+  "AGENTS.md",
+  "HOW_WE_WORK.md",
+  "product/missions/M109-multi-model-classification-flow.toml"
+]
+relevant_paths = [
+  "product/",
+  "scripts/",
+  ".pi/skills/",
+  "docs/"
+]
+related_missions = [
+  "M083 — Pi workflow hardening",
+  "M109 — Multi-model classification flow"
+]
+
+[scope]
+in_scope = [
+  "Define the run model for parallel coding attempts: task input, model/build variant, worktree path, branch, status, and artifacts.",
+  "Create or document commands/scripts for setting up, listing, cleaning, and inspecting candidate worktrees.",
+  "Define evaluator inputs: story TOML, candidate diffs, test output, lint/type output, commit history, and implementation notes.",
+  "Define evaluator output schema for judgement logs and decisions.",
+  "Support a synthesis loop where no single candidate wins but the evaluator requests another run with combination guidance.",
+  "Integrate with existing product TOML status conventions and quality-gate expectations.",
+  "Keep candidate runs isolated until an explicit promotion/merge decision is made."
+]
+out_of_scope = [
+  "Building a full UI for monitoring parallel runs.",
+  "Automatically merging unreviewed candidate code into main.",
+  "Replacing product TOML stories as the source of truth.",
+  "Provider-specific model procurement or billing controls beyond storing model/build metadata.",
+  "Long-running distributed job scheduling beyond local worktree orchestration."
+]
+acceptable_breakage = [
+  "The first version may require local sequential command execution to simulate parallel candidates, as long as worktree isolation and evaluator judgement artifacts are real."
+]
+
+[notes]
+considerations = """
+This mission is about the coding workflow, not data classification models. Use M109's language of multiple model variants only as inspiration: each candidate run is a competing implementation attempt. The core design should preserve Fyrnheim's current product workflow: stories remain canonical, completed work still requires quality gates, commits, and pushes, and evaluator judgements should be auditable files that future agents can read.
+
+Important design questions for breakdown:
+- Where should candidate run metadata live: product/runs, .pi/runs, or docs/workflow artifacts?
+- Should orchestration be shell scripts, Pi skills/commands, or Python CLI helpers?
+- What minimal artifact set is required for a fair evaluator comparison?
+- How does a selected worktree get promoted without losing provenance from rejected/synthesized candidates?
+"""

@@ -1,0 +1,100 @@
+# Mission: OpenRouter provider candidate dogfood
+
+id = "M113"
+title = "OpenRouter provider candidate dogfood"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M112"]
+
+[outcome]
+description = """
+Dogfood provider-backed multi-model candidate execution with real model commands selected from the Propel Explorer OpenRouter setup. Use a small docs task to compare a low-cost/high-context OpenRouter coding candidate against a stronger fallback/evaluator-style candidate, then judge quality, token/cost behavior, artifact completeness, synthesis usefulness, and cleanup ergonomics.
+"""
+
+user_progress = "From 'provider-backed execution is implemented but only unit-tested' to 'we have run real candidate commands using the Propel Explorer OpenRouter configuration and know whether the model mix is practical'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "real-provider-candidate-run",
+  "openrouter-candidate-selection-notes",
+  "execution-artifacts",
+  "artifact-readiness-check",
+  "evaluator-judgement",
+  "promoted-docs-change",
+  "cleanup-verification",
+  "follow-up-missions-if-needed"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "The mission documents which candidate models were chosen and why, using Propel Explorer's OpenRouter configuration as input.",
+  "At least one candidate uses `openrouter-capped/qwen/qwen3-coder`, reflecting Propel Explorer's low-cost capped code execution setup.",
+  "At least one comparison candidate uses a stronger fallback/evaluator-style model or provider command for quality comparison.",
+  "scripts/multi_model_coding.py prepare creates isolated worktrees and candidate metadata for the chosen model mix.",
+  "scripts/multi_model_coding.py run-candidates launches real provider commands or records a documented credential/tooling blocker with exact command attempts and logs.",
+  "Candidate execution artifacts include stdout/stderr/exit/duration plus notes, quality-gates, status, and diff artifacts or explicit incomplete/blocked statuses.",
+  "check-artifacts is run before judgement and its result is included in the mission report or artifacts.",
+  "The evaluator judgement explains code/docs quality, cost/token observations where available, selected/synthesized outcome, and whether to keep or adjust the candidate model mix.",
+  "cleanup removes candidate worktrees safely after promotion or documents any dirty-worktree blocker."
+]
+validator_context = [
+  "docs/multi-model-coding-workflow.md",
+  "docs/m111-parallel-coding-dogfood-retro.md",
+  "scripts/multi_model_coding.py",
+  ".pi/coding-runs/",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/extensions/openrouter-capped.ts",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/scripts/multi-model-mission.sh",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/prompts/multi-model-mission.md"
+]
+
+[context]
+related_docs = [
+  "docs/multi-model-coding-workflow.md",
+  "docs/m111-parallel-coding-dogfood-retro.md",
+  "product/missions/M112-provider-backed-multi-model-candidate-runs.toml",
+  "/home/tmo/roadtothebeach/propel/propel-explorer/.pi/prompts/multi-model-mission.md"
+]
+relevant_paths = [
+  "docs/multi-model-coding-workflow.md",
+  "scripts/multi_model_coding.py",
+  ".pi/coding-runs/",
+  "product/"
+]
+related_missions = [
+  "M110 — Parallel multi-model coding evaluation",
+  "M111 — Dogfood parallel coding workflow",
+  "M112 — Provider-backed multi-model candidate runs"
+]
+
+[scope]
+in_scope = [
+  "Inspect Propel Explorer's OpenRouter capped provider and multi-model mission defaults before selecting candidates.",
+  "Pick candidates based on practical coding performance and token/cost constraints, starting with `openrouter-capped/qwen/qwen3-coder` for low-cost capped code execution.",
+  "Use a tiny documentation task so failures are safe and evaluation is fast.",
+  "Run provider commands through M112's `run-candidates` path when credentials/tools are available.",
+  "If a provider command cannot run because credentials or CLI tooling are unavailable, record the exact blocker in artifacts and judgement instead of silently simulating success.",
+  "Compare candidate output quality, artifact completeness, observed logs, and any cost/token data exposed by the provider/tooling.",
+  "Promote the selected or synthesized docs change and clean up worktrees."
+]
+out_of_scope = [
+  "Adding new OpenRouter providers or modifying Propel Explorer's .pi extensions in this repo.",
+  "Committing secrets or OpenRouter API keys.",
+  "Large feature implementation unrelated to dogfooding provider-backed execution.",
+  "Building token accounting beyond what command output/provider logs already expose."
+]
+acceptable_breakage = [
+  "If real provider credentials are unavailable in this environment, the mission may complete with a documented blocked provider run and concrete follow-up mission rather than a promoted provider-generated change."
+]
+
+[notes]
+considerations = """
+Propel Explorer's current OpenRouter setup registers `openrouter-capped/qwen/qwen3-coder` with a large context window and a capped max token default (`PI_EXPLORER_OPENROUTER_CODE_MAX_TOKENS`, default 4096). Its multi-model mission workflow uses GPT-5.5 high for planning/evaluation and Qwen3 Coder via OpenRouter for code execution, with GPT-5.5 high as fallback when tool-use smoke tests fail.
+
+Recommended candidate mix for this dogfood:
+- `qwen=openrouter-capped/qwen/qwen3-coder` — low-cost/high-context code candidate from Propel Explorer.
+- `fallback=openai-codex/gpt-5.5:high` or the locally available strongest coding command — quality comparison/fallback.
+
+Keep all provider secrets in environment variables only. Do not commit `.env` files or command logs containing secrets.
+"""

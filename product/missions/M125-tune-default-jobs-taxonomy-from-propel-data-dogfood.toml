@@ -1,0 +1,69 @@
+# Mission: Tune default jobs taxonomy from Propel Data dogfood
+
+id = "M125"
+title = "Tune Default Jobs Taxonomy from Propel Data Dogfood"
+status = "draft"
+created = 2026-06-21
+depends_on = ["M117"]
+
+[outcome]
+description = """
+Fyrnheim's default dbt jobs taxonomy produces more useful first-run classifications on a real dbt project.
+Instead of labeling every well-tested model as data-contract enforcement, the taxonomy distinguishes model purpose from the presence of normal tests or docs and gives users a clearer starting point for review.
+"""
+user_progress = "From 'the default taxonomy technically classifies every model but over-labels routine tested models as contract enforcement' to 'the default taxonomy highlights likely model jobs with less noise on a real dbt project.'"
+
+[execution_strategy]
+mode = "recommend_multi_model"
+rationale = "Taxonomy tuning is judgment-heavy and benefits from comparing alternative heuristics against Propel Data dogfood output, but a single-agent implementation is acceptable if the plan is straightforward."
+dry_run_allowed = true
+candidate_variants = [
+  "qwen=openrouter-capped/qwen/qwen3-coder",
+  "glm=openrouter/z-ai/glm-5.2",
+  "fallback=openai-codex:gpt-5.5-high"
+]
+required_artifacts = [
+  "before/after classification summaries for Propel Data",
+  "judgement notes explaining taxonomy tradeoffs",
+  "quality gates"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Running the default classifier on Propel Data no longer labels all 42 models as data_contract_enforcement solely because they have tests or columns.",
+  "The default taxonomy still supports an explicit data contract or quality validation label when model metadata, path, tags, name, or description indicates that contract enforcement is the model's purpose.",
+  "Regression tests cover the noisy Propel Data-style case and at least one true contract-enforcement case.",
+  "Docs explain the difference between normal tested/documented models and models whose job is data contract enforcement."
+]
+validator_context = [
+  "src/fyrnheim/dbt_classification.py",
+  "tests/test_dbt_classification.py",
+  "docs/default-dbt-jobs-taxonomy.md",
+  "docs/dbt-model-classification.md",
+  ".pi/local-runs/propel-data-default-taxonomy/classification-summary.txt"
+]
+
+[context]
+related_docs = [
+  "VISION.md",
+  "VALUES.md",
+  "docs/default-dbt-jobs-taxonomy.md",
+  "docs/dbt-model-classification.md"
+]
+relevant_paths = [
+  "src/fyrnheim/dbt_classification.py",
+  "tests/test_dbt_classification.py",
+  ".pi/local-runs/propel-data-default-taxonomy/"
+]
+
+[notes]
+considerations = """
+M117 was dogfooded against /home/tmo/roadtothebeach/propel/propel-data/dbt.
+The initial default classifier output was:
+  models: total=42, classified=42, unclassified=0, ambiguous=0
+  labels: business_rule_application=3, data_contract_enforcement=42, entity_definition=13, quality_validation=2, source_mapping=15
+  layer/job mismatches=0
+
+The key issue is that data_contract_enforcement currently fires for routine evidence like attached_tests >= 1 and columns >= 3, which makes every well-tested model look like its job is contract enforcement. Prefer signals that indicate contract enforcement is the model's purpose, such as contract tags/meta, audit/assertion naming, schema/contract descriptions, or model paths dedicated to contracts. Keep the taxonomy humble and easy to override.
+"""

@@ -1,0 +1,53 @@
+# Story: Add dbt project fallback scan
+
+id = "M115-E001-S002"
+parent = "M115-E001"
+title = "Add dbt project fallback scan"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Add a lightweight fallback scanner for dbt projects without manifest.json using dbt_project.yml, models/**/*.sql, and models/**/*.yml."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Fallback scan discovers SQL models under models/ and YAML model/source metadata."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Fallback scan extracts ref() and source() dependencies from SQL and computes downstream links."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Fallback scan marks inventory generation source as `project_files` and records limitations through warnings."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/dbt_inventory.py",
+  "tests/test_dbt_inventory.py"
+]
+input_fixtures = []
+depends_on = ["M115-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Use PyYAML already present in dependencies.",
+  "Do not attempt to compile dbt or resolve Jinja beyond simple ref/source regexes.",
+  "Document fallback limitations in warning strings included in the artifact."
+]
+reference_files = [
+  "product/missions/M115-dbt-project-inventory-mvp.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

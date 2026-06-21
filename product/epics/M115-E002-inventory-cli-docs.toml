@@ -1,0 +1,41 @@
+# Epic: Inventory CLI and docs
+
+id = "M115-E002"
+parent = "M115"
+title = "Inventory CLI and docs"
+status = "complete"
+created = 2026-06-20
+depends_on = ["M115-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "Fyrnheim exposes dbt inventory generation through the CLI and documents how to run it and interpret the output."
+
+[job_story]
+description = "When I am inside a dbt project, I want a simple command that writes inventory context and prints a concise summary so I can immediately use it in human or agent workflows."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "CLI command writes a machine-readable inventory artifact when requested.",
+  "CLI command prints a concise summary for humans.",
+  "Docs explain manifest and fallback behavior, artifact schema, and examples."
+]
+validator_context = [
+  "src/fyrnheim/cli.py",
+  "src/fyrnheim/dbt_inventory.py",
+  "tests/test_dbt_inventory.py",
+  "docs/dbt-project-inventory.md"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/cli.py",
+  "src/fyrnheim/dbt_inventory.py",
+  "tests/",
+  "docs/"
+]
+dependencies = ["M115-E001"]
+
+[notes]
+considerations = "The command should work without installing dbt. It may consume dbt artifacts when present, but it should not execute dbt."

@@ -1,0 +1,55 @@
+# Story: Add dbt inventory CLI and docs
+
+id = "M115-E002-S001"
+parent = "M115-E002"
+title = "Add dbt inventory CLI and docs"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Expose dbt inventory generation through `fyr dbt scan` and document manifest/fallback usage and artifact interpretation."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "`fyr dbt scan --project-path <path> --output <file>` writes JSON inventory and prints a concise summary."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "`fyr dbt scan --format json` prints the machine-readable inventory to stdout."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain how to run the command, when manifest vs fallback is used, and how to interpret the artifact."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/cli.py",
+  "src/fyrnheim/dbt_inventory.py",
+  "tests/test_dbt_inventory.py",
+  "docs/dbt-project-inventory.md"
+]
+input_fixtures = []
+depends_on = ["M115-E001-S001", "M115-E001-S002"]
+
+[handoff]
+implementation_hints = [
+  "Add a `dbt` CLI group and `scan` subcommand without requiring dbt to be installed.",
+  "Default to concise summary output unless `--format json` is requested.",
+  "If `--output` is provided, write the JSON artifact and still print the summary."
+]
+reference_files = [
+  "product/missions/M115-dbt-project-inventory-mvp.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

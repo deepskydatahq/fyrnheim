@@ -110,6 +110,70 @@ def _discover_assets(entities_dir: Path) -> dict[str, list]:
     return discover_assets(entities_dir, strict=False)
 
 
+@main.group()
+def dbt() -> None:
+    """Inspect dbt projects for model context."""
+
+
+@dbt.command("scan")
+@click.option(
+    "--project-path",
+    default=".",
+    show_default=True,
+    help="dbt project root to scan.",
+)
+@click.option(
+    "--manifest",
+    "manifest_path",
+    default=None,
+    help="Optional path to manifest.json. Defaults to target/manifest.json when present.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    help="Write machine-readable inventory JSON to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["summary", "json"]),
+    default="summary",
+    show_default=True,
+    help="Output format printed to stdout.",
+)
+@click.pass_context
+def dbt_scan(
+    ctx: click.Context,
+    project_path: str,
+    manifest_path: str | None,
+    output_path: str | None,
+    output_format: str,
+) -> None:
+    """Generate a dbt project inventory without executing dbt."""
+    from fyrnheim.dbt_inventory import inventory_json, inventory_summary, load_dbt_inventory
+
+    verbose = ctx.obj.get("verbose", False)
+    try:
+        inventory = load_dbt_inventory(project_path, manifest_path=manifest_path)
+    except Exception as exc:
+        if verbose:
+            raise
+        raise click.ClickException(str(exc)) from exc
+
+    if output_path:
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(inventory_json(inventory), encoding="utf-8")
+
+    if output_format == "json":
+        click.echo(inventory_json(inventory), nl=False)
+    else:
+        click.echo(inventory_summary(inventory), nl=False)
+        if output_path:
+            click.echo(f"inventory written: {output_path}")
+
+
 @main.command()
 @click.option(
     "--entities-dir", default="entities", help="Directory with entity definitions"

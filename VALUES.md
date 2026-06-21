@@ -10,14 +10,14 @@
 
 | Level | Value | Status |
 |-------|-------|--------|
-| 1 | dbt Project Inventory | planned |
+| 1 | dbt Project Inventory | shipped |
 | 2 | Model Classification | planned |
 | 3 | Data Model Principles | planned |
 | 4 | Agent Context CLI | planned |
 | 5 | Guided dbt Development | future |
 | 6 | Team Workflow Integration | future |
 
-**Next level to build:** Level 1 — dbt Project Inventory
+**Next level to build:** Level 2 — Model Classification
 
 ---
 
@@ -31,7 +31,7 @@ The new value ladder starts from the reality that many teams already have dbt pr
 
 ## Level 1: dbt Project Inventory
 
-**Status:** planned
+**Status:** shipped
 
 Run Fyrnheim inside a dbt project and generate a structured inventory of what exists.
 

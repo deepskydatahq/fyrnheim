@@ -1,0 +1,38 @@
+# Epic: dbt inventory core
+
+id = "M115-E001"
+parent = "M115"
+title = "dbt inventory core"
+status = "complete"
+created = 2026-06-20
+depends_on = []
+estimated_stories = 2
+
+[outcome]
+description = "Fyrnheim can build a versioned dbt project inventory from manifest.json and from a documented lightweight project-file fallback."
+
+[job_story]
+description = "When I point Fyrnheim at a dbt project, I want a structured inventory artifact so I can understand resources, metadata, and lineage without manually reading the project."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Manifest parser extracts dbt resources, metadata, materialization, lineage, and downstream links.",
+  "Fallback scanner reads dbt_project.yml, SQL model files, and YAML model/source metadata when manifest.json is absent.",
+  "Inventory artifacts are versioned and deterministic enough for tests and future agent context."
+]
+validator_context = [
+  "src/fyrnheim/dbt_inventory.py",
+  "tests/test_dbt_inventory.py",
+  "product/missions/M115-dbt-project-inventory-mvp.toml"
+]
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/",
+  "tests/"
+]
+dependencies = []
+
+[notes]
+considerations = "Prefer manifest.json as the happy path. Keep fallback intentionally lightweight and documented rather than pretending to fully compile dbt."

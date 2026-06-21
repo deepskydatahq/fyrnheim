@@ -2,7 +2,7 @@
 
 id = "M115"
 title = "dbt Project Inventory MVP"
-status = "draft"
+status = "complete"
 created = 2026-06-20
 depends_on = []
 

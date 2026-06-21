@@ -1,0 +1,54 @@
+# Story: Parse dbt manifest inventory
+
+id = "M115-E001-S001"
+parent = "M115-E001"
+title = "Parse dbt manifest inventory"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Implement the first dbt inventory schema and manifest.json parser with model/source/test/exposure/metric/macro metadata and lineage."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Manifest parsing returns schema_version `fyrnheim.dbt_inventory.v1` and project metadata."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Manifest parsing extracts models with name, path, materialization, tags, description, owner/meta, upstream dependencies, downstream dependencies, and attached tests."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Manifest parsing includes sources, exposures, metrics, and macros in the inventory artifact."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/dbt_inventory.py",
+  "tests/test_dbt_inventory.py"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use dbt manifest.json as the happy path and avoid executing dbt.",
+  "Represent output as plain JSON-serializable dictionaries for easy CLI and future agent use.",
+  "Compute downstream dependencies by reversing depends_on.nodes links."
+]
+reference_files = [
+  "product/missions/M115-dbt-project-inventory-mvp.toml",
+  "https://docs.getdbt.com/reference/artifacts/manifest-json"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

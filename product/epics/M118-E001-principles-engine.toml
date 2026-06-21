@@ -1,0 +1,36 @@
+# Epic: Principles engine and CLI
+
+id = "M118-E001"
+parent = "M118"
+title = "Principles engine and CLI"
+status = "complete"
+created = 2026-06-21
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Fyrnheim can evaluate dbt inventory and classification artifacts against configurable data modeling principles and report actionable findings."
+
+[job_story]
+description = "When I review a dbt project, I want Fyrnheim to check configurable modeling principles so I can see actionable issues beyond SQL compilation."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Principle configs can condition checks on inventory fields, classification labels, materialization, paths, metadata, and lineage.",
+  "Built-in principles cover owner, descriptions, grain clarity, source contract tests, high-risk tests, and complexity warnings.",
+  "The CLI reports project-wide and single-model principle results."
+]
+validator_context = [
+  "src/fyrnheim/dbt_principles.py",
+  "src/fyrnheim/cli.py",
+  "tests/test_dbt_principles.py",
+  "docs/dbt-data-model-principles.md"
+]
+
+[context]
+relevant_paths = ["src/fyrnheim/", "tests/", "docs/"]
+dependencies = ["M116", "M117"]
+
+[notes]
+considerations = "Keep the first engine small and evidence-oriented. Principles should be configurable, not a universal standard."

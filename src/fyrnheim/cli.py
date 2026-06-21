@@ -184,6 +184,87 @@ def dbt_classify(
             click.echo(f"classification written: {output_path}")
 
 
+@dbt.command("principles")
+@click.option(
+    "--inventory",
+    "inventory_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to a dbt inventory JSON artifact produced by `fyr dbt scan`.",
+)
+@click.option(
+    "--classification",
+    "classification_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Optional dbt classification JSON artifact produced by `fyr dbt classify`.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Optional principle config YAML or JSON. Defaults to Fyrnheim's starter principles.",
+)
+@click.option("--model", "model_name", default=None, help="Limit results to a model name or unique_id.")
+@click.option("--output", "output_path", default=None, help="Write machine-readable results JSON to this file.")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["summary", "json"]),
+    default="summary",
+    show_default=True,
+    help="Output format printed to stdout.",
+)
+@click.pass_context
+def dbt_principles(
+    ctx: click.Context,
+    inventory_path: Path,
+    classification_path: Path | None,
+    config_path: Path | None,
+    model_name: str | None,
+    output_path: str | None,
+    output_format: str,
+) -> None:
+    """Evaluate dbt models against data modeling principles."""
+    from fyrnheim.dbt_principles import (
+        evaluate_principles,
+        load_principle_config,
+        principles_json,
+        principles_summary,
+    )
+
+    verbose = ctx.obj.get("verbose", False)
+    try:
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+        classification = (
+            json.loads(classification_path.read_text(encoding="utf-8")) if classification_path else None
+        )
+        config = load_principle_config(config_path) if config_path else None
+        result = evaluate_principles(
+            inventory,
+            classification=classification,
+            config=config,
+            model=model_name,
+        )
+    except Exception as exc:
+        if verbose:
+            raise
+        raise click.ClickException(str(exc)) from exc
+
+    if output_path:
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(principles_json(result), encoding="utf-8")
+
+    if output_format == "json":
+        click.echo(principles_json(result), nl=False)
+    else:
+        click.echo(principles_summary(result), nl=False)
+        if output_path:
+            click.echo(f"principle results written: {output_path}")
+
+
 @dbt.command("scan")
 @click.option(
     "--project-path",

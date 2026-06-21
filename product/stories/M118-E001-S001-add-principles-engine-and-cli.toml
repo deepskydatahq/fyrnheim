@@ -1,0 +1,65 @@
+# Story: Add principles engine and CLI
+
+id = "M118-E001-S001"
+parent = "M118-E001"
+title = "Add principles engine and CLI"
+status = "complete"
+triage = "brainstorm"
+created = 2026-06-21
+
+[outcome]
+description = "Implement the first configurable data model principles engine, built-in starter principles, machine-readable findings, CLI reporting, tests, and docs."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Principle configuration supports applies-to conditions over classification labels, metadata, path, materialization, and lineage context."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Built-in starter principles cover owner presence, description presence, grain clarity for analytical outputs, source contract tests, high-risk model tests, and complexity warnings."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Principle findings include status, severity, evidence, affected model, and suggested remediation for pass, fail, warning, not-applicable, and config-error cases."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "The CLI reports principle results project-wide and for an individual model."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain the principle config format and starter principles."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/dbt_principles.py",
+  "src/fyrnheim/cli.py",
+  "tests/test_dbt_principles.py",
+  "docs/dbt-data-model-principles.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Prefer field-condition and simple check primitives over SQL parsing.",
+  "Accept optional classification artifacts so principles can apply by default taxonomy labels.",
+  "Emit both JSON and concise human summaries."
+]
+reference_files = [
+  "product/missions/M118-data-model-principles-engine.toml",
+  "src/fyrnheim/dbt_classification.py",
+  "docs/dbt-model-classification.md"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = ""
+started = "2026-06-21"
+completed = "2026-06-21"
+failure_reason = ""

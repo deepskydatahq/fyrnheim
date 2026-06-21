@@ -1,0 +1,50 @@
+# Mission: Dogfood principles on Propel Data
+
+id = "M126"
+title = "Dogfood Principles on Propel Data"
+status = "draft"
+created = 2026-06-21
+depends_on = ["M118", "M125"]
+
+[outcome]
+description = """
+Fyrnheim's starter principles are calibrated against a real dbt project so default findings feel actionable rather than noisy.
+Users can run the principles engine on Propel Data and understand which warnings are high-signal, which checks need tuning, and which team conventions should be encoded as local config.
+"""
+user_progress = "From 'starter principle output is technically correct but may be noisy on real projects' to 'principle output has been reviewed against a real dbt project and documented with tuning decisions.'"
+
+[execution]
+mode = "audit"
+outputs = ["dogfood-report", "tuning-decisions", "follow-up-missions"]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Run inventory, classification, and principles against /home/tmo/roadtothebeach/propel/propel-data/dbt and preserve non-secret summaries.",
+  "Classify principle findings by high-signal, expected project convention, noisy default, and configuration opportunity.",
+  "Create follow-up mission TOMLs for any coherent implementation work discovered by the dogfood review."
+]
+validator_context = [
+  "src/fyrnheim/dbt_principles.py",
+  "docs/dbt-data-model-principles.md",
+  ".pi/local-runs/propel-data-default-taxonomy/"
+]
+
+[context]
+related_docs = [
+  "docs/dbt-data-model-principles.md",
+  "docs/default-dbt-jobs-taxonomy.md"
+]
+relevant_paths = [
+  "src/fyrnheim/dbt_principles.py",
+  "tests/test_dbt_principles.py",
+  "docs/"
+]
+
+[notes]
+considerations = """
+Initial M118 smoke against Propel Data produced:
+  principle findings: total=252, passed=99, failed=0, warnings=44, not_applicable=109, config_errors=0
+  top warnings were owner-presence across models.
+Do not assume every warning is a product bug; decide whether Propel Data needs local config, inventory owner extraction improvements, or starter principle tuning.
+"""

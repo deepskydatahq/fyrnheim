@@ -12,12 +12,12 @@
 |-------|-------|--------|
 | 1 | dbt Project Inventory | shipped |
 | 2 | Model Classification | shipped |
-| 3 | Data Model Principles | planned |
+| 3 | Data Model Principles | shipped |
 | 4 | Agent Context CLI | planned |
 | 5 | Guided dbt Development | future |
 | 6 | Team Workflow Integration | future |
 
-**Next level to build:** Level 3 — Data Model Principles
+**Next level to build:** Level 4 — Agent Context CLI
 
 ---
 
@@ -71,7 +71,7 @@ Layer names are useful folders, but they often hide the real purpose of a transf
 
 ## Level 3: Data Model Principles
 
-**Status:** planned
+**Status:** shipped
 
 Define and check data modeling principles against the dbt project.
 

@@ -1,0 +1,722 @@
+diff --git a/docs/dbt-default-jobs-taxonomy.md b/docs/dbt-default-jobs-taxonomy.md
+new file mode 100644
+index 0000000..2fb88df
+--- /dev/null
++++ b/docs/dbt-default-jobs-taxonomy.md
+@@ -0,0 +1,243 @@
++# Default Jobs Taxonomy for dbt Models
++
++Fyrnheim ships with an opinionated default taxonomy that classifies dbt models by the job each model performs. This taxonomy provides a practical starting point for discussing model purpose and guiding AI-assisted changes.
++
++## Overview
++
++Unlike traditional layer-based approaches (staging/intermediate/marts or bronze/silver/gold), the jobs taxonomy focuses on what each model actually does rather than where it lives in the codebase. This approach makes model purpose more explicit and helps teams have clearer discussions about data transformation work.
++
++## Jobs Taxonomy
++
++The default taxonomy includes seven distinct jobs that dbt models typically perform:
++
++### 1. Source Mapping (`source_mapping`)
++
++**Description**: Maps raw source data into a standardized format.
++
++**Signals**:
++- Path contains `/staging/` or `/sources/`
++- Tags contain `staging` or `source`
++- Materialized as `view` or `ephemeral`
++
++**Examples**:
++- Raw data transformations that standardize field names and types
++- Source-specific adapters that map to a canonical schema
++
++**Anti-Examples**:
++- Business logic transformations in intermediate models
++- Analytical output shaping in marts
++
++**Principles**:
++- Apply early in the transformation pipeline
++- Focus on standardization, not business logic
++
++**Relations**:
++- Often maps to dbt's staging layer
++- Similar to medallion architecture's bronze layer
++
++### 2. Format Alignment (`format_alignment`)
++
++**Description**: Standardizes data formats, types, and naming conventions.
++
++**Signals**:
++- Name contains `format` or `standardize`
++- Tags contain `format` or `standardization`
++- Applies type casting or naming conventions
++
++**Examples**:
++- Timestamp normalization across different source formats
++- Currency code standardization
++- Boolean representation alignment
++
++**Anti-Examples**:
++- Business rule calculations
++- Entity definition logic
++
++**Principles**:
++- Reusable formatting primitives
++- Applied consistently across sources
++
++**Relations**:
++- Often embedded within source mapping jobs
++- Foundation for data contract enforcement
++
++### 3. Data Contract (`data_contract`)
++
++**Description**: Enforces data quality standards and schema compliance.
++
++**Signals**:
++- Attached tests is not empty
++- Tags contain `contract` or `quality`
++- Implements validation rules
++
++**Examples**:
++- Models with comprehensive data quality tests
++- Schema validation implementations
++
++**Anti-Examples**:
++- Simple formatting transformations
++- Business metric calculations
++
++**Principles**:
++- Define clear expectations for data quality
++- Fail fast when contracts are violated
++
++**Relations**:
++- Complements source mapping and format alignment
++- Precedes entity definition and business rules
++
++### 4. Entity Definition (`entity_definition`)
++
++**Description**: Defines core business entities and their attributes.
++
++**Signals**:
++- Path contains `/intermediate/` or `/entities/`
++- Tags contain `entity` or `dimension`
++- Implements dimensional modeling concepts
++
++**Examples**:
++- Customer entity with lifecycle attributes
++- Account dimension with business metrics
++
++**Anti-Examples**:
++- Source-specific transformations
++- Report-specific aggregations
++
++**Principles**:
++- Model entities close to business concepts
++- Denormalize judiciously for usability
++
++**Relations**:
++- Often maps to dbt's intermediate layer
++- Similar to medallion architecture's silver layer
++
++### 5. Business Rules (`business_rules`)
++
++**Description**: Applies domain-specific business logic and calculations.
++
++**Signals**:
++- Name contains `business` or `logic`
++- Implements complex transformations
++- Tags contain `business` or `logic`
++
++**Examples**:
++- Revenue recognition calculations
++- Customer lifecycle stage determination
++- Attribution modeling implementations
++
++**Anti-Examples**:
++- Simple format alignment
++- Report-specific aggregations
++
++**Principles**:
++- Centralize complex business logic
++- Make business rules inspectable and adjustable
++
++**Relations**:
++- Often embedded in intermediate models
++- Foundation for analytical outputs
++
++### 6. Analytical Output (`analytical_output`)
++
++**Description**: Shapes data for specific analytical use cases and reports.
++
++**Signals**:
++- Path contains `/marts/` or `/reporting/`
++- Downstream is not empty
++- Materialized is `table`
++
++**Examples**:
++- Fact tables for dimensional reporting
++- Pre-aggregated metrics for dashboards
++
++**Anti-Examples**:
++- Source mapping transformations
++- Entity definition models
++
++**Principles**:
++- Optimize for analytical query performance
++- Pre-compute frequently accessed aggregations
++
++**Relations**:
++- Often maps to dbt's marts layer
++- Similar to medallion architecture's gold layer
++
++### 7. Quality Validation (`quality_validation`)
++
++**Description**: Validates data quality and monitors for anomalies.
++
++**Signals**:
++- Attached tests contain `not_null` or `unique`
++- Tags contain `quality` or `observability`
++- Implements monitoring patterns
++
++**Examples**:
++- Data quality dashboards
++- Anomaly detection models
++
++**Anti-Examples**:
++- Business logic implementations
++- Entity definition work
++
++**Principles**:
++- Continuous monitoring of data health
++- Alert on data quality degradation
++
++**Relations**:
++- Cross-cutting concern across all layers
++- Complements data contract enforcement
++
++## Using the Default Taxonomy
++
++### CLI Usage
++
++To classify dbt models using the default taxonomy:
++
++```bash
++fyr dbt classify \
++  --inventory .fyrnheim/dbt-inventory.json \
++  --use-default
++```
++
++This will apply the default jobs taxonomy rules to your dbt inventory and produce a classification report.
++
++### Programmatic Usage
++
++You can also load and use the default taxonomy programmatically:
++
++```python
++from fyrnheim.dbt_default_taxonomy import load_default_taxonomy
++from fyrnheim.dbt_classification import classify_inventory
++
++# Load the default taxonomy
++taxonomy = load_default_taxonomy()
++
++# Load your dbt inventory
++with open("dbt-inventory.json") as f:
++    inventory = json.load(f)
++
++# Classify the models
++classification = classify_inventory(inventory, taxonomy)
++```
++
++## Customizing the Taxonomy
++
++While the default taxonomy provides a solid starting point, you can customize it for your specific needs:
++
++1. Export the default taxonomy to a file:
++   ```bash
++   fyr dbt classify --use-default --format json > custom-taxonomy.yml
++   ```
++
++2. Edit the taxonomy file to adjust rules, priorities, or add new jobs
++
++3. Use your custom taxonomy:
++   ```bash
++   fyr dbt classify --inventory inventory.json --rules custom-taxonomy.yml
++   ```
++
++## Relationship to Traditional Layers
++
++The jobs taxonomy complements but does not replace traditional layer approaches. A model that lives in the `marts` layer might perform an `analytical_output` job, but the same job could theoretically be performed by a model in a different layering scheme.
++
++The key insight from the jobs approach is that layer names are organizing principles, but job descriptions explain what progress each transformation accomplishes. This makes model purpose more explicit and discussions about data architecture more precise.
+\ No newline at end of file
+diff --git a/src/fyrnheim/cli.py b/src/fyrnheim/cli.py
+index d129d40..b9abc5f 100644
+--- a/src/fyrnheim/cli.py
++++ b/src/fyrnheim/cli.py
+@@ -126,10 +126,16 @@ def dbt() -> None:
+ @click.option(
+     "--rules",
+     "rules_path",
+-    required=True,
+     type=click.Path(exists=True, dir_okay=False, path_type=Path),
+     help="Path to classification rules YAML or JSON.",
+ )
++@click.option(
++    "--use-default",
++    "use_default",
++    is_flag=True,
++    default=False,
++    help="Use the default jobs taxonomy classification rules.",
++)
+ @click.option(
+     "--output",
+     "output_path",
+@@ -148,7 +154,8 @@ def dbt() -> None:
+ def dbt_classify(
+     ctx: click.Context,
+     inventory_path: Path,
+-    rules_path: Path,
++    rules_path: Path | None,
++    use_default: bool,
+     output_path: str | None,
+     output_format: str,
+ ) -> None:
+@@ -158,12 +165,25 @@ def dbt_classify(
+         classification_summary,
+         classify_inventory,
+         load_classification_rules,
++        load_default_classification_rules,
+     )
+
+     verbose = ctx.obj.get("verbose", False)
++
++    # Validate that either rules_path or use_default is provided
++    if not rules_path and not use_default:
++        raise click.ClickException("Either --rules or --use-default must be specified")
++    if rules_path and use_default:
++        raise click.ClickException("Cannot specify both --rules and --use-default")
++
+     try:
+         inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+-        rules = load_classification_rules(rules_path)
++        if use_default:
++            rules = load_default_classification_rules()
++        else:
++            if rules_path is None:
++                raise click.ClickException("Rules path must be specified when not using default")
++            rules = load_classification_rules(rules_path)
+         classification = classify_inventory(inventory, rules)
+     except Exception as exc:
+         if verbose:
+diff --git a/src/fyrnheim/dbt_classification.py b/src/fyrnheim/dbt_classification.py
+index 4fc1a94..36269ef 100644
+--- a/src/fyrnheim/dbt_classification.py
++++ b/src/fyrnheim/dbt_classification.py
+@@ -13,6 +13,12 @@ import yaml
+ DBT_CLASSIFICATION_SCHEMA_VERSION = "fyrnheim.dbt_classification.v1"
+
+
++def load_default_classification_rules() -> dict[str, Any]:
++    """Load the default jobs taxonomy classification rules."""
++    from fyrnheim.dbt_default_taxonomy import load_default_taxonomy
++    return load_default_taxonomy()
++
++
+ def load_classification_rules(path: Path | str) -> dict[str, Any]:
+     """Load classification rules from YAML or JSON."""
+
+diff --git a/src/fyrnheim/dbt_default_taxonomy.py b/src/fyrnheim/dbt_default_taxonomy.py
+new file mode 100644
+index 0000000..be75fc2
+--- /dev/null
++++ b/src/fyrnheim/dbt_default_taxonomy.py
+@@ -0,0 +1,73 @@
++"""Default jobs taxonomy for dbt model classification."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any
++
++from fyrnheim.dbt_classification import load_classification_rules
++
++# Path to the default taxonomy file
++DEFAULT_TAXONOMY_PATH = Path(__file__).parent / "default_jobs_taxonomy.yml"
++
++
++def load_default_taxonomy() -> dict[str, Any]:
++    """Load the default jobs taxonomy rules."""
++    return load_classification_rules(DEFAULT_TAXONOMY_PATH)
++
++
++def default_taxonomy_json() -> str:
++    """Return the default taxonomy as JSON string."""
++    taxonomy = load_default_taxonomy()
++    return json.dumps(taxonomy, indent=2, sort_keys=True) + "\n"
++
++
++def default_taxonomy_summary() -> str:
++    """Return a summary of the default taxonomy."""
++    taxonomy = load_default_taxonomy()
++    rules = taxonomy.get("rules", [])
++
++    lines = ["Default Jobs Taxonomy for dbt Models", "=" * 40]
++
++    for rule in rules:
++        label = rule.get("label", "unnamed")
++        description = rule.get("description", "No description")
++        lines.append(f"{label.upper()}: {description}")
++
++    lines.append(f"\nTotal jobs: {len(rules)}")
++
++    return "\n".join(lines) + "\n"
++
++
++def validate_default_taxonomy() -> list[str]:
++    """Validate the default taxonomy and return any issues found."""
++    issues = []
++    try:
++        taxonomy = load_default_taxonomy()
++        rules = taxonomy.get("rules", [])
++
++        if not rules:
++            issues.append("No rules found in taxonomy")
++            return issues
++
++        rule_ids = set()
++        for i, rule in enumerate(rules):
++            rule_id = rule.get("id")
++            if not rule_id:
++                issues.append(f"Rule {i} missing required 'id' field")
++            elif rule_id in rule_ids:
++                issues.append(f"Duplicate rule id: {rule_id}")
++            else:
++                rule_ids.add(rule_id)
++
++            if not rule.get("label"):
++                issues.append(f"Rule {rule_id or i} missing required 'label' field")
++
++            if not rule.get("description"):
++                issues.append(f"Rule {rule_id or i} missing 'description' field")
++
++    except Exception as e:
++        issues.append(f"Failed to load taxonomy: {e}")
++
++    return issues
+diff --git a/src/fyrnheim/default_jobs_taxonomy.yml b/src/fyrnheim/default_jobs_taxonomy.yml
+new file mode 100644
+index 0000000..da632f2
+--- /dev/null
++++ b/src/fyrnheim/default_jobs_taxonomy.yml
+@@ -0,0 +1,151 @@
++schema_version: fyrnheim.dbt_classification_rules.v1
++allow_multiple_labels: true
++rules:
++  - id: source-mapping-job
++    label: source_mapping
++    priority: 10
++    description: "Maps raw source data into a standardized format"
++    signals:
++      - "path contains '/staging/' or '/sources/'"
++      - "tags contains 'staging' or 'source'"
++      - "materialized is 'view' or 'ephemeral'"
++    examples:
++      - "Raw data transformations that standardize field names and types"
++      - "Source-specific adapters that map to a canonical schema"
++    anti_examples:
++      - "Business logic transformations in intermediate models"
++      - "Analytical output shaping in marts"
++    principles:
++      - "Apply early in the transformation pipeline"
++      - "Focus on standardization, not business logic"
++    relations:
++      - "Often maps to dbt's staging layer"
++      - "Similar to medallion architecture's bronze layer"
++
++  - id: format-alignment-job
++    label: format_alignment
++    priority: 20
++    description: "Standardizes data formats, types, and naming conventions"
++    signals:
++      - "name contains 'format' or 'standardize'"
++      - "tags contains 'format' or 'standardization'"
++      - "applies type casting or naming conventions"
++    examples:
++      - "Timestamp normalization across different source formats"
++      - "Currency code standardization"
++      - "Boolean representation alignment"
++    anti_examples:
++      - "Business rule calculations"
++      - "Entity definition logic"
++    principles:
++      - "Reusable formatting primitives"
++      - "Applied consistently across sources"
++    relations:
++      - "Often embedded within source mapping jobs"
++      - "Foundation for data contract enforcement"
++
++  - id: data-contract-job
++    label: data_contract
++    priority: 30
++    description: "Enforces data quality standards and schema compliance"
++    signals:
++      - "attached_tests is not empty"
++      - "tags contains 'contract' or 'quality'"
++      - "implements validation rules"
++    examples:
++      - "Models with comprehensive data quality tests"
++      - "Schema validation implementations"
++    anti_examples:
++      - "Simple formatting transformations"
++      - "Business metric calculations"
++    principles:
++      - "Define clear expectations for data quality"
++      - "Fail fast when contracts are violated"
++    relations:
++      - "Complements source mapping and format alignment"
++      - "Precedes entity definition and business rules"
++
++  - id: entity-definition-job
++    label: entity_definition
++    priority: 40
++    description: "Defines core business entities and their attributes"
++    signals:
++      - "path contains '/intermediate/' or '/entities/'"
++      - "tags contains 'entity' or 'dimension'"
++      - "implements dimensional modeling concepts"
++    examples:
++      - "Customer entity with lifecycle attributes"
++      - "Account dimension with business metrics"
++    anti_examples:
++      - "Source-specific transformations"
++      - "Report-specific aggregations"
++    principles:
++      - "Model entities close to business concepts"
++      - "Denormalize judiciously for usability"
++    relations:
++      - "Often maps to dbt's intermediate layer"
++      - "Similar to medallion architecture's silver layer"
++
++  - id: business-rules-job
++    label: business_rules
++    priority: 50
++    description: "Applies domain-specific business logic and calculations"
++    signals:
++      - "name contains 'business' or 'logic'"
++      - "implements complex transformations"
++      - "tags contains 'business' or 'logic'"
++    examples:
++      - "Revenue recognition calculations"
++      - "Customer lifecycle stage determination"
++      - "Attribution modeling implementations"
++    anti_examples:
++      - "Simple format alignment"
++      - "Report-specific aggregations"
++    principles:
++      - "Centralize complex business logic"
++      - "Make business rules inspectable and adjustable"
++    relations:
++      - "Often embedded in intermediate models"
++      - "Foundation for analytical outputs"
++
++  - id: analytical-output-job
++    label: analytical_output
++    priority: 60
++    description: "Shapes data for specific analytical use cases and reports"
++    signals:
++      - "path contains '/marts/' or '/reporting/'"
++      - "downstream is not empty"
++      - "materialized is 'table'"
++    examples:
++      - "Fact tables for dimensional reporting"
++      - "Pre-aggregated metrics for dashboards"
++    anti_examples:
++      - "Source mapping transformations"
++      - "Entity definition models"
++    principles:
++      - "Optimize for analytical query performance"
++      - "Pre-compute frequently accessed aggregations"
++    relations:
++      - "Often maps to dbt's marts layer"
++      - "Similar to medallion architecture's gold layer"
++
++  - id: quality-validation-job
++    label: quality_validation
++    priority: 70
++    description: "Validates data quality and monitors for anomalies"
++    signals:
++      - "attached_tests contains 'not_null' or 'unique'"
++      - "tags contains 'quality' or 'observability'"
++      - "implements monitoring patterns"
++    examples:
++      - "Data quality dashboards"
++      - "Anomaly detection models"
++    anti_examples:
++      - "Business logic implementations"
++      - "Entity definition work"
++    principles:
++      - "Continuous monitoring of data health"
++      - "Alert on data quality degradation"
++    relations:
++      - "Cross-cutting concern across all layers"
++      - "Complements data contract enforcement"
+\ No newline at end of file
+diff --git a/tests/test_dbt_default_taxonomy.py b/tests/test_dbt_default_taxonomy.py
+new file mode 100644
+index 0000000..7cbffec
+--- /dev/null
++++ b/tests/test_dbt_default_taxonomy.py
+@@ -0,0 +1,153 @@
++"""Tests for the default jobs taxonomy functionality."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import yaml
++from click.testing import CliRunner
++
++from fyrnheim.cli import main
++from fyrnheim.dbt_default_taxonomy import (
++    default_taxonomy_json,
++    default_taxonomy_summary,
++    load_default_taxonomy,
++    validate_default_taxonomy,
++)
++
++
++def test_load_default_taxonomy() -> None:
++    """Test that the default taxonomy can be loaded successfully."""
++    taxonomy = load_default_taxonomy()
++
++    # Check that it has the expected structure
++    assert "schema_version" in taxonomy
++    assert "rules" in taxonomy
++    assert isinstance(taxonomy["rules"], list)
++    assert len(taxonomy["rules"]) > 0
++
++    # Check that each rule has required fields
++    rules = taxonomy["rules"]
++    assert len(rules) > 0, "No rules found in taxonomy"
++
++    for rule in rules:
++        assert "id" in rule, f"Rule missing id: {rule}"
++        assert "label" in rule, f"Rule missing label: {rule}"
++        assert "description" in rule, f"Rule missing description: {rule}"
++
++
++def test_validate_default_taxonomy() -> None:
++    """Test that the default taxonomy validation works."""
++    issues = validate_default_taxonomy()
++    assert len(issues) == 0, f"Validation issues found: {issues}"
++
++
++def test_default_taxonomy_summary() -> None:
++    """Test that the default taxonomy summary can be generated."""
++    summary = default_taxonomy_summary()
++
++    assert isinstance(summary, str)
++    assert "Default Jobs Taxonomy" in summary
++
++
++def test_default_taxonomy_json() -> None:
++    """Test that the default taxonomy can be serialized to JSON."""
++    json_str = default_taxonomy_json()
++
++    assert isinstance(json_str, str)
++    # Should be valid JSON
++    parsed = json.loads(json_str)
++    assert "schema_version" in parsed
++
++
++def test_dbt_classify_cli_with_default_taxonomy(tmp_path: Path) -> None:
++    """Test the CLI classify command with the default taxonomy."""
++    # Create a sample inventory
++    inventory_path = tmp_path / "inventory.json"
++    inventory_path.write_text(
++        json.dumps({
++            "schema_version": "fyrnheim.dbt_inventory.v1",
++            "project": {"name": "test_project"},
++            "resources": {
++                "models": [{
++                    "unique_id": "model.test_project.stg_customers",
++                    "name": "stg_customers",
++                    "path": "models/staging/stg_customers.sql",
++                    "materialized": "view",
++                    "tags": ["staging"]
++                }]
++            }
++        }),
++        encoding="utf-8"
++    )
++
++    # Run classification with default taxonomy
++    result = CliRunner().invoke(
++        main,
++        [
++            "dbt",
++            "classify",
++            "--inventory",
++            str(inventory_path),
++            "--use-default",
++        ],
++    )
++
++    assert result.exit_code == 0, result.output
++    assert "dbt project: test_project" in result.output
++
++
++def test_dbt_classify_cli_mutual_exclusive_options(tmp_path: Path) -> None:
++    """Test that --rules and --use-default are mutually exclusive."""
++    # Create a sample inventory
++    inventory_path = tmp_path / "inventory.json"
++    inventory_path.write_text(
++        json.dumps({"schema_version": "test", "project": {}, "resources": {}}),
++        encoding="utf-8"
++    )
++
++    # Create a dummy rules file
++    rules_path = tmp_path / "rules.yml"
++    rules_path.write_text(yaml.safe_dump({"schema_version": "test", "rules": []}), encoding="utf-8")
++
++    # Try to use both options
++    result = CliRunner().invoke(
++        main,
++        [
++            "dbt",
++            "classify",
++            "--inventory",
++            str(inventory_path),
++            "--rules",
++            str(rules_path),
++            "--use-default",
++        ],
++    )
++
++    assert result.exit_code != 0
++    assert "Cannot specify both --rules and --use-default" in result.output
++
++
++def test_dbt_classify_cli_requires_rules_or_default(tmp_path: Path) -> None:
++    """Test that either --rules or --use-default must be specified."""
++    # Create a sample inventory
++    inventory_path = tmp_path / "inventory.json"
++    inventory_path.write_text(
++        json.dumps({"schema_version": "test", "project": {}, "resources": {}}),
++        encoding="utf-8"
++    )
++
++    # Try to run without either option
++    result = CliRunner().invoke(
++        main,
++        [
++            "dbt",
++            "classify",
++            "--inventory",
++            str(inventory_path),
++        ],
++    )
++
++    assert result.exit_code != 0
++    assert "Either --rules or --use-default must be specified" in result.output

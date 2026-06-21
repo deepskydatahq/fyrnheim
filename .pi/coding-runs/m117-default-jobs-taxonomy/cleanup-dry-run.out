@@ -1,0 +1,3 @@
+candidate=fallback worktree=/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/fallback status=would_remove clean=True
+candidate=glm worktree=/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/glm status=would_remove clean=True
+candidate=qwen worktree=/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/qwen status=would_remove clean=True

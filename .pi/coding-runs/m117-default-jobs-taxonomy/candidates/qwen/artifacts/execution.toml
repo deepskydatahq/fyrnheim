@@ -1,0 +1,10 @@
+candidate = "qwen"
+status = "complete"
+command = "bash -lc 'set -a; source /home/tmo/roadtothebeach/propel/propel-enrich/.env; set +a; pi -e ./.pi/extensions/openrouter-capped.ts --no-session --model openrouter-capped/qwen/qwen3-coder --print \"$(cat /home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/qwen/prompt.md)\"'"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/qwen"
+exit_code = 0
+duration_seconds = 507.816
+started_at = "2026-06-21T11:49:36Z"
+completed_at = "2026-06-21T11:58:03Z"
+stdout = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/qwen/artifacts/stdout.txt"
+stderr = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/qwen/artifacts/stderr.txt"

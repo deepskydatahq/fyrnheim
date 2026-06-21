@@ -1,0 +1,80 @@
+# Story: Add default jobs taxonomy
+
+id = "M117-E001-S001"
+parent = "M117-E001"
+title = "Add default jobs taxonomy"
+status = "complete"
+triage = "brainstorm"
+created = 2026-06-21
+
+[execution_strategy]
+mode = "multi_model"
+rationale = "Compare Qwen, GLM 5.2, and fallback implementations for the opinionated default jobs taxonomy."
+dry_run_allowed = false
+candidate_variants = [
+  "qwen=openrouter-capped/qwen/qwen3-coder",
+  "glm=openrouter/z-ai/glm-5.2",
+  "fallback=openai-codex:gpt-5.5-high"
+]
+required_artifacts = [
+  "run.toml",
+  "candidate artifacts",
+  "judgement.toml",
+  "cleanup evidence"
+]
+
+[outcome]
+description = "Implement a default jobs taxonomy for dbt model classification with docs and tests."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "The classifier can load and apply default jobs taxonomy rules without a custom rules file."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Classification output includes model-level evidence for default job labels and can flag layer/job mismatch evidence where configured."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs describe each default job with description, signals, examples, anti-examples, suggested principles, and relation to common layer labels."
+
+[context]
+relevant_paths = [
+  "src/fyrnheim/dbt_classification.py",
+  "tests/test_dbt_classification.py",
+  "docs/dbt-model-classification.md",
+  "docs/default-dbt-jobs-taxonomy.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Keep the default taxonomy configurable and humble; do not claim universality.",
+  "Default rules should be plain M116 rules so users can copy/override them.",
+  "Prefer a small stable default over complex SQL analysis."
+]
+reference_files = [
+  "product/missions/M117-jobs-oriented-default-taxonomy.toml",
+  "docs/dbt-model-classification.md",
+  "https://timo.space/blog/data-model-layers-and-jobs"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "edd79fa"
+started = "2026-06-21"
+completed = "2026-06-21"
+failure_reason = ""
+
+[multi_model]
+run_dir = ".pi/coding-runs/m117-default-jobs-taxonomy"
+decision = "accept_candidate"
+winner = "fallback"
+cleanup = ".pi/coding-runs/m117-default-jobs-taxonomy/cleanup.out"
+provider_blockers = []

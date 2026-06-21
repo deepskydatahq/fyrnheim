@@ -2,6 +2,8 @@
 
 Fyrnheim model classification labels dbt models from an M115 inventory artifact using transparent, configurable rules. The goal is not to guess with an LLM; it is to make the team's model taxonomy inspectable and adjustable.
 
+By default, `fyr dbt classify` uses Fyrnheim's [default dbt jobs taxonomy](default-dbt-jobs-taxonomy.md). Provide `--rules` only when you want a custom taxonomy.
+
 ## Command
 
 First create an inventory:
@@ -10,20 +12,21 @@ First create an inventory:
 fyr dbt scan --output .fyrnheim/dbt-inventory.json
 ```
 
-Then classify it:
+Then classify it with Fyrnheim's built-in jobs taxonomy:
 
 ```bash
 fyr dbt classify \
   --inventory .fyrnheim/dbt-inventory.json \
-  --rules fyrnheim-classification.yml \
   --output .fyrnheim/dbt-classification.json
 ```
 
 The command prints a concise summary and writes a versioned JSON artifact. To print the artifact to stdout:
 
 ```bash
-fyr dbt classify --inventory .fyrnheim/dbt-inventory.json --rules fyrnheim-classification.yml --format json
+fyr dbt classify --inventory .fyrnheim/dbt-inventory.json --format json
 ```
+
+Pass `--rules fyrnheim-classification.yml` to override the default jobs taxonomy with project-specific YAML or JSON rules.
 
 ## Rule file
 
@@ -141,8 +144,9 @@ Each model result includes:
 - `labels`
 - `matched_labels`
 - `evidence`
+- `layer_job_mismatch_evidence`
 
-Evidence records the matching rule, condition field, operator, expected value, and actual value. This is what makes the classifier inspectable: users should be able to understand why a label was applied and adjust the rule if needed.
+Evidence records the matching rule, condition field, operator, expected value, and actual value. This is what makes the classifier inspectable: users should be able to understand why a label was applied and adjust the rule if needed. Layer/job mismatch evidence records configured checks where the model's layer signals and matched job labels appear to be in tension.
 
 ## Ambiguity and multiple labels
 
@@ -150,6 +154,22 @@ By default, `allow_multiple_labels: false`. If more than one rule matches a mode
 
 Set `allow_multiple_labels: true` when a model should intentionally receive multiple labels, such as a model being both an analytical output and a finance-domain model.
 
-## Relationship to default jobs
+## Default jobs taxonomy
 
-This mission provides the configurable rule engine. The opinionated default jobs taxonomy — source mapping, format alignment, data contract enforcement, entity definition, business rule application, analytical output shaping, and quality validation — is planned separately in M117.
+When no `--rules` file is provided, Fyrnheim loads the built-in default jobs taxonomy (`fyrnheim.default_dbt_jobs_taxonomy.v1`). The default taxonomy applies these labels when model names, paths, tags, metadata, tests, lineage, or descriptions provide evidence:
+
+- `source_mapping`
+- `format_alignment`
+- `data_contract_enforcement`
+- `entity_definition`
+- `business_rule_application`
+- `analytical_output_shaping`
+- `quality_validation`
+
+The default taxonomy sets `allow_multiple_labels: true` because a model can perform more than one job. For example, a staging model can both map a raw source and enforce a data contract through tests. `primary_label` still records the highest-priority job, and `matched_labels` plus `evidence` show every matched default job.
+
+See [Default dbt Jobs Taxonomy](default-dbt-jobs-taxonomy.md) for descriptions, signals, examples, anti-examples, suggested principles, and how jobs relate to common layer labels.
+
+## Layer/job mismatch evidence
+
+Rule configurations may include `layer_job_mismatch_checks`. These checks do not change the assigned job labels; they add `layer_job_mismatch_evidence` to model results when layer signals and job labels appear to be in tension. The default taxonomy includes checks for common cases such as staging/bronze models that look like analytical outputs, or marts/gold models that look like source-mapping or validation models.

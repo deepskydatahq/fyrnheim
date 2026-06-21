@@ -1,0 +1,1310 @@
+diff --git a/docs/dbt-default-jobs-taxonomy.md b/docs/dbt-default-jobs-taxonomy.md
+new file mode 100644
+index 0000000..fa278e5
+--- /dev/null
++++ b/docs/dbt-default-jobs-taxonomy.md
+@@ -0,0 +1,155 @@
++# Default Jobs Taxonomy
++
++Fyrnheim ships an opinionated default taxonomy that classifies dbt models by the **job** each model performs, not only by the folder or layer where it lives. Layers describe *where* a model lives; jobs describe *what* the model does. A single model can perform several jobs at once.
++
++The taxonomy is a starting point for conversation, not a universal truth. It is intentionally configurable and humble: every default can be overridden by a project-specific rules file passed to `fyr dbt classify`.
++
++## Why jobs, not only layers
++
++Layers (staging / intermediate / marts, or medallion bronze / silver / gold) are useful organizing structures, but they are not enough to describe model purpose. A staging model may perform source mapping, format alignment, and data contract enforcement all at once. Two models in the same `marts/` folder may serve very different jobs.
++
++Fyrnheim's default jobs make that explicit and inspectable, so teams and AI agents can discuss *why* a model exists in the graph.
++
++## Using the defaults
++
++`fyr dbt classify` uses the default taxonomy automatically when no `--rules` file is supplied:
++
++```bash
++fyr dbt scan --output .fyrnheim/dbt-inventory.json
++fyr dbt classify \
++  --inventory .fyrnheim/dbt-inventory.json \
++  --output .fyrnheim/dbt-classification.json
++```
++
++The default rules set `allow_multiple_labels: true` and `flag_layer_job_mismatch: true`, because the jobs framing expects a model to perform more than one job and to surface when a job looks out of place for its layer.
++
++## The default jobs
++
++Each job below has a description, signals, examples, anti-examples, suggested principles, and the layers it most often relates to. Suggested principles are not enforced here; M118 handles enforcement.
++
++### source_mapping
++
++Bring raw source data into the model graph with stable names, grain, and lightweight selection.
++
++- **Signals**: lives in staging or bronze; name begins with `stg_`; depends directly on a source; renames and selects without business logic.
++- **Examples**: `stg_customers` selecting and renaming columns from `raw.customers`; `bronze_orders` exposing raw orders with stable names.
++- **Anti-examples**: a staging model that joins two sources and applies business rules (that is `business_rule_application`); a `stg_orders` that aggregates to a monthly grain.
++- **Suggested principles**: keep 1:1 with a source; avoid joins and row-level logic; prefer explicit selection over `select *`.
++- **Related layers**: staging, bronze.
++
++### format_alignment
++
++Standardize data shapes so downstream models can trust types, casing, encoding, and units.
++
++- **Signals**: name contains `clean`, `cast`, `typed`, `normalized`, or `formatted`; intermediate/silver model that only adjusts formats.
++- **Examples**: `int_customers_cleaned` casting text ids to integers; `silver_events_normalized` converting timestamps to UTC.
++- **Anti-examples**: a model that changes grain or joins entities (that is `business_rule_application`); a staging model that only renames (that is `source_mapping`).
++- **Suggested principles**: do one format adjustment per column family; never change grain; make casts explicit and lossless.
++- **Related layers**: intermediate, silver.
++
++### data_contract_enforcement
++
++Assert and enforce the shape of data that crosses a boundary: not-null, uniqueness, accepted values, referential integrity, freshness.
++
++- **Signals**: several attached tests; tagged `contract`, `certified`, or `trusted`; sits at a layer boundary.
++- **Examples**: a silver model with not-null and unique tests on its primary key; a staging model tagged `contract` gating raw data.
++- **Anti-examples**: a model with a single sanity test (ordinary hygiene); a mart that merely exposes already-tested data.
++- **Suggested principles**: test the contract at the boundary; prefer explicit named contracts; make failures actionable and noisy.
++- **Related layers**: staging, silver, gold.
++
++### entity_definition
++
++Define a core business entity (customer, order, account) with a stable identity and descriptive attributes.
++
++- **Signals**: name or path references a single entity; tagged `entity`; lives under `models/intermediate/entities/`.
++- **Examples**: `int_customers_entity` resolving a stable `customer_id`; `dim_accounts` defining the account entity.
++- **Anti-examples**: a fact table of events (that is `analytical_output_shaping` or `business_rule_application`); a staging model that only renames (that is `source_mapping`).
++- **Suggested principles**: one entity per model; resolve identity once and reuse; separate entity definition from metrics.
++- **Related layers**: intermediate, silver.
++
++### business_rule_application
++
++Apply the joins, calculations, and logic that turn aligned data into meaningful records.
++
++- **Signals**: intermediate/silver model that joins multiple models; name begins with `int_`; applies calculations or enrichment.
++- **Examples**: `int_orders_with_customers` joining orders to customers; `silver_subscriptions_renewed` flagging renewals.
++- **Anti-examples**: a staging model that only selects and renames (that is `source_mapping`); a final mart shaped for a dashboard (that is `analytical_output_shaping`).
++- **Suggested principles**: name the rule the model applies; keep one major rule per model; document assumptions inline.
++- **Related layers**: intermediate, silver.
++
++### analytical_output_shaping
++
++Shape data for consumption by people, dashboards, or downstream systems.
++
++- **Signals**: lives in marts/gold; name begins with `fct_` or `dim_`; has downstream exposures; materialized as a table.
++- **Examples**: `fct_orders` exposing order events for analytics; `dim_customers` shaped for BI tooling.
++- **Anti-examples**: an intermediate model still applying logic (that is `business_rule_application`); a model with no consumers that is really an intermediate step.
++- **Suggested principles**: optimize grain and columns for the consumer; name outputs by the question they answer; keep marts thin.
++- **Related layers**: marts, gold.
++
++### quality_validation
++
++Validate data quality through dedicated test models, assertions, or QA models.
++
++- **Signals**: name contains `quality`, `assert`, `qa`, or `test`; materialized as `test`; tagged `quality` or `qa`.
++- **Examples**: `orders_quality_checks` failing when revenue is negative; `assert_customer_ids_unique` surfacing duplicates.
++- **Anti-examples**: a mart that happens to have tests (that is `analytical_output_shaping`); a staging model with ordinary hygiene tests (that is `source_mapping` with a contract).
++- **Suggested principles**: make validation models fail loudly; validate at the boundary; prefer reusable checks.
++- **Related layers**: staging, intermediate, marts.
++
++## Layers and mismatch detection
++
++The default taxonomy also describes the common dbt layers and the jobs each layer usually implies:
++
++| Layer | Detect | Implied jobs |
++| --- | --- | --- |
++| staging | `/staging/` path, `staging` tag, `stg_` name | source_mapping, data_contract_enforcement |
++| bronze | `/bronze/` path, `bronze` tag | source_mapping |
++| intermediate | `/intermediate/` path, `intermediate` tag, `int_` name | format_alignment, entity_definition, business_rule_application |
++| silver | `/silver/` path, `silver` tag | format_alignment, data_contract_enforcement, entity_definition, business_rule_application |
++| marts | `/marts/` path, `mart` tag, `fct_`/`dim_` name | analytical_output_shaping, business_rule_application |
++| gold | `/gold/` path, `gold` tag | analytical_output_shaping |
++
++When `flag_layer_job_mismatch` is true (the default for the default taxonomy), Fyrnheim flags a model when it performs a job that is not implied by its detected layer. This is informational evidence, not an error: it surfaces places where a model's location and its behavior disagree, which is often where the most interesting modeling conversations happen.
++
++Each model record includes a `layer` assessment:
++
++```json
++{
++  "layer": {
++    "detected": "marts",
++    "implied_jobs": ["analytical_output_shaping", "business_rule_application"],
++    "mismatch": true,
++    "unexpected_jobs": ["source_mapping"],
++    "mismatch_evidence": [
++      {
++        "field": "layer",
++        "operator": "job_not_implied",
++        "expected": ["analytical_output_shaping", "business_rule_application"],
++        "actual": ["analytical_output_shaping", "source_mapping"],
++        "message": "model in layer 'marts' performs job(s) ['source_mapping'] not implied by that layer (...)"
++      }
++    ],
++    "evidence": [/* layer detection evidence */]
++  }
++}
++```
++
++## Overriding the defaults
++
++The default taxonomy is overridable. Provide a custom rules file to `fyr dbt classify --rules` to replace it entirely, or copy the default rules into your project and adjust them. See [dbt Model Classification](dbt-model-classification.md) for the rule schema.
++
++A project can also guide classification explicitly with `meta.job` on a model:
++
++```yaml
++models:
++  - name: int_orders
++    meta:
++      job: business_rule_application
++```
++
++The default rules check `meta.job` for every job, so explicit intent wins over heuristics.
++
++## Relationship to dbt layers
++
++Jobs do not replace layers. Layers remain a useful organizing convention; jobs add purpose. The two views compose: a model in `models/staging/` performing `source_mapping` is aligned; a model in `models/marts/` performing `source_mapping` is worth a conversation. Fyrnheim reports both so teams can decide.
+diff --git a/docs/dbt-model-classification.md b/docs/dbt-model-classification.md
+index 59e4003..4744298 100644
+--- a/docs/dbt-model-classification.md
++++ b/docs/dbt-model-classification.md
+@@ -10,7 +10,15 @@ First create an inventory:
+ fyr dbt scan --output .fyrnheim/dbt-inventory.json
+ ```
+
+-Then classify it:
++Then classify it. Without `--rules`, Fyrnheim uses its default jobs taxonomy:
++
++```bash
++fyr dbt classify \
++  --inventory .fyrnheim/dbt-inventory.json \
++  --output .fyrnheim/dbt-classification.json
++```
++
++To classify with a project-specific rules file:
+
+ ```bash
+ fyr dbt classify \
+@@ -22,9 +30,11 @@ fyr dbt classify \
+ The command prints a concise summary and writes a versioned JSON artifact. To print the artifact to stdout:
+
+ ```bash
+-fyr dbt classify --inventory .fyrnheim/dbt-inventory.json --rules fyrnheim-classification.yml --format json
++fyr dbt classify --inventory .fyrnheim/dbt-inventory.json --format json
+ ```
+
++See [Default Jobs Taxonomy](dbt-default-jobs-taxonomy.md) for the built-in defaults.
++
+ ## Rule file
+
+ Rules can be YAML or JSON. A minimal YAML file:
+@@ -152,4 +162,4 @@ Set `allow_multiple_labels: true` when a model should intentionally receive mult
+
+ ## Relationship to default jobs
+
+-This mission provides the configurable rule engine. The opinionated default jobs taxonomy — source mapping, format alignment, data contract enforcement, entity definition, business rule application, analytical output shaping, and quality validation — is planned separately in M117.
++This mission provides the configurable rule engine. The opinionated default jobs taxonomy — source mapping, format alignment, data contract enforcement, entity definition, business rule application, analytical output shaping, and quality validation — is documented in [Default Jobs Taxonomy](dbt-default-jobs-taxonomy.md) and is used automatically when `--rules` is omitted. The default taxonomy also supplies a layer mapping that flags layer/job mismatches where evidence supports it.
+diff --git a/product/epics/M117-E001-default-jobs-taxonomy.toml b/product/epics/M117-E001-default-jobs-taxonomy.toml
+new file mode 100644
+index 0000000..1deb2b7
+--- /dev/null
++++ b/product/epics/M117-E001-default-jobs-taxonomy.toml
+@@ -0,0 +1,36 @@
++# Epic: Default jobs taxonomy
++
++id = "M117-E001"
++parent = "M117"
++title = "Default jobs taxonomy"
++status = "in_progress"
++created = 2026-06-21
++depends_on = ["M116-E001"]
++estimated_stories = 1
++
++[outcome]
++description = "Fyrnheim ships an opinionated default jobs taxonomy that the M116 classifier can load and apply without a custom rules file, with model-level evidence and layer/job mismatch detection."
++
++[job_story]
++description = "When I classify a dbt inventory, I want a sensible default jobs taxonomy applied out of the box so I can discuss model purpose without first writing rules."
++
++[testing]
++approach = "agent-judgment"
++criteria = [
++  "The classifier can load and apply default jobs taxonomy rules without a custom rules file.",
++  "Classification output includes model-level evidence for default job labels and can flag layer/job mismatch evidence where configured.",
++  "Docs describe each default job with description, signals, examples, anti-examples, suggested principles, and relation to common layer labels."
++]
++validator_context = [
++  "src/fyrnheim/default_jobs_taxonomy.py",
++  "src/fyrnheim/dbt_classification.py",
++  "tests/test_default_jobs_taxonomy.py",
++  "docs/dbt-default-jobs-taxonomy.md"
++]
++
++[context]
++relevant_paths = ["src/fyrnheim/", "tests/", "docs/"]
++dependencies = ["M116-E001"]
++
++[notes]
++considerations = "Preserve the layers-and-jobs nuance: layers are useful but not enough. Defaults must be overridable and humble."
+diff --git a/product/stories/M117-E001-S001-add-default-jobs-taxonomy.toml b/product/stories/M117-E001-S001-add-default-jobs-taxonomy.toml
+new file mode 100644
+index 0000000..5601082
+--- /dev/null
++++ b/product/stories/M117-E001-S001-add-default-jobs-taxonomy.toml
+@@ -0,0 +1,56 @@
++# Story: Add default jobs taxonomy
++
++id = "M117-E001-S001"
++parent = "M117-E001"
++title = "Add default jobs taxonomy"
++status = "in_progress"
++triage = "brainstorm"
++created = 2026-06-21
++
++[outcome]
++description = "Implement a default jobs taxonomy for dbt model classification with docs and tests."
++
++[acceptance_criteria]
++executable = true
++
++[[acceptance_criteria.criteria]]
++test = "pytest"
++description = "The classifier can load and apply default jobs taxonomy rules without a custom rules file."
++
++[[acceptance_criteria.criteria]]
++test = "pytest"
++description = "Classification output includes model-level evidence for default job labels and can flag layer/job mismatch evidence where configured."
++
++[[acceptance_criteria.criteria]]
++test = "manual"
++description = "Docs describe each default job with description, signals, examples, anti-examples, suggested principles, and relation to common layer labels."
++
++[context]
++relevant_paths = [
++  "src/fyrnheim/default_jobs_taxonomy.py",
++  "src/fyrnheim/dbt_classification.py",
++  "src/fyrnheim/cli.py",
++  "tests/test_default_jobs_taxonomy.py",
++  "docs/dbt-default-jobs-taxonomy.md",
++]
++input_fixtures = []
++depends_on = ["M116-E001-S001"]
++
++[handoff]
++implementation_hints = [
++  "Ship the taxonomy as a single source parsed from YAML inside the package so docs and rules stay aligned.",
++  "Keep default rules compatible with the M116 classify_inventory contract; layer/job mismatch is informational evidence."
++]
++reference_files = [
++  "product/missions/M117-jobs-oriented-default-taxonomy.toml",
++  "src/fyrnheim/dbt_classification.py",
++]
++
++[execution]
++branch = "coding/m117-e001-s001-m117-default-jobs-taxonomy-glm"
++worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/glm"
++pr = ""
++commit = "HEAD"
++started = "2026-06-21"
++completed = ""
++failure_reason = ""
+diff --git a/src/fyrnheim/cli.py b/src/fyrnheim/cli.py
+index d129d40..56f9ab0 100644
+--- a/src/fyrnheim/cli.py
++++ b/src/fyrnheim/cli.py
+@@ -126,9 +126,12 @@ def dbt() -> None:
+ @click.option(
+     "--rules",
+     "rules_path",
+-    required=True,
++    default=None,
+     type=click.Path(exists=True, dir_okay=False, path_type=Path),
+-    help="Path to classification rules YAML or JSON.",
++    help=(
++        "Path to classification rules YAML or JSON. "
++        "When omitted, the Fyrnheim default jobs taxonomy is used."
++    ),
+ )
+ @click.option(
+     "--output",
+@@ -152,18 +155,26 @@ def dbt_classify(
+     output_path: str | None,
+     output_format: str,
+ ) -> None:
+-    """Classify dbt inventory models with configurable rules."""
++    """Classify dbt inventory models with configurable rules.
++
++    When --rules is omitted, classification uses the Fyrnheim default jobs taxonomy.
++    """
+     from fyrnheim.dbt_classification import (
+         classification_json,
+         classification_summary,
+         classify_inventory,
+         load_classification_rules,
+     )
++    from fyrnheim.default_jobs_taxonomy import load_default_classification_rules
+
+     verbose = ctx.obj.get("verbose", False)
+     try:
+         inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+-        rules = load_classification_rules(rules_path)
++        rules = (
++            load_classification_rules(rules_path)
++            if rules_path is not None
++            else load_default_classification_rules()
++        )
+         classification = classify_inventory(inventory, rules)
+     except Exception as exc:
+         if verbose:
+diff --git a/src/fyrnheim/dbt_classification.py b/src/fyrnheim/dbt_classification.py
+index 4fc1a94..1dbc4c4 100644
+--- a/src/fyrnheim/dbt_classification.py
++++ b/src/fyrnheim/dbt_classification.py
+@@ -29,21 +29,36 @@ def load_classification_rules(path: Path | str) -> dict[str, Any]:
+
+
+ def classify_inventory(inventory: dict[str, Any], rules_config: dict[str, Any]) -> dict[str, Any]:
+-    """Classify dbt models in an M115 inventory artifact with inspectable rules."""
++    """Classify dbt models in an M115 inventory artifact with inspectable rules.
++
++    When ``rules_config`` provides a ``layer_mapping`` (as the default jobs taxonomy
++    does) and ``flag_layer_job_mismatch`` is true, each model record also includes a
++    ``layer`` assessment describing the detected layer, the jobs that layer usually
++    implies, and mismatch evidence when a matched job is not expected for that layer.
++    """
+
+     rules = _rules(rules_config)
+     allow_multiple = bool(rules_config.get("allow_multiple_labels", False))
++    layer_mapping = _layer_mapping(rules_config.get("layer_mapping"))
++    flag_mismatch = bool(rules_config.get("flag_layer_job_mismatch", False)) and bool(layer_mapping)
+     resources_raw = inventory.get("resources")
+     resources: dict[str, Any] = resources_raw if isinstance(resources_raw, dict) else {}
+     models_raw = resources.get("models")
+     models: list[Any] = models_raw if isinstance(models_raw, list) else []
+     classified_models = [
+-        _classify_model(model, inventory, rules, allow_multiple=allow_multiple)
++        _classify_model(
++            model,
++            inventory,
++            rules,
++            allow_multiple=allow_multiple,
++            layer_mapping=layer_mapping,
++            flag_mismatch=flag_mismatch,
++        )
+         for model in models
+         if isinstance(model, dict)
+     ]
+     summary = _summary(classified_models)
+-    return {
++    result = {
+         "schema_version": DBT_CLASSIFICATION_SCHEMA_VERSION,
+         "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+         "inventory_schema_version": inventory.get("schema_version"),
+@@ -51,9 +66,16 @@ def classify_inventory(inventory: dict[str, Any], rules_config: dict[str, Any])
+         "rules_source": rules_config.get("rules_source", ""),
+         "project": inventory.get("project", {}),
+         "allow_multiple_labels": allow_multiple,
++        "flag_layer_job_mismatch": flag_mismatch,
+         "summary": summary,
+         "models": classified_models,
+     }
++    if layer_mapping:
++        result["layer_mapping"] = [
++            {"id": layer["id"], "implied_jobs": layer["implied_jobs"]}
++            for layer in layer_mapping
++        ]
++    return result
+
+
+ def classification_json(classification: dict[str, Any]) -> str:
+@@ -82,6 +104,9 @@ def classification_summary(classification: dict[str, Any]) -> str:
+     if labels:
+         label_text = ", ".join(f"{label}={count}" for label, count in sorted(labels.items()))
+         lines.append(f"labels: {label_text}")
++    mismatches = summary.get("layer_job_mismatches")
++    if isinstance(mismatches, int) and mismatches:
++        lines.append(f"layer/job mismatches: {mismatches}")
+     return "\n".join(lines) + "\n"
+
+
+@@ -106,6 +131,8 @@ def _classify_model(
+     rules: list[dict[str, Any]],
+     *,
+     allow_multiple: bool,
++    layer_mapping: list[dict[str, Any]],
++    flag_mismatch: bool,
+ ) -> dict[str, Any]:
+     matches = []
+     for rule in rules:
+@@ -129,7 +156,7 @@ def _classify_model(
+     else:
+         status = "classified"
+
+-    return {
++    record: dict[str, Any] = {
+         "unique_id": model.get("unique_id"),
+         "name": model.get("name"),
+         "path": model.get("path") or model.get("original_file_path"),
+@@ -140,6 +167,12 @@ def _classify_model(
+         "evidence": matches,
+     }
+
++    if layer_mapping:
++        record["layer"] = _layer_assessment(
++            model, inventory, layer_mapping, labels, flag_mismatch=flag_mismatch
++        )
++    return record
++
+
+ def _match_rule(
+     rule: dict[str, Any], model: dict[str, Any], inventory: dict[str, Any]
+@@ -251,13 +284,92 @@ def _count(value: Any) -> int:
+     return 0 if value is None else 1
+
+
++def _layer_mapping(value: Any) -> list[dict[str, Any]]:
++    if not isinstance(value, list):
++        return []
++    mapping: list[dict[str, Any]] = []
++    for entry in value:
++        if not isinstance(entry, dict) or not entry.get("id"):
++            continue
++        detect = entry.get("detect") or {}
++        if not isinstance(detect, dict) or not detect:
++            continue
++        implied = entry.get("implied_jobs") or []
++        mapping.append(
++            {
++                "id": str(entry["id"]),
++                "detect": detect,
++                "implied_jobs": [str(job) for job in implied if job],
++            }
++        )
++    return mapping
++
++
++def _layer_assessment(
++    model: dict[str, Any],
++    inventory: dict[str, Any],
++    layer_mapping: list[dict[str, Any]],
++    matched_labels: list[str],
++    *,
++    flag_mismatch: bool,
++) -> dict[str, Any]:
++    """Detect the model's layer and flag jobs that are unexpected for that layer."""
++
++    detected: dict[str, Any] | None = None
++    detection_evidence: list[dict[str, Any]] = []
++    for layer in layer_mapping:
++        evidence = _match_rule({"label": layer["id"], **layer["detect"]}, model, inventory)
++        if evidence is not None:
++            detected = {"id": layer["id"], "implied_jobs": layer["implied_jobs"]}
++            detection_evidence = evidence
++            break
++
++    assessment: dict[str, Any] = {
++        "detected": detected["id"] if detected else None,
++        "implied_jobs": detected["implied_jobs"] if detected else [],
++        "mismatch": False,
++        "evidence": detection_evidence,
++    }
++    if not flag_mismatch or not detected or not matched_labels:
++        return assessment
++
++    unexpected = [label for label in matched_labels if label not in detected["implied_jobs"]]
++    if not unexpected:
++        return assessment
++
++    assessment["mismatch"] = True
++    assessment["unexpected_jobs"] = unexpected
++    assessment["mismatch_evidence"] = [
++        {
++            "field": "layer",
++            "operator": "job_not_implied",
++            "expected": detected["implied_jobs"],
++            "actual": matched_labels,
++            "message": (
++                f"model in layer '{detected['id']}' performs job(s) {unexpected} "
++                f"not implied by that layer ({detected['implied_jobs']})"
++            ),
++        }
++    ]
++    return assessment
++
++
+ def _summary(models: list[dict[str, Any]]) -> dict[str, Any]:
+     statuses = {"classified": 0, "unclassified": 0, "ambiguous": 0}
+     labels: dict[str, int] = {}
++    mismatches = 0
+     for model in models:
+         status = str(model.get("status"))
+         if status in statuses:
+             statuses[status] += 1
+         for label in model.get("matched_labels", []):
+             labels[str(label)] = labels.get(str(label), 0) + 1
+-    return {"total": len(models), **statuses, "labels": labels}
++        layer = model.get("layer")
++        if isinstance(layer, dict) and layer.get("mismatch"):
++            mismatches += 1
++    return {
++        "total": len(models),
++        **statuses,
++        "labels": labels,
++        "layer_job_mismatches": mismatches,
++    }
+diff --git a/src/fyrnheim/default_jobs_taxonomy.py b/src/fyrnheim/default_jobs_taxonomy.py
+new file mode 100644
+index 0000000..b20ca39
+--- /dev/null
++++ b/src/fyrnheim/default_jobs_taxonomy.py
+@@ -0,0 +1,483 @@
++"""Default jobs taxonomy for dbt model classification.
++
++The default taxonomy classifies dbt models by the *job* each model performs rather
++than only by the folder or layer where it lives. It is opinionated but overridable:
++projects can supply their own rules file to ``fyr dbt classify`` and team configuration
++can extend or replace any job definition.
++
++The taxonomy is inspired by the "layers and jobs" framing: layers (staging,
++intermediate, marts, or medallion bronze/silver/gold) are useful organizing
++structures, but they are not enough to describe model purpose. A staging model may
++perform source mapping, format alignment, and data contract enforcement all at once.
++Fyrnheim's default jobs make that explicit and inspectable.
++"""
++
++from __future__ import annotations
++
++from typing import Any
++
++import yaml
++
++JOBS_TAXONOMY_SCHEMA_VERSION = "fyrnheim.jobs_taxonomy.v1"
++DEFAULT_CLASSIFICATION_RULES_SOURCE = "fyrnheim:default-jobs-taxonomy"
++
++# The canonical default jobs, in the order suggested by the layers-and-jobs framing.
++DEFAULT_JOB_IDS: tuple[str, ...] = (
++    "source_mapping",
++    "format_alignment",
++    "data_contract_enforcement",
++    "entity_definition",
++    "business_rule_application",
++    "analytical_output_shaping",
++    "quality_validation",
++)
++
++DEFAULT_TAXONOMY_YAML = """\
++schema_version: fyrnheim.jobs_taxonomy.v1
++name: fyrnheim-default-jobs
++title: Fyrnheim Default Jobs Taxonomy
++description: |
++  An opinionated starting point for classifying dbt models by the job each model
++  performs. Layers describe where a model lives; jobs describe what the model does.
++  A single model can perform several jobs at once. This taxonomy is intentionally
++  configurable and humble: it is a starting point for conversation, not a universal
++  truth.
++
++jobs:
++  - id: source_mapping
++    title: Source mapping
++    description: |
++      Bring raw source data into the model graph with stable names, grain, and
++      lightweight selection. The model maps external tables or files into the first
++      trusted relation of the project.
++    signals:
++      - Lives in a staging or bronze layer.
++      - Name begins with stg_ or sits under models/staging/ or models/bronze/.
++      - Depends directly on a source rather than another model.
++      - Performs renaming, column selection, and light casting without business logic.
++    examples:
++      - stg_customers selecting and renaming columns from raw.customers.
++      - bronze_orders exposing the raw orders table with stable column names.
++    anti_examples:
++      - A staging model that joins two sources and applies business rules (that is
++        business_rule_application, not pure source mapping).
++      - A model named stg_orders that aggregates orders to a monthly grain.
++    suggested_principles:
++      - Keep source mapping models 1:1 with a source whenever possible.
++      - Avoid joins and row-level business logic here.
++      - Prefer explicit column selection over select *.
++    related_layers: [staging, bronze]
++
++  - id: format_alignment
++    title: Format alignment
++    description: |
++      Standardize data shapes so downstream models can trust types, casing, encoding,
++      and units. The model fixes formats rather than answering business questions.
++    signals:
++      - Name contains clean, cast, typed, normalized, or formatted.
++      - Lives in an intermediate or silver layer and only adjusts formats.
++      - Performs type casts, casing, timezone normalization, or unit conversion.
++    examples:
++      - int_customers_cleaned that casts text ids to integers and lowercases emails.
++      - silver_events_normalized that converts timestamps to UTC.
++    anti_examples:
++      - A model that changes grain or joins entities (that is business rule
++        application).
++      - A staging model that only renames columns (that is source mapping).
++    suggested_principles:
++      - Do one format adjustment per column family and document it.
++      - Never change grain in a format alignment model.
++      - Make casts explicit and lossless where possible.
++    related_layers: [intermediate, silver]
++
++  - id: data_contract_enforcement
++    title: Data contract enforcement
++    description: |
++      Assert and enforce the shape of data that crosses a boundary: not-null columns,
++      uniqueness, accepted values, referential integrity, and freshness. The model (or
++      the tests attached to it) exists to fail loudly when a contract is broken.
++    signals:
++      - Has several attached tests covering not-null, unique, or accepted_values.
++      - Tagged contract, certified, or trusted.
++      - Sits at a layer boundary where downstream consumers depend on guarantees.
++    examples:
++      - A silver model with not-null and unique tests on its primary key.
++      - A staging model tagged contract that gates raw data into the project.
++    anti_examples:
++      - A model with a single sanity test (that is ordinary hygiene, not a contract
++        boundary).
++      - A mart that merely exposes already-tested data.
++    suggested_principles:
++      - Test the contract at the boundary, not only at the mart.
++      - Prefer explicit, named contracts over implicit assumptions.
++      - Make failures actionable and noisy.
++    related_layers: [staging, silver, gold]
++
++  - id: entity_definition
++    title: Entity definition
++    description: |
++      Define a core business entity (customer, order, account) with a stable identity
++      and the attributes that describe it. The model establishes what an entity *is*
++      so other models can reference it.
++    signals:
++      - Name or path references a single entity (customers, orders, accounts).
++      - Tagged entity or lives under models/intermediate/entities/.
++      - Exposes a stable identity key and descriptive attributes.
++    examples:
++      - int_customers_entity resolving a stable customer_id and profile attributes.
++      - dim_accounts defining the account entity used by downstream marts.
++    anti_examples:
++      - A fact table of events (that is analytical output or business rule
++        application).
++      - A staging model that only renames source columns (that is source mapping).
++    suggested_principles:
++      - One entity per model; keep the identity key explicit.
++      - Resolve identity once and reuse, do not re-resolve downstream.
++      - Separate entity definition from metrics and reporting.
++    related_layers: [intermediate, silver]
++
++  - id: business_rule_application
++    title: Business rule application
++    description: |
++      Apply the joins, calculations, and logic that turn raw or aligned data into
++      meaningful records. The model answers "what happened" using business semantics.
++    signals:
++      - Lives in an intermediate or silver layer and joins multiple models.
++      - Name begins with int_ or sits under models/intermediate/.
++      - Applies calculations, lookups, or enrichment beyond format fixes.
++    examples:
++      - int_orders_with_customers joining orders to customers for enrichment.
++      - silver_subscriptions_renewed flagging renewal events.
++    anti_examples:
++      - A staging model that only selects and renames (that is source mapping).
++      - A final mart shaped for a dashboard (that is analytical output shaping).
++    suggested_principles:
++      - Name the rule the model applies, not only the data it touches.
++      - Keep one major business rule per model so logic is traceable.
++      - Document assumptions and edge cases inline.
++    related_layers: [intermediate, silver]
++
++  - id: analytical_output_shaping
++    title: Analytical output shaping
++    description: |
++      Shape data for consumption by people, dashboards, or downstream systems. The
++      model optimizes for a reader: grain, columns, and naming chosen for an audience.
++    signals:
++      - Lives in a marts or gold layer.
++      - Name begins with fct_, dim_, or sits under models/marts/.
++      - Has downstream exposures or consumers.
++      - Materialized as a table for read performance.
++    examples:
++      - fct_orders exposing order events for analytics.
++      - dim_customers shaped for BI tooling and dashboards.
++    anti_examples:
++      - An intermediate model that still applies business logic (that is business
++        rule application).
++      - A model with no downstream consumers that is really an intermediate step.
++    suggested_principles:
++      - Optimize grain and columns for the consumer, not the producer.
++      - Name outputs by the question they answer.
++      - Keep marts thin: push logic into intermediate models.
++    related_layers: [marts, gold]
++
++  - id: quality_validation
++    title: Quality validation
++    description: |
++      Validate data quality through dedicated test models, assertions, or QA models.
++      The model exists to surface data problems rather than to serve analytics.
++    signals:
++      - Name contains quality, assert, qa, or test.
++      - Materialized as a test or ephemeral assertion.
++      - Tagged quality or qa.
++    examples:
++      - orders_quality_checks failing when revenue is negative.
++      - assert_customer_ids_unique surfacing duplicate identities.
++    anti_examples:
++      - A mart that happens to have tests (that is analytical output shaping).
++      - A staging model with ordinary hygiene tests (that is source mapping with a
++        contract).
++    suggested_principles:
++      - Make validation models fail loudly and explain why.
++      - Validate at the boundary where bad data enters.
++      - Prefer reusable checks over one-off assertions.
++    related_layers: [staging, intermediate, marts]
++
++layers:
++  - id: staging
++    description: First trusted relation from a source; often the staging layer.
++    detect:
++      any:
++        - field: path
++          operator: contains
++          value: /staging/
++        - field: tags
++          operator: contains
++          value: staging
++        - field: name
++          operator: regex
++          value: ^stg_
++    implied_jobs: [source_mapping, data_contract_enforcement]
++
++  - id: bronze
++    description: Medallion bronze layer; raw data exposed with minimal change.
++    detect:
++      any:
++        - field: path
++          operator: contains
++          value: /bronze/
++        - field: tags
++          operator: contains
++          value: bronze
++    implied_jobs: [source_mapping]
++
++  - id: intermediate
++    description: Intermediate transformations between staging and marts.
++    detect:
++      any:
++        - field: path
++          operator: contains
++          value: /intermediate/
++        - field: tags
++          operator: contains
++          value: intermediate
++        - field: name
++          operator: regex
++          value: ^int_
++    implied_jobs: [format_alignment, entity_definition, business_rule_application]
++
++  - id: silver
++    description: Medallion silver layer; cleaned and conformed data.
++    detect:
++      any:
++        - field: path
++          operator: contains
++          value: /silver/
++        - field: tags
++          operator: contains
++          value: silver
++    implied_jobs:
++      - format_alignment
++      - data_contract_enforcement
++      - entity_definition
++      - business_rule_application
++
++  - id: marts
++    description: Presentation marts shaped for consumers.
++    detect:
++      any:
++        - field: path
++          operator: contains
++          value: /marts/
++        - field: tags
++          operator: contains
++          value: mart
++        - field: name
++          operator: regex
++          value: ^(fct|dim)_
++    implied_jobs: [analytical_output_shaping, business_rule_application]
++
++  - id: gold
++    description: Medallion gold layer; business-level aggregates and outputs.
++    detect:
++      any:
++        - field: path
++          operator: contains
++          value: /gold/
++        - field: tags
++          operator: contains
++          value: gold
++    implied_jobs: [analytical_output_shaping]
++
++rules:
++  - id: default-source-mapping
++    label: source_mapping
++    priority: 10
++    any:
++      - field: path
++        operator: contains
++        value: /staging/
++      - field: path
++        operator: contains
++        value: /bronze/
++      - field: tags
++        operator: contains
++        value: staging
++      - field: tags
++        operator: contains
++        value: bronze
++      - field: name
++        operator: regex
++        value: ^stg_
++      - field: meta.job
++        operator: equals
++        value: source_mapping
++
++  - id: default-format-alignment
++    label: format_alignment
++    priority: 20
++    any:
++      - field: name
++        operator: regex
++        value: (clean|cast|typed|normaliz|format)
++      - field: tags
++        operator: contains
++        value: format_alignment
++      - field: meta.job
++        operator: equals
++        value: format_alignment
++
++  - id: default-data-contract-enforcement
++    label: data_contract_enforcement
++    priority: 30
++    any:
++      - field: attached_tests
++        operator: count_gte
++        value: 2
++      - field: tags
++        operator: contains_any
++        value: [contract, certified, trusted]
++      - field: meta.job
++        operator: equals
++        value: data_contract_enforcement
++
++  - id: default-entity-definition
++    label: entity_definition
++    priority: 30
++    any:
++      - field: path
++        operator: contains
++        value: /entities/
++      - field: tags
++        operator: contains
++        value: entity
++      - field: meta.job
++        operator: equals
++        value: entity_definition
++
++  - id: default-business-rule-application
++    label: business_rule_application
++    priority: 40
++    any:
++      - field: path
++        operator: contains
++        value: /intermediate/
++      - field: path
++        operator: contains
++        value: /silver/
++      - field: tags
++        operator: contains
++        value: intermediate
++      - field: tags
++        operator: contains
++        value: silver
++      - field: name
++        operator: regex
++        value: ^int_
++      - field: meta.job
++        operator: equals
++        value: business_rule_application
++
++  - id: default-analytical-output-shaping
++    label: analytical_output_shaping
++    priority: 50
++    any:
++      - field: path
++        operator: contains
++        value: /marts/
++      - field: path
++        operator: contains
++        value: /gold/
++      - field: tags
++        operator: contains
++        value: mart
++      - field: tags
++        operator: contains
++        value: gold
++      - field: name
++        operator: regex
++        value: ^(fct|dim)_
++      - field: meta.job
++        operator: equals
++        value: analytical_output_shaping
++
++  - id: default-quality-validation
++    label: quality_validation
++    priority: 60
++    any:
++      - field: name
++        operator: regex
++        value: (quality|assert|qa)
++      - field: tags
++        operator: contains_any
++        value: [quality, qa]
++      - field: materialized
++        operator: equals
++        value: test
++      - field: meta.job
++        operator: equals
++        value: quality_validation
++"""
++
++
++def load_default_taxonomy() -> dict[str, Any]:
++    """Return the parsed default jobs taxonomy as a plain dict.
++
++    The taxonomy is the single source for both documentation and default rules. The
++    return value is freshly parsed each call so callers can safely mutate it.
++    """
++
++    payload = yaml.safe_load(DEFAULT_TAXONOMY_YAML)
++    if not isinstance(payload, dict):
++        raise RuntimeError("Default jobs taxonomy failed to parse as a mapping")
++    return payload
++
++
++def default_classification_rules(
++    *,
++    flag_layer_job_mismatch: bool = True,
++) -> dict[str, Any]:
++    """Return the default jobs taxonomy as a classification rules config.
++
++    The returned config is compatible with ``classify_inventory`` and can be used
++    directly when no project-specific rules file is supplied. Layer/job mismatch
++    detection is enabled by default because the default taxonomy defines the
++    layer-to-job relationships it should check.
++    """
++
++    taxonomy = load_default_taxonomy()
++    rules = list(taxonomy.get("rules") or [])
++    layers = list(taxonomy.get("layers") or [])
++    layer_mapping = [
++        {
++            "id": str(layer.get("id")),
++            "detect": layer.get("detect") or {},
++            "implied_jobs": list(layer.get("implied_jobs") or []),
++            "description": str(layer.get("description") or ""),
++        }
++        for layer in layers
++        if isinstance(layer, dict) and layer.get("id")
++    ]
++    return {
++        "schema_version": "fyrnheim.dbt_classification_rules.v1",
++        "rules_source": DEFAULT_CLASSIFICATION_RULES_SOURCE,
++        "allow_multiple_labels": True,
++        "flag_layer_job_mismatch": flag_layer_job_mismatch,
++        "rules": rules,
++        "layer_mapping": layer_mapping,
++    }
++
++
++def load_default_classification_rules() -> dict[str, Any]:
++    """Load default classification rules (alias for clarity at call sites)."""
++
++    return default_classification_rules()
++
++
++def describe_default_job(job_id: str) -> dict[str, Any] | None:
++    """Return the taxonomy entry for a single default job, or None."""
++
++    taxonomy = load_default_taxonomy()
++    for job in taxonomy.get("jobs") or []:
++        if isinstance(job, dict) and job.get("id") == job_id:
++            return job
++    return None
+diff --git a/tests/test_default_jobs_taxonomy.py b/tests/test_default_jobs_taxonomy.py
+new file mode 100644
+index 0000000..4c8b990
+--- /dev/null
++++ b/tests/test_default_jobs_taxonomy.py
+@@ -0,0 +1,266 @@
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import yaml
++from click.testing import CliRunner
++
++from fyrnheim.cli import main
++from fyrnheim.dbt_classification import (
++    DBT_CLASSIFICATION_SCHEMA_VERSION,
++    classification_summary,
++    classify_inventory,
++)
++from fyrnheim.default_jobs_taxonomy import (
++    DEFAULT_JOB_IDS,
++    JOBS_TAXONOMY_SCHEMA_VERSION,
++    default_classification_rules,
++    describe_default_job,
++    load_default_taxonomy,
++)
++
++
++def _inventory() -> dict:
++    return {
++        "schema_version": "fyrnheim.dbt_inventory.v1",
++        "generation_source": "manifest",
++        "project": {"name": "jaffle_shop", "path": "/tmp/jaffle"},
++        "resources": {
++            "models": [
++                {
++                    "unique_id": "model.jaffle_shop.stg_customers",
++                    "name": "stg_customers",
++                    "path": "models/staging/stg_customers.sql",
++                    "materialized": "view",
++                    "tags": ["staging"],
++                    "meta": {"domain": "core"},
++                    "depends_on": ["source.jaffle_shop.raw.customers"],
++                    "downstream": ["model.jaffle_shop.int_orders"],
++                    "attached_tests": ["test.jaffle_shop.unique_customers_id"],
++                    "columns": {"id": {"name": "id"}},
++                },
++                {
++                    "unique_id": "model.jaffle_shop.int_orders",
++                    "name": "int_orders",
++                    "path": "models/intermediate/int_orders.sql",
++                    "materialized": "ephemeral",
++                    "tags": ["intermediate"],
++                    "meta": {"job": "business_rule_application"},
++                    "depends_on": ["model.jaffle_shop.stg_customers"],
++                    "downstream": ["model.jaffle_shop.fct_orders"],
++                    "attached_tests": [],
++                    "columns": {},
++                },
++                {
++                    "unique_id": "model.jaffle_shop.fct_orders",
++                    "name": "fct_orders",
++                    "path": "models/marts/fct_orders.sql",
++                    "materialized": "table",
++                    "tags": ["mart", "finance"],
++                    "meta": {"domain": "finance"},
++                    "depends_on": ["model.jaffle_shop.int_orders"],
++                    "downstream": ["exposure.jaffle_shop.orders_dashboard"],
++                    "attached_tests": [
++                        "test.jaffle_shop.unique_orders_id",
++                        "test.jaffle_shop.not_null_orders_id",
++                    ],
++                    "columns": {"id": {"name": "id"}},
++                },
++                {
++                    "unique_id": "model.jaffle_shop.silver_events_normalized",
++                    "name": "silver_events_normalized",
++                    "path": "models/silver/silver_events_normalized.sql",
++                    "materialized": "view",
++                    "tags": ["silver"],
++                    "meta": {},
++                    "depends_on": ["model.jaffle_shop.stg_customers"],
++                    "downstream": [],
++                    "attached_tests": [],
++                    "columns": {},
++                },
++            ]
++        },
++        "warnings": [],
++    }
++
++
++def test_default_taxonomy_describes_every_default_job() -> None:
++    taxonomy = load_default_taxonomy()
++
++    assert taxonomy["schema_version"] == JOBS_TAXONOMY_SCHEMA_VERSION
++    job_ids = [job["id"] for job in taxonomy["jobs"]]
++    assert tuple(job_ids) == DEFAULT_JOB_IDS
++
++    for job in taxonomy["jobs"]:
++        for key in (
++            "id",
++            "title",
++            "description",
++            "signals",
++            "examples",
++            "anti_examples",
++            "suggested_principles",
++            "related_layers",
++        ):
++            assert key in job, f"job {job.get('id')} missing {key}"
++        assert job["related_layers"], f"job {job['id']} should relate to at least one layer"
++
++    layer_ids = [layer["id"] for layer in taxonomy["layers"]]
++    # Cover common dbt structures: staging/intermediate/marts and bronze/silver/gold.
++    for expected in ("staging", "intermediate", "marts", "bronze", "silver", "gold"):
++        assert expected in layer_ids
++
++
++def test_describe_default_job_returns_entry() -> None:
++    job = describe_default_job("source_mapping")
++    assert job is not None
++    assert job["title"] == "Source mapping"
++    assert describe_default_job("does_not_exist") is None
++
++
++def test_default_classification_rules_can_classify_without_custom_file() -> None:
++    rules = default_classification_rules()
++
++    assert rules["rules_source"] == "fyrnheim:default-jobs-taxonomy"
++    assert rules["allow_multiple_labels"] is True
++    assert rules["flag_layer_job_mismatch"] is True
++    assert len(rules["rules"]) == len(DEFAULT_JOB_IDS)
++    assert rules["layer_mapping"]
++
++    result = classify_inventory(_inventory(), rules)
++
++    assert result["schema_version"] == DBT_CLASSIFICATION_SCHEMA_VERSION
++    assert result["rules_source"] == "fyrnheim:default-jobs-taxonomy"
++    assert result["allow_multiple_labels"] is True
++    assert result["flag_layer_job_mismatch"] is True
++    assert result["summary"]["total"] == 4
++    assert result["summary"]["unclassified"] == 0
++    # Every model carries evidence for its default job labels.
++    for model in result["models"]:
++        assert model["evidence"], f"{model['name']} should have evidence"
++        for match in model["evidence"]:
++            assert match["rule_id"].startswith("default-")
++            assert match["evidence"]
++
++    models = {model["name"]: model for model in result["models"]}
++    assert "source_mapping" in models["stg_customers"]["matched_labels"]
++    assert "business_rule_application" in models["int_orders"]["matched_labels"]
++    assert "analytical_output_shaping" in models["fct_orders"]["matched_labels"]
++    assert "format_alignment" in models["silver_events_normalized"]["matched_labels"]
++
++
++def test_default_classification_flags_layer_job_mismatch() -> None:
++    # A mart model that is *also* tagged as performing source mapping is a layer/job
++    # mismatch: marts do not usually perform source mapping.
++    inventory = _inventory()
++    fct = inventory["resources"]["models"][2]
++    fct["meta"] = {**fct.get("meta", {}), "job": "source_mapping"}
++
++    rules = default_classification_rules()
++    result = classify_inventory(inventory, rules)
++    fct_result = {model["name"]: model for model in result["models"]}["fct_orders"]
++
++    assert "source_mapping" in fct_result["matched_labels"]
++    assert fct_result["layer"]["detected"] == "marts"
++    assert fct_result["layer"]["mismatch"] is True
++    assert "source_mapping" in fct_result["layer"]["unexpected_jobs"]
++    assert fct_result["layer"]["mismatch_evidence"]
++    assert result["summary"]["layer_job_mismatches"] >= 1
++
++    # A clean staging model performing source mapping is not a mismatch.
++    stg = {model["name"]: model for model in result["models"]}["stg_customers"]
++    assert stg["layer"]["detected"] == "staging"
++    assert stg["layer"]["mismatch"] is False
++
++
++def test_default_classification_layer_mapping_included_in_output() -> None:
++    result = classify_inventory(_inventory(), default_classification_rules())
++
++    assert "layer_mapping" in result
++    ids = [entry["id"] for entry in result["layer_mapping"]]
++    assert "staging" in ids
++    for entry in result["layer_mapping"]:
++        assert entry["implied_jobs"]
++
++
++def test_default_classification_summary_mentions_mismatches() -> None:
++    inventory = _inventory()
++    fct = inventory["resources"]["models"][2]
++    fct["meta"] = {**fct.get("meta", {}), "job": "source_mapping"}
++
++    summary = classification_summary(
++        classify_inventory(inventory, default_classification_rules())
++    )
++
++    assert "layer/job mismatches:" in summary
++
++
++def test_mismatch_detection_can_be_disabled() -> None:
++    rules = default_classification_rules(flag_layer_job_mismatch=False)
++    inventory = _inventory()
++    fct = inventory["resources"]["models"][2]
++    fct["meta"] = {**fct.get("meta", {}), "job": "source_mapping"}
++
++    result = classify_inventory(inventory, rules)
++    fct = {model["name"]: model for model in result["models"]}["fct_orders"]
++
++    assert result["flag_layer_job_mismatch"] is False
++    assert fct["layer"]["mismatch"] is False
++    assert "unexpected_jobs" not in fct["layer"]
++    assert result["summary"]["layer_job_mismatches"] == 0
++
++
++def test_dbt_classify_cli_uses_default_taxonomy_without_rules_file(tmp_path: Path) -> None:
++    inventory_path = tmp_path / "inventory.json"
++    output_path = tmp_path / "classification.json"
++    inventory_path.write_text(json.dumps(_inventory()), encoding="utf-8")
++
++    result = CliRunner().invoke(
++        main,
++        [
++            "dbt",
++            "classify",
++            "--inventory",
++            str(inventory_path),
++            "--output",
++            str(output_path),
++        ],
++    )
++
++    assert result.exit_code == 0, result.output
++    assert "dbt project: jaffle_shop" in result.output
++    assert output_path.exists()
++    payload = json.loads(output_path.read_text(encoding="utf-8"))
++    assert payload["schema_version"] == DBT_CLASSIFICATION_SCHEMA_VERSION
++    assert payload["rules_source"] == "fyrnheim:default-jobs-taxonomy"
++    assert payload["summary"]["unclassified"] == 0
++
++
++def test_dbt_classify_cli_default_taxonomy_json_output(tmp_path: Path) -> None:
++    inventory_path = tmp_path / "inventory.json"
++    inventory_path.write_text(json.dumps(_inventory()), encoding="utf-8")
++
++    result = CliRunner().invoke(
++        main,
++        [
++            "dbt",
++            "classify",
++            "--inventory",
++            str(inventory_path),
++            "--format",
++            "json",
++        ],
++    )
++
++    assert result.exit_code == 0, result.output
++    payload = json.loads(result.output)
++    assert payload["rules_source"] == "fyrnheim:default-jobs-taxonomy"
++    assert payload["summary"]["total"] == 4
++
++
++def test_default_taxonomy_round_trips_as_yaml_for_docs() -> None:
++    # The taxonomy must remain valid YAML so docs and tooling can consume it.
++    parsed = yaml.safe_load(yaml.safe_dump(load_default_taxonomy(), sort_keys=False))
++    assert parsed["schema_version"] == JOBS_TAXONOMY_SCHEMA_VERSION
++    assert len(parsed["jobs"]) == len(DEFAULT_JOB_IDS)

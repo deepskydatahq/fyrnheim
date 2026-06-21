@@ -1,0 +1,36 @@
+# Epic: Default jobs taxonomy
+
+id = "M117-E001"
+parent = "M117"
+title = "Default jobs taxonomy"
+status = "complete"
+created = 2026-06-21
+depends_on = []
+estimated_stories = 1
+
+[outcome]
+description = "Fyrnheim ships an opinionated default jobs taxonomy that can be loaded by the classification engine and explained in docs."
+
+[job_story]
+description = "When I classify dbt models, I want a default jobs taxonomy inspired by layers-and-jobs thinking so I can start without writing a full custom rule file."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Default jobs include source mapping, format alignment, data contract enforcement, entity definition, business rule application, analytical output shaping, and quality validation.",
+  "The default taxonomy is loadable by the M116 classifier without custom user configuration.",
+  "Docs explain descriptions, signals, examples, anti-examples, suggested principles, and layer/job relationships."
+]
+validator_context = [
+  "src/fyrnheim/dbt_classification.py",
+  "tests/test_dbt_classification.py",
+  "docs/dbt-model-classification.md",
+  "docs/default-dbt-jobs-taxonomy.md"
+]
+
+[context]
+relevant_paths = ["src/fyrnheim/", "tests/", "docs/"]
+dependencies = []
+
+[notes]
+considerations = "This epic should be executed through the mission-level multi-model strategy and promote the simplest complete candidate or synthesis."

@@ -1,0 +1,10 @@
+schema_version = "fyrnheim.coding_run.v1"
+run_id = "m117-default-jobs-taxonomy"
+story_id = "M117-E001-S001"
+story_path = "product/stories/M117-E001-S001-add-default-jobs-taxonomy.toml"
+repo_root = "/home/tmo/roadtothebeach/open/fyrnheim"
+base_ref = "HEAD"
+status = "prepared"
+created_at = "2026-06-21T11:30:25Z"
+dry_run = false
+candidate_count = 3

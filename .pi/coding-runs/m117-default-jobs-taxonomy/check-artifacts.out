@@ -1,0 +1,3 @@
+candidate=fallback artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/fallback/artifacts status=complete missing=[] ready=True explicitly_incomplete=False
+candidate=glm artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/glm/artifacts status=complete missing=[] ready=True explicitly_incomplete=False
+candidate=qwen artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/qwen/artifacts status=complete missing=[] ready=True explicitly_incomplete=False

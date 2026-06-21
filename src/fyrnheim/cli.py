@@ -126,9 +126,10 @@ def dbt() -> None:
 @click.option(
     "--rules",
     "rules_path",
-    required=True,
+    required=False,
+    default=None,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Path to classification rules YAML or JSON.",
+    help="Path to classification rules YAML or JSON. Defaults to Fyrnheim's built-in jobs taxonomy.",
 )
 @click.option(
     "--output",
@@ -148,7 +149,7 @@ def dbt() -> None:
 def dbt_classify(
     ctx: click.Context,
     inventory_path: Path,
-    rules_path: Path,
+    rules_path: Path | None,
     output_path: str | None,
     output_format: str,
 ) -> None:
@@ -163,7 +164,7 @@ def dbt_classify(
     verbose = ctx.obj.get("verbose", False)
     try:
         inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
-        rules = load_classification_rules(rules_path)
+        rules = load_classification_rules(rules_path) if rules_path else None
         classification = classify_inventory(inventory, rules)
     except Exception as exc:
         if verbose:

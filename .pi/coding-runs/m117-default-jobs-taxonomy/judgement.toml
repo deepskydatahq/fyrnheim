@@ -1,0 +1,52 @@
+schema_version = "fyrnheim.coding_judgement.v1"
+run_id = "m117-default-jobs-taxonomy"
+decision = "accept_candidate"
+winner = "fallback"
+reason = "Fallback produced the smallest complete implementation with full repository quality gates passing, default classifier loading without custom rules, model-level evidence, layer/job mismatch evidence, docs, and tests. GLM and Qwen both produced useful alternatives, but GLM reported unrelated full-suite failures and Qwen used a separate YAML loader/--use-default shape that was a larger API change. Fallback best matches M117's load-without-custom-config acceptance criterion."
+synthesis_guidance = ""
+created_at = "2026-06-21T11:58:37Z"
+risks = ["Qwen required explicit project extension loading in the candidate worktree for openrouter-capped; default project extension discovery did not load there. Candidate execution metadata includes later no-op reruns for non-target candidates, so notes/diffs are the stronger provenance for GLM/fallback implementation details."]
+follow_up = ["Consider a future mission to export/print the built-in default taxonomy as YAML if users want an editable copy."]
+
+[candidates]
+
+[[candidates.summary]]
+variant = "fallback"
+slug = "fallback"
+branch = "coding/m117-e001-s001-m117-default-jobs-taxonomy-fallback"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/fallback"
+status = "run_complete"
+disposition = "selected"
+
+[[candidates.summary]]
+variant = "glm"
+slug = "glm"
+branch = "coding/m117-e001-s001-m117-default-jobs-taxonomy-glm"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/glm"
+status = "run_complete"
+disposition = "not_selected"
+
+[[candidates.summary]]
+variant = "qwen"
+slug = "qwen"
+branch = "coding/m117-e001-s001-m117-default-jobs-taxonomy-qwen"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/qwen"
+status = "run_complete"
+disposition = "not_selected"
+
+[evaluation]
+
+[[evaluation.criteria]]
+criterion = "The classifier can load and apply default jobs taxonomy rules without a custom rules file."
+status = "passed"
+evidence = "classify_inventory(inventory) now defaults to load_default_classification_rules(); fyr dbt classify --rules is optional. Verified by tests/test_dbt_classification.py and final quality gates."
+
+[[evaluation.criteria]]
+criterion = "Classification output includes model-level evidence for default job labels and can flag layer/job mismatch evidence where configured."
+status = "passed"
+evidence = "Default rules reuse M116 match evidence and add layer_job_mismatches evidence in classification output and summary. Covered by tests/test_dbt_classification.py."
+
+[[evaluation.criteria]]
+criterion = "Docs describe each default job with description, signals, examples, anti-examples, suggested principles, and relation to common layer labels."
+status = "passed"
+evidence = "docs/default-dbt-jobs-taxonomy.md documents all seven jobs plus signals, examples, anti-examples, principles, and common layer relationships."

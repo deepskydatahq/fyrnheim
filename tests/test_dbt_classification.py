@@ -9,8 +9,10 @@ from click.testing import CliRunner
 from fyrnheim.cli import main
 from fyrnheim.dbt_classification import (
     DBT_CLASSIFICATION_SCHEMA_VERSION,
+    DEFAULT_JOBS_TAXONOMY_VERSION,
     classification_summary,
     classify_inventory,
+    load_default_classification_rules,
 )
 
 
@@ -159,6 +161,47 @@ def test_classification_supports_materialization_lineage_name_and_regex() -> Non
     assert models["stg_customers"]["status"] == "unclassified"
 
 
+def test_default_jobs_taxonomy_classifies_without_custom_rules() -> None:
+    inventory = _inventory()
+    inventory["resources"]["models"][0]["attached_tests"] = ["test.jaffle_shop.not_null_stg_customers_customer_id"]
+
+    result = classify_inventory(inventory)
+    models = {model["name"]: model for model in result["models"]}
+
+    assert result["rules_source"] == DEFAULT_JOBS_TAXONOMY_VERSION
+    assert result["allow_multiple_labels"] is True
+    assert models["stg_customers"]["primary_label"] == "source_mapping"
+    assert "data_contract_enforcement" in models["stg_customers"]["matched_labels"]
+    assert models["stg_customers"]["evidence"][0]["rule_id"] == "default-source-mapping"
+    assert models["fct_orders"]["primary_label"] == "analytical_output_shaping"
+    assert "analytical_output_shaping" in models["fct_orders"]["matched_labels"]
+
+
+def test_default_jobs_taxonomy_flags_layer_job_mismatch_evidence() -> None:
+    inventory = _inventory()
+    inventory["resources"]["models"][1]["path"] = "models/staging/fct_orders.sql"
+    inventory["resources"]["models"][1]["tags"] = ["staging"]
+
+    result = classify_inventory(inventory)
+    fct_orders = {model["name"]: model for model in result["models"]}["fct_orders"]
+
+    mismatch = fct_orders["layer_job_mismatch_evidence"]
+    assert mismatch[0]["check_id"] == "staging-output-job-mismatch"
+    assert "analytical_output_shaping" in mismatch[0]["unexpected_labels"]
+    assert mismatch[0]["evidence"][0]["field"] in {"path", "tags"}
+    assert result["summary"]["layer_job_mismatches"] == 1
+
+
+def test_load_default_classification_rules_returns_isolated_copy() -> None:
+    first = load_default_classification_rules()
+    second = load_default_classification_rules()
+
+    first["rules"].clear()
+
+    assert second["rules"]
+    assert second["taxonomy"]["source_mapping"]["description"]
+
+
 def test_classification_summary_is_concise() -> None:
     result = classify_inventory(_inventory(), _rules(allow_multiple=True))
 
@@ -167,6 +210,28 @@ def test_classification_summary_is_concise() -> None:
     assert "dbt project: jaffle_shop" in summary
     assert "models: total=3" in summary
     assert "analytical_output=1" in summary
+
+
+def test_dbt_classify_cli_uses_default_jobs_taxonomy_without_rules_file(tmp_path: Path) -> None:
+    inventory_path = tmp_path / "inventory.json"
+    inventory_path.write_text(json.dumps(_inventory()), encoding="utf-8")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "dbt",
+            "classify",
+            "--inventory",
+            str(inventory_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["rules_source"] == DEFAULT_JOBS_TAXONOMY_VERSION
+    assert payload["summary"]["labels"]["source_mapping"] == 1
 
 
 def test_dbt_classify_cli_writes_output_and_prints_summary(tmp_path: Path) -> None:

@@ -1,0 +1,6 @@
+status = "complete"
+variant = "fallback"
+story = "M117-E001-S001"
+branch = "coding/m117-e001-s001-m117-default-jobs-taxonomy-fallback"
+quality_gates = "passed"
+notes = "Implemented default dbt jobs taxonomy with default classifier loading, CLI no-rules path, model evidence, layer/job mismatch evidence, docs, and tests."

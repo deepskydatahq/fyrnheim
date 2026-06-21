@@ -1,0 +1,10 @@
+candidate = "glm"
+status = "complete"
+command = "true"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m117-default-jobs-taxonomy/glm"
+exit_code = 0
+duration_seconds = 0.001
+started_at = "2026-06-21T11:49:36Z"
+completed_at = "2026-06-21T11:49:36Z"
+stdout = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/glm/artifacts/stdout.txt"
+stderr = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m117-default-jobs-taxonomy/candidates/glm/artifacts/stderr.txt"

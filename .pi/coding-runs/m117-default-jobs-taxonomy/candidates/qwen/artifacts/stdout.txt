@@ -1,0 +1,45 @@
+I have successfully implemented the default jobs taxonomy for dbt model classification as required by story M117-E001-S001. Here's what was accomplished:
+
+## Implementation Summary
+
+### Key Components Created:
+1. **Default Jobs Taxonomy** (`src/fyrnheim/default_jobs_taxonomy.yml`) - A comprehensive YAML file with 7 job categories:
+   - Source Mapping
+   - Format Alignment
+   - Data Contract
+   - Entity Definition
+   - Business Rules
+   - Analytical Output
+   - Quality Validation
+
+2. **Taxonomy Loader Module** (`src/fyrnheim/dbt_default_taxonomy.py`) - Python functions to load, validate, and work with the default taxonomy
+
+3. **CLI Integration** - Added `--use-default` flag to `fyr dbt classify` command for easy application
+
+4. **Comprehensive Documentation** (`docs/dbt-default-jobs-taxonomy.md`) - Detailed docs explaining each job category
+
+5. **Complete Test Suite** (`tests/test_dbt_default_taxonomy.py`) - 7 new tests covering all functionality
+
+### Features Delivered:
+✅ **Default taxonomy loading** - Users can now classify models without custom rules
+✅ **Model-level evidence** - Classification output explains why each label was applied
+✅ **Layer/job mismatch detection** - Configurable rules can flag inconsistencies
+✅ **Complete documentation** - Each job has description, signals, examples, etc.
+
+### Quality Assurance:
+- All new tests pass (7/7)
+- All existing tests continue to pass (no regressions)
+- Code style checks pass (ruff)
+- Type checks pass (mypy)
+- Manual validation confirms functionality works
+
+### Usage:
+```bash
+# Classify with default taxonomy
+fyr dbt classify --inventory inventory.json --use-default
+
+# Export and customize
+fyr dbt classify --use-default --format json > custom-taxonomy.yml
+```
+
+The implementation fully satisfies all acceptance criteria and is ready for evaluation. All required artifacts have been created in the candidate worktree's artifacts directory.

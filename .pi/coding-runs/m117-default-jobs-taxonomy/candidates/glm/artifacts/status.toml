@@ -1,0 +1,23 @@
+status = "complete"
+candidate = "glm"
+story = "M117-E001-S001"
+branch = "coding/m117-e001-s001-m117-default-jobs-taxonomy-glm"
+date = 2026-06-21
+
+[summary]
+description = "Implemented default jobs taxonomy: inline YAML source of truth, classifier integration with layer/job mismatch detection, CLI defaults, docs, and tests."
+
+[quality_gates]
+ruff = "pass"
+mypy = "pass"
+pytest = "750 passed, 9 pre-existing failures unrelated to this candidate (verified on base commit)"
+candidate_tests = "pass (test_default_jobs_taxonomy.py + test_dbt_classification.py: 17 passed)"
+
+[acceptance_criteria]
+load_without_custom_file = "met"
+model_evidence_and_mismatch = "met"
+docs_describe_each_job = "met"
+
+[notes]
+shared_story_not_marked_complete = "Per candidate isolation rules; evaluator promotes a candidate before the shared story is closed."
+pre_existing_failures = "clickhouse/bigquery optional deps + pandas NaN + arrow projection test; present on base commit 6a6e148."

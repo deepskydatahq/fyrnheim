@@ -1,0 +1,39 @@
+# Epic: Integrated workflow dogfood
+
+id = "M123-E002"
+parent = "M123"
+title = "Integrated workflow dogfood"
+status = "complete"
+created = 2026-06-20
+depends_on = ["M123-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "A small bounded story validates the integrated multi-model execution strategy with preserved run artifacts, judgement, and cleanup evidence."
+
+[job_story]
+description = "When the workflow says a story can request multi-model execution, I want a real dogfood artifact proving the instructions can be followed so future missions do not rely only on docs."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A story explicitly requests multi-model execution using the new convention.",
+  "A dry-run or provider-backed candidate run produces run artifacts and judgement.",
+  "Cleanup dry-run/cleanup evidence or explicit no-worktree rationale is preserved."
+]
+validator_context = [
+  "product/stories/M123-E002-S001-dogfood-integrated-multi-model-strategy.toml",
+  ".pi/coding-runs/m123-integrated-workflow-dogfood/",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[context]
+relevant_paths = [
+  "product/stories/",
+  ".pi/coding-runs/",
+  "scripts/multi_model_coding.py"
+]
+dependencies = ["M123-E001"]
+
+[notes]
+considerations = "Use dry-run if provider credentials are unavailable; the point is validating workflow integration and artifact links, not spending provider budget."

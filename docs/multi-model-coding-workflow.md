@@ -6,12 +6,49 @@ This is a local-first, provider-neutral workflow. Pi, Claude, another coding age
 
 ## Concepts
 
+- **Execution strategy** — an optional product TOML convention that tells mission execution whether to use the normal single-agent path or the multi-model candidate workflow.
 - **Run** — one comparison session for a single story or coding task.
 - **Candidate** — one model/build variant attempting the run in its own branch/worktree.
 - **Evaluator** — a separate review pass that compares candidates against the story acceptance criteria, diffs, tests, simplicity, maintainability, and risks.
 - **Synthesis candidate** — an additional candidate created when no single candidate wins but multiple candidates contain useful parts.
 
 Default run artifacts live under `.pi/coding-runs/<run-id>/`. Candidate worktrees default to a sibling worktree area under `../worktrees/coding-runs/<run-id>/<candidate>/`.
+
+## Product TOML integration
+
+Single-agent execution remains the default for missions and stories. Add `[execution_strategy]` only when multi-model comparison is useful or required:
+
+```toml
+[execution_strategy]
+mode = "recommend_multi_model"  # single_agent | recommend_multi_model | multi_model
+rationale = "Multiple plausible approaches; compare candidates before promotion."
+dry_run_allowed = false
+candidate_variants = [
+  "qwen=openrouter-capped/qwen/qwen3-coder",
+  "fallback=openai-codex:gpt-5.5-high"
+]
+required_artifacts = [
+  "run.toml",
+  "candidate artifacts",
+  "judgement.toml",
+  "cleanup evidence"
+]
+```
+
+Use `single_agent` for small, mechanical stories. Use `recommend_multi_model` when candidate comparison may reduce risk, but the executor can downgrade to single-agent with a documented reason. Use `multi_model` when the story explicitly requires candidate runs, evaluator judgement, or workflow dogfooding.
+
+Stories completed through this workflow should also record the result:
+
+```toml
+[multi_model]
+run_dir = ".pi/coding-runs/<run-id>"
+decision = "accept_candidate"
+winner = "fallback"
+cleanup = ".pi/coding-runs/<run-id>/cleanup.out"
+provider_blockers = []
+```
+
+Completion requires the run directory, candidate artifacts, `judgement.toml`, selected/synthesized outcome or `all_failed` rationale, and cleanup evidence. Missing provider credentials must be recorded as provider blockers or candidate failures; do not silently skip them.
 
 ## Prepare candidates
 

@@ -1,0 +1,82 @@
+# Story: Dogfood integrated multi-model strategy
+
+id = "M123-E002-S001"
+parent = "M123-E002"
+title = "Dogfood integrated multi-model strategy"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[execution_strategy]
+mode = "multi_model"
+rationale = "Dogfood the newly integrated mission execution workflow on a small bounded documentation/provenance task."
+dry_run_allowed = true
+candidate_variants = [
+  "docs-a=local:dry-run",
+  "docs-b=local:dry-run"
+]
+required_artifacts = [
+  "run.toml",
+  "candidate.toml",
+  "execution.toml",
+  "status.toml",
+  "notes.md",
+  "quality-gates.txt",
+  "diff.patch",
+  "judgement.toml",
+  "cleanup evidence"
+]
+
+[outcome]
+description = "Validate the multi-model execution strategy convention with a dry-run candidate workflow and preserved artifact links."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "A run exists under `.pi/coding-runs/m123-integrated-workflow-dogfood` with two dry-run candidates."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Candidate artifacts, judgement.toml, check-artifacts output, and cleanup evidence are preserved."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Story execution metadata links the run directory and selected outcome."
+
+[context]
+relevant_paths = [
+  ".pi/coding-runs/m123-integrated-workflow-dogfood/",
+  "scripts/multi_model_coding.py",
+  "docs/multi-model-coding-workflow.md"
+]
+input_fixtures = []
+depends_on = ["M123-E001-S001", "M123-E001-S002"]
+
+[handoff]
+implementation_hints = [
+  "Use scripts/multi_model_coding.py prepare --dry-run and run-candidates --dry-run.",
+  "Write minimal candidate artifacts manually if dry-run commands do not produce candidate-complete files.",
+  "Judge the run as accept_candidate or all_failed based on dry-run success; no code promotion is expected."
+]
+reference_files = [
+  "docs/multi-model-coding-workflow.md",
+  "product/missions/M123-integrate-multi-model-mission-execution.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""
+
+[multi_model]
+run_dir = ".pi/coding-runs/m123-integrated-workflow-dogfood"
+decision = "accept_candidate"
+winner = "docs-a"
+cleanup = ".pi/coding-runs/m123-integrated-workflow-dogfood/cleanup.out"
+provider_blockers = []

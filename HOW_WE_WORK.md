@@ -109,6 +109,41 @@ Stories replace the old Beads task layer. Story TOML files hold implementation s
 | `plan` | Clear goal but needs codebase exploration to identify files/steps | Explore, make a short plan, then implement |
 | `brainstorm` | Multiple approaches, architectural decisions, ambiguity, cross-cutting scope | Compare approaches, choose simplest, plan, implement |
 
+### Optional Execution Strategy
+
+Single-agent execution is the default. When the mission or story does not include an `[execution_strategy]` table, implement it with the normal product-story workflow.
+
+Use `[execution_strategy]` only when a story should intentionally use the multi-model candidate workflow or when the author wants to recommend it for evaluator judgement:
+
+```toml
+[execution_strategy]
+mode = "single_agent"          # single_agent | recommend_multi_model | multi_model
+rationale = "Why this strategy fits the story"
+dry_run_allowed = false
+candidate_variants = [
+  "qwen=openrouter-capped/qwen/qwen3-coder",
+  "fallback=openai-codex:gpt-5.5-high"
+]
+required_artifacts = [
+  "run.toml",
+  "candidate artifacts",
+  "judgement.toml",
+  "cleanup evidence"
+]
+```
+
+Use `single_agent` for small, mechanical, low-risk stories. Use `recommend_multi_model` when multiple implementation approaches would be helpful but the executing agent may downgrade to single-agent with a documented reason. Use `multi_model` when the story is complex, risky, ambiguous, or explicitly dogfoods the candidate workflow.
+
+When multi-model execution is used, story completion must link or record:
+
+- run directory under `.pi/coding-runs/`
+- candidate artifact directories
+- `judgement.toml` decision and selected/synthesized outcome
+- provider blockers, missing credentials, or failed candidates
+- cleanup dry-run and cleanup evidence for candidate worktrees
+
+Provider credentials are never committed. Missing credentials are documented as blockers or candidate failures, not silently ignored.
+
 ### Optional Execution Metadata
 
 Stories may include an `[execution]` table:
@@ -122,6 +157,17 @@ commit = ""
 started = ""
 completed = ""
 failure_reason = ""
+```
+
+Stories that use multi-model execution may also include a `[multi_model]` table:
+
+```toml
+[multi_model]
+run_dir = ".pi/coding-runs/<run-id>"
+decision = "accept_candidate"
+winner = "candidate-slug"
+cleanup = "cleanup.out"
+provider_blockers = []
 ```
 
 ---

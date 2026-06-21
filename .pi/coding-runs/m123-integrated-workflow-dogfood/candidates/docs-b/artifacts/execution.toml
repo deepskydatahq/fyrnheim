@@ -1,0 +1,8 @@
+candidate = "docs-b"
+status = "dry_run"
+command = "python -c \"print(\\\"dry-run candidate docs-b\\\")\""
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m123-integrated-workflow-dogfood/docs-b"
+exit_code = 0
+duration_seconds = 0.0
+started_at = "2026-06-21T11:09:50Z"
+completed_at = "2026-06-21T11:09:50Z"

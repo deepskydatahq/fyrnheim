@@ -2,7 +2,7 @@
 
 id = "M123"
 title = "Integrate multi-model candidate workflow into mission execution"
-status = "draft"
+status = "complete"
 created = 2026-06-20
 depends_on = ["M110", "M112", "M114", "M115"]
 

@@ -1,0 +1,12 @@
+schema_version = "fyrnheim.coding_candidate.v1"
+run_id = "m123-integrated-workflow-dogfood"
+story_id = "M123-E002-S001"
+variant_name = "docs-b"
+model = "local"
+build = "dry-run"
+branch = "coding/m123-e002-s001-m123-integrated-workflow-dogfood-docs-b"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m123-integrated-workflow-dogfood/docs-b"
+artifact_dir = "/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m123-integrated-workflow-dogfood/candidates/docs-b/artifacts"
+status = "created"
+created_at = "2026-06-21T11:09:44Z"
+dry_run = true

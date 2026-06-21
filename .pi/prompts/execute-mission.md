@@ -11,7 +11,7 @@ Execute mission `$1` using Fyrnheim's product TOML workflow. Do not use Beads.
 1. Read `AGENTS.md`, `HOW_WE_WORK.md`, and `CLAUDE.md`.
 2. If docs disagree, use this precedence chain: mission/product TOML workflow rules > `AGENTS.md` > `HOW_WE_WORK.md` > `CLAUDE.md`/legacy docs.
 3. Read the mission file: `product/missions/$1-*.toml`.
-4. Extract outcome, scope, testing criteria, relevant paths, dependencies, and `[execution]` if present.
+4. Extract outcome, scope, testing criteria, relevant paths, dependencies, `[execution]`, and optional `[execution_strategy]` if present.
 5. Determine execution mode:
    - Use `[execution].mode` when present.
    - Otherwise infer mode from the mission outcome/scope.
@@ -36,6 +36,7 @@ If the mission is audit/planning-shaped, do not create implementation stories ju
 3. For each epic, check for existing stories: `product/stories/{epic_id}-S*.toml`.
 4. If missing, use the `product-epic-breakdown` skill to create stories.
 5. Assign each story a `triage = "ready" | "plan" | "brainstorm"` field if missing.
+6. Read optional `[execution_strategy]` from the mission and stories. If absent, use `mode = "single_agent"`. Supported strategy values are `single_agent`, `recommend_multi_model`, and `multi_model`.
 
 ### Phase 3: Build execution order
 
@@ -49,10 +50,16 @@ For each selected story:
 
 1. Use the `product-story-execution` skill.
 2. Set story `status = "in_progress"`.
-3. Implement production code and tests.
-4. Run focused tests, then `scripts/quality-gates.sh`.
-5. Commit after each completed story.
-6. Set story `status = "complete"` and record commit metadata if an `[execution]` table exists.
+3. Choose the execution strategy:
+   - `single_agent` (default): implement directly in this session.
+   - `recommend_multi_model`: prefer the multi-model workflow for ambiguous/risky work, but you may downgrade to single-agent if you document why.
+   - `multi_model`: use `scripts/multi_model_coding.py` to prepare/run candidates, judge outcomes, promote the selected result if applicable, and preserve artifacts.
+4. Implement production code and tests, or promote the selected multi-model candidate result.
+5. Run focused tests, then `scripts/quality-gates.sh`.
+6. Commit after each completed story.
+7. Set story `status = "complete"` and record commit metadata if an `[execution]` table exists.
+
+For multi-model stories, completion also requires: run directory, candidate artifacts, `judgement.toml`, selected/synthesized outcome, provider blockers if any, and cleanup dry-run/cleanup evidence recorded in story metadata or handoff notes. Missing provider credentials are blockers or candidate failures, not reasons to silently skip required artifacts.
 
 If blocked, set `status = "blocked"` and document the reason in `[execution].failure_reason`.
 

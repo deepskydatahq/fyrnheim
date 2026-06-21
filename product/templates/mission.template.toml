@@ -17,6 +17,16 @@ Focus on what changes for the user, not what we build.
 # Jobs-to-be-Done framing: from state A to state B
 user_progress = "From '[current painful state]' to '[desired improved state]'"
 
+# Optional execution strategy. Omit this table for normal single-agent execution.
+# Use mode = "recommend_multi_model" for complex/risky missions where candidate comparison may help.
+# Use mode = "multi_model" only when multi-model execution is required for the mission.
+[execution_strategy]
+mode = "single_agent"  # single_agent | recommend_multi_model | multi_model
+rationale = "Why this strategy fits, or leave as single-agent default"
+dry_run_allowed = false
+candidate_variants = []
+required_artifacts = []
+
 # Testing: How do we know this mission succeeded?
 [testing]
 approach = "agent-judgment"  # Missions always use agent judgment

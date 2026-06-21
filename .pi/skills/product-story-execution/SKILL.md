@@ -29,21 +29,40 @@ Use story `triage` values:
 1. Read `HOW_WE_WORK.md`, `CLAUDE.md`, the story TOML, parent epic, and parent mission.
 2. Verify dependencies in `[context].depends_on` are complete.
 3. Set the story to `status = "in_progress"`.
-4. Follow the triage path:
+4. Read optional `[execution_strategy]` from the story, then the parent mission. If absent, use `mode = "single_agent"`.
+5. Follow the triage path:
    - `ready`: implement directly.
    - `plan`: inspect relevant paths and write a concise plan in your response before editing.
    - `brainstorm`: compare approaches briefly and choose the simplest.
-5. Implement production code and tests for each acceptance criterion.
-6. Run focused tests, then relevant quality gates:
+6. Follow the execution strategy:
+   - `single_agent`: implement production code and tests in this session.
+   - `recommend_multi_model`: use the multi-model workflow when multiple approaches or model comparisons would materially reduce risk; if you downgrade to single-agent, document why in the story execution metadata or final report.
+   - `multi_model`: use `scripts/multi_model_coding.py prepare`, candidate execution, `check-artifacts`, evaluator `judge`, promotion if a candidate wins, and `cleanup` before marking the story complete.
+7. Implement production code and tests for each acceptance criterion, or promote the accepted/synthesized candidate output.
+8. Run focused tests, then relevant quality gates:
    - `uv run pytest`
    - `uv run ruff check src/ tests/`
    - `uv run mypy src/`
-7. Commit the story with a descriptive message.
-8. Update the story to `status = "complete"` and record useful execution metadata if fields exist:
+9. Commit the story with a descriptive message.
+10. Update the story to `status = "complete"` and record useful execution metadata if fields exist:
    - branch
    - commit
    - PR URL if known
    - completed date
+
+## Multi-model completion requirements
+
+A story using `mode = "multi_model"` is complete only when the story or handoff links:
+
+- `.pi/coding-runs/<run-id>/run.toml`
+- candidate `candidate.toml` files and artifact directories
+- candidate `execution.toml`, `status.toml`, `notes.md`, `quality-gates.txt`, and `diff.patch` where applicable
+- `.pi/coding-runs/<run-id>/judgement.toml`
+- selected or synthesized outcome, or `all_failed` rationale
+- provider blockers such as missing credentials
+- cleanup dry-run and cleanup output, or an explicit no-worktree/dry-run rationale
+
+Do not silently skip multi-model execution because a provider is unavailable. Record the provider blocker as a candidate failure or story blocker and decide whether a dry-run/fallback candidate satisfies the story acceptance criteria.
 
 ## If blocked or failed
 

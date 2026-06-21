@@ -1,0 +1,10 @@
+schema_version = "fyrnheim.coding_run.v1"
+run_id = "m123-integrated-workflow-dogfood"
+story_id = "M123-E002-S001"
+story_path = "product/stories/M123-E002-S001-dogfood-integrated-multi-model-strategy.toml"
+repo_root = "/home/tmo/roadtothebeach/open/fyrnheim"
+base_ref = "HEAD"
+status = "prepared"
+created_at = "2026-06-21T11:09:44Z"
+dry_run = true
+candidate_count = 2

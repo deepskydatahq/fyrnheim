@@ -1,0 +1,53 @@
+# Story: Update execution prompts and skills
+
+id = "M123-E001-S002"
+parent = "M123-E001"
+title = "Update execution prompts and skills"
+status = "complete"
+triage = "ready"
+created = 2026-06-20
+
+[outcome]
+description = "Update execute-mission and product-story-execution guidance so agents know when and how to use the multi-model workflow."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = ".pi/prompts/execute-mission.md reads and applies `[execution_strategy]` during implementation planning."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = ".pi/skills/product-story-execution/SKILL.md explains single-agent vs multi-model selection and artifact requirements."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Guidance requires provider blockers and cleanup evidence to be documented instead of silently ignored."
+
+[context]
+relevant_paths = [
+  ".pi/prompts/execute-mission.md",
+  ".pi/skills/product-story-execution/SKILL.md",
+  "docs/multi-model-coding-workflow.md"
+]
+input_fixtures = []
+depends_on = ["M123-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Add concise instructions rather than duplicating the entire multi-model workflow.",
+  "Point to docs/multi-model-coding-workflow.md for detailed commands."
+]
+reference_files = [
+  "product/missions/M123-integrate-multi-model-mission-execution.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

@@ -1,0 +1,54 @@
+# Story: Define execution strategy convention
+
+id = "M123-E001-S001"
+parent = "M123-E001"
+title = "Define execution strategy convention"
+status = "complete"
+triage = "plan"
+created = 2026-06-20
+
+[outcome]
+description = "Document and template a lightweight execution strategy convention with single-agent default and optional multi-model execution."
+
+[acceptance_criteria]
+executable = false
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "HOW_WE_WORK.md defines single-agent default plus optional `multi_model` and `recommend_multi_model` strategy values."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Mission and story templates include commented execution strategy examples."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "docs/multi-model-coding-workflow.md documents required story metadata/artifact links for multi-model completion."
+
+[context]
+relevant_paths = [
+  "HOW_WE_WORK.md",
+  "product/templates/mission.template.toml",
+  "product/templates/story.template.toml",
+  "docs/multi-model-coding-workflow.md"
+]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Keep single-agent as the default when the table is missing.",
+  "Use a lightweight optional `[execution_strategy]` table rather than changing existing status semantics."
+]
+reference_files = [
+  "product/missions/M123-integrate-multi-model-mission-execution.toml"
+]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-20"
+completed = "2026-06-20"
+failure_reason = ""

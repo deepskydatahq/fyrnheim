@@ -1,0 +1,2 @@
+candidate=docs-a artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m123-integrated-workflow-dogfood/candidates/docs-a/artifacts status=complete missing=[] ready=True explicitly_incomplete=False
+candidate=docs-b artifact_dir=/home/tmo/roadtothebeach/open/fyrnheim/.pi/coding-runs/m123-integrated-workflow-dogfood/candidates/docs-b/artifacts status=complete missing=[] ready=True explicitly_incomplete=False

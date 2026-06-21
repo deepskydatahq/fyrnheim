@@ -1,0 +1,44 @@
+schema_version = "fyrnheim.coding_judgement.v1"
+run_id = "m123-integrated-workflow-dogfood"
+decision = "accept_candidate"
+winner = "docs-a"
+reason = "Dry-run dogfood validated that a story can request multi-model execution, prepare candidate metadata, dry-run candidate commands, preserve required artifacts, and record evaluator judgement without provider credentials."
+synthesis_guidance = ""
+created_at = "2026-06-21T11:10:01Z"
+risks = ["Dry-run did not exercise real provider execution or code promotion."]
+follow_up = ["Use provider-backed execution for a future complex implementation story when credentials are available."]
+
+[candidates]
+
+[[candidates.summary]]
+variant = "docs-a"
+slug = "docs-a"
+branch = "coding/m123-e002-s001-m123-integrated-workflow-dogfood-docs-a"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m123-integrated-workflow-dogfood/docs-a"
+status = "created"
+disposition = "selected"
+
+[[candidates.summary]]
+variant = "docs-b"
+slug = "docs-b"
+branch = "coding/m123-e002-s001-m123-integrated-workflow-dogfood-docs-b"
+worktree = "/home/tmo/roadtothebeach/open/worktrees/coding-runs/m123-integrated-workflow-dogfood/docs-b"
+status = "created"
+disposition = "not_selected"
+
+[evaluation]
+
+[[evaluation.criteria]]
+criterion = "A run exists under `.pi/coding-runs/m123-integrated-workflow-dogfood` with two dry-run candidates."
+status = "needs_evaluator_review"
+evidence = ""
+
+[[evaluation.criteria]]
+criterion = "Candidate artifacts, judgement.toml, check-artifacts output, and cleanup evidence are preserved."
+status = "needs_evaluator_review"
+evidence = ""
+
+[[evaluation.criteria]]
+criterion = "Story execution metadata links the run directory and selected outcome."
+status = "needs_evaluator_review"
+evidence = ""

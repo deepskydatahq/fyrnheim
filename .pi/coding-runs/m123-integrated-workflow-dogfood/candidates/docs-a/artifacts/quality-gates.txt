@@ -1,0 +1,2 @@
+Dry-run candidate: no candidate code changes, so candidate-specific quality gates were not run.
+Repository quality gates are run from the main worktree for mission validation.

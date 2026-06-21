@@ -1,0 +1,69 @@
+# Mission: Provider-backed multi-model execution dogfood
+
+id = "M124"
+title = "Provider-backed multi-model execution dogfood"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M123"]
+
+[outcome]
+description = """
+Validate the M123 integrated execution strategy with a real provider-backed candidate run on a bounded implementation story when credentials are available. This should exercise actual model execution, evaluator judgement, promotion or rejection, and cleanup beyond dry-run wiring.
+"""
+
+user_progress = "From 'multi-model mission execution is integrated and dry-run validated' to 'the integrated workflow has been proven with real provider-backed candidates and documented provider/cost behavior'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "provider-backed-candidate-run",
+  "judgement",
+  "promotion-or-rejection-record",
+  "cleanup-evidence",
+  "retro"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "A story uses `[execution_strategy].mode = \"multi_model\" with provider-backed candidate commands.",
+  "At least one candidate performs a real provider request, or missing credentials/provider errors are recorded as explicit blockers.",
+  "Candidate artifacts, judgement, selected outcome, and cleanup evidence are preserved.",
+  "Cost/token observations are recorded when the provider exposes them."
+]
+validator_context = [
+  "docs/multi-model-coding-workflow.md",
+  ".pi/coding-runs/",
+  "product/stories/"
+]
+
+[context]
+related_docs = [
+  "docs/multi-model-coding-workflow.md",
+  "docs/openrouter-provider-setup.md"
+]
+relevant_paths = [
+  ".pi/coding-runs/",
+  "docs/",
+  "product/"
+]
+related_missions = [
+  "M123 — Integrate multi-model candidate workflow into mission execution"
+]
+
+[scope]
+in_scope = [
+  "Select a small bounded implementation story suitable for real candidate execution.",
+  "Run provider-backed candidate commands through the integrated workflow.",
+  "Record judgement, promotion/rejection, cleanup, and provider observations."
+]
+out_of_scope = [
+  "Changing the M123 execution strategy schema unless dogfood reveals a blocker.",
+  "Committing provider credentials or secrets.",
+  "Forcing provider-backed execution when credentials are unavailable."
+]
+
+[notes]
+considerations = """
+M123 used a dry-run dogfood because the workflow integration itself was the target. This follow-up should run only when provider credentials/tooling are available or when the session explicitly wants to document a provider blocker.
+"""

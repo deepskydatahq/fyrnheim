@@ -1,0 +1,44 @@
+# Epic: Execution strategy workflow
+
+id = "M123-E001"
+parent = "M123"
+title = "Execution strategy workflow"
+status = "complete"
+created = 2026-06-20
+depends_on = []
+estimated_stories = 2
+
+[outcome]
+description = "Fyrnheim product workflow docs, templates, and skills define a single-agent default and optional multi-model execution strategy with required artifacts."
+
+[job_story]
+description = "When a mission or story is complex enough to benefit from multiple candidates, I want the product workflow to say how to request and complete that strategy so multi-model execution is intentional and auditable."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Workflow docs and templates define a lightweight execution strategy convention with single-agent as the default.",
+  "Execute-mission and product-story-execution guidance explain when to choose single-agent, recommend multi-model, or require multi-model execution.",
+  "Required multi-model artifacts and cleanup evidence are documented as story completion requirements."
+]
+validator_context = [
+  "HOW_WE_WORK.md",
+  ".pi/prompts/execute-mission.md",
+  ".pi/skills/product-story-execution/SKILL.md",
+  "product/templates/mission.template.toml",
+  "product/templates/story.template.toml",
+  "docs/multi-model-coding-workflow.md"
+]
+
+[context]
+relevant_paths = [
+  "HOW_WE_WORK.md",
+  ".pi/prompts/execute-mission.md",
+  ".pi/skills/product-story-execution/SKILL.md",
+  "product/templates/",
+  "docs/"
+]
+dependencies = []
+
+[notes]
+considerations = "Keep the convention lightweight. Do not require multi-model execution for small stories."

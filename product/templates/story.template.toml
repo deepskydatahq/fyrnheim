@@ -5,8 +5,19 @@
 id = "MXXX-EXXX-SXXX"
 parent = "MXXX-EXXX"  # Parent epic ID
 title = "Story title - specific implementable unit"
-status = "draft"  # draft | ready | in-progress | complete | abandoned
+status = "draft"  # draft | ready | in_progress | blocked | complete | failed
+triage = "plan"  # ready | plan | brainstorm
 created = 2025-01-01  # Update to current date
+
+# Optional execution strategy. Omit this table for normal single-agent execution.
+# Use recommend_multi_model when candidate comparison may help but is not required.
+# Use multi_model when the story must be completed through candidate runs and judgement.
+[execution_strategy]
+mode = "single_agent"  # single_agent | recommend_multi_model | multi_model
+rationale = "Why this strategy fits, or leave as single-agent default"
+dry_run_allowed = false
+candidate_variants = []
+required_artifacts = []
 
 # Outcome: What does this story deliver?
 [outcome]
@@ -56,3 +67,11 @@ Leave empty if the story is self-explanatory.
 
 # Files that provide useful context for implementation
 reference_files = []
+
+# Optional: fill when execution_strategy.mode = "multi_model"
+[multi_model]
+run_dir = ""
+decision = ""  # accept_candidate | synthesize | all_failed
+winner = ""
+cleanup = ""
+provider_blockers = []

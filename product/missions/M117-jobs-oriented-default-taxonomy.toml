@@ -29,6 +29,7 @@ rationale = "Compare candidate implementations for an opinionated default jobs t
 dry_run_allowed = false
 candidate_variants = [
   "qwen=openrouter-capped/qwen/qwen3-coder",
+  "glm=openrouter/z-ai/glm-5.2",
   "fallback=openai-codex:gpt-5.5-high"
 ]
 required_artifacts = [

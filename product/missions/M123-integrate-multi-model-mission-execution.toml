@@ -1,0 +1,87 @@
+# Mission: Integrate multi-model candidate workflow into mission execution
+
+id = "M123"
+title = "Integrate multi-model candidate workflow into mission execution"
+status = "draft"
+created = 2026-06-20
+depends_on = ["M110", "M112", "M114", "M115"]
+
+[outcome]
+description = """
+Make Fyrnheim's product TOML mission execution workflow aware of the multi-model candidate tooling. Mission and story execution should be able to request multi-model implementation, preserve candidate artifacts and evaluator judgement, and fall back to single-agent execution for small or simple stories.
+"""
+
+user_progress = "From 'multi-model coding exists as separate tooling that must be invoked manually' to 'mission execution can intentionally choose and document multi-model candidate execution when the work warrants it'."
+
+[execution]
+mode = "implementation"
+outputs = [
+  "execution-strategy-schema",
+  "execute-mission-prompt-update",
+  "story-execution-guidance",
+  "multi-model-artifact-linking",
+  "dogfood-run",
+  "docs"
+]
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Mission/story TOML supports an explicit way to request or recommend multi-model execution without making it mandatory for every story.",
+  "The execute-mission and product-story-execution guidance explains when to use single-agent vs multi-model candidate execution.",
+  "When multi-model execution is used, candidate run artifacts, judgement.toml, selected outcome, and cleanup evidence are linked from story execution metadata or documented handoff fields.",
+  "The workflow includes safe defaults: single-agent remains default, cleanup is required for candidate worktrees, and missing provider credentials are reported as blockers rather than silently ignored.",
+  "A small dogfood story or documentation task validates the integrated workflow with at least a dry-run or provider-backed candidate run, depending on available credentials."
+]
+validator_context = [
+  "HOW_WE_WORK.md",
+  ".pi/prompts/execute-mission.md",
+  ".pi/skills/product-story-execution/SKILL.md",
+  "docs/multi-model-coding-workflow.md",
+  "scripts/multi_model_coding.py",
+  "product/missions/M123-integrate-multi-model-mission-execution.toml"
+]
+
+[context]
+related_docs = [
+  "docs/multi-model-coding-workflow.md",
+  "docs/openrouter-provider-setup.md",
+  "docs/m113-openrouter-provider-dogfood-retro.md",
+  "HOW_WE_WORK.md"
+]
+relevant_paths = [
+  ".pi/prompts/execute-mission.md",
+  ".pi/skills/product-story-execution/SKILL.md",
+  ".pi/skills/product-mission-breakdown/SKILL.md",
+  ".pi/skills/product-epic-breakdown/SKILL.md",
+  "docs/",
+  "scripts/multi_model_coding.py",
+  "product/templates/"
+]
+related_missions = [
+  "M110 — Parallel multi-model coding evaluation",
+  "M112 — Provider-backed multi-model candidate runs",
+  "M113 — OpenRouter provider candidate dogfood",
+  "M114 — Fyrnheim OpenRouter provider configuration",
+  "M115 — dbt Project Inventory MVP"
+]
+
+[scope]
+in_scope = [
+  "Define a lightweight execution strategy convention for missions/stories, such as single-agent default and optional multi-model mode/recommendation.",
+  "Update product workflow docs, prompt templates, and skills so mission execution can choose multi-model candidate runs intentionally.",
+  "Document required artifacts for multi-model story completion: run directory, candidate artifacts, judgement, selected result, cleanup proof, provider blockers if any.",
+  "Add or update templates so future missions/stories can request multi-model execution explicitly.",
+  "Dogfood the integrated workflow on a small bounded task."
+]
+out_of_scope = [
+  "Forcing every mission or story to use multiple models.",
+  "Building a fully autonomous scheduler for candidate worktrees.",
+  "Guaranteeing OpenRouter requests run without credentials.",
+  "Replacing existing single-agent product-story execution."
+]
+
+[notes]
+considerations = """
+M115 showed that multi-model execution is not automatically part of mission execution even though the tooling exists. This mission should close that workflow gap carefully: multi-model execution should be an explicit strategy for complex, risky, ambiguous, or dogfood-worthy stories, not a tax on every small story.
+"""

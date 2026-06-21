@@ -1,0 +1,47 @@
+# Story: Add classification rules engine
+
+id = "M116-E001-S001"
+parent = "M116-E001"
+title = "Add classification rules engine"
+status = "complete"
+triage = "plan"
+created = 2026-06-21
+
+[outcome]
+description = "Implement a rule-based dbt model classifier that operates on M115 inventory artifacts."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Rules can match model path, name, tags, meta fields, materialization, upstream/downstream lineage, and inventory metadata."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "Classifier emits labels with evidence and stable schema version `fyrnheim.dbt_classification.v1`."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "No-match, overlapping-rule, precedence, and multiple-label cases are covered."
+
+[context]
+relevant_paths = ["src/fyrnheim/dbt_classification.py", "tests/test_dbt_classification.py"]
+input_fixtures = []
+depends_on = []
+
+[handoff]
+implementation_hints = [
+  "Use plain JSON-serializable dict artifacts for future agent consumption.",
+  "Keep rule matching inspectable and deterministic."
+]
+reference_files = ["product/missions/M116-model-classification-rules.toml", "src/fyrnheim/dbt_inventory.py"]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-21"
+completed = "2026-06-21"
+failure_reason = ""

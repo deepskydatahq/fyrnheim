@@ -1,0 +1,36 @@
+# Epic: Classification CLI and docs
+
+id = "M116-E002"
+parent = "M116"
+title = "Classification CLI and docs"
+status = "complete"
+created = 2026-06-21
+depends_on = ["M116-E001"]
+estimated_stories = 1
+
+[outcome]
+description = "Fyrnheim exposes model classification through CLI reports and documents the rules schema."
+
+[job_story]
+description = "When I classify a dbt inventory, I want a concise report and machine-readable artifact so humans and agents can see classified, unclassified, and ambiguous models."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "CLI command reads inventory and rules files and emits JSON or summary output.",
+  "CLI report distinguishes classified, unclassified, and ambiguous models.",
+  "Docs explain rule schema, evidence, ambiguity, and examples."
+]
+validator_context = [
+  "src/fyrnheim/cli.py",
+  "src/fyrnheim/dbt_classification.py",
+  "tests/test_dbt_classification.py",
+  "docs/dbt-model-classification.md"
+]
+
+[context]
+relevant_paths = ["src/fyrnheim/cli.py", "src/fyrnheim/dbt_classification.py", "tests/", "docs/"]
+dependencies = ["M116-E001"]
+
+[notes]
+considerations = "The CLI should work from an existing M115 inventory artifact and should not rescan dbt implicitly in this first version."

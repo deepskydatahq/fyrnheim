@@ -1,0 +1,47 @@
+# Story: Add classification CLI and docs
+
+id = "M116-E002-S001"
+parent = "M116-E002"
+title = "Add classification CLI and docs"
+status = "complete"
+triage = "ready"
+created = 2026-06-21
+
+[outcome]
+description = "Expose model classification through `fyr dbt classify` and document rule configuration and output."
+
+[acceptance_criteria]
+executable = true
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "`fyr dbt classify --inventory <file> --rules <file> --output <file>` writes JSON classification and prints a concise summary."
+
+[[acceptance_criteria.criteria]]
+test = "pytest"
+description = "`fyr dbt classify --format json` prints machine-readable classification to stdout."
+
+[[acceptance_criteria.criteria]]
+test = "manual"
+description = "Docs explain rule schema, evidence, ambiguous/unclassified reports, and example usage."
+
+[context]
+relevant_paths = ["src/fyrnheim/cli.py", "src/fyrnheim/dbt_classification.py", "tests/test_dbt_classification.py", "docs/dbt-model-classification.md"]
+input_fixtures = []
+depends_on = ["M116-E001-S001"]
+
+[handoff]
+implementation_hints = [
+  "Add a subcommand under the existing `fyr dbt` group.",
+  "Do not require dbt to be installed or executed."
+]
+reference_files = ["product/missions/M116-model-classification-rules.toml"]
+
+[execution]
+branch = "multi-model-classification-flow"
+worktree = "/home/tmo/roadtothebeach/open/fyrnheim"
+pr = ""
+commit = "HEAD"
+started = "2026-06-21"
+completed = "2026-06-21"
+failure_reason = ""

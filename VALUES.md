@@ -11,13 +11,13 @@
 | Level | Value | Status |
 |-------|-------|--------|
 | 1 | dbt Project Inventory | shipped |
-| 2 | Model Classification | planned |
+| 2 | Model Classification | shipped |
 | 3 | Data Model Principles | planned |
 | 4 | Agent Context CLI | planned |
 | 5 | Guided dbt Development | future |
 | 6 | Team Workflow Integration | future |
 
-**Next level to build:** Level 2 — Model Classification
+**Next level to build:** Level 3 — Data Model Principles
 
 ---
 
@@ -51,7 +51,7 @@ Fyrnheim cannot classify, critique, or guide changes until it can reliably under
 
 ## Level 2: Model Classification
 
-**Status:** planned
+**Status:** shipped
 
 Classify dbt models using configurable taxonomies, with a strong default based on data model layers and jobs.
 

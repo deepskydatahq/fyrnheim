@@ -2,7 +2,7 @@
 
 id = "M116"
 title = "Model Classification Rules"
-status = "draft"
+status = "complete"
 created = 2026-06-20
 depends_on = ["M115"]
 

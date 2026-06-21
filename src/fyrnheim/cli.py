@@ -115,6 +115,74 @@ def dbt() -> None:
     """Inspect dbt projects for model context."""
 
 
+@dbt.command("classify")
+@click.option(
+    "--inventory",
+    "inventory_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to a dbt inventory JSON artifact produced by `fyr dbt scan`.",
+)
+@click.option(
+    "--rules",
+    "rules_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to classification rules YAML or JSON.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    help="Write machine-readable classification JSON to this file.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["summary", "json"]),
+    default="summary",
+    show_default=True,
+    help="Output format printed to stdout.",
+)
+@click.pass_context
+def dbt_classify(
+    ctx: click.Context,
+    inventory_path: Path,
+    rules_path: Path,
+    output_path: str | None,
+    output_format: str,
+) -> None:
+    """Classify dbt inventory models with configurable rules."""
+    from fyrnheim.dbt_classification import (
+        classification_json,
+        classification_summary,
+        classify_inventory,
+        load_classification_rules,
+    )
+
+    verbose = ctx.obj.get("verbose", False)
+    try:
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+        rules = load_classification_rules(rules_path)
+        classification = classify_inventory(inventory, rules)
+    except Exception as exc:
+        if verbose:
+            raise
+        raise click.ClickException(str(exc)) from exc
+
+    if output_path:
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(classification_json(classification), encoding="utf-8")
+
+    if output_format == "json":
+        click.echo(classification_json(classification), nl=False)
+    else:
+        click.echo(classification_summary(classification), nl=False)
+        if output_path:
+            click.echo(f"classification written: {output_path}")
+
+
 @dbt.command("scan")
 @click.option(
     "--project-path",

@@ -1,0 +1,34 @@
+# Epic: Classification engine
+
+id = "M116-E001"
+parent = "M116"
+title = "Classification engine"
+status = "complete"
+created = 2026-06-21
+depends_on = []
+estimated_stories = 2
+
+[outcome]
+description = "Fyrnheim can classify dbt inventory models with configurable inspectable rules and evidence."
+
+[job_story]
+description = "When I have a dbt inventory artifact, I want configurable rules to label each model with evidence so model purpose is explicit instead of tribal knowledge."
+
+[testing]
+approach = "agent-judgment"
+criteria = [
+  "Classification rules support model fields, metadata, tags, materialization, lineage, and inventory metadata.",
+  "Classification results include labels, primary label, evidence, and classified/unclassified/ambiguous status.",
+  "Tests cover no-match, overlapping rules, precedence, and multiple-label mode."
+]
+validator_context = [
+  "src/fyrnheim/dbt_classification.py",
+  "tests/test_dbt_classification.py"
+]
+
+[context]
+relevant_paths = ["src/fyrnheim/", "tests/"]
+dependencies = []
+
+[notes]
+considerations = "Keep the engine rule-based and transparent; do not use an LLM for MVP classification."
